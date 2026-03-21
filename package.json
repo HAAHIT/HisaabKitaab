@@ -1,0 +1,45 @@
+{
+  "name": "doorcraft-pro",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "db:push": "npx prisma db push",
+    "db:seed": "npx prisma db seed",
+    "db:studio": "npx prisma studio",
+    "postinstall": "prisma generate"
+  },
+  "prisma": {
+    "seed": "npx tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@heroui/react": "^2.8.10",
+    "@prisma/adapter-pg": "^7.5.0",
+    "@prisma/client": "^6.19.2",
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^17.3.1",
+    "framer-motion": "^12.38.0",
+    "jose": "^6.2.2",
+    "next": "16.2.1",
+    "pg": "^8.20.0",
+    "prisma": "^6.19.2",
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20",
+    "@types/pg": "^8.20.0",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.1",
+    "tailwindcss": "^4",
+    "tsx": "^4.21.0",
+    "typescript": "^5"
+  }
+}

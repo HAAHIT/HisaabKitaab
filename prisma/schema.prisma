@@ -1,0 +1,175 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Users & Auth ──────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String?  @unique
+  phone     String?  @unique
+  password  String   // bcrypt hashed
+  role      Role     @default(CUSTOMER)
+  isActive  Boolean  @default(true)
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  billsCreated Bill[]
+  payments     Payment[]
+  measurements MeasurementUpload[]
+}
+
+enum Role {
+  ADMIN
+  STAFF
+  ACCOUNTANT
+  CUSTOMER
+}
+
+// ── Bill Templates ────────────────────────────────────
+
+model BillTemplate {
+  id        String   @id @default(cuid())
+  name      String
+  columns   Json     // Array of { name, type, position, formula?, options? }
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  bills     Bill[]
+}
+
+// ── Bills ─────────────────────────────────────────────
+
+model Bill {
+  id              String     @id @default(cuid())
+  billNumber      String     @unique
+  templateId      String
+  template        BillTemplate @relation(fields: [templateId], references: [id])
+  customerName    String
+  customerPhone   String?
+  customerAddress String?
+  gstin           String?
+  rows            Json       // Array of { [columnName]: value }
+  notes           String?
+  terms           String?
+  subtotal        Float
+  taxPercent      Float      @default(0)
+  taxAmount       Float      @default(0)
+  grandTotal      Float
+  status          BillStatus @default(DRAFT)
+  payments        Payment[]
+  createdBy       String
+  creator         User       @relation(fields: [createdBy], references: [id])
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+}
+
+enum BillStatus {
+  DRAFT
+  FINALIZED
+  CANCELLED
+}
+
+// ── Parties ───────────────────────────────────────────
+
+model Party {
+  id             String    @id @default(cuid())
+  name           String
+  type           PartyType
+  phone          String?
+  email          String?
+  address        String?
+  gstin          String?
+  openingBalance Float     @default(0)
+  currentBalance Float     @default(0)
+  isActive       Boolean   @default(true)
+  createdBy      String?
+  payments       Payment[]
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+enum PartyType {
+  VENDOR
+  CUSTOMER
+}
+
+// ── Payments ──────────────────────────────────────────
+
+model Payment {
+  id           String       @id @default(cuid())
+  partyId      String
+  party        Party        @relation(fields: [partyId], references: [id])
+  direction    PayDirection
+  amount       Float
+  date         DateTime
+  mode         PaymentMode
+  referenceNo  String?
+  linkedBillId String?
+  linkedBill   Bill?        @relation(fields: [linkedBillId], references: [id])
+  notes        String?
+  receiptUrl   String?
+  createdBy    String
+  creator      User         @relation(fields: [createdBy], references: [id])
+  createdAt    DateTime     @default(now())
+}
+
+enum PayDirection {
+  INCOMING
+  OUTGOING
+}
+
+enum PaymentMode {
+  CASH
+  UPI
+  BANK_TRANSFER
+  CHEQUE
+}
+
+// ── Measurements ──────────────────────────────────────
+
+model MeasurementUpload {
+  id          String            @id @default(cuid())
+  customerId  String
+  customer    User              @relation(fields: [customerId], references: [id])
+  label       String
+  roomName    String?
+  doorType    String?
+  notes       String?
+  photos      Json              // Array of { url, thumbnailUrl }
+  status      MeasurementStatus @default(UPLOADED)
+  reviewedBy  String?
+  reviewNotes String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+}
+
+enum MeasurementStatus {
+  UPLOADED
+  PENDING
+  REVIEWED
+  IN_PRODUCTION
+  COMPLETED
+}
+
+// ── Company Settings ──────────────────────────────────
+
+model CompanySettings {
+  id                String  @id @default("default")
+  companyName       String  @default("")
+  companyAddress    String  @default("")
+  companyPhone      String  @default("")
+  companyEmail      String  @default("")
+  companyGstin      String  @default("")
+  companyLogo       String?
+  defaultTaxPercent Float   @default(18)
+  defaultTerms      String  @default("")
+  billPrefix        String  @default("BILL")
+}
