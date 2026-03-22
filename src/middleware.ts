@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
-
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "fallback-secret-change-me"
-);
+import { getJwtSecret } from "@/lib/jwt-secret";
 
 const PUBLIC_PATHS = ["/login", "/api/auth/login"];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  let jwtSecret: Uint8Array;
+
+  try {
+    jwtSecret = getJwtSecret();
+  } catch (error) {
+    console.error("Middleware auth configuration error:", error);
+    return NextResponse.json({ error: "Server auth is misconfigured" }, { status: 500 });
+  }
 
   // Allow public paths and static assets
   if (
@@ -28,7 +33,7 @@ export async function middleware(request: NextRequest) {
   }
 
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, jwtSecret);
     
     // Pass user info into request headers so API routes can read them
     const requestHeaders = new Headers(request.headers);
@@ -45,6 +50,7 @@ export async function middleware(request: NextRequest) {
         "/measurements/upload",
         "/measurements/my-uploads",
         "/api/measurements",
+        "/api/assets",
         "/api/upload",
         "/api/auth",
       ];

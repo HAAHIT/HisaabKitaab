@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/prisma";
+import { buildBillSnapshotFromParty } from "@/lib/accounting";
 import { NextRequest, NextResponse } from "next/server";
+
+const BILL_NUMBER_LOCK_KEY = 22032026;
 
 // GET /api/bills — List bills with filtering
 export async function GET(request: NextRequest) {
@@ -11,23 +14,29 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const search = searchParams.get("search") || "";
   const status = searchParams.get("status") || "";
+  const partyId = searchParams.get("partyId") || "";
   const from = searchParams.get("from");
   const to = searchParams.get("to");
   const page = parseInt(searchParams.get("page") || "1");
   const limit = parseInt(searchParams.get("limit") || "20");
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = {};
+  const where: any = { isDeleted: false };
 
   if (search) {
     where.OR = [
       { billNumber: { contains: search, mode: "insensitive" } },
       { customerName: { contains: search, mode: "insensitive" } },
+      { party: { name: { contains: search, mode: "insensitive" } } },
     ];
   }
 
   if (status && status !== "ALL") {
     where.status = status;
+  }
+
+  if (partyId) {
+    where.partyId = partyId;
   }
 
   if (from || to) {
@@ -45,6 +54,14 @@ export async function GET(request: NextRequest) {
       select: {
         id: true,
         billNumber: true,
+        partyId: true,
+        party: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+          },
+        },
         customerName: true,
         grandTotal: true,
         status: true,
@@ -75,6 +92,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const {
       templateId,
+      partyId,
       customerName,
       customerPhone,
       customerAddress,
@@ -89,49 +107,77 @@ export async function POST(request: NextRequest) {
       status,
     } = body;
 
-    if (!templateId || !customerName || !rows) {
+    if (!templateId || !partyId || !Array.isArray(rows) || rows.length === 0) {
       return NextResponse.json(
-        { error: "Template, customer name, and rows are required" },
+        { error: "Template, party, and at least one row are required" },
         { status: 400 }
       );
     }
 
-    // Generate bill number
+    const party = await prisma.party.findFirst({
+      where: {
+        id: partyId,
+        isDeleted: false,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        address: true,
+        gstin: true,
+      },
+    });
+
+    if (!party) {
+      return NextResponse.json({ error: "Party not found" }, { status: 404 });
+    }
+
     const settings = await prisma.companySettings.findUnique({
       where: { id: "default" },
     });
     const prefix = settings?.billPrefix || "BILL";
     const now = new Date();
     const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
-
-    // Count existing bills this month
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    const existingCount = await prisma.bill.count({
-      where: {
-        createdAt: { gte: monthStart, lte: monthEnd },
-      },
+    const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const snapshot = buildBillSnapshotFromParty(party, {
+      customerName,
+      customerPhone,
+      customerAddress,
+      gstin,
     });
-    const billNumber = `${prefix}-${yearMonth}-${String(existingCount + 1).padStart(3, "0")}`;
 
-    const bill = await prisma.bill.create({
-      data: {
-        billNumber,
-        templateId,
-        customerName,
-        customerPhone: customerPhone || null,
-        customerAddress: customerAddress || null,
-        gstin: gstin || null,
-        rows,
-        notes: notes || null,
-        terms: terms || null,
-        subtotal: subtotal || 0,
-        taxPercent: taxPercent ?? (settings?.defaultTaxPercent || 0),
-        taxAmount: taxAmount || 0,
-        grandTotal: grandTotal || 0,
-        status: status || "DRAFT",
-        createdBy: userId!,
-      },
+    const bill = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(${BILL_NUMBER_LOCK_KEY})`;
+
+      const existingCount = await tx.bill.count({
+        where: {
+          createdAt: {
+            gte: monthStart,
+            lt: nextMonthStart,
+          },
+        },
+      });
+      const billNumber = `${prefix}-${yearMonth}-${String(existingCount + 1).padStart(3, "0")}`;
+
+      return tx.bill.create({
+        data: {
+          billNumber,
+          templateId,
+          partyId: party.id,
+          ...snapshot,
+          rows,
+          notes: notes || null,
+          terms: terms || null,
+          subtotal: subtotal || 0,
+          taxPercent: taxPercent ?? (settings?.defaultTaxPercent || 0),
+          taxAmount: taxAmount || 0,
+          grandTotal: grandTotal || 0,
+          status: status || "DRAFT",
+          createdBy: userId!,
+        },
+      });
     });
 
     return NextResponse.json({ bill }, { status: 201 });

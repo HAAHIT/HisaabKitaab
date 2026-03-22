@@ -1,22 +1,27 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
+  Button,
   Card,
   CardBody,
-  Button,
-  Input,
   Chip,
+  Input,
+  Pagination,
   Select,
   SelectItem,
   Skeleton,
-  Pagination,
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
 
 interface Bill {
   id: string;
   billNumber: string;
+  party: {
+    id: string;
+    name: string;
+    type: string;
+  } | null;
   customerName: string;
   grandTotal: number;
   status: string;
@@ -36,12 +41,17 @@ const statusColorMap: Record<string, "default" | "primary" | "success" | "danger
   CANCELLED: "danger",
 };
 
-function formatCurrency(n: number): string {
+function formatCurrency(value: number): string {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
     maximumFractionDigits: 0,
-  }).format(n);
+  }).format(value);
+}
+
+async function readError(response: Response) {
+  const data = await response.json().catch(() => null);
+  return data?.error || "Request failed";
 }
 
 export default function BillsListPage() {
@@ -52,56 +62,79 @@ export default function BillsListPage() {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "success" | "error";
+  } | null>(null);
 
   const fetchBills = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (search) params.set("search", search);
-      if (statusFilter !== "ALL") params.set("status", statusFilter);
+      if (search) {
+        params.set("search", search);
+      }
+      if (statusFilter !== "ALL") {
+        params.set("status", statusFilter);
+      }
       params.set("page", String(page));
 
-      const res = await fetch(`/api/bills?${params}`);
-      const data = await res.json();
-      setBills(data.bills || []);
+      const response = await fetch(`/api/bills?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error(await readError(response));
+      }
+
+      const data = await response.json();
+      setBills((data.bills || []) as Bill[]);
       setTotalPages(data.totalPages || 1);
-    } catch {
-      // ignore
+    } catch (error) {
+      setBills([]);
+      setTotalPages(1);
+      showToast(error instanceof Error ? error.message : "Failed to load bills", "error");
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, page]);
+  }, [page, search, statusFilter]);
 
   useEffect(() => {
     fetchBills();
   }, [fetchBills]);
 
+  function showToast(message: string, type: "success" | "error") {
+    setToast({ message, type });
+    window.setTimeout(() => setToast(null), 3000);
+  }
+
   return (
-    <div className="p-4 lg:p-8 animate-fade-in">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+    <div className="animate-fade-in p-4 lg:p-8">
+      {toast && (
+        <div
+          className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${
+            toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
+          }`}
+        >
+          {toast.message}
+        </div>
+      )}
+
+      <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Bills</h1>
-          <p className="text-default-500 text-sm mt-1">
-            Create and manage invoices
+          <p className="mt-1 text-sm text-default-500">
+            Create and manage invoices from the server record only.
           </p>
         </div>
         <Button
           color="primary"
-          className="font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 shadow-lg shadow-blue-500/25"
+          className="bg-gradient-to-r from-blue-600 to-indigo-600 font-semibold shadow-lg shadow-blue-500/25"
           onPress={() => router.push("/bills/new")}
           startContent={
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
+                d="M12 4v16m8-8H4"
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth={2}
-                d="M12 4v16m8-8H4"
               />
             </svg>
           }
@@ -110,26 +143,20 @@ export default function BillsListPage() {
         </Button>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row">
         <Input
-          placeholder="Search by bill # or customer..."
+          placeholder="Search by bill number or customer..."
           value={search}
           onValueChange={setSearch}
           variant="bordered"
           className="flex-1"
           startContent={
-            <svg
-              className="w-4 h-4 text-default-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
+            <svg className="h-4 w-4 text-default-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth={1.5}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
               />
             </svg>
           }
@@ -137,55 +164,47 @@ export default function BillsListPage() {
         <Select
           selectedKeys={[statusFilter]}
           onSelectionChange={(keys) => {
-            const val = Array.from(keys)[0] as string;
-            if (val) {
-              setStatusFilter(val);
+            const value = Array.from(keys)[0] as string;
+            if (value) {
+              setStatusFilter(value);
               setPage(1);
             }
           }}
           variant="bordered"
           className="w-40"
         >
-          {STATUS_OPTIONS.map((s) => (
-            <SelectItem key={s.key}>{s.label}</SelectItem>
+          {STATUS_OPTIONS.map((option) => (
+            <SelectItem key={option.key}>{option.label}</SelectItem>
           ))}
         </Select>
       </div>
 
-      {/* Bills List */}
       {loading ? (
         <div className="space-y-3">
-          {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-16 w-full rounded-xl" />
+          {[1, 2, 3, 4].map((item) => (
+            <Skeleton key={item} className="h-16 w-full rounded-xl" />
           ))}
         </div>
       ) : bills.length === 0 ? (
         <Card shadow="sm">
           <CardBody className="flex flex-col items-center justify-center py-16">
-            <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-              <svg
-                className="w-10 h-10 text-primary"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
+            <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
+              <svg className="h-10 w-10 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
+                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={1.5}
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                 />
               </svg>
             </div>
             <p className="text-lg font-medium text-default-600">
-              {search || statusFilter !== "ALL"
-                ? "No matching bills found"
-                : "No bills yet"}
+              {search || statusFilter !== "ALL" ? "No matching bills found" : "No bills yet"}
             </p>
-            <p className="text-sm text-default-400 mt-1">
+            <p className="mt-1 text-sm text-default-400">
               {search || statusFilter !== "ALL"
                 ? "Try changing your filters"
-                : "Create your first bill to get started!"}
+                : "Create your first bill to get started"}
             </p>
             {!search && statusFilter === "ALL" && (
               <Button
@@ -208,16 +227,14 @@ export default function BillsListPage() {
                 key={bill.id}
                 isPressable
                 shadow="sm"
-                className="hover:shadow-md transition"
+                className="transition hover:shadow-md"
                 onPress={() => router.push(`/bills/${bill.id}`)}
               >
                 <CardBody className="p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-mono font-semibold text-sm">
-                          {bill.billNumber}
-                        </span>
+                        <span className="font-mono text-sm font-semibold">{bill.billNumber}</span>
                         <Chip
                           size="sm"
                           variant="flat"
@@ -228,6 +245,11 @@ export default function BillsListPage() {
                         </Chip>
                       </div>
                       <p className="text-default-600">{bill.customerName}</p>
+                      {bill.party && (
+                        <p className="text-xs text-default-400">
+                          Party: {bill.party.name}
+                        </p>
+                      )}
                       <p className="text-xs text-default-400">
                         {new Date(bill.createdAt).toLocaleDateString("en-IN", {
                           day: "numeric",
@@ -237,9 +259,7 @@ export default function BillsListPage() {
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-lg font-bold">
-                        {formatCurrency(bill.grandTotal)}
-                      </p>
+                      <p className="text-lg font-bold">{formatCurrency(bill.grandTotal)}</p>
                     </div>
                   </div>
                 </CardBody>
@@ -247,15 +267,9 @@ export default function BillsListPage() {
             ))}
           </div>
 
-          {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex justify-center mt-6">
-              <Pagination
-                total={totalPages}
-                page={page}
-                onChange={setPage}
-                showControls
-              />
+            <div className="mt-6 flex justify-center">
+              <Pagination total={totalPages} page={page} onChange={setPage} showControls />
             </div>
           )}
         </>

@@ -1,7 +1,23 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
-// GET /api/parties/[id] — Get single party with payment history
+async function findVisibleParty(id: string) {
+  return prisma.party.findFirst({
+    where: {
+      id,
+      isDeleted: false,
+    },
+    include: {
+      payments: {
+        where: { isDeleted: false },
+        orderBy: { date: "desc" },
+        take: 20,
+      },
+    },
+  });
+}
+
+// GET /api/parties/[id] - Get single party with payment history
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -12,15 +28,7 @@ export async function GET(
   }
 
   const { id } = await params;
-  const party = await prisma.party.findUnique({
-    where: { id },
-    include: {
-      payments: {
-        orderBy: { date: "desc" },
-        take: 20,
-      },
-    },
-  });
+  const party = await findVisibleParty(id);
 
   if (!party) {
     return NextResponse.json({ error: "Party not found" }, { status: 404 });
@@ -29,7 +37,7 @@ export async function GET(
   return NextResponse.json({ party });
 }
 
-// PATCH /api/parties/[id] — Update party
+// PATCH /api/parties/[id] - Update party
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -42,6 +50,11 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json();
+    const existingParty = await findVisibleParty(id);
+
+    if (!existingParty) {
+      return NextResponse.json({ error: "Party not found" }, { status: 404 });
+    }
 
     const party = await prisma.party.update({
       where: { id },
@@ -58,7 +71,7 @@ export async function PATCH(
   }
 }
 
-// DELETE /api/parties/[id] — Soft delete
+// DELETE /api/parties/[id] - Soft delete
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -70,9 +83,18 @@ export async function DELETE(
 
   try {
     const { id } = await params;
+    const existingParty = await findVisibleParty(id);
+
+    if (!existingParty) {
+      return NextResponse.json({ error: "Party not found" }, { status: 404 });
+    }
+
     await prisma.party.update({
       where: { id },
-      data: { isActive: false },
+      data: {
+        isActive: false,
+        isDeleted: true,
+      },
     });
 
     return NextResponse.json({ success: true });

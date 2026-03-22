@@ -23,14 +23,194 @@ function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+type MathToken =
+  | { type: "number"; value: number }
+  | { type: "operator"; value: "+" | "-" | "*" | "/" | "%" }
+  | { type: "paren"; value: "(" | ")" };
+
+function tokenizeMathExpression(expression: string): MathToken[] | null {
+  const tokens: MathToken[] = [];
+  let index = 0;
+
+  while (index < expression.length) {
+    const character = expression[index];
+
+    if (/\s/.test(character)) {
+      index += 1;
+      continue;
+    }
+
+    if (/[0-9.]/.test(character)) {
+      let end = index + 1;
+      while (end < expression.length && /[0-9.]/.test(expression[end])) {
+        end += 1;
+      }
+
+      const rawValue = expression.slice(index, end);
+      if ((rawValue.match(/\./g) || []).length > 1) {
+        return null;
+      }
+
+      const value = Number.parseFloat(rawValue);
+      if (!Number.isFinite(value)) {
+        return null;
+      }
+
+      tokens.push({ type: "number", value });
+      index = end;
+      continue;
+    }
+
+    if (character === "(" || character === ")") {
+      tokens.push({ type: "paren", value: character });
+      index += 1;
+      continue;
+    }
+
+    if (character === "+" || character === "-" || character === "*" || character === "/" || character === "%") {
+      tokens.push({ type: "operator", value: character });
+      index += 1;
+      continue;
+    }
+
+    return null;
+  }
+
+  return tokens;
+}
+
+function evaluateMathExpression(expression: string): number | null {
+  const tokens = tokenizeMathExpression(expression);
+  if (!tokens || tokens.length === 0) {
+    return null;
+  }
+
+  let index = 0;
+
+  function parseExpression(): number | null {
+    let left = parseTerm();
+    if (left === null) {
+      return null;
+    }
+
+    while (
+      index < tokens.length &&
+      tokens[index].type === "operator" &&
+      (tokens[index].value === "+" || tokens[index].value === "-")
+    ) {
+      const operator = tokens[index].value;
+      index += 1;
+      const right = parseTerm();
+      if (right === null) {
+        return null;
+      }
+
+      left = operator === "+" ? left + right : left - right;
+    }
+
+    return left;
+  }
+
+  function parseTerm(): number | null {
+    let left = parseUnary();
+    if (left === null) {
+      return null;
+    }
+
+    while (
+      index < tokens.length &&
+      tokens[index].type === "operator" &&
+      (tokens[index].value === "*" || tokens[index].value === "/" || tokens[index].value === "%")
+    ) {
+      const operator = tokens[index].value;
+      index += 1;
+      const right = parseUnary();
+      if (right === null) {
+        return null;
+      }
+
+      if (operator === "*") {
+        left *= right;
+      } else if (operator === "/") {
+        if (right === 0) {
+          return null;
+        }
+        left /= right;
+      } else {
+        if (right === 0) {
+          return null;
+        }
+        left %= right;
+      }
+    }
+
+    return left;
+  }
+
+  function parseUnary(): number | null {
+    if (
+      index < tokens.length &&
+      tokens[index].type === "operator" &&
+      (tokens[index].value === "+" || tokens[index].value === "-")
+    ) {
+      const operator = tokens[index].value;
+      index += 1;
+      const value = parseUnary();
+      if (value === null) {
+        return null;
+      }
+
+      return operator === "-" ? -value : value;
+    }
+
+    return parsePrimary();
+  }
+
+  function parsePrimary(): number | null {
+    const token = tokens[index];
+    if (!token) {
+      return null;
+    }
+
+    if (token.type === "number") {
+      index += 1;
+      return token.value;
+    }
+
+    if (token.type === "paren" && token.value === "(") {
+      index += 1;
+      const value = parseExpression();
+      if (
+        value === null ||
+        index >= tokens.length ||
+        tokens[index].type !== "paren" ||
+        tokens[index].value !== ")"
+      ) {
+        return null;
+      }
+
+      index += 1;
+      return value;
+    }
+
+    return null;
+  }
+
+  const result = parseExpression();
+  if (result === null || index !== tokens.length || !Number.isFinite(result)) {
+    return null;
+  }
+
+  return result;
+}
+
 /**
  * Evaluate a formula given column definitions and current row values.
  * Returns the computed number, or null if inputs are missing.
  */
 export function evaluateFormula(
   formula: string,
-  rowValues: Record<string, number | string>,
-  _columns: ColumnDef[]
+  rowValues: Record<string, number | string>
 ): number | null {
   let expression = formula;
   const refs = extractReferences(formula);
@@ -49,14 +229,12 @@ export function evaluateFormula(
   // Replace × with * and ÷ with /
   expression = expression.replace(/×/g, "*").replace(/÷/g, "/");
 
-  try {
-    const result = new Function(`return (${expression})`)();
-    return typeof result === "number" && isFinite(result)
-      ? Math.round(result * 100) / 100
-      : null;
-  } catch {
+  const result = evaluateMathExpression(expression);
+  if (result === null) {
     return null;
   }
+
+  return Math.round(result * 100) / 100;
 }
 
 /**
@@ -71,7 +249,7 @@ export function evaluateRow(
 
   for (const col of sortedColumns) {
     if (col.type === "formula" && col.formula) {
-      const computed = evaluateFormula(col.formula, result, columns);
+      const computed = evaluateFormula(col.formula, result);
       if (computed !== null) {
         result[col.id] = computed;
       }

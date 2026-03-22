@@ -23,15 +23,34 @@ type LedgerEntry = {
   link?: string;
 };
 
+type PartyProfile = {
+  name: string;
+  type: "CUSTOMER" | "VENDOR";
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  gstin: string | null;
+  openingBalance: number;
+  createdAt: Date;
+};
+
+type MeasurementItem = {
+  id: string;
+  label: string;
+  roomName: string | null;
+  status: string;
+  createdAt: Date;
+};
+
 export default function PartyProfileClient({
   party,
   ledger,
   measurements,
   calculatedCurrent,
 }: {
-  party: any;
+  party: PartyProfile;
   ledger: LedgerEntry[];
-  measurements: any[];
+  measurements: MeasurementItem[];
   calculatedCurrent: number;
 }) {
   return (
@@ -158,7 +177,7 @@ export default function PartyProfileClient({
                 </h2>
                 {measurements.length > 0 ? (
                   <div className="space-y-3">
-                    {measurements.map((m: any) => (
+                    {measurements.map((m) => (
                       <div key={m.id} className="p-3 border border-default-200 rounded-lg flex items-center justify-between hover:bg-default-50 transition">
                         <div>
                           <p className="font-medium">{m.label}</p>

@@ -42,6 +42,7 @@ export default function UserManagementPage() {
   const [formPhone, setFormPhone] = useState("");
   const [formPassword, setFormPassword] = useState("");
   const [formRole, setFormRole] = useState("STAFF");
+  const [showPassword, setShowPassword] = useState(false);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -80,6 +81,7 @@ export default function UserManagementPage() {
     setFormPhone("");
     setFormPassword("");
     setFormRole("STAFF");
+    setShowPassword(false);
     setShowPanel(true);
   }
 
@@ -90,6 +92,7 @@ export default function UserManagementPage() {
     setFormPhone(user.phone || "");
     setFormPassword("");
     setFormRole(user.role);
+    setShowPassword(false);
     setShowPanel(true);
   }
 
@@ -364,20 +367,30 @@ export default function UserManagementPage() {
                   <Input
                     label="Password"
                     placeholder={editingUser ? "Leave blank to keep current" : "Min 6 characters"}
-                    type="text"
+                    type={showPassword ? "text" : "password"}
                     value={formPassword}
                     onValueChange={setFormPassword}
                     variant="bordered"
                     isRequired={!editingUser}
                     endContent={
-                      <Button
-                        size="sm"
-                        variant="flat"
-                        onPress={generatePassword}
-                        className="text-xs"
-                      >
-                        Generate
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          size="sm"
+                          variant="flat"
+                          onPress={() => setShowPassword((current) => !current)}
+                          className="text-xs"
+                        >
+                          {showPassword ? "Hide" : "Show"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="flat"
+                          onPress={generatePassword}
+                          className="text-xs"
+                        >
+                          Generate
+                        </Button>
+                      </div>
                     }
                   />
                 </div>

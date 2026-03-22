@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   const type = searchParams.get("type") || "";
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = { isActive: true };
+  const where: any = { isActive: true, isDeleted: false };
 
   if (search) {
     where.OR = [

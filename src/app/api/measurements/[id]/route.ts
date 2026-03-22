@@ -1,7 +1,32 @@
-import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { serializeMeasurementUpload } from "@/lib/media";
+import { prisma } from "@/lib/prisma";
 
-// GET /api/measurements/[id] — Get single measurement
+const measurementInclude = {
+  customer: { select: { name: true, phone: true, email: true } },
+  party: { select: { id: true, name: true, type: true } },
+  photoAssets: {
+    orderBy: { sortOrder: "asc" as const },
+    select: {
+      sortOrder: true,
+      asset: {
+        select: { id: true },
+      },
+    },
+  },
+};
+
+async function findVisibleMeasurement(id: string) {
+  return prisma.measurementUpload.findFirst({
+    where: {
+      id,
+      isDeleted: false,
+    },
+    include: measurementInclude,
+  });
+}
+
+// GET /api/measurements/[id] - Get single measurement
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -14,26 +39,22 @@ export async function GET(
   }
 
   const { id } = await params;
-  const measurement = await prisma.measurementUpload.findUnique({
-    where: { id },
-    include: {
-      customer: { select: { name: true, phone: true, email: true } },
-    },
-  });
+  const measurement = await findVisibleMeasurement(id);
 
   if (!measurement) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  // Ensure security: Customers can only see their own
   if (role === "CUSTOMER" && measurement.customerId !== userId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  return NextResponse.json({ measurement });
+  return NextResponse.json({
+    measurement: serializeMeasurementUpload(measurement),
+  });
 }
 
-// PATCH /api/measurements/[id] — Update measurement status (Staff/Admin)
+// PATCH /api/measurements/[id] - Update measurement status or party link
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -48,20 +69,59 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { status, reviewNotes } = body;
+    const { status, reviewNotes, partyId } = body;
+    const existingMeasurement = await findVisibleMeasurement(id);
+
+    if (!existingMeasurement) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
 
     const data: Record<string, unknown> = {
-      status,
-      reviewNotes: reviewNotes || null,
       reviewedBy: userId,
     };
+
+    if (typeof status === "string" && status) {
+      data.status = status;
+    }
+
+    if (reviewNotes !== undefined) {
+      data.reviewNotes =
+        typeof reviewNotes === "string" && reviewNotes.trim()
+          ? reviewNotes.trim()
+          : null;
+    }
+
+    if (partyId !== undefined) {
+      if (partyId === null) {
+        data.partyId = null;
+      } else {
+        const party = await prisma.party.findFirst({
+          where: {
+            id: partyId,
+            type: "CUSTOMER",
+            isDeleted: false,
+            isActive: true,
+          },
+          select: { id: true },
+        });
+
+        if (!party) {
+          return NextResponse.json({ error: "Party not found" }, { status: 404 });
+        }
+
+        data.partyId = party.id;
+      }
+    }
 
     const measurement = await prisma.measurementUpload.update({
       where: { id },
       data,
+      include: measurementInclude,
     });
 
-    return NextResponse.json({ measurement });
+    return NextResponse.json({
+      measurement: serializeMeasurementUpload(measurement),
+    });
   } catch (error) {
     console.error("Update measurement error:", error);
     return NextResponse.json(
@@ -71,7 +131,7 @@ export async function PATCH(
   }
 }
 
-// DELETE /api/measurements/[id] — Delete measurement (Admin only)
+// DELETE /api/measurements/[id] - Soft delete measurement
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -84,7 +144,23 @@ export async function DELETE(
 
   try {
     const { id } = await params;
-    await prisma.measurementUpload.delete({ where: { id } });
+    const measurement = await prisma.measurementUpload.findFirst({
+      where: {
+        id,
+        isDeleted: false,
+      },
+    });
+
+    if (!measurement) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    // Keep assets attached to tombstoned measurements so audit and recovery remain possible.
+    await prisma.measurementUpload.update({
+      where: { id },
+      data: { isDeleted: true },
+    });
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Delete measurement error:", error);

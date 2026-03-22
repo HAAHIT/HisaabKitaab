@@ -42,6 +42,7 @@ model BillTemplate {
   createdBy String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  isDeleted Boolean  @default(false)
   bills     Bill[]
 }
 
@@ -52,6 +53,8 @@ model Bill {
   billNumber      String     @unique
   templateId      String
   template        BillTemplate @relation(fields: [templateId], references: [id])
+  partyId         String?
+  party           Party?     @relation(fields: [partyId], references: [id])
   customerName    String
   customerPhone   String?
   customerAddress String?
@@ -69,11 +72,12 @@ model Bill {
   creator         User       @relation(fields: [createdBy], references: [id])
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
+  isDeleted       Boolean    @default(false)
 }
 
 enum BillStatus {
   DRAFT
-  FINALIZED
+  FINAL
   CANCELLED
 }
 
@@ -90,8 +94,11 @@ model Party {
   openingBalance Float     @default(0)
   currentBalance Float     @default(0)
   isActive       Boolean   @default(true)
+  isDeleted      Boolean   @default(false)
   createdBy      String?
+  bills          Bill[]
   payments       Payment[]
+  measurements   MeasurementUpload[]
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 }
@@ -120,6 +127,8 @@ model Payment {
   createdBy    String
   creator      User          @relation(fields: [createdBy], references: [id])
   createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  isDeleted    Boolean       @default(false)
 }
 
 enum PayDirection {
@@ -139,20 +148,56 @@ enum PaymentStatus {
   COMPLETED
 }
 
+enum MediaAssetKind {
+  COMPANY_LOGO
+  MEASUREMENT_PHOTO
+}
+
+model MediaAsset {
+  id                String             @id @default(cuid())
+  kind              MediaAssetKind
+  storageProvider   String
+  storageKey        String             @unique
+  mimeType          String
+  bytes             Int
+  originalName      String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  companyLogoFor    CompanySettings[]  @relation("CompanyLogoAsset")
+  measurementPhotos MeasurementPhoto[]
+}
+
+model MeasurementPhoto {
+  id            String            @id @default(cuid())
+  measurementId String
+  measurement   MeasurementUpload @relation(fields: [measurementId], references: [id], onDelete: Cascade)
+  assetId       String
+  asset         MediaAsset        @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  sortOrder     Int               @default(0)
+  createdAt     DateTime          @default(now())
+
+  @@index([measurementId, sortOrder])
+  @@index([assetId])
+}
+
 // ── Measurements ──────────────────────────────────────
 
 model MeasurementUpload {
   id          String            @id @default(cuid())
   customerId  String
   customer    User              @relation(fields: [customerId], references: [id])
+  partyId     String?
+  party       Party?            @relation(fields: [partyId], references: [id])
   label       String
   roomName    String?
   doorType    String?
   notes       String?
-  photos      Json              // Array of { url, thumbnailUrl }
+  photosLegacy Json             @map("photos") // Legacy base64 strings / URLs kept only as migration fallback.
+  photoAssets  MeasurementPhoto[]
   status      MeasurementStatus @default(UPLOADED)
   reviewedBy  String?
   reviewNotes String?
+  isDeleted   Boolean           @default(false)
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 }
@@ -168,14 +213,16 @@ enum MeasurementStatus {
 // ── Company Settings ──────────────────────────────────
 
 model CompanySettings {
-  id                String  @id @default("default")
-  companyName       String  @default("")
-  companyAddress    String  @default("")
-  companyPhone      String  @default("")
-  companyEmail      String  @default("")
-  companyGstin      String  @default("")
-  companyLogo       String?
-  defaultTaxPercent Float   @default(18)
-  defaultTerms      String  @default("")
-  billPrefix        String  @default("BILL")
+  id                 String      @id @default("default")
+  companyName        String      @default("")
+  companyAddress     String      @default("")
+  companyPhone       String      @default("")
+  companyEmail       String      @default("")
+  companyGstin       String      @default("")
+  companyLogoLegacy  String?     @map("companyLogo")
+  companyLogoAssetId String?
+  companyLogoAsset   MediaAsset? @relation("CompanyLogoAsset", fields: [companyLogoAssetId], references: [id])
+  defaultTaxPercent  Float       @default(18)
+  defaultTerms       String      @default("")
+  billPrefix         String      @default("BILL")
 }

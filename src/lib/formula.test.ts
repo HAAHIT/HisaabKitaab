@@ -20,25 +20,25 @@ const MOCK_COLUMNS: ColumnDef[] = [
 describe("Formula Evaluator Engine", () => {
   it("evaluates a standard formula correctly", () => {
     // Tests: {col_qty} * {col_rate}
-    const result = evaluateFormula("{col_qty} * {col_rate}", { col_qty: 10, col_rate: 200 }, MOCK_COLUMNS);
+    const result = evaluateFormula("{col_qty} * {col_rate}", { col_qty: 10, col_rate: 200 });
     expect(result).toBe(2000);
   });
 
   it("handles missing variables gracefully", () => {
-    const result = evaluateFormula("{col_qty} * {col_rate}", { col_qty: 10 }, MOCK_COLUMNS);
+    const result = evaluateFormula("{col_qty} * {col_rate}", { col_qty: 10 });
     // Because col_rate is missing from row Values, it should return null without throwing
     expect(result).toBeNull();
   });
 
   it("guards against division by zero", () => {
     // 10 / 0 = Infinity. The engine should trap this and return null.
-    const result = evaluateFormula("{col_qty} / {col_discount}", { col_qty: 10, col_discount: 0 }, MOCK_COLUMNS);
+    const result = evaluateFormula("{col_qty} / {col_discount}", { col_qty: 10, col_discount: 0 });
     expect(result).toBeNull();
   });
 
   it("handles floating point precision clamping", () => {
     // JS 0.1 + 0.2 = 0.30000000000000004. Engine should clamp to 2 decimals.
-    const result = evaluateFormula("{col_qty} + {col_rate}", { col_qty: 0.1, col_rate: 0.2 }, MOCK_COLUMNS);
+    const result = evaluateFormula("{col_qty} + {col_rate}", { col_qty: 0.1, col_rate: 0.2 });
     expect(result).toBe(0.3);
   });
 
@@ -72,7 +72,6 @@ describe("Formula ID Translator", () => {
   });
 
   it("correctly identifies variables inside completely malformed brackets", () => {
-    const refs = extractReferences("{(Qty)} * { Rate } - {Discount}");
     // wait, extractReferences uses strict match `\{([^}]+)\}` and trims nothing, so spaces are included verbatim!
     // The current engine regex treats `{ Rate }` as literally " Rate " inside the string!
     // Let's verify it simply works as written.

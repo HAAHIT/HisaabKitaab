@@ -1,14 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import {
-  Card,
-  CardBody,
-  Button,
-  Chip,
-  Skeleton,
-} from "@heroui/react";
+import { useCallback, useEffect, useState } from "react";
+import Image from "next/image";
+import { Button, Card, CardBody, Chip, Skeleton } from "@heroui/react";
 import { useRouter } from "next/navigation";
+import { db, type MeasurementDraft } from "@/lib/db";
+import { useSync } from "@/hooks/useSync";
 
 interface MeasurementUpload {
   id: string;
@@ -16,74 +13,137 @@ interface MeasurementUpload {
   roomName: string | null;
   doorType: string | null;
   notes: string | null;
-  photos: { url: string; thumbnailUrl: string }[];
+  photos: { url: string; thumbnailUrl?: string }[];
   status: string;
-  reviewNotes: string | null;
+  reviewNotes?: string | null;
   createdAt: string;
 }
 
-const STATUS_CONFIG: Record<string, { color: "default" | "warning" | "primary" | "secondary" | "success"; label: string }> = {
-  UPLOADED: { color: "default", label: "📤 Uploaded" },
-  PENDING: { color: "warning", label: "🕐 Pending Review" },
-  REVIEWED: { color: "primary", label: "✅ Reviewed" },
-  IN_PRODUCTION: { color: "secondary", label: "🏭 In Production" },
-  COMPLETED: { color: "success", label: "🎉 Completed" },
+const STATUS_CONFIG: Record<
+  string,
+  { color: "default" | "warning" | "primary" | "secondary" | "success"; label: string }
+> = {
+  UPLOADED: { color: "default", label: "Uploaded" },
+  PENDING: { color: "warning", label: "Pending Review" },
+  REVIEWED: { color: "primary", label: "Reviewed" },
+  IN_PRODUCTION: { color: "secondary", label: "In Production" },
+  COMPLETED: { color: "success", label: "Completed" },
 };
+
+function formatDate(value: string | number) {
+  return new Date(value).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
 
 export default function MyUploadsPage() {
   const router = useRouter();
+  const { isOnline, isSyncing, syncAll } = useSync();
   const [uploads, setUploads] = useState<MeasurementUpload[]>([]);
+  const [drafts, setDrafts] = useState<MeasurementDraft[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchUploads = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/measurements");
-      const data = await res.json();
-      setUploads(data.measurements || []);
-    } catch { /* ignore */ } finally { setLoading(false); }
+      const draftPromise = db.measurementDrafts.orderBy("createdAt").reverse().toArray();
+      const serverPromise = fetch("/api/measurements")
+        .then(async (response) => {
+          if (!response.ok) {
+            return [];
+          }
+
+          const data = await response.json();
+          return (data.measurements || []) as MeasurementUpload[];
+        })
+        .catch(() => []);
+
+      const [nextDrafts, nextUploads] = await Promise.all([draftPromise, serverPromise]);
+      setDrafts(nextDrafts);
+      setUploads(nextUploads);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  useEffect(() => { fetchUploads(); }, [fetchUploads]);
+  useEffect(() => {
+    fetchUploads();
+  }, [fetchUploads, isSyncing]);
 
   return (
-    <div className="p-4 lg:p-8 animate-fade-in">
-      <div className="flex items-center justify-between mb-6">
+    <div className="animate-fade-in p-4 lg:p-8">
+      <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">My Uploads</h1>
-          <p className="text-default-500 text-sm mt-1">Track the status of your measurement uploads</p>
+          <p className="mt-1 text-sm text-default-500">
+            Server records are authoritative. Local drafts stay separate until they upload.
+          </p>
         </div>
-        <Button
-          color="primary"
-          className="font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 shadow-lg shadow-blue-500/25"
-          onPress={() => router.push("/measurements/upload")}
-          startContent={
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-          }
-        >
-          New Upload
-        </Button>
+        <div className="flex gap-2">
+          {!isOnline && (
+            <Chip size="sm" variant="flat" color="warning">
+              Offline
+            </Chip>
+          )}
+          {isSyncing && (
+            <Chip size="sm" variant="flat" color="primary" className="animate-pulse">
+              Syncing drafts
+            </Chip>
+          )}
+          {drafts.length > 0 && isOnline && (
+            <Button variant="flat" color="secondary" onPress={syncAll}>
+              Sync Now
+            </Button>
+          )}
+          <Button
+            color="primary"
+            className="bg-gradient-to-r from-blue-600 to-indigo-600 font-semibold shadow-lg shadow-blue-500/25"
+            onPress={() => router.push("/measurements/upload")}
+            startContent={
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  d="M12 4v16m8-8H4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                />
+              </svg>
+            }
+          >
+            New Upload
+          </Button>
+        </div>
       </div>
 
       {loading ? (
         <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-40 rounded-xl" />
+          {[1, 2, 3].map((item) => (
+            <Skeleton key={item} className="h-40 rounded-xl" />
           ))}
         </div>
-      ) : uploads.length === 0 ? (
+      ) : uploads.length === 0 && drafts.length === 0 ? (
         <Card shadow="sm">
           <CardBody className="flex flex-col items-center justify-center py-16">
-            <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-              <svg className="w-10 h-10 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+            <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
+              <svg className="h-10 w-10 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.5}
+                />
+                <path
+                  d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.5}
+                />
               </svg>
             </div>
             <p className="text-lg font-medium text-default-600">No uploads yet</p>
-            <p className="text-sm text-default-400 mt-1 text-center max-w-sm">
+            <p className="mt-1 max-w-sm text-center text-sm text-default-400">
               Upload photos of doors and measurements so the factory team can review them.
             </p>
             <Button
@@ -93,84 +153,173 @@ export default function MyUploadsPage() {
               className="mt-4"
               onPress={() => router.push("/measurements/upload")}
             >
-              📸 Upload Your First Measurement
+              Upload Your First Measurement
             </Button>
           </CardBody>
         </Card>
       ) : (
-        <div className="space-y-4">
-          {uploads.map((upload) => {
-            const statusCfg = STATUS_CONFIG[upload.status] || STATUS_CONFIG.UPLOADED;
-            return (
-              <Card key={upload.id} shadow="sm" className="hover:shadow-md transition">
-                <CardBody className="p-5">
-                  <div className="flex flex-col gap-3">
-                    {/* Header row */}
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h3 className="font-semibold text-lg">{upload.label}</h3>
-                        <div className="flex gap-2 mt-1 flex-wrap">
-                          {upload.roomName && (
-                            <span className="text-xs text-default-400 bg-default-100 px-2 py-0.5 rounded-full">
-                              🏠 {upload.roomName}
-                            </span>
-                          )}
-                          {upload.doorType && (
-                            <span className="text-xs text-default-400 bg-default-100 px-2 py-0.5 rounded-full">
-                              🚪 {upload.doorType}
-                            </span>
-                          )}
-                          <span className="text-xs text-default-400">
-                            {new Date(upload.createdAt).toLocaleDateString("en-IN", {
-                              day: "numeric",
-                              month: "short",
-                              year: "numeric",
-                            })}
-                          </span>
-                        </div>
-                      </div>
-                      <Chip size="sm" variant="flat" color={statusCfg.color}>
-                        {statusCfg.label}
-                      </Chip>
-                    </div>
+        <div className="space-y-8">
+          {drafts.length > 0 && (
+            <section className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold">Pending On This Device</h2>
+                  <p className="text-sm text-default-500">
+                    These drafts have not reached the server yet.
+                  </p>
+                </div>
+                <Chip size="sm" variant="flat" color={isOnline ? "primary" : "warning"}>
+                  {isOnline ? "Ready to sync" : "Waiting for connection"}
+                </Chip>
+              </div>
 
-                    {/* Photos */}
-                    {upload.photos && upload.photos.length > 0 && (
-                      <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-                        {upload.photos.map((photo, i) => (
-                          <div
-                            key={i}
-                            className="aspect-square rounded-lg overflow-hidden bg-default-100"
-                          >
-                            <img
-                              src={photo.thumbnailUrl || photo.url}
-                              alt={`${upload.label} - ${i + 1}`}
-                              className="w-full h-full object-cover"
-                            />
+              <div className="space-y-4">
+                {drafts.map((draft) => (
+                  <Card key={draft.id} shadow="sm" className="border border-warning/30 bg-warning/5">
+                    <CardBody className="p-5">
+                      <div className="flex flex-col gap-3">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-lg font-semibold">{draft.label}</h3>
+                              <Chip size="sm" variant="flat" color="warning">
+                                Pending Upload
+                              </Chip>
+                            </div>
+                            <div className="mt-1 flex flex-wrap gap-2">
+                              {draft.roomName && (
+                                <span className="rounded-full bg-default-100 px-2 py-0.5 text-xs text-default-400">
+                                  {draft.roomName}
+                                </span>
+                              )}
+                              {draft.doorType && (
+                                <span className="rounded-full bg-default-100 px-2 py-0.5 text-xs text-default-400">
+                                  {draft.doorType}
+                                </span>
+                              )}
+                              <span className="text-xs text-default-400">
+                                {formatDate(draft.createdAt)}
+                              </span>
+                            </div>
                           </div>
-                        ))}
-                      </div>
-                    )}
+                        </div>
 
-                    {/* Notes */}
-                    {upload.notes && (
-                      <p className="text-sm text-default-500 bg-default-50 p-3 rounded-lg">
-                        📝 {upload.notes}
-                      </p>
-                    )}
+                        {draft.photos.length > 0 && (
+                          <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+                            {draft.photos.map((photo, index) => (
+                              <div
+                                key={`${draft.id}-${index}`}
+                                className="relative aspect-square overflow-hidden rounded-lg bg-default-100"
+                              >
+                                <Image
+                                  src={photo}
+                                  alt={`${draft.label} draft ${index + 1}`}
+                                  fill
+                                  unoptimized
+                                  className="object-cover"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        )}
 
-                    {/* Review notes from admin */}
-                    {upload.reviewNotes && (
-                      <div className="bg-primary/5 border border-primary/20 rounded-lg p-3">
-                        <p className="text-xs font-semibold text-primary mb-1">Review Notes:</p>
-                        <p className="text-sm text-default-700">{upload.reviewNotes}</p>
+                        {draft.notes && (
+                          <p className="rounded-lg bg-default-50 p-3 text-sm text-default-500">
+                            {draft.notes}
+                          </p>
+                        )}
                       </div>
-                    )}
-                  </div>
-                </CardBody>
-              </Card>
-            );
-          })}
+                    </CardBody>
+                  </Card>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {uploads.length > 0 && (
+            <section className="space-y-4">
+              <div>
+                <h2 className="text-lg font-semibold">Uploaded To Server</h2>
+                <p className="text-sm text-default-500">
+                  These records come from the canonical measurement API.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                {uploads.map((upload) => {
+                  const status = STATUS_CONFIG[upload.status] || STATUS_CONFIG.UPLOADED;
+
+                  return (
+                    <Card key={upload.id} shadow="sm" className="transition hover:shadow-md">
+                      <CardBody className="p-5">
+                        <div className="flex flex-col gap-3">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <h3 className="text-lg font-semibold">{upload.label}</h3>
+                              </div>
+                              <div className="mt-1 flex flex-wrap gap-2">
+                                {upload.roomName && (
+                                  <span className="rounded-full bg-default-100 px-2 py-0.5 text-xs text-default-400">
+                                    {upload.roomName}
+                                  </span>
+                                )}
+                                {upload.doorType && (
+                                  <span className="rounded-full bg-default-100 px-2 py-0.5 text-xs text-default-400">
+                                    {upload.doorType}
+                                  </span>
+                                )}
+                                <span className="text-xs text-default-400">
+                                  {formatDate(upload.createdAt)}
+                                </span>
+                              </div>
+                            </div>
+                            <Chip size="sm" variant="flat" color={status.color}>
+                              {status.label}
+                            </Chip>
+                          </div>
+
+                          {upload.photos.length > 0 && (
+                            <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+                              {upload.photos.map((photo, index) => (
+                                <div
+                                  key={`${upload.id}-${index}`}
+                                  className="relative aspect-square overflow-hidden rounded-lg bg-default-100"
+                                >
+                                  <Image
+                                    src={photo.thumbnailUrl || photo.url}
+                                    alt={`${upload.label} ${index + 1}`}
+                                    fill
+                                    unoptimized
+                                    className="object-cover"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {upload.notes && (
+                            <p className="rounded-lg bg-default-50 p-3 text-sm text-default-500">
+                              {upload.notes}
+                            </p>
+                          )}
+
+                          {upload.reviewNotes && (
+                            <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
+                              <p className="mb-1 text-xs font-semibold text-primary">
+                                Review Notes
+                              </p>
+                              <p className="text-sm text-default-700">{upload.reviewNotes}</p>
+                            </div>
+                          )}
+                        </div>
+                      </CardBody>
+                    </Card>
+                  );
+                })}
+              </div>
+            </section>
+          )}
         </div>
       )}
     </div>

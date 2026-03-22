@@ -1,6 +1,22 @@
-import { prisma } from "@/lib/prisma";
+import { Role } from "@prisma/client";
 import { hashPassword } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+
+const VALID_ROLES = new Set(Object.values(Role));
+
+function normalizeOptionalString(value: unknown) {
+  if (value === null) {
+    return null;
+  }
+
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
 
 // GET /api/users — List all users (Admin only)
 export async function GET(request: NextRequest) {
@@ -36,7 +52,13 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { name, email, phone, password, userRole } = body;
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    const email = normalizeOptionalString(body.email);
+    const phone =
+      typeof body.phone === "string" ? body.phone.trim() : "";
+    const password = typeof body.password === "string" ? body.password : "";
+    const userRole =
+      typeof body.userRole === "string" ? body.userRole : "STAFF";
 
     if (!name || !phone || !password) {
       return NextResponse.json(
@@ -48,6 +70,20 @@ export async function POST(request: NextRequest) {
     if (password.length < 6) {
       return NextResponse.json(
         { error: "Password must be at least 6 characters" },
+        { status: 400 }
+      );
+    }
+
+    if (email === undefined) {
+      return NextResponse.json(
+        { error: "Email must be a string" },
+        { status: 400 }
+      );
+    }
+
+    if (!VALID_ROLES.has(userRole as Role)) {
+      return NextResponse.json(
+        { error: "Invalid user role" },
         { status: 400 }
       );
     }
@@ -79,7 +115,7 @@ export async function POST(request: NextRequest) {
         email: email || null,
         phone,
         password: hashedPassword,
-        role: userRole || "STAFF",
+        role: userRole,
         createdBy: adminId,
       },
       select: {

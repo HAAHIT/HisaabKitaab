@@ -1,8 +1,28 @@
+import { Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 
-// PATCH /api/users/[id] — Update a user (Admin only)
+const VALID_ROLES = new Set(Object.values(Role));
+
+function hasOwn(body: Record<string, unknown>, key: string) {
+  return Object.prototype.hasOwnProperty.call(body, key);
+}
+
+function normalizeOptionalString(value: unknown) {
+  if (value === null) {
+    return null;
+  }
+
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+// PATCH /api/users/[id] - Update a user (Admin only)
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -14,16 +34,120 @@ export async function PATCH(
 
   try {
     const { id } = await params;
-    const body = await request.json();
-    const { name, email, phone, userRole, isActive, password } = body;
+    const body = (await request.json()) as Record<string, unknown>;
+    const existingUser = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+
+    if (!existingUser) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
 
     const updateData: Record<string, unknown> = {};
-    if (name !== undefined) updateData.name = name;
-    if (email !== undefined) updateData.email = email || null;
-    if (phone !== undefined) updateData.phone = phone;
-    if (userRole !== undefined) updateData.role = userRole;
-    if (isActive !== undefined) updateData.isActive = isActive;
-    if (password) updateData.password = await hashPassword(password);
+
+    if (hasOwn(body, "name")) {
+      if (typeof body.name !== "string" || !body.name.trim()) {
+        return NextResponse.json(
+          { error: "Name cannot be empty" },
+          { status: 400 }
+        );
+      }
+
+      updateData.name = body.name.trim();
+    }
+
+    if (hasOwn(body, "email")) {
+      const email = normalizeOptionalString(body.email);
+      if (email === undefined) {
+        return NextResponse.json(
+          { error: "Email must be a string" },
+          { status: 400 }
+        );
+      }
+
+      if (email) {
+        const existingEmail = await prisma.user.findFirst({
+          where: {
+            email,
+            NOT: { id },
+          },
+          select: { id: true },
+        });
+
+        if (existingEmail) {
+          return NextResponse.json(
+            { error: "A user with this email already exists" },
+            { status: 409 }
+          );
+        }
+      }
+
+      updateData.email = email;
+    }
+
+    if (hasOwn(body, "phone")) {
+      const phone = normalizeOptionalString(body.phone);
+      if (!phone) {
+        return NextResponse.json(
+          { error: "Phone is required" },
+          { status: 400 }
+        );
+      }
+
+      const existingPhone = await prisma.user.findFirst({
+        where: {
+          phone,
+          NOT: { id },
+        },
+        select: { id: true },
+      });
+
+      if (existingPhone) {
+        return NextResponse.json(
+          { error: "A user with this phone already exists" },
+          { status: 409 }
+        );
+      }
+
+      updateData.phone = phone;
+    }
+
+    if (hasOwn(body, "userRole")) {
+      if (
+        typeof body.userRole !== "string" ||
+        !VALID_ROLES.has(body.userRole as Role)
+      ) {
+        return NextResponse.json(
+          { error: "Invalid user role" },
+          { status: 400 }
+        );
+      }
+
+      updateData.role = body.userRole;
+    }
+
+    if (hasOwn(body, "isActive")) {
+      if (typeof body.isActive !== "boolean") {
+        return NextResponse.json(
+          { error: "isActive must be a boolean" },
+          { status: 400 }
+        );
+      }
+
+      updateData.isActive = body.isActive;
+    }
+
+    if (hasOwn(body, "password")) {
+      if (typeof body.password !== "string" || body.password.length < 6) {
+        return NextResponse.json(
+          { error: "Password must be at least 6 characters" },
+          { status: 400 }
+        );
+      }
+
+      updateData.password = await hashPassword(body.password);
+    }
 
     const user = await prisma.user.update({
       where: { id },
@@ -49,7 +173,7 @@ export async function PATCH(
   }
 }
 
-// DELETE /api/users/[id] — Soft delete (Admin only)
+// DELETE /api/users/[id] - Soft delete (Admin only)
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

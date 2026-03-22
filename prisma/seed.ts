@@ -3,11 +3,29 @@ import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
+function getSeedPassword(envKey: string, fallback: string) {
+  const value = process.env[envKey]?.trim();
+  if (value) {
+    return value;
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      `${envKey} must be provided when seeding in production. Refusing to use demo passwords.`
+    );
+  }
+
+  return fallback;
+}
+
 async function main() {
   console.log("🌱 Seeding database...");
 
   // ── Admin User ──────────────────────────────────────
-  const adminPassword = await bcrypt.hash("admin123", 12);
+  const adminPassword = await bcrypt.hash(
+    getSeedPassword("SEED_ADMIN_PASSWORD", "admin123"),
+    12
+  );
   const admin = await prisma.user.upsert({
     where: { email: "admin@doorcraft.com" },
     update: {},
@@ -27,21 +45,23 @@ async function main() {
       name: "Door Order Invoice",
       createdBy: admin.id,
       columns: [
-        { name: "Description", type: "text", position: 0 },
-        { name: "Qty", type: "number", position: 1 },
-        { name: "Rate (₹)", type: "number", position: 2 },
+        { id: "desc-col-001", name: "Description", type: "text", position: 0 },
+        { id: "qty-col-002", name: "Qty", type: "number", position: 1 },
+        { id: "rate-col-003", name: "Rate (₹)", type: "number", position: 2 },
         {
+          id: "amount-col-004",
           name: "Amount",
           type: "formula",
           position: 3,
-          formula: "{Qty} * {Rate (₹)}",
+          formula: "{qty-col-002} * {rate-col-003}",
         },
-        { name: "Discount %", type: "number", position: 4 },
+        { id: "disc-col-005", name: "Discount %", type: "number", position: 4 },
         {
+          id: "net-col-006",
           name: "Net Amount",
           type: "formula",
           position: 5,
-          formula: "{Amount} - ({Amount} * {Discount %} / 100)",
+          formula: "{amount-col-004} - ({amount-col-004} * {disc-col-005} / 100)",
         },
       ],
     },
@@ -67,7 +87,10 @@ async function main() {
   console.log("✅ Company settings created");
 
   // ── Sample Staff user ───────────────────────────────
-  const staffPassword = await bcrypt.hash("staff123", 12);
+  const staffPassword = await bcrypt.hash(
+    getSeedPassword("SEED_STAFF_PASSWORD", "staff123"),
+    12
+  );
   await prisma.user.upsert({
     where: { email: "staff@doorcraft.com" },
     update: {},
@@ -83,7 +106,10 @@ async function main() {
   console.log("✅ Staff user created: staff@doorcraft.com");
 
   // ── Sample Customer user ────────────────────────────
-  const custPassword = await bcrypt.hash("customer123", 12);
+  const custPassword = await bcrypt.hash(
+    getSeedPassword("SEED_CUSTOMER_PASSWORD", "customer123"),
+    12
+  );
   await prisma.user.upsert({
     where: { email: "rajesh@example.com" },
     update: {},
