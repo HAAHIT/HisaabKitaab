@@ -1,6 +1,36 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
+const VALID_PARTY_TYPES = new Set(["CUSTOMER", "VENDOR"]);
+
+function normalizeOptionalString(value: unknown) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function parseOpeningBalance(value: unknown) {
+  if (value === undefined || value === null || value === "") {
+    return 0;
+  }
+
+  const numericValue =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number.parseFloat(value)
+        : Number.NaN;
+
+  if (!Number.isFinite(numericValue)) {
+    return null;
+  }
+
+  return Math.round(numericValue * 100) / 100;
+}
+
 // GET /api/parties — List all parties with balance info
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
@@ -49,24 +79,42 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { name, phone, email, address, gstin, type, openingBalance } = body;
+    const normalizedName = normalizeOptionalString(name);
+    const normalizedType =
+      typeof type === "string" ? type.trim().toUpperCase() : undefined;
+    const normalizedOpeningBalance = parseOpeningBalance(openingBalance);
 
-    if (!name || !type) {
+    if (!normalizedName || !normalizedType) {
       return NextResponse.json(
         { error: "Name and type are required" },
         { status: 400 }
       );
     }
 
+    if (!VALID_PARTY_TYPES.has(normalizedType)) {
+      return NextResponse.json(
+        { error: "Invalid party type" },
+        { status: 400 }
+      );
+    }
+
+    if (normalizedOpeningBalance === null) {
+      return NextResponse.json(
+        { error: "Opening balance must be a valid number" },
+        { status: 400 }
+      );
+    }
+
     const party = await prisma.party.create({
       data: {
-        name,
-        phone: phone || null,
-        email: email || null,
-        address: address || null,
-        gstin: gstin || null,
-        type,
-        openingBalance: openingBalance || 0,
-        currentBalance: openingBalance || 0,
+        name: normalizedName,
+        phone: normalizeOptionalString(phone),
+        email: normalizeOptionalString(email),
+        address: normalizeOptionalString(address),
+        gstin: normalizeOptionalString(gstin),
+        type: normalizedType,
+        openingBalance: normalizedOpeningBalance,
+        currentBalance: normalizedOpeningBalance,
         createdBy: userId!,
       },
     });

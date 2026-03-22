@@ -1,6 +1,17 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
+const VALID_PARTY_TYPES = new Set(["CUSTOMER", "VENDOR"]);
+
+function normalizeOptionalString(value: unknown) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
 async function findVisibleParty(id: string) {
   return prisma.party.findFirst({
     where: {
@@ -56,9 +67,75 @@ export async function PATCH(
       return NextResponse.json({ error: "Party not found" }, { status: 404 });
     }
 
+    const allowedKeys = new Set([
+      "name",
+      "phone",
+      "email",
+      "address",
+      "gstin",
+      "type",
+    ]);
+    const unexpectedKey = Object.keys(body).find((key) => !allowedKeys.has(key));
+
+    if (unexpectedKey) {
+      return NextResponse.json(
+        { error: `Unexpected field: ${unexpectedKey}` },
+        { status: 400 }
+      );
+    }
+
+    const nextName = normalizeOptionalString(body.name);
+    const nextType =
+      typeof body.type === "string" ? body.type.trim().toUpperCase() : undefined;
+
+    if (!nextName) {
+      return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    }
+
+    if (!nextType || !VALID_PARTY_TYPES.has(nextType)) {
+      return NextResponse.json({ error: "Invalid party type" }, { status: 400 });
+    }
+
+    if (nextType !== existingParty.type) {
+      const relationCounts = await prisma.party.findUnique({
+        where: { id },
+        select: {
+          _count: {
+            select: {
+              bills: true,
+              payments: true,
+              measurements: true,
+            },
+          },
+        },
+      });
+
+      const hasLinkedRecords =
+        (relationCounts?._count.bills || 0) > 0 ||
+        (relationCounts?._count.payments || 0) > 0 ||
+        (relationCounts?._count.measurements || 0) > 0;
+
+      if (hasLinkedRecords) {
+        return NextResponse.json(
+          {
+            error:
+              "Cannot change party type after bills, payments, or measurements exist",
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     const party = await prisma.party.update({
       where: { id },
-      data: body,
+      data: {
+        name: nextName,
+        phone: normalizeOptionalString(body.phone),
+        email: normalizeOptionalString(body.email),
+        address: normalizeOptionalString(body.address),
+        gstin: normalizeOptionalString(body.gstin),
+        type: nextType,
+      },
     });
 
     return NextResponse.json({ party });

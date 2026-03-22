@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { getBalanceStatusLabel, type SupportedPartyType } from "@/lib/accounting";
 import {
   Button,
   Card,
@@ -26,6 +27,12 @@ interface Party {
   _count?: { payments: number };
 }
 
+function getOpeningBalanceDescription(partyType: SupportedPartyType) {
+  return partyType === "CUSTOMER"
+    ? "Positive means customer advance. Negative means customer outstanding."
+    : "Positive means vendor advance paid. Negative means amount you still owe the vendor.";
+}
+
 const TYPE_OPTIONS = [
   { key: "ALL", label: "All" },
   { key: "CUSTOMER", label: "Customers" },
@@ -38,6 +45,14 @@ function formatCurrency(value: number): string {
     currency: "INR",
     maximumFractionDigits: 0,
   }).format(Math.abs(value));
+}
+
+function formatSignedCurrency(value: number) {
+  if (value === 0) {
+    return "INR 0";
+  }
+
+  return `${value > 0 ? "+" : "-"}${formatCurrency(value)}`;
 }
 
 async function readError(response: Response) {
@@ -322,26 +337,19 @@ export default function PartiesPage() {
                         <p
                           className={`text-lg font-bold ${
                             party.currentBalance > 0
-                              ? "text-danger"
+                              ? "text-success"
                               : party.currentBalance < 0
-                                ? "text-success"
+                                ? "text-danger"
                                 : "text-default-400"
                           }`}
                         >
-                          {party.currentBalance === 0
-                            ? "INR 0"
-                            : `${party.currentBalance > 0 ? "" : "-"}${formatCurrency(
-                                party.currentBalance
-                              )}`}
+                          {formatSignedCurrency(party.currentBalance)}
                         </p>
                         <p className="text-xs text-default-400">
-                          {party.currentBalance > 0
-                            ? party.type === "CUSTOMER"
-                              ? "to receive"
-                              : "to pay"
-                            : party.currentBalance < 0
-                              ? "advance"
-                              : "settled"}
+                          {getBalanceStatusLabel(
+                            party.type as SupportedPartyType,
+                            party.currentBalance
+                          )}
                         </p>
                       </div>
 
@@ -477,7 +485,9 @@ export default function PartiesPage() {
                     value={formBalance}
                     onValueChange={setFormBalance}
                     variant="bordered"
-                    description="Positive means they owe you. Negative means you owe them."
+                    description={getOpeningBalanceDescription(
+                      formType as SupportedPartyType
+                    )}
                   />
                 )}
 

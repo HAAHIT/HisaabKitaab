@@ -22,14 +22,24 @@ export async function GET(request: NextRequest) {
       overdueCount,
       billStats,
     ] = await Promise.all([
-      // Total receivable (customers who owe us, positive balance)
+      // Total receivable (customers who still owe us, negative balance)
       prisma.party.aggregate({
-        where: { type: "CUSTOMER", currentBalance: { gt: 0 }, isActive: true },
+        where: {
+          type: "CUSTOMER",
+          currentBalance: { lt: 0 },
+          isActive: true,
+          isDeleted: false,
+        },
         _sum: { currentBalance: true },
       }),
-      // Total payable (vendors we owe, positive balance)
+      // Total payable (vendors we still owe, negative balance)
       prisma.party.aggregate({
-        where: { type: "VENDOR", currentBalance: { gt: 0 }, isActive: true },
+        where: {
+          type: "VENDOR",
+          currentBalance: { lt: 0 },
+          isActive: true,
+          isDeleted: false,
+        },
         _sum: { currentBalance: true },
       }),
       // Payments this month (only completed)
@@ -48,13 +58,15 @@ export async function GET(request: NextRequest) {
         take: 5,
         include: { party: { select: { name: true, type: true } } },
       }),
-      // Overdue count (parties with balance > 0 and no payment in 30 days)
+      // Overdue count (parties with outstanding balance and no payment in 30 days)
       prisma.party.count({
         where: {
-          currentBalance: { gt: 0 },
+          currentBalance: { lt: 0 },
           isActive: true,
+          isDeleted: false,
           payments: {
             none: {
+              isDeleted: false,
               date: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
             },
           },
@@ -95,8 +107,8 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const receivable = receivableParties._sum.currentBalance || 0;
-    const payable = payableParties._sum.currentBalance || 0;
+    const receivable = Math.abs(receivableParties._sum.currentBalance || 0);
+    const payable = Math.abs(payableParties._sum.currentBalance || 0);
     const collectedThisMonth = monthPayments._sum.amount || 0;
 
     return NextResponse.json({

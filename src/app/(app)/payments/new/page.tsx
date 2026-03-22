@@ -2,6 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
+  getBalanceStatusLabel,
+  getSettlementDirectionForParty,
+  type SupportedPartyType,
+} from "@/lib/accounting";
+import {
   Button,
   Card,
   CardBody,
@@ -17,8 +22,17 @@ import { useRouter } from "next/navigation";
 interface Party {
   id: string;
   name: string;
-  type: "CUSTOMER" | "VENDOR";
+  type: SupportedPartyType;
   currentBalance: number;
+}
+
+function formatSignedBalance(value: number) {
+  const absolute = Math.abs(value).toLocaleString("en-IN");
+  if (value === 0) {
+    return `INR ${absolute}`;
+  }
+
+  return `${value > 0 ? "+" : "-"}INR ${absolute}`;
 }
 
 interface BillOption {
@@ -26,6 +40,19 @@ interface BillOption {
   billNumber: string;
   grandTotal: number;
   customerName: string;
+}
+
+function sanitizeAmountInput(value: string) {
+  const normalized = value.replace(/[^\d.]/g, "");
+  const parts = normalized.split(".");
+
+  if (parts.length === 1) {
+    return parts[0];
+  }
+
+  const integerPart = parts[0];
+  const decimalPart = parts.slice(1).join("").slice(0, 2);
+  return `${integerPart}.${decimalPart}`;
 }
 
 async function readError(response: Response) {
@@ -87,7 +114,7 @@ export default function RecordPaymentPage() {
 
     const party = parties.find((item) => item.id === partyId);
     if (party) {
-      setDirection(party.type === "CUSTOMER" ? "INCOMING" : "OUTGOING");
+      setDirection(getSettlementDirectionForParty(party.type));
     }
 
     setBillsLoading(true);
@@ -333,21 +360,21 @@ export default function RecordPaymentPage() {
             <div
               className={`rounded-lg px-3 py-2 text-sm ${
                 selectedParty.currentBalance > 0
-                  ? "bg-danger/10 text-danger"
+                  ? "bg-success/10 text-success"
                   : selectedParty.currentBalance < 0
-                    ? "bg-success/10 text-success"
+                    ? "bg-danger/10 text-danger"
                     : "bg-default-100 text-default-500"
               }`}
             >
               Current balance:{" "}
               <strong>
-                INR {Math.abs(selectedParty.currentBalance).toLocaleString("en-IN")}
+                {formatSignedBalance(selectedParty.currentBalance)}
               </strong>
-              {selectedParty.currentBalance > 0
-                ? " pending"
-                : selectedParty.currentBalance < 0
-                  ? " advance"
-                  : " settled"}
+              {" "}
+              {getBalanceStatusLabel(
+                selectedParty.type,
+                selectedParty.currentBalance
+              )}
             </div>
           )}
 
@@ -360,7 +387,7 @@ export default function RecordPaymentPage() {
               if (value) {
                 setBillId(value);
                 if (selectedParty) {
-                  setDirection(selectedParty.type === "CUSTOMER" ? "INCOMING" : "OUTGOING");
+                  setDirection(getSettlementDirectionForParty(selectedParty.type));
                 }
               } else {
                 setBillId("");
@@ -396,12 +423,15 @@ export default function RecordPaymentPage() {
           <Input
             label="Amount (INR)"
             placeholder="Enter amount"
-            type="number"
+            type="text"
             value={amount}
-            onValueChange={setAmount}
+            onValueChange={(value) => setAmount(sanitizeAmountInput(value))}
             variant="bordered"
             size="lg"
             isRequired
+            inputMode="decimal"
+            pattern="[0-9]*[.]?[0-9]{0,2}"
+            description="Plain text amount entry avoids accidental mouse-wheel step changes."
             startContent={<span className="text-lg text-default-400">INR</span>}
           />
 

@@ -1,5 +1,40 @@
 export type SupportedPartyType = "CUSTOMER" | "VENDOR";
 export type SupportedPayDirection = "INCOMING" | "OUTGOING";
+export type PartyLedgerEntryType = "BILL" | "PAYMENT" | "OPENING";
+
+export type PartyLedgerEntry = {
+  id: string;
+  date: Date;
+  type: PartyLedgerEntryType;
+  description: string;
+  debit: number;
+  credit: number;
+  balanceAfter: number;
+  link?: string;
+};
+
+type PartyLedgerBill = {
+  id: string;
+  billNumber: string;
+  grandTotal: number;
+  createdAt: Date;
+};
+
+type PartyLedgerPayment = {
+  id: string;
+  amount: number;
+  direction: SupportedPayDirection;
+  mode: string;
+  date: Date;
+};
+
+type PartyLedgerInput = {
+  partyType: SupportedPartyType;
+  openingBalance: number;
+  createdAt: Date;
+  bills: PartyLedgerBill[];
+  payments: PartyLedgerPayment[];
+};
 
 type BillSnapshotSource = {
   name: string;
@@ -38,15 +73,180 @@ export function getPaymentBalanceDelta(
   direction: SupportedPayDirection,
   amount: number
 ) {
-  if (partyType === "CUSTOMER") {
-    return direction === "INCOMING" ? -amount : amount;
-  }
-
-  return direction === "OUTGOING" ? -amount : amount;
+  return direction === getSettlementDirectionForParty(partyType)
+    ? amount
+    : -amount;
 }
 
 export function getSettlementDirectionForParty(
   partyType: SupportedPartyType
 ): SupportedPayDirection {
   return partyType === "CUSTOMER" ? "INCOMING" : "OUTGOING";
+}
+
+export function getBillBalanceDelta(
+  _partyType: SupportedPartyType,
+  amount: number
+) {
+  return -amount;
+}
+
+export function getLedgerAmountsForBalanceDelta(
+  partyType: SupportedPartyType,
+  balanceDelta: number
+) {
+  const amount = Math.abs(balanceDelta);
+  if (amount === 0) {
+    return { debit: 0, credit: 0 };
+  }
+
+  const positiveIsDebit = partyType === "VENDOR";
+  if (balanceDelta > 0) {
+    return positiveIsDebit
+      ? { debit: amount, credit: 0 }
+      : { debit: 0, credit: amount };
+  }
+
+  return positiveIsDebit
+    ? { debit: 0, credit: amount }
+    : { debit: amount, credit: 0 };
+}
+
+export function getBalanceIndicator(
+  partyType: SupportedPartyType,
+  balance: number
+) {
+  if (balance === 0) {
+    return null;
+  }
+
+  if (partyType === "CUSTOMER") {
+    return balance > 0 ? "Cr" : "Dr";
+  }
+
+  return balance > 0 ? "Dr" : "Cr";
+}
+
+export function getBalanceStatusLabel(
+  partyType: SupportedPartyType,
+  balance: number
+) {
+  if (balance === 0) {
+    return "settled";
+  }
+
+  if (balance > 0) {
+    return "advance balance";
+  }
+
+  return partyType === "CUSTOMER" ? "to receive" : "to pay";
+}
+
+function getBillLedgerDescription(
+  partyType: SupportedPartyType,
+  billNumber: string
+) {
+  return partyType === "CUSTOMER"
+    ? `Bill #${billNumber}`
+    : `Purchase Bill #${billNumber}`;
+}
+
+function getPaymentLedgerDescription(
+  direction: SupportedPayDirection,
+  mode: string
+) {
+  return direction === "INCOMING"
+    ? `Payment Received (${mode})`
+    : `Payment Paid (${mode})`;
+}
+
+export function buildPartyLedger({
+  partyType,
+  openingBalance,
+  createdAt,
+  bills,
+  payments,
+}: PartyLedgerInput) {
+  let runningBalance = openingBalance;
+  const openingEntry = getLedgerAmountsForBalanceDelta(
+    partyType,
+    openingBalance
+  );
+
+  const ledger: PartyLedgerEntry[] = [
+    {
+      id: "opening",
+      date: createdAt,
+      type: "OPENING",
+      description: "Opening Balance",
+      debit: openingEntry.debit,
+      credit: openingEntry.credit,
+      balanceAfter: runningBalance,
+    },
+  ];
+
+  const allTransactions = [
+    ...bills.map((bill) => ({
+      txDate: bill.createdAt,
+      kind: "BILL" as const,
+      bill,
+    })),
+    ...payments.map((payment) => ({
+      txDate: payment.date,
+      kind: "PAYMENT" as const,
+      payment,
+    })),
+  ].sort((left, right) => left.txDate.getTime() - right.txDate.getTime());
+
+  for (const transaction of allTransactions) {
+    if (transaction.kind === "BILL") {
+      const delta = getBillBalanceDelta(
+        partyType,
+        transaction.bill.grandTotal
+      );
+      runningBalance += delta;
+      const entryAmounts = getLedgerAmountsForBalanceDelta(partyType, delta);
+
+      ledger.push({
+        id: transaction.bill.id,
+        date: transaction.bill.createdAt,
+        type: "BILL",
+        description: getBillLedgerDescription(
+          partyType,
+          transaction.bill.billNumber
+        ),
+        debit: entryAmounts.debit,
+        credit: entryAmounts.credit,
+        balanceAfter: runningBalance,
+        link: `/bills/${transaction.bill.id}`,
+      });
+      continue;
+    }
+
+    const delta = getPaymentBalanceDelta(
+      partyType,
+      transaction.payment.direction,
+      transaction.payment.amount
+    );
+    runningBalance += delta;
+    const entryAmounts = getLedgerAmountsForBalanceDelta(partyType, delta);
+
+    ledger.push({
+      id: transaction.payment.id,
+      date: transaction.payment.date,
+      type: "PAYMENT",
+      description: getPaymentLedgerDescription(
+        transaction.payment.direction,
+        transaction.payment.mode
+      ),
+      debit: entryAmounts.debit,
+      credit: entryAmounts.credit,
+      balanceAfter: runningBalance,
+    });
+  }
+
+  return {
+    ledger,
+    calculatedCurrent: runningBalance,
+  };
 }

@@ -11,72 +11,80 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { searchParams } = new URL(request.url);
-  const search = searchParams.get("search") || "";
-  const status = searchParams.get("status") || "";
-  const partyId = searchParams.get("partyId") || "";
-  const from = searchParams.get("from");
-  const to = searchParams.get("to");
-  const page = parseInt(searchParams.get("page") || "1");
-  const limit = parseInt(searchParams.get("limit") || "20");
+  try {
+    const { searchParams } = new URL(request.url);
+    const search = searchParams.get("search") || "";
+    const status = searchParams.get("status") || "";
+    const partyId = searchParams.get("partyId") || "";
+    const from = searchParams.get("from");
+    const to = searchParams.get("to");
+    const page = parseInt(searchParams.get("page") || "1");
+    const limit = parseInt(searchParams.get("limit") || "20");
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = { isDeleted: false };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const where: any = { isDeleted: false };
 
-  if (search) {
-    where.OR = [
-      { billNumber: { contains: search, mode: "insensitive" } },
-      { customerName: { contains: search, mode: "insensitive" } },
-      { party: { name: { contains: search, mode: "insensitive" } } },
-    ];
-  }
+    if (search) {
+      where.OR = [
+        { billNumber: { contains: search, mode: "insensitive" } },
+        { customerName: { contains: search, mode: "insensitive" } },
+        { party: { name: { contains: search, mode: "insensitive" } } },
+      ];
+    }
 
-  if (status && status !== "ALL") {
-    where.status = status;
-  }
+    if (status && status !== "ALL") {
+      where.status = status;
+    }
 
-  if (partyId) {
-    where.partyId = partyId;
-  }
+    if (partyId) {
+      where.partyId = partyId;
+    }
 
-  if (from || to) {
-    where.createdAt = {};
-    if (from) where.createdAt.gte = new Date(from);
-    if (to) where.createdAt.lte = new Date(to);
-  }
+    if (from || to) {
+      where.createdAt = {};
+      if (from) where.createdAt.gte = new Date(from);
+      if (to) where.createdAt.lte = new Date(to);
+    }
 
-  const [bills, total] = await Promise.all([
-    prisma.bill.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      skip: (page - 1) * limit,
-      take: limit,
-      select: {
-        id: true,
-        billNumber: true,
-        partyId: true,
-        party: {
-          select: {
-            id: true,
-            name: true,
-            type: true,
+    const [bills, total] = await Promise.all([
+      prisma.bill.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * limit,
+        take: limit,
+        select: {
+          id: true,
+          billNumber: true,
+          partyId: true,
+          party: {
+            select: {
+              id: true,
+              name: true,
+              type: true,
+            },
           },
+          customerName: true,
+          grandTotal: true,
+          status: true,
+          createdAt: true,
         },
-        customerName: true,
-        grandTotal: true,
-        status: true,
-        createdAt: true,
-      },
-    }),
-    prisma.bill.count({ where }),
-  ]);
+      }),
+      prisma.bill.count({ where }),
+    ]);
 
-  return NextResponse.json({
-    bills,
-    total,
-    page,
-    totalPages: Math.ceil(total / limit),
-  });
+    return NextResponse.json({
+      bills,
+      total,
+      page,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    });
+  } catch (error) {
+    console.error("List bills error:", error);
+    return NextResponse.json(
+      { error: "Failed to load bills" },
+      { status: 500 }
+    );
+  }
 }
 
 // POST /api/bills — Create a new bill
@@ -149,7 +157,7 @@ export async function POST(request: NextRequest) {
     });
 
     const bill = await prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(${BILL_NUMBER_LOCK_KEY})`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${BILL_NUMBER_LOCK_KEY})`;
 
       const existingCount = await tx.bill.count({
         where: {

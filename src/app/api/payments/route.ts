@@ -1,11 +1,29 @@
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   getPaymentBalanceDelta,
   getSettlementDirectionForParty,
 } from "@/lib/accounting";
-import { NextRequest, NextResponse } from "next/server";
 
-// GET /api/payments — List payments with filters
+const VALID_DIRECTIONS = new Set(["INCOMING", "OUTGOING"]);
+const VALID_MODES = new Set(["CASH", "UPI", "BANK_TRANSFER", "CHEQUE"]);
+
+function parsePaymentAmount(value: unknown) {
+  const numericValue =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number.parseFloat(value)
+        : Number.NaN;
+
+  if (!Number.isFinite(numericValue) || numericValue <= 0) {
+    return null;
+  }
+
+  return Math.round(numericValue * 100) / 100;
+}
+
+// GET /api/payments - List payments with filters
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
   if (!role || role === "CUSTOMER") {
@@ -18,8 +36,8 @@ export async function GET(request: NextRequest) {
   const status = searchParams.get("status") || "";
   const from = searchParams.get("from");
   const to = searchParams.get("to");
-  const page = parseInt(searchParams.get("page") || "1");
-  const limit = parseInt(searchParams.get("limit") || "20");
+  const page = parseInt(searchParams.get("page") || "1", 10);
+  const limit = parseInt(searchParams.get("limit") || "20", 10);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: any = { isDeleted: false };
@@ -63,11 +81,11 @@ export async function GET(request: NextRequest) {
     payments,
     total,
     page,
-    totalPages: Math.ceil(total / limit),
+    totalPages: Math.max(1, Math.ceil(total / limit)),
   });
 }
 
-// POST /api/payments — Record a new payment
+// POST /api/payments - Record a new payment
 export async function POST(request: NextRequest) {
   const role = request.headers.get("x-user-role");
   const userId = request.headers.get("x-user-id");
@@ -79,19 +97,32 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { partyId, amount, type, mode, date, notes, billId, status } = body;
+    const normalizedAmount = parsePaymentAmount(amount);
 
-    if ((!partyId && !billId) || !amount || !type || !mode) {
+    if ((!partyId && !billId) || !normalizedAmount || !type || !mode) {
       return NextResponse.json(
         { error: "Party or linked bill, amount, type, and mode are required" },
         { status: 400 }
       );
     }
 
+    if (!VALID_DIRECTIONS.has(type)) {
+      return NextResponse.json(
+        { error: "Invalid payment direction" },
+        { status: 400 }
+      );
+    }
+
+    if (!VALID_MODES.has(mode)) {
+      return NextResponse.json(
+        { error: "Invalid payment mode" },
+        { status: 400 }
+      );
+    }
+
     const paymentStatus = status === "EXPECTED" ? "EXPECTED" : "COMPLETED";
 
-    // Create payment and optionally update party balance in a transaction
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const payment = await prisma.$transaction(async (tx: any) => {
+    const payment = await prisma.$transaction(async (tx) => {
       let resolvedPartyId = partyId as string | null;
       const resolvedBillId = billId || null;
 
@@ -111,7 +142,12 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        if (!linkedBill || linkedBill.status !== "FINAL" || !linkedBill.partyId || !linkedBill.party) {
+        if (
+          !linkedBill ||
+          linkedBill.status !== "FINAL" ||
+          !linkedBill.partyId ||
+          !linkedBill.party
+        ) {
           throw new Error("Linked bill must be a final bill attached to a party");
         }
 
@@ -141,7 +177,7 @@ export async function POST(request: NextRequest) {
       const newPayment = await tx.payment.create({
         data: {
           partyId: party.id,
-          amount: parseFloat(amount),
+          amount: normalizedAmount,
           direction: type,
           mode,
           status: paymentStatus,
@@ -156,13 +192,11 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // Only update party balance if payment is COMPLETED (money has actually moved)
       if (paymentStatus === "COMPLETED") {
-        const amt = parseFloat(amount);
         const balanceChange = getPaymentBalanceDelta(
           party.type,
           type,
-          amt
+          normalizedAmount
         );
 
         await tx.party.update({
@@ -180,14 +214,11 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Internal server error";
     console.error("Create payment error:", error);
-    return NextResponse.json(
-      { error: msg },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: msg }, { status: 400 });
   }
 }
 
-// PATCH /api/payments — Mark an expected payment as completed
+// PATCH /api/payments - Mark an expected payment as completed
 export async function PATCH(request: NextRequest) {
   const role = request.headers.get("x-user-role");
 
@@ -203,11 +234,12 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Payment ID required" }, { status: 400 });
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await prisma.$transaction(async (tx: any) => {
-      // Fetch the payment
-      const payment = await tx.payment.findUnique({
-        where: { id: paymentId, isDeleted: false }, // Ensure payment is not deleted
+    const result = await prisma.$transaction(async (tx) => {
+      const payment = await tx.payment.findFirst({
+        where: {
+          id: paymentId,
+          isDeleted: false,
+        },
         include: { party: { select: { type: true } } },
       });
 
@@ -219,14 +251,12 @@ export async function PATCH(request: NextRequest) {
         throw new Error("Payment is already completed");
       }
 
-      // Mark as completed
       const updated = await tx.payment.update({
         where: { id: paymentId },
         data: { status: "COMPLETED" },
         include: { party: { select: { name: true, type: true } } },
       });
 
-      // Now apply the balance change
       const balanceChange = getPaymentBalanceDelta(
         payment.party.type,
         payment.direction,
