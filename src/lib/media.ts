@@ -1,6 +1,10 @@
 import { randomUUID } from "crypto";
 import type { MediaAssetKind } from "@prisma/client";
-import { deleteStoredObject, storeBuffer, type StorageNamespace } from "@/lib/object-storage";
+import {
+  deleteStoredObject,
+  storeBuffer,
+  type StorageNamespace,
+} from "@/lib/object-storage";
 
 type AssetIdRef = {
   id: string;
@@ -254,7 +258,7 @@ export async function deleteMediaAsset(asset: {
   storageProvider: string;
   storageKey: string;
 }) {
-  if (asset.storageProvider === "local") {
-    await deleteStoredObject(asset.storageKey);
+  if (asset.storageProvider === "local" || asset.storageProvider === "gcs") {
+    await deleteStoredObject(asset.storageProvider, asset.storageKey);
   }
 }

@@ -52,12 +52,15 @@ export async function GET(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  if (asset.storageProvider !== "local") {
+  if (asset.storageProvider === "proxy") {
     return NextResponse.redirect(asset.storageKey);
   }
 
   try {
-    const fileBuffer = await readStoredObject(asset.storageKey);
+    const fileBuffer = await readStoredObject(
+      asset.storageProvider,
+      asset.storageKey
+    );
     return new NextResponse(fileBuffer, {
       headers: {
         "Content-Type": asset.mimeType,
@@ -68,3 +71,4 @@ export async function GET(
     return NextResponse.json({ error: "File missing" }, { status: 404 });
   }
 }
+

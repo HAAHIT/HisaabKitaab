@@ -1,50 +1,71 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 import { getJwtSecret } from "@/lib/jwt-secret";
+import { attachRequestIdHeader, logError } from "@/lib/observability";
 
-const PUBLIC_PATHS = ["/login", "/api/auth/login"];
+const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/health"];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const requestId = request.headers.get("x-request-id")?.trim() || crypto.randomUUID();
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-request-id", requestId);
   let jwtSecret: Uint8Array;
+
+  function nextWithRequestHeaders() {
+    return attachRequestIdHeader(
+      NextResponse.next({
+        request: {
+          headers: requestHeaders,
+        },
+      }),
+      requestId
+    );
+  }
+
+  function redirectWithRequestId(url: URL) {
+    return attachRequestIdHeader(NextResponse.redirect(url), requestId);
+  }
 
   try {
     jwtSecret = getJwtSecret();
   } catch (error) {
-    console.error("Middleware auth configuration error:", error);
-    return NextResponse.json({ error: "Server auth is misconfigured" }, { status: 500 });
+    logError("middleware.auth.misconfigured", {
+      requestId,
+      pathname,
+      error,
+    });
+    return attachRequestIdHeader(
+      NextResponse.json({ error: "Server auth is misconfigured" }, { status: 500 }),
+      requestId
+    );
   }
 
-  // Allow public paths and static assets
   if (
     PUBLIC_PATHS.some((p) => pathname.startsWith(p)) ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
     pathname.includes(".")
   ) {
-    return NextResponse.next();
+    return nextWithRequestHeaders();
   }
 
   const token = request.cookies.get("doorcraft-session")?.value;
 
   if (!token) {
     const loginUrl = new URL("/login", request.url);
-    return NextResponse.redirect(loginUrl);
+    return redirectWithRequestId(loginUrl);
   }
 
   try {
     const { payload } = await jwtVerify(token, jwtSecret);
-    
-    // Pass user info into request headers so API routes can read them
-    const requestHeaders = new Headers(request.headers);
+
     requestHeaders.set("x-user-id", payload.userId as string);
     requestHeaders.set("x-user-role", payload.role as string);
     requestHeaders.set("x-user-name", payload.name as string);
 
-    // Role-based route protection
     const role = payload.role as string;
 
-    // Customer can only access measurements
     if (role === "CUSTOMER") {
       const allowed = [
         "/measurements/upload",
@@ -56,25 +77,19 @@ export async function middleware(request: NextRequest) {
       ];
       if (!allowed.some((p) => pathname.startsWith(p))) {
         const redirectUrl = new URL("/measurements/upload", request.url);
-        return NextResponse.redirect(redirectUrl);
+        return redirectWithRequestId(redirectUrl);
       }
     }
 
-    // Admin-only routes
     if (pathname.startsWith("/settings") && role !== "ADMIN") {
       const redirectUrl = new URL("/dashboard", request.url);
-      return NextResponse.redirect(redirectUrl);
+      return redirectWithRequestId(redirectUrl);
     }
 
-    return NextResponse.next({
-      request: {
-        headers: requestHeaders,
-      },
-    });
+    return nextWithRequestHeaders();
   } catch {
-    // Invalid token — clear it and redirect to login
     const loginUrl = new URL("/login", request.url);
-    const response = NextResponse.redirect(loginUrl);
+    const response = redirectWithRequestId(loginUrl);
     response.cookies.delete("doorcraft-session");
     return response;
   }
@@ -82,12 +97,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico
-     */
     "/((?!_next/static|_next/image|favicon.ico).*)",
   ],
 };

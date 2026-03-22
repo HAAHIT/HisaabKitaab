@@ -22,6 +22,7 @@ model User {
   updatedAt DateTime @updatedAt
 
   billsCreated Bill[]
+  authThrottles AuthThrottle[]
   payments     Payment[]
   measurements MeasurementUpload[]
 }
@@ -31,6 +32,29 @@ enum Role {
   STAFF
   ACCOUNTANT
   CUSTOMER
+}
+
+enum AuthThrottleScope {
+  IP
+  CREDENTIAL
+}
+
+model AuthThrottle {
+  id             String            @id @default(cuid())
+  scope          AuthThrottleScope
+  throttleKey    String
+  userId         String?
+  user           User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  failureCount   Int               @default(0)
+  firstFailureAt DateTime?
+  lastAttemptAt  DateTime?
+  blockedUntil   DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@unique([scope, throttleKey])
+  @@index([blockedUntil])
+  @@index([userId])
 }
 
 // ── Bill Templates ────────────────────────────────────
