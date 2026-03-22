@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const search = searchParams.get("search") || "";
   const type = searchParams.get("type") || "";
+  const status = searchParams.get("status") || "";
   const from = searchParams.get("from");
   const to = searchParams.get("to");
   const page = parseInt(searchParams.get("page") || "1");
@@ -28,6 +29,10 @@ export async function GET(request: NextRequest) {
 
   if (type && type !== "ALL") {
     where.direction = type;
+  }
+
+  if (status && status !== "ALL") {
+    where.status = status;
   }
 
   if (from || to) {
@@ -68,7 +73,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { partyId, amount, type, mode, date, notes, billId } = body;
+    const { partyId, amount, type, mode, date, notes, billId, status } = body;
 
     if (!partyId || !amount || !type || !mode) {
       return NextResponse.json(
@@ -77,7 +82,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create payment and update party balance in a transaction
+    const paymentStatus = status === "EXPECTED" ? "EXPECTED" : "COMPLETED";
+
+    // Create payment and optionally update party balance in a transaction
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const payment = await prisma.$transaction(async (tx: any) => {
       const newPayment = await tx.payment.create({
@@ -86,6 +93,7 @@ export async function POST(request: NextRequest) {
           amount: parseFloat(amount),
           direction: type,
           mode,
+          status: paymentStatus,
           date: date ? new Date(date) : new Date(),
           notes: notes || null,
           linkedBillId: billId || null,
@@ -96,16 +104,23 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // Update party balance
-      const balanceChange =
-        type === "INCOMING" ? -parseFloat(amount) : parseFloat(amount);
+      // Only update party balance if payment is COMPLETED (money has actually moved)
+      if (paymentStatus === "COMPLETED") {
+        let balanceChange = 0;
+        const amt = parseFloat(amount);
+        if (newPayment.party.type === "CUSTOMER") {
+          balanceChange = type === "INCOMING" ? -amt : amt;
+        } else {
+          balanceChange = type === "OUTGOING" ? -amt : amt;
+        }
 
-      await tx.party.update({
-        where: { id: partyId },
-        data: {
-          currentBalance: { increment: balanceChange },
-        },
-      });
+        await tx.party.update({
+          where: { id: partyId },
+          data: {
+            currentBalance: { increment: balanceChange },
+          },
+        });
+      }
 
       return newPayment;
     });
@@ -117,5 +132,70 @@ export async function POST(request: NextRequest) {
       { error: "Internal server error" },
       { status: 500 }
     );
+  }
+}
+
+// PATCH /api/payments — Mark an expected payment as completed
+export async function PATCH(request: NextRequest) {
+  const role = request.headers.get("x-user-role");
+
+  if (!role || role === "CUSTOMER") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  try {
+    const body = await request.json();
+    const { paymentId } = body;
+
+    if (!paymentId) {
+      return NextResponse.json({ error: "Payment ID required" }, { status: 400 });
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await prisma.$transaction(async (tx: any) => {
+      // Fetch the payment
+      const payment = await tx.payment.findUnique({
+        where: { id: paymentId },
+        include: { party: { select: { type: true } } },
+      });
+
+      if (!payment) {
+        throw new Error("Payment not found");
+      }
+
+      if (payment.status === "COMPLETED") {
+        throw new Error("Payment is already completed");
+      }
+
+      // Mark as completed
+      const updated = await tx.payment.update({
+        where: { id: paymentId },
+        data: { status: "COMPLETED" },
+        include: { party: { select: { name: true, type: true } } },
+      });
+
+      // Now apply the balance change
+      let balanceChange = 0;
+      if (payment.party.type === "CUSTOMER") {
+        balanceChange = payment.direction === "INCOMING" ? -payment.amount : payment.amount;
+      } else {
+        balanceChange = payment.direction === "OUTGOING" ? -payment.amount : payment.amount;
+      }
+
+      await tx.party.update({
+        where: { id: payment.partyId },
+        data: {
+          currentBalance: { increment: balanceChange },
+        },
+      });
+
+      return updated;
+    });
+
+    return NextResponse.json({ payment: result });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Internal server error";
+    console.error("Mark payment completed error:", error);
+    return NextResponse.json({ error: msg }, { status: 400 });
   }
 }

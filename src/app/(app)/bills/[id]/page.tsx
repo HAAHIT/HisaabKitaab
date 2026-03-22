@@ -53,6 +53,23 @@ function formatCurrency(n: number): string {
   }).format(n);
 }
 
+function formatColumnValue(colName: string, value: number): string {
+  const lower = colName.toLowerCase();
+  const isCurrency =
+    lower.includes("rate") ||
+    lower.includes("price") ||
+    lower.includes("amount") ||
+    lower.includes("total") ||
+    lower.includes("₹") ||
+    lower.includes("rs");
+
+  if (isCurrency) return formatCurrency(value);
+  
+  return new Intl.NumberFormat("en-IN", {
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
 export default function BillDetailPage({
   params,
 }: {
@@ -326,10 +343,10 @@ export default function BillDetailPage({
                         } ${col.type === "formula" ? "text-success font-medium" : ""}`}
                       >
                         {col.type === "number" || col.type === "formula"
-                          ? typeof row[col.name] === "number"
-                            ? formatCurrency(row[col.name] as number)
-                            : row[col.name]
-                          : row[col.name] || "—"}
+                          ? typeof row[col.id] === "number"
+                            ? formatColumnValue(col.name, row[col.id] as number)
+                            : row[col.id] || "—"
+                          : row[col.id] || "—"}
                       </td>
                     ))}
                   </tr>

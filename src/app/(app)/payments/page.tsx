@@ -19,15 +19,22 @@ interface Payment {
   amount: number;
   direction: string;
   mode: string;
+  status: string;
   date: string;
   notes: string | null;
   party: { name: string; type: string };
 }
 
 const TYPE_OPTS = [
-  { key: "ALL", label: "All" },
+  { key: "ALL", label: "All Types" },
   { key: "INCOMING", label: "Received" },
   { key: "OUTGOING", label: "Paid" },
+];
+
+const STATUS_OPTS = [
+  { key: "ALL", label: "All Status" },
+  { key: "COMPLETED", label: "✅ Completed" },
+  { key: "EXPECTED", label: "🕐 Expected" },
 ];
 
 function formatCurrency(n: number): string {
@@ -40,8 +47,10 @@ export default function PaymentsListPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("ALL");
+  const [statusFilter, setStatusFilter] = useState("ALL");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [markingId, setMarkingId] = useState<string | null>(null);
 
   const fetchPayments = useCallback(async () => {
     setLoading(true);
@@ -49,15 +58,38 @@ export default function PaymentsListPage() {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (typeFilter !== "ALL") params.set("type", typeFilter);
+      if (statusFilter !== "ALL") params.set("status", statusFilter);
       params.set("page", String(page));
       const res = await fetch(`/api/payments?${params}`);
       const data = await res.json();
       setPayments(data.payments || []);
       setTotalPages(data.totalPages || 1);
     } catch { /* ignore */ } finally { setLoading(false); }
-  }, [search, typeFilter, page]);
+  }, [search, typeFilter, statusFilter, page]);
 
   useEffect(() => { fetchPayments(); }, [fetchPayments]);
+
+  async function markAsCompleted(paymentId: string) {
+    setMarkingId(paymentId);
+    try {
+      const res = await fetch("/api/payments", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentId }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "Failed to mark as completed");
+        return;
+      }
+      // Refresh the list
+      fetchPayments();
+    } catch {
+      alert("Failed to mark as completed");
+    } finally {
+      setMarkingId(null);
+    }
+  }
 
   return (
     <div className="p-4 lg:p-8 animate-fade-in">
@@ -80,6 +112,9 @@ export default function PaymentsListPage() {
         <Select selectedKeys={[typeFilter]} onSelectionChange={(keys) => { const v = Array.from(keys)[0] as string; if (v) { setTypeFilter(v); setPage(1); } }} variant="bordered" className="w-40">
           {TYPE_OPTS.map((o) => <SelectItem key={o.key}>{o.label}</SelectItem>)}
         </Select>
+        <Select selectedKeys={[statusFilter]} onSelectionChange={(keys) => { const v = Array.from(keys)[0] as string; if (v) { setStatusFilter(v); setPage(1); } }} variant="bordered" className="w-44">
+          {STATUS_OPTS.map((o) => <SelectItem key={o.key}>{o.label}</SelectItem>)}
+        </Select>
       </div>
 
       {loading ? (
@@ -89,21 +124,27 @@ export default function PaymentsListPage() {
           <div className="w-20 h-20 rounded-full bg-success/10 flex items-center justify-center mb-4">
             <svg className="w-10 h-10 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
           </div>
-          <p className="text-lg font-medium text-default-600">{search || typeFilter !== "ALL" ? "No matching payments" : "No payments recorded"}</p>
+          <p className="text-lg font-medium text-default-600">{search || typeFilter !== "ALL" || statusFilter !== "ALL" ? "No matching payments" : "No payments recorded"}</p>
           <Button color="primary" variant="flat" size="sm" className="mt-3" onPress={() => router.push("/payments/new")}>Record Payment</Button>
         </CardBody></Card>
       ) : (
         <>
           <div className="space-y-3">
             {payments.map((p) => (
-              <Card key={p.id} shadow="sm" className="hover:shadow-md transition">
+              <Card key={p.id} shadow="sm" className={`hover:shadow-md transition ${p.status === "EXPECTED" ? "border-l-4 border-l-warning" : ""}`}>
                 <CardBody className="p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex flex-col gap-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold">{p.party.name}</span>
-                        <Chip size="sm" variant="flat" color={p.direction === "INCOMING" ? "success" : "warning"} className="capitalize">
-                          {p.direction.toLowerCase()}
+                        <Chip size="sm" variant="flat" color={
+                          p.status === "EXPECTED"
+                            ? "warning"
+                            : p.direction === "INCOMING" ? "success" : "warning"
+                        }>
+                          {p.status === "EXPECTED"
+                            ? (p.direction === "INCOMING" ? "🕐 To Receive" : "🕐 To Pay")
+                            : (p.direction === "INCOMING" ? "✅ Received" : "✅ Paid")}
                         </Chip>
                         <Chip size="sm" variant="flat" color="default" className="capitalize">
                           {p.mode.toLowerCase().replace("_", " ")}
@@ -114,9 +155,22 @@ export default function PaymentsListPage() {
                         {p.notes && <span className="truncate max-w-[200px]">📝 {p.notes}</span>}
                       </div>
                     </div>
-                    <p className={`text-lg font-bold ${p.direction === "INCOMING" ? "text-success" : "text-warning"}`}>
-                      {p.direction === "INCOMING" ? "+" : "-"}{formatCurrency(p.amount)}
-                    </p>
+                    <div className="flex items-center gap-3">
+                      <p className={`text-lg font-bold ${p.direction === "INCOMING" ? "text-success" : "text-warning"}`}>
+                        {p.direction === "INCOMING" ? "+" : "-"}{formatCurrency(p.amount)}
+                      </p>
+                      {p.status === "EXPECTED" && (
+                        <Button
+                          size="sm"
+                          color="success"
+                          variant="flat"
+                          isLoading={markingId === p.id}
+                          onPress={() => markAsCompleted(p.id)}
+                        >
+                          Mark Completed
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </CardBody>
               </Card>

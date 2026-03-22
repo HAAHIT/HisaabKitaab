@@ -8,6 +8,7 @@ import {
   Skeleton,
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface DashboardData {
   summary: {
@@ -61,6 +62,7 @@ function CashFlowBar({ data }: { data: DashboardData["cashFlow"] }) {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { t } = useLanguage();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -95,8 +97,8 @@ export default function DashboardPage() {
   return (
     <div className="p-4 lg:p-8 animate-fade-in">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <p className="text-default-500 text-sm mt-1">Business overview at a glance</p>
+        <h1 className="text-2xl font-bold">{t("dash.title")}</h1>
+        <p className="text-default-500 text-sm mt-1">{t("dash.overview")}</p>
       </div>
 
       {/* Summary Cards */}
@@ -107,7 +109,7 @@ export default function DashboardPage() {
               <div className="w-10 h-10 rounded-xl bg-danger/10 flex items-center justify-center">
                 <svg className="w-5 h-5 text-danger" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" /></svg>
               </div>
-              <span className="text-sm text-default-500">Receivable</span>
+              <span className="text-sm text-default-500">{t("dash.receivable")}</span>
             </div>
             <p className="text-2xl font-bold text-danger">{formatCurrency(s?.receivable || 0)}</p>
           </CardBody>
@@ -119,7 +121,7 @@ export default function DashboardPage() {
               <div className="w-10 h-10 rounded-xl bg-warning/10 flex items-center justify-center">
                 <svg className="w-5 h-5 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
               </div>
-              <span className="text-sm text-default-500">Payable</span>
+              <span className="text-sm text-default-500">{t("dash.payable")}</span>
             </div>
             <p className="text-2xl font-bold text-warning">{formatCurrency(s?.payable || 0)}</p>
           </CardBody>
@@ -131,7 +133,7 @@ export default function DashboardPage() {
               <div className="w-10 h-10 rounded-xl bg-success/10 flex items-center justify-center">
                 <svg className="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
               </div>
-              <span className="text-sm text-default-500">Collected (Mo)</span>
+              <span className="text-sm text-default-500">{t("dash.collected")}</span>
             </div>
             <p className="text-2xl font-bold text-success">{formatCurrency(s?.collectedThisMonth || 0)}</p>
           </CardBody>
@@ -143,10 +145,10 @@ export default function DashboardPage() {
               <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
                 <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
               </div>
-              <span className="text-sm text-default-500">Total Bills</span>
+              <span className="text-sm text-default-500">{t("dash.totalBills")}</span>
             </div>
             <p className="text-2xl font-bold text-primary">{formatCurrency(billTotal)}</p>
-            <p className="text-xs text-default-400 mt-1">{billCount} bills</p>
+            <p className="text-xs text-default-400 mt-1">{billCount} {t("dash.billsCount")}</p>
           </CardBody>
         </Card>
       </div>

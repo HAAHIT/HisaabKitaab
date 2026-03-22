@@ -126,8 +126,9 @@ export default function PartiesPage() {
   }
 
   return (
-    <div className="p-4 lg:p-8 animate-fade-in relative">
-      {toast && (
+    <>
+      <div className="p-4 lg:p-8 animate-fade-in relative">
+        {toast && (
         <div className={`fixed top-4 right-4 z-[100] px-4 py-3 rounded-xl shadow-lg animate-slide-up ${toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"}`}>
           {toast.message}
         </div>
@@ -189,10 +190,21 @@ export default function PartiesPage() {
                         {p.currentBalance === 0 ? "₹0" : `${p.currentBalance > 0 ? "" : "-"}${formatCurrency(p.currentBalance)}`}
                       </p>
                       <p className="text-xs text-default-400">
-                        {p.currentBalance > 0 ? (p.type === "CUSTOMER" ? "receivable" : "payable") : p.currentBalance < 0 ? "advance" : "settled"}
+                        {p.currentBalance > 0
+                          ? (p.type === "CUSTOMER" ? "to receive" : "to pay")
+                          : p.currentBalance < 0 ? "advance" : "settled"}
                       </p>
                     </div>
-                    <div className="flex gap-1">
+                    <div className="flex gap-2 items-center mt-3 md:mt-0">
+                      <Button 
+                        size="sm" 
+                        color="secondary" 
+                        variant="flat" 
+                        onPress={() => router.push(`/parties/${p.id}`)}
+                        className="font-medium md:mr-2"
+                      >
+                        View Profile
+                      </Button>
                       <Button size="sm" variant="flat" isIconOnly onPress={() => openEdit(p)}>
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                       </Button>
@@ -207,6 +219,7 @@ export default function PartiesPage() {
           ))}
         </div>
       )}
+      </div>
 
       {/* Slide-Over Panel */}
       {showPanel && (
@@ -246,9 +259,9 @@ export default function PartiesPage() {
         </>
       )}
 
-      <style jsx>{`
+      <style>{`
         @keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
       `}</style>
-    </div>
+    </>
   );
 }

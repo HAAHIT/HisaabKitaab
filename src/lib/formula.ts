@@ -1,6 +1,7 @@
 // lib/formula.ts — Formula parser & evaluator for bill templates
 
-interface ColumnDef {
+export interface ColumnDef {
+  id: string;
   name: string;
   type: "text" | "number" | "formula" | "date" | "dropdown";
   formula?: string;
@@ -72,7 +73,7 @@ export function evaluateRow(
     if (col.type === "formula" && col.formula) {
       const computed = evaluateFormula(col.formula, result, columns);
       if (computed !== null) {
-        result[col.name] = computed;
+        result[col.id] = computed;
       }
     }
   }
@@ -115,4 +116,32 @@ export function validateFormula(
   return { valid: true };
 }
 
-export type { ColumnDef };
+/** Translates user-facing {Name} to internal {id} */
+export function translateFormulaToIds(userFormula: string, columns: ColumnDef[]): string {
+  if (!userFormula) return "";
+  let result = userFormula;
+  const refs = extractReferences(userFormula);
+  for (const ref of refs) {
+    const col = columns.find(c => c.name === ref);
+    if (col) {
+      result = result.replace(new RegExp(`\\{${escapeRegex(ref)}\\}`, "g"), `{${col.id}}`);
+    }
+  }
+  return result;
+}
+
+/** Translates internal {id} to user-facing {Name} */
+export function translateFormulaToNames(internalFormula: string, columns: ColumnDef[]): string {
+  if (!internalFormula) return "";
+  let result = internalFormula;
+  const refs = extractReferences(internalFormula);
+  for (const ref of refs) {
+    const col = columns.find(c => c.id === ref);
+    if (col) {
+      result = result.replace(new RegExp(`\\{${escapeRegex(ref)}\\}`, "g"), `{${col.name}}`);
+    } else {
+      result = result.replace(new RegExp(`\\{${escapeRegex(ref)}\\}`, "g"), `{Deleted}`);
+    }
+  }
+  return result;
+}

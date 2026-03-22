@@ -159,9 +159,10 @@ export default function UserManagementPage() {
   };
 
   return (
-    <div className="p-4 lg:p-8 animate-fade-in relative">
-      {/* Toast Notification */}
-      {toast && (
+    <>
+      <div className="p-4 lg:p-8 animate-fade-in relative">
+        {/* Toast Notification */}
+        {toast && (
         <div
           className={`fixed top-4 right-4 z-[100] px-4 py-3 rounded-xl shadow-lg animate-slide-up ${
             toast.type === "success"
@@ -306,6 +307,7 @@ export default function UserManagementPage() {
           )}
         </CardBody>
       </Card>
+      </div>
 
       {/* ── Slide-Over Panel ───────────────────────── */}
       {showPanel && (
@@ -416,19 +418,15 @@ export default function UserManagementPage() {
         </>
       )}
 
-      <style jsx>{`
+      <style>{`
         @keyframes slide-in-right {
-          from {
-            transform: translateX(100%);
-          }
-          to {
-            transform: translateX(0);
-          }
+          from { transform: translateX(100%); }
+          to { transform: translateX(0); }
         }
         .animate-slide-in-right {
           animation: slide-in-right 0.3s ease-out;
         }
       `}</style>
-    </div>
+    </>
   );
 }

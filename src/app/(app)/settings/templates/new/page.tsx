@@ -8,9 +8,10 @@ import {
   Button,
   Select,
   SelectItem,
+  Chip,
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
-import { validateFormula, type ColumnDef } from "@/lib/formula";
+import { validateFormula, translateFormulaToIds, type ColumnDef } from "@/lib/formula";
 
 const COLUMN_TYPES = [
   { key: "text", label: "Text" },
@@ -24,7 +25,7 @@ export default function CreateTemplatePage() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [columns, setColumns] = useState<ColumnDef[]>([
-    { name: "", type: "text", position: 0 },
+    { id: crypto.randomUUID(), name: "", type: "text", position: 0 },
   ]);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<number, string>>({});
@@ -41,7 +42,7 @@ export default function CreateTemplatePage() {
   function addColumn() {
     setColumns([
       ...columns,
-      { name: "", type: "text", position: columns.length },
+      { id: crypto.randomUUID(), name: "", type: "text", position: columns.length },
     ]);
   }
 
@@ -95,6 +96,12 @@ export default function CreateTemplatePage() {
     setColumns(newCols);
   }
 
+  function appendToFormula(index: number, varName: string) {
+    const current = columns[index].formula || "";
+    const prefix = current && !current.endsWith(" ") ? current + " " : current;
+    updateColumn(index, "formula", prefix + `{${varName}}`);
+  }
+
   function validateAll(): boolean {
     const newErrors: Record<number, string> = {};
     let valid = true;
@@ -142,12 +149,23 @@ export default function CreateTemplatePage() {
   async function handleSave() {
     if (!validateAll()) return;
 
+    // Translate formulas to use persistent IDs before securing perfectly to database
+    const encodedColumns = columns.map(col => {
+      if (col.type === "formula" && col.formula) {
+        return {
+          ...col,
+          formula: translateFormulaToIds(col.formula, columns)
+        };
+      }
+      return col;
+    });
+
     setSaving(true);
     try {
       const res = await fetch("/api/templates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, columns }),
+        body: JSON.stringify({ name, columns: encodedColumns }),
       });
 
       const data = await res.json();
@@ -229,22 +247,16 @@ export default function CreateTemplatePage() {
             {columns.map((col, index) => (
               <div
                 key={index}
-                className="flex flex-col gap-3 p-4 rounded-xl bg-default-50 dark:bg-default-100/5 border border-default-200"
+                className="flex flex-col gap-4 p-5 rounded-2xl bg-white dark:bg-default-50 border shadow-sm border-default-200 transition-all hover:border-primary/30"
               >
-                <div className="flex items-center gap-2">
-                  {/* Position and reorder buttons */}
-                  <div className="flex flex-col gap-1">
+                <div className="flex items-start md:items-center gap-4">
+                  <div className="flex flex-col gap-1 items-center bg-default-100 dark:bg-default-200/50 rounded-lg p-1">
                     <button
                       onClick={() => moveColumn(index, index - 1)}
                       disabled={index === 0}
-                      className="text-default-400 hover:text-default-600 disabled:opacity-30 transition"
+                      className="text-default-400 hover:text-primary disabled:opacity-30 transition p-1"
                     >
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path
                           strokeLinecap="round"
                           strokeLinejoin="round"
@@ -256,29 +268,19 @@ export default function CreateTemplatePage() {
                     <button
                       onClick={() => moveColumn(index, index + 1)}
                       disabled={index === columns.length - 1}
-                      className="text-default-400 hover:text-default-600 disabled:opacity-30 transition"
+                      className="text-default-400 hover:text-primary disabled:opacity-30 transition p-1"
                     >
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M19 9l-7 7-7-7"
-                        />
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                       </svg>
                     </button>
                   </div>
 
-                  <span className="text-sm font-mono text-default-400 w-6">
+                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-sm">
                     {index + 1}
                   </span>
 
-                  <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
                     <Input
                       label="Column Name"
                       placeholder="e.g. Qty, Rate, Amount"
@@ -307,69 +309,79 @@ export default function CreateTemplatePage() {
                   {/* Delete button */}
                   <Button
                     isIconOnly
-                    size="sm"
                     variant="flat"
                     color="danger"
                     onPress={() => removeColumn(index)}
                     isDisabled={columns.length === 1}
+                    className="mt-1 md:mt-0"
                   >
-                    <svg
-                      className="w-4 h-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={1.5}
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                      />
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
                   </Button>
                 </div>
 
-                {/* Formula input — only shown for formula type */}
                 {col.type === "formula" && (
-                  <div className="ml-12">
+                  <div className="ml-0 md:ml-16 p-4 rounded-xl bg-warning-50 dark:bg-warning/10 border border-warning/20">
+                    <p className="text-sm font-semibold text-warning-700 dark:text-warning-500 mb-3 flex items-center gap-2">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                      Build Formula
+                    </p>
                     <Input
-                      label="Formula"
-                      placeholder="e.g. {Qty} * {Rate (₹)}"
+                      placeholder="e.g. {Qty} * {Rate}"
                       value={col.formula || ""}
                       onValueChange={(v) => updateColumn(index, "formula", v)}
-                      variant="bordered"
-                      size="sm"
-                      description="Use {ColumnName} to reference other columns. Supports +, -, *, /, ()"
+                      variant="faded"
                       isInvalid={!!errors[index]}
-                      errorMessage={errors[index]}
+                      errorMessage={errors[index] || "Formula must be valid math. Supports +, -, *, /, ()"}
                     />
+                    
+                    <div className="mt-4">
+                      <p className="text-xs text-default-500 mb-2 font-medium">Click to insert existing columns:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {columns.slice(0, index).filter(c => c.name.trim()).length > 0 ? (
+                          columns.slice(0, index).filter(c => c.name.trim()).map((prevCol, i) => (
+                            <Chip 
+                              key={i} 
+                              size="sm" 
+                              variant="flat" 
+                              color="warning"
+                              className="cursor-pointer hover:bg-warning-200 transition px-2 py-4 shadow-sm"
+                              onClick={() => appendToFormula(index, prevCol.name)}
+                            >
+                              <span className="font-mono text-sm">{prevCol.name}</span>
+                            </Chip>
+                          ))
+                        ) : (
+                          <span className="text-xs text-default-400 italic">No previous columns defined yet. Add columns above to use them in formulas.</span>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
 
-                {/* Dropdown options — only shown for dropdown type */}
                 {col.type === "dropdown" && (
-                  <div className="ml-12">
+                  <div className="ml-0 md:ml-16 p-4 rounded-xl bg-primary-50 dark:bg-primary/10 border border-primary/20">
+                    <p className="text-sm font-semibold text-primary-700 dark:text-primary-500 mb-3 flex items-center gap-2">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" /></svg>
+                      Dropdown Options
+                    </p>
                     <Input
-                      label="Options (comma-separated)"
-                      placeholder="e.g. Main Door, Internal Door, Sliding Door"
-                      value={(col.options || []).join(", ")}
+                      placeholder="e.g. Main Door, Internal, Sliding"
+                      value={(col.options || []).join(",")}
                       onValueChange={(v) => {
                         const newCols = [...columns];
-                        newCols[index].options = v
-                          .split(",")
-                          .map((s) => s.trim())
-                          .filter(Boolean);
+                        newCols[index].options = v.split(",");
                         setColumns(newCols);
                       }}
-                      variant="bordered"
-                      size="sm"
+                      variant="faded"
+                      description="Separate options with commas. Example: Option 1, Option 2"
                     />
                   </div>
                 )}
 
-                {/* Error for non-formula cols */}
                 {errors[index] && col.type !== "formula" && (
-                  <p className="text-danger text-xs ml-12">{errors[index]}</p>
+                  <p className="text-danger text-sm ml-0 md:ml-16 font-medium">{errors[index]}</p>
                 )}
               </div>
             ))}
@@ -380,22 +392,12 @@ export default function CreateTemplatePage() {
             className="mt-4"
             onPress={addColumn}
             startContent={
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 4v16m8-8H4"
-                />
+              <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
             }
           >
-            Add Column
+            Add Another Column
           </Button>
         </CardBody>
       </Card>

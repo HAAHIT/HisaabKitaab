@@ -30,11 +30,11 @@ export async function middleware(request: NextRequest) {
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET);
     
-    // Inject user info into headers for API routes
-    const response = NextResponse.next();
-    response.headers.set("x-user-id", payload.userId as string);
-    response.headers.set("x-user-role", payload.role as string);
-    response.headers.set("x-user-name", payload.name as string);
+    // Pass user info into request headers so API routes can read them
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set("x-user-id", payload.userId as string);
+    requestHeaders.set("x-user-role", payload.role as string);
+    requestHeaders.set("x-user-name", payload.name as string);
 
     // Role-based route protection
     const role = payload.role as string;
@@ -60,7 +60,11 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(redirectUrl);
     }
 
-    return response;
+    return NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
   } catch {
     // Invalid token — clear it and redirect to login
     const loginUrl = new URL("/login", request.url);

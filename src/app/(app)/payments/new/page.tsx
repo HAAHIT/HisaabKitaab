@@ -9,6 +9,8 @@ import {
   Input,
   Select,
   SelectItem,
+  RadioGroup,
+  Radio,
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
 
@@ -32,6 +34,7 @@ export default function RecordPaymentPage() {
   const [mode, setMode] = useState("CASH");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [notes, setNotes] = useState("");
+  const [paymentStatus, setPaymentStatus] = useState("COMPLETED");
 
   const fetchParties = useCallback(async () => {
     try {
@@ -59,11 +62,11 @@ export default function RecordPaymentPage() {
       const res = await fetch("/api/payments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ partyId, amount, type: direction, mode, date, notes }),
+        body: JSON.stringify({ partyId, amount, type: direction, mode, date, notes, status: paymentStatus }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      showToast("Payment recorded!", "success");
+      showToast(paymentStatus === "COMPLETED" ? "Payment recorded!" : "Expected payment saved!", "success");
       setTimeout(() => router.push("/payments"), 800);
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Failed to save", "error");
@@ -87,6 +90,42 @@ export default function RecordPaymentPage() {
           <p className="text-default-500 text-sm mt-1">Track an incoming or outgoing payment</p>
         </div>
       </div>
+
+      {/* Payment Status Selection */}
+      <Card shadow="sm" className="mb-4">
+        <CardBody className="p-5">
+          <RadioGroup
+            label="What are you recording?"
+            value={paymentStatus}
+            onValueChange={setPaymentStatus}
+            orientation="horizontal"
+            classNames={{ label: "text-sm font-semibold text-foreground" }}
+          >
+            <Radio
+              value="COMPLETED"
+              description="Money has already been received or paid"
+              classNames={{
+                base: `flex-1 m-0 border-2 rounded-xl p-3 cursor-pointer transition-all
+                  ${paymentStatus === "COMPLETED" ? "border-success bg-success/5" : "border-default-200 hover:border-default-300"}`,
+                label: "font-semibold",
+              }}
+            >
+              ✅ Already Received / Paid
+            </Radio>
+            <Radio
+              value="EXPECTED"
+              description="Payment is expected but hasn't happened yet"
+              classNames={{
+                base: `flex-1 m-0 border-2 rounded-xl p-3 cursor-pointer transition-all
+                  ${paymentStatus === "EXPECTED" ? "border-warning bg-warning/5" : "border-default-200 hover:border-default-300"}`,
+                label: "font-semibold",
+              }}
+            >
+              🕐 Expected / Planned
+            </Radio>
+          </RadioGroup>
+        </CardBody>
+      </Card>
 
       <Card shadow="sm" className="mb-6">
         <CardHeader className="px-6 pt-6 pb-0">
@@ -120,7 +159,11 @@ export default function RecordPaymentPage() {
           {selectedParty && (
             <div className={`text-sm px-3 py-2 rounded-lg ${selectedParty.currentBalance > 0 ? "bg-danger/10 text-danger" : selectedParty.currentBalance < 0 ? "bg-success/10 text-success" : "bg-default-100 text-default-500"}`}>
               Current balance: <strong>₹{Math.abs(selectedParty.currentBalance).toLocaleString("en-IN")}</strong>
-              {selectedParty.currentBalance > 0 ? " receivable" : selectedParty.currentBalance < 0 ? " advance" : " — settled"}
+              {selectedParty.currentBalance > 0
+                ? (selectedParty.type === "CUSTOMER" ? " pending" : " pending")
+                : selectedParty.currentBalance < 0
+                ? " advance"
+                : " — settled"}
             </div>
           )}
 
@@ -162,8 +205,13 @@ export default function RecordPaymentPage() {
 
       <div className="flex gap-3 justify-end">
         <Button variant="flat" onPress={() => router.push("/payments")}>Cancel</Button>
-        <Button color="primary" className="bg-gradient-to-r from-blue-600 to-indigo-600 font-semibold" onPress={handleSave} isLoading={saving}>
-          Record Payment
+        <Button
+          color={paymentStatus === "COMPLETED" ? "primary" : "warning"}
+          className={paymentStatus === "COMPLETED" ? "bg-gradient-to-r from-blue-600 to-indigo-600 font-semibold" : "font-semibold"}
+          onPress={handleSave}
+          isLoading={saving}
+        >
+          {paymentStatus === "COMPLETED" ? "✅ Record Payment" : "🕐 Save Expected Payment"}
         </Button>
       </div>
     </div>

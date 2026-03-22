@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, use } from "react";
 import {
   Card,
   CardBody,
@@ -51,20 +51,19 @@ function formatColumnValue(colName: string, value: number): string {
   }).format(value);
 }
 
-export default function NewBillPage() {
+export default function EditBillPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const router = useRouter();
   const { t } = useLanguage();
+  
   const [templates, setTemplates] = useState<Template[]>([]);
-  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(
-    null
-  );
+  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  const [expectedTemplateId, setExpectedTemplateId] = useState<string | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, boolean>>({});
-  const [toast, setToast] = useState<{
-    message: string;
-    type: "success" | "error";
-  } | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   // Customer fields
   const [customerName, setCustomerName] = useState("");
@@ -72,10 +71,8 @@ export default function NewBillPage() {
   const [customerAddress, setCustomerAddress] = useState("");
   const [gstin, setGstin] = useState("");
 
-  // Rows: array of row objects, each row is {colName: value}
   const [rows, setRows] = useState<Record<string, string | number>[]>([]);
 
-  // Footer
   const [taxPercent, setTaxPercent] = useState(18);
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("");
@@ -87,8 +84,6 @@ export default function NewBillPage() {
       setTemplates(data.templates || []);
     } catch {
       showToast("Failed to load templates", "error");
-    } finally {
-      setLoading(false);
     }
   }, []);
 
@@ -96,34 +91,47 @@ export default function NewBillPage() {
     fetchTemplates();
   }, [fetchTemplates]);
 
-  // Load company settings for defaults
+  // Load existing bill data
   useEffect(() => {
-    fetch("/api/settings")
-      .then((res) => res.json())
+    fetch(`/api/bills/${id}`)
+      .then((res) => {
+        if (!res.ok) throw new Error("Bill not found");
+        return res.json();
+      })
       .then((data) => {
-        if (data.settings) {
-          setTaxPercent(data.settings.defaultTaxPercent || 18);
-          setTerms(data.settings.defaultTerms || "");
+        if (data.bill) {
+          const b = data.bill;
+          setCustomerName(b.customerName);
+          setCustomerPhone(b.customerPhone || "");
+          setCustomerAddress(b.customerAddress || "");
+          setGstin(b.gstin || "");
+          setRows(Array.isArray(b.rows) ? b.rows : JSON.parse(b.rows as string || "[]"));
+          setNotes(b.notes || "");
+          setTerms(b.terms || "");
+          setTaxPercent(b.taxPercent);
+          setExpectedTemplateId(b.templateId);
         }
       })
-      .catch(() => {});
-  }, []);
+      .catch((err) => {
+        showToast(err.message, "error");
+        setTimeout(() => router.push("/bills"), 1500);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [id, router]);
+
+  // Auto-select template once loaded
+  useEffect(() => {
+    if (templates.length > 0 && expectedTemplateId && !selectedTemplate) {
+      const tmpl = templates.find((t) => t.id === expectedTemplateId);
+      if (tmpl) setSelectedTemplate(tmpl);
+    }
+  }, [templates, expectedTemplateId, selectedTemplate]);
 
   function showToast(message: string, type: "success" | "error") {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
-  }
-
-  function selectTemplate(templateId: string) {
-    const tmpl = templates.find((t) => t.id === templateId);
-    if (!tmpl) return;
-    setSelectedTemplate(tmpl);
-    // Initialize with one empty row
-    const emptyRow: Record<string, string | number> = {};
-    (tmpl.columns as ColumnDef[]).forEach((col) => {
-      emptyRow[col.id] = col.type === "number" || col.type === "formula" ? 0 : "";
-    });
-    setRows([{ ...emptyRow }]);
   }
 
   function addRow() {
@@ -150,7 +158,6 @@ export default function NewBillPage() {
     } else {
       newRows[rowIndex][colId] = value;
     }
-    // Re-evaluate formulas for this row
     if (selectedTemplate) {
       newRows[rowIndex] = evaluateRow(
         newRows[rowIndex],
@@ -160,16 +167,12 @@ export default function NewBillPage() {
     setRows(newRows);
   }
 
-  // Calculate totals
   const { subtotal, taxAmount, grandTotal } = useMemo(() => {
     if (!selectedTemplate) return { subtotal: 0, taxAmount: 0, grandTotal: 0 };
-    
-    // Find the last formula or number column to use as the "total" per row
     const cols = selectedTemplate.columns as ColumnDef[];
     const lastCol = [...cols].reverse().find(
       (c) => c.type === "formula" || c.type === "number"
     );
-    
     if (!lastCol) return { subtotal: 0, taxAmount: 0, grandTotal: 0 };
 
     const subtotal = rows.reduce((sum, row) => {
@@ -183,14 +186,14 @@ export default function NewBillPage() {
     return { subtotal, taxAmount, grandTotal };
   }, [rows, taxPercent, selectedTemplate]);
 
-  async function handleSave(status: "DRAFT" | "FINAL") {
+  async function handleSave(status: "DRAFT" | "FINALIZED") {
     const mainScroll = document.querySelector('main');
     if (!selectedTemplate) {
-      showToast("Please select a template", "error");
+      showToast("Please wait for template to load", "error");
       mainScroll?.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
-    
+
     // Validation
     const formErrors: Record<string, boolean> = {};
     if (!customerName.trim()) formErrors.customerName = true;
@@ -206,11 +209,10 @@ export default function NewBillPage() {
 
     setSaving(true);
     try {
-      const res = await fetch("/api/bills", {
-        method: "POST",
+      const res = await fetch(`/api/bills/${id}`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          templateId: selectedTemplate.id,
           customerName,
           customerPhone,
           customerAddress,
@@ -227,21 +229,25 @@ export default function NewBillPage() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) throw new Error(data.error || "Failed to edit bill");
 
       showToast(
-        `Bill ${data.bill.billNumber} ${status === "DRAFT" ? "saved as draft" : "finalized"}!`,
+        `Bill updated and ${status === "DRAFT" ? "saved as draft" : "finalized"}!`,
         "success"
       );
       setTimeout(() => router.push("/bills"), 800);
     } catch (err) {
       showToast(
-        err instanceof Error ? err.message : "Failed to save bill",
+        err instanceof Error ? err.message : "Failed to update bill",
         "error"
       );
     } finally {
       setSaving(false);
     }
+  }
+
+  if (loading) {
+    return <div className="p-8 text-center text-default-500">Loading bill data...</div>;
   }
 
   return (
@@ -277,86 +283,21 @@ export default function NewBillPage() {
           </svg>
         </Button>
         <div>
-          <h1 className="text-2xl font-bold">{t("bills.new")}</h1>
+          <h1 className="text-2xl font-bold">Edit Bill</h1>
           <p className="text-default-500 text-sm mt-1">
-            Select a template and fill in the details
+            Update bill details
           </p>
         </div>
       </div>
 
-      {/* Template Selection */}
-      {!selectedTemplate && (
-        <Card shadow="sm" className="mb-6">
-          <CardBody className="p-6">
-            <h2 className="text-lg font-semibold mb-4">Choose Template</h2>
-            {loading ? (
-              <p className="text-default-400">Loading templates...</p>
-            ) : templates.length === 0 ? (
-              <div className="text-center py-8">
-                <p className="text-default-500">No templates found</p>
-                <Button
-                  size="sm"
-                  variant="flat"
-                  color="primary"
-                  className="mt-2"
-                  onPress={() => router.push("/settings/templates/new")}
-                >
-                  Create Template First
-                </Button>
-              </div>
-            ) : (
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {templates.map((t) => (
-                  <button
-                    key={t.id}
-                    onClick={() => selectTemplate(t.id)}
-                    className="text-left p-4 rounded-xl border-2 border-default-200 hover:border-primary hover:bg-primary/5 transition"
-                  >
-                    <p className="font-semibold">{t.name}</p>
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {(t.columns as ColumnDef[]).map((c, i) => (
-                        <Chip
-                          key={i}
-                          size="sm"
-                          variant="flat"
-                          color={
-                            c.type === "formula"
-                              ? "warning"
-                              : c.type === "number"
-                                ? "primary"
-                                : "default"
-                          }
-                        >
-                          {c.name}
-                        </Chip>
-                      ))}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </CardBody>
-        </Card>
-      )}
-
       {/* Bill Form — only when template selected */}
       {selectedTemplate && (
         <>
-          {/* Template badge + change */}
+          {/* Template badge */}
           <div className="flex items-center gap-2 mb-4">
             <Chip size="sm" color="primary" variant="flat">
               📋 {selectedTemplate.name}
             </Chip>
-            <Button
-              size="sm"
-              variant="light"
-              onPress={() => {
-                setSelectedTemplate(null);
-                setRows([]);
-              }}
-            >
-              Change Template
-            </Button>
           </div>
 
           {/* Customer Details */}
@@ -644,10 +585,10 @@ export default function NewBillPage() {
             <Button
               color="primary"
               className="bg-gradient-to-r from-blue-600 to-indigo-600 font-semibold"
-              onPress={() => handleSave("FINAL")}
+              onPress={() => handleSave("FINALIZED")}
               isLoading={saving}
             >
-              ✅ {t("bills.finalize")}
+              ✅ Finalize Update
             </Button>
           </div>
         </>

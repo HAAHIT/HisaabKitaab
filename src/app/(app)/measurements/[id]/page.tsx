@@ -140,8 +140,11 @@ export default function MeasurementDetailPage({ params }: { params: Promise<{ id
               <h2 className="font-semibold mb-4">Photos</h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 {data.photos.map((p, i) => (
-                  <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-divider cursor-pointer hover:opacity-90 transition" onClick={() => setSelectedImage(p.url)}>
+                  <div key={i} className="relative aspect-[4/3] rounded-xl overflow-hidden border border-divider cursor-pointer hover:opacity-90 transition group" onClick={() => setSelectedImage(p.url)}>
                     <Image src={p.url} alt={`Photo ${i+1}`} fill className="object-cover" />
+                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                    </div>
                   </div>
                 ))}
               </div>

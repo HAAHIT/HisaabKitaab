@@ -32,16 +32,18 @@ export async function GET(request: NextRequest) {
         where: { type: "VENDOR", currentBalance: { gt: 0 }, isActive: true },
         _sum: { currentBalance: true },
       }),
-      // Payments this month
+      // Payments this month (only completed)
       prisma.payment.aggregate({
         where: {
           direction: "INCOMING",
+          status: "COMPLETED",
           date: { gte: monthStart, lte: monthEnd },
         },
         _sum: { amount: true },
       }),
-      // Recent payments (last 5)
+      // Recent payments (last 5, completed only)
       prisma.payment.findMany({
+        where: { status: "COMPLETED" },
         orderBy: { date: "desc" },
         take: 5,
         include: { party: { select: { name: true, type: true } } },
@@ -74,11 +76,11 @@ export async function GET(request: NextRequest) {
 
       const [received, paid] = await Promise.all([
         prisma.payment.aggregate({
-          where: { direction: "INCOMING", date: { gte: mStart, lte: mEnd } },
+          where: { direction: "INCOMING", status: "COMPLETED", date: { gte: mStart, lte: mEnd } },
           _sum: { amount: true },
         }),
         prisma.payment.aggregate({
-          where: { direction: "OUTGOING", date: { gte: mStart, lte: mEnd } },
+          where: { direction: "OUTGOING", status: "COMPLETED", date: { gte: mStart, lte: mEnd } },
           _sum: { amount: true },
         }),
       ]);

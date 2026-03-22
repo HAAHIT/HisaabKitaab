@@ -12,6 +12,8 @@ import {
   Tooltip,
 } from "@heroui/react";
 import { ThemeSwitcher } from "./ThemeSwitcher";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { TranslationKey } from "@/lib/i18n/translations";
 
 interface UserSession {
   userId: string;
@@ -47,6 +49,16 @@ const NAV_ITEMS: NavItem[] = [
     ),
     label: "Bills",
     href: "/bills",
+    roles: ["ADMIN", "STAFF", "ACCOUNTANT"],
+  },
+  {
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+      </svg>
+    ),
+    label: "Parties",
+    href: "/parties",
     roles: ["ADMIN", "STAFF", "ACCOUNTANT"],
   },
   {
@@ -103,6 +115,7 @@ export default function AppShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { t, language, setLanguage } = useLanguage();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showFab, setShowFab] = useState(false);
 
@@ -153,10 +166,12 @@ export default function AppShell({
 
         {/* Nav Links */}
         <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
-          {navItems.map((item) => (
+          {navItems.map((item) => {
+            const transKey = `nav.${item.label.replace(" ", "").toLowerCase()}` as TranslationKey;
+            return (
             <Tooltip
               key={item.href}
-              content={item.label}
+              content={t(transKey)}
               placement="right"
               isDisabled={!sidebarCollapsed}
             >
@@ -175,10 +190,11 @@ export default function AppShell({
                 >
                   {item.icon}
                 </span>
-                {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
+                {!sidebarCollapsed && <span className="truncate">{t(transKey)}</span>}
               </button>
             </Tooltip>
-          ))}
+            );
+          })}
 
           {user.role === "ADMIN" && (
             <>
@@ -254,7 +270,20 @@ export default function AppShell({
 
         {/* Collapse Toggle & Theme */}
         <div className="flex items-center gap-2 px-3 py-2 border-t border-divider justify-between">
-          {!sidebarCollapsed && <ThemeSwitcher />}
+          {!sidebarCollapsed && (
+            <div className="flex gap-2 items-center">
+              <Button 
+                size="sm" 
+                variant="flat" 
+                color="primary"
+                onPress={() => setLanguage(language === "en" ? "hi" : "en")}
+                className="font-bold"
+              >
+                {language === "en" ? "HI" : "EN"}
+              </Button>
+              <ThemeSwitcher />
+            </div>
+          )}
           <button
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
             className="flex-1 flex items-center justify-center p-2 rounded-xl text-default-400 hover:text-default-600 hover:bg-default-100 transition"
@@ -327,6 +356,14 @@ export default function AppShell({
             </span>
           </div>
           <div className="flex items-center gap-2">
+            <Button 
+              size="sm" 
+              variant="flat" 
+              color="primary"
+              onPress={() => setLanguage(language === "en" ? "hi" : "en")}
+            >
+              {language === "en" ? "HI" : "EN"}
+            </Button>
             <ThemeSwitcher />
             <Dropdown>
               <DropdownTrigger>
@@ -371,6 +408,7 @@ export default function AppShell({
         <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-background/90 backdrop-blur-xl border-t border-divider z-50 pb-safe-bottom print:hidden">
           <div className="flex items-center justify-around h-16 relative">
             {navItems.map((item, index) => {
+              const transKey = `nav.${item.label.replace(" ", "").toLowerCase()}` as TranslationKey;
               // For non-customer, inject FAB in middle position
               if (user.role !== "CUSTOMER" && index === 2) {
                 return (
@@ -399,9 +437,9 @@ export default function AppShell({
                       {showFab && (
                         <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 flex flex-col gap-2 animate-slide-up">
                           {[
-                            { label: "New Bill", href: "/bills/new", icon: "🧾" },
-                            { label: "Record Payment", href: "/payments/new", icon: "💰" },
-                            { label: "Add Party", href: "/parties", icon: "👤" },
+                            { label: "New Bill", transKey: "bills.new", href: "/bills/new", icon: "🧾" },
+                            { label: "Record Payment", transKey: "nav.recordpayment", href: "/payments/new", icon: "💰" },
+                            { label: "Add Party", transKey: "nav.addparty", href: "/parties", icon: "👤" },
                           ].map((action) => (
                             <Button
                               key={action.href}
@@ -413,7 +451,7 @@ export default function AppShell({
                                 router.push(action.href);
                               }}
                             >
-                              {action.icon} {action.label}
+                              {action.icon} {t(action.transKey as TranslationKey)}
                             </Button>
                           ))}
                         </div>
@@ -428,7 +466,7 @@ export default function AppShell({
                       }`}
                     >
                       {item.icon}
-                      <span className="text-[10px] font-medium">{item.label}</span>
+                      <span className="text-[10px] font-medium">{t(transKey)}</span>
                     </button>
                   </div>
                 );
@@ -443,7 +481,7 @@ export default function AppShell({
                   }`}
                 >
                   {item.icon}
-                  <span className="text-[10px] font-medium">{item.label}</span>
+                  <span className="text-[10px] font-medium">{t(transKey)}</span>
                 </button>
               );
             })}
