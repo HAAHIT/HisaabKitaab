@@ -155,13 +155,17 @@ export default function TemplatesPage() {
         </Card>
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {templates.map((t) => (
-            <Card key={t.id} shadow="sm" className="hover:shadow-md transition">
+          {templates.map((template) => (
+            <Card
+              key={template.id}
+              shadow="sm"
+              className="hover:shadow-md transition"
+            >
               <CardBody className="p-5">
-                <h3 className="text-lg font-semibold mb-2">{t.name}</h3>
+                <h3 className="text-lg font-semibold mb-2">{template.name}</h3>
                 <div className="flex flex-wrap gap-1 mb-3">
                   {(
-                    t.columns as { name: string; type: string }[]
+                    template.columns as { name: string; type: string }[]
                   ).map((col, i) => (
                     <Chip
                       key={i}
@@ -180,8 +184,8 @@ export default function TemplatesPage() {
                   ))}
                 </div>
                 <p className="text-xs text-default-400">
-                  {t._count.bills} bill(s) •{" "}
-                  {new Date(t.createdAt).toLocaleDateString("en-IN", {
+                  {template._count.bills} bill(s) •{" "}
+                  {new Date(template.createdAt).toLocaleDateString("en-IN", {
                     day: "numeric",
                     month: "short",
                     year: "numeric",
@@ -193,7 +197,7 @@ export default function TemplatesPage() {
                   size="sm"
                   variant="flat"
                   onPress={() =>
-                    router.push(`/settings/templates/${t.id}`)
+                    router.push(`/settings/templates/${template.id}`)
                   }
                 >
                   {t("templates.edit")}
@@ -202,7 +206,7 @@ export default function TemplatesPage() {
                   size="sm"
                   variant="flat"
                   color="danger"
-                  onPress={() => handleDelete(t.id)}
+                  onPress={() => handleDelete(template.id)}
                 >
                   {t("common.delete")}
                 </Button>

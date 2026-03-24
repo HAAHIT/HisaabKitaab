@@ -414,7 +414,7 @@ export default function BillDetailPage({
                 {columns.map(col => (
                   <td key={col.id} className={`py-3 px-4 border border-gray-100 text-sm ${col.type === "number" || col.type === "formula" ? "text-right font-mono" : ""}`}>
                     {col.type === "number" || col.type === "formula" 
-                      ? typeof row[col.id] === "number" ? formatColumnValue(col.name, row[col.id]) : row[col.id] || "—"
+                      ? typeof row[col.id] === "number" ? formatColumnValue(col.name, row[col.id] as number) : row[col.id] || "—"
                       : row[col.id] || "—"}
                   </td>
                 ))}
