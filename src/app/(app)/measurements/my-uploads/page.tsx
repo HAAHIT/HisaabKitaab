@@ -6,6 +6,7 @@ import { Button, Card, CardBody, Chip, Skeleton } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { db, type MeasurementDraft } from "@/lib/db";
 import { useSync } from "@/hooks/useSync";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface MeasurementUpload {
   id: string;
@@ -40,6 +41,7 @@ function formatDate(value: string | number) {
 
 export default function MyUploadsPage() {
   const router = useRouter();
+  const { t } = useLanguage();
   const { isOnline, isSyncing, syncAll } = useSync();
   const [uploads, setUploads] = useState<MeasurementUpload[]>([]);
   const [drafts, setDrafts] = useState<MeasurementDraft[]>([]);
@@ -76,25 +78,25 @@ export default function MyUploadsPage() {
     <div className="animate-fade-in p-4 lg:p-8">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">My Uploads</h1>
+          <h1 className="text-2xl font-bold">{t("measurements.myUploadsTitle")}</h1>
           <p className="mt-1 text-sm text-default-500">
-            Server records are authoritative. Local drafts stay separate until they upload.
+            {t("measurements.myUploadsSubtitle")}
           </p>
         </div>
         <div className="flex gap-2">
           {!isOnline && (
             <Chip size="sm" variant="flat" color="warning">
-              Offline
+              {t("common.offline")}
             </Chip>
           )}
           {isSyncing && (
             <Chip size="sm" variant="flat" color="primary" className="animate-pulse">
-              Syncing drafts
+              {t("common.syncingDrafts")}
             </Chip>
           )}
           {drafts.length > 0 && isOnline && (
             <Button variant="flat" color="secondary" onPress={syncAll}>
-              Sync Now
+              {t("measurements.syncNow")}
             </Button>
           )}
           <Button
@@ -112,7 +114,7 @@ export default function MyUploadsPage() {
               </svg>
             }
           >
-            New Upload
+            {t("measurements.newUpload")}
           </Button>
         </div>
       </div>
@@ -142,9 +144,9 @@ export default function MyUploadsPage() {
                 />
               </svg>
             </div>
-            <p className="text-lg font-medium text-default-600">No uploads yet</p>
+            <p className="text-lg font-medium text-default-600">{t("measurements.noUploads")}</p>
             <p className="mt-1 max-w-sm text-center text-sm text-default-400">
-              Upload photos of doors and measurements so the factory team can review them.
+              {t("measurements.noUploadsSubtitle")}
             </p>
             <Button
               color="primary"
@@ -153,7 +155,7 @@ export default function MyUploadsPage() {
               className="mt-4"
               onPress={() => router.push("/measurements/upload")}
             >
-              Upload Your First Measurement
+              {t("measurements.firstUpload")}
             </Button>
           </CardBody>
         </Card>
@@ -163,13 +165,13 @@ export default function MyUploadsPage() {
             <section className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-lg font-semibold">Pending On This Device</h2>
+                  <h2 className="text-lg font-semibold">{t("measurements.pendingDeviceTitle")}</h2>
                   <p className="text-sm text-default-500">
-                    These drafts have not reached the server yet.
+                    {t("measurements.pendingDeviceSubtitle")}
                   </p>
                 </div>
                 <Chip size="sm" variant="flat" color={isOnline ? "primary" : "warning"}>
-                  {isOnline ? "Ready to sync" : "Waiting for connection"}
+                  {isOnline ? t("measurements.readyToSync") : t("measurements.waitingConnection")}
                 </Chip>
               </div>
 
@@ -183,7 +185,7 @@ export default function MyUploadsPage() {
                             <div className="flex items-center gap-2">
                               <h3 className="text-lg font-semibold">{draft.label}</h3>
                               <Chip size="sm" variant="flat" color="warning">
-                                Pending Upload
+                                {t("measurements.pendingUpload")}
                               </Chip>
                             </div>
                             <div className="mt-1 flex flex-wrap gap-2">
@@ -239,9 +241,9 @@ export default function MyUploadsPage() {
           {uploads.length > 0 && (
             <section className="space-y-4">
               <div>
-                <h2 className="text-lg font-semibold">Uploaded To Server</h2>
+                <h2 className="text-lg font-semibold">{t("measurements.uploadedServerTitle")}</h2>
                 <p className="text-sm text-default-500">
-                  These records come from the canonical measurement API.
+                  {t("measurements.uploadedServerSubtitle")}
                 </p>
               </div>
 
@@ -307,7 +309,7 @@ export default function MyUploadsPage() {
                           {upload.reviewNotes && (
                             <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
                               <p className="mb-1 text-xs font-semibold text-primary">
-                                Review Notes
+                                {t("measurements.reviewNotes")}
                               </p>
                               <p className="text-sm text-default-700">{upload.reviewNotes}</p>
                             </div>

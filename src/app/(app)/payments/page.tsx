@@ -13,6 +13,7 @@ import {
   Skeleton,
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface Payment {
   id: string;
@@ -25,18 +26,6 @@ interface Payment {
   party: { name: string; type: string };
   linkedBill: { id: string; billNumber: string } | null;
 }
-
-const TYPE_OPTIONS = [
-  { key: "ALL", label: "All Types" },
-  { key: "INCOMING", label: "Received" },
-  { key: "OUTGOING", label: "Paid" },
-];
-
-const STATUS_OPTIONS = [
-  { key: "ALL", label: "All Status" },
-  { key: "COMPLETED", label: "Completed" },
-  { key: "EXPECTED", label: "Expected" },
-];
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("en-IN", {
@@ -53,6 +42,7 @@ async function readError(response: Response) {
 
 export default function PaymentsListPage() {
   const router = useRouter();
+  const { t } = useLanguage();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -92,11 +82,26 @@ export default function PaymentsListPage() {
     } catch (error) {
       setPayments([]);
       setTotalPages(1);
-      showToast(error instanceof Error ? error.message : "Failed to load payments", "error");
+      showToast(
+        error instanceof Error ? error.message : t("payments.loadFailed"),
+        "error"
+      );
     } finally {
       setLoading(false);
     }
-  }, [page, search, statusFilter, typeFilter]);
+  }, [page, search, statusFilter, t, typeFilter]);
+
+  const typeOptions = [
+    { key: "ALL", label: t("payments.filter.allTypes") },
+    { key: "INCOMING", label: t("payments.filter.received") },
+    { key: "OUTGOING", label: t("payments.filter.paid") },
+  ];
+
+  const statusOptions = [
+    { key: "ALL", label: t("payments.filter.allStatus") },
+    { key: "COMPLETED", label: t("payments.filter.completed") },
+    { key: "EXPECTED", label: t("payments.filter.expected") },
+  ];
 
   useEffect(() => {
     fetchPayments();
@@ -120,11 +125,11 @@ export default function PaymentsListPage() {
         throw new Error(await readError(response));
       }
 
-      showToast("Payment marked as completed", "success");
+      showToast(t("payments.markCompletedSuccess"), "success");
       await fetchPayments();
     } catch (error) {
       showToast(
-        error instanceof Error ? error.message : "Failed to mark as completed",
+        error instanceof Error ? error.message : t("payments.markCompletedFailed"),
         "error"
       );
     } finally {
@@ -136,9 +141,9 @@ export default function PaymentsListPage() {
     <div className="animate-fade-in p-4 lg:p-8">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Payments</h1>
+          <h1 className="text-2xl font-bold">{t("payments.title")}</h1>
           <p className="mt-1 text-sm text-default-500">
-            Track incoming and outgoing payments from the server ledger.
+            {t("payments.subtitle")}
           </p>
         </div>
         <Button
@@ -156,7 +161,7 @@ export default function PaymentsListPage() {
             </svg>
           }
         >
-          Record Payment
+          {t("payments.record")}
         </Button>
       </div>
 
@@ -172,7 +177,7 @@ export default function PaymentsListPage() {
 
       <div className="mb-6 flex flex-col gap-3 sm:flex-row">
         <Input
-          placeholder="Search by party name..."
+          placeholder={t("payments.searchPlaceholder")}
           value={search}
           onValueChange={setSearch}
           variant="bordered"
@@ -200,7 +205,7 @@ export default function PaymentsListPage() {
           variant="bordered"
           className="w-40"
         >
-          {TYPE_OPTIONS.map((option) => (
+          {typeOptions.map((option) => (
             <SelectItem key={option.key}>{option.label}</SelectItem>
           ))}
         </Select>
@@ -216,7 +221,7 @@ export default function PaymentsListPage() {
           variant="bordered"
           className="w-44"
         >
-          {STATUS_OPTIONS.map((option) => (
+          {statusOptions.map((option) => (
             <SelectItem key={option.key}>{option.label}</SelectItem>
           ))}
         </Select>
@@ -243,8 +248,8 @@ export default function PaymentsListPage() {
             </div>
             <p className="text-lg font-medium text-default-600">
               {search || typeFilter !== "ALL" || statusFilter !== "ALL"
-                ? "No matching payments"
-                : "No payments recorded"}
+                ? t("payments.emptyFiltered")
+                : t("payments.empty")}
             </p>
             <Button
               color="primary"
@@ -253,7 +258,7 @@ export default function PaymentsListPage() {
               className="mt-3"
               onPress={() => router.push("/payments/new")}
             >
-              Record Payment
+              {t("payments.record")}
             </Button>
           </CardBody>
         </Card>
@@ -286,11 +291,11 @@ export default function PaymentsListPage() {
                         >
                           {payment.status === "EXPECTED"
                             ? payment.direction === "INCOMING"
-                              ? "To Receive"
-                              : "To Pay"
+                              ? t("payments.toReceive")
+                              : t("payments.toPay")
                             : payment.direction === "INCOMING"
-                              ? "Received"
-                              : "Paid"}
+                              ? t("payments.filter.received")
+                              : t("payments.filter.paid")}
                         </Chip>
                         <Chip size="sm" variant="flat" color="default" className="capitalize">
                           {payment.mode.toLowerCase().replace("_", " ")}
@@ -309,7 +314,7 @@ export default function PaymentsListPage() {
                         )}
                         {payment.linkedBill && (
                           <span className="max-w-[200px] truncate">
-                            Bill: {payment.linkedBill.billNumber}
+                            {t("payments.billPrefix")}: {payment.linkedBill.billNumber}
                           </span>
                         )}
                       </div>
@@ -332,7 +337,7 @@ export default function PaymentsListPage() {
                           isLoading={markingId === payment.id}
                           onPress={() => markAsCompleted(payment.id)}
                         >
-                          Mark Completed
+                          {t("payments.markCompleted")}
                         </Button>
                       )}
                     </div>

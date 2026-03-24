@@ -13,6 +13,7 @@ import {
   Skeleton,
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface Bill {
   id: string;
@@ -27,13 +28,6 @@ interface Bill {
   status: string;
   createdAt: string;
 }
-
-const STATUS_OPTIONS = [
-  { key: "ALL", label: "All" },
-  { key: "DRAFT", label: "Draft" },
-  { key: "FINAL", label: "Final" },
-  { key: "CANCELLED", label: "Cancelled" },
-];
 
 const statusColorMap: Record<string, "default" | "primary" | "success" | "danger"> = {
   DRAFT: "default",
@@ -56,6 +50,7 @@ async function readError(response: Response) {
 
 export default function BillsListPage() {
   const router = useRouter();
+  const { t } = useLanguage();
   const [bills, setBills] = useState<Bill[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -90,11 +85,18 @@ export default function BillsListPage() {
     } catch (error) {
       setBills([]);
       setTotalPages(1);
-      showToast(error instanceof Error ? error.message : "Failed to load bills", "error");
+      showToast(error instanceof Error ? error.message : t("bills.loadFailed"), "error");
     } finally {
       setLoading(false);
     }
-  }, [page, search, statusFilter]);
+  }, [page, search, statusFilter, t]);
+
+  const statusOptions = [
+    { key: "ALL", label: t("bills.filter.all") },
+    { key: "DRAFT", label: t("bills.filter.draft") },
+    { key: "FINAL", label: t("bills.filter.final") },
+    { key: "CANCELLED", label: t("bills.filter.cancelled") },
+  ];
 
   useEffect(() => {
     fetchBills();
@@ -119,9 +121,9 @@ export default function BillsListPage() {
 
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Bills</h1>
+          <h1 className="text-2xl font-bold">{t("bills.title")}</h1>
           <p className="mt-1 text-sm text-default-500">
-            Create and manage invoices from the server record only.
+            {t("bills.subtitle")}
           </p>
         </div>
         <Button
@@ -139,13 +141,13 @@ export default function BillsListPage() {
             </svg>
           }
         >
-          Create Bill
+          {t("bills.create")}
         </Button>
       </div>
 
       <div className="mb-6 flex flex-col gap-3 sm:flex-row">
         <Input
-          placeholder="Search by bill number or customer..."
+          placeholder={t("bills.searchPlaceholder")}
           value={search}
           onValueChange={setSearch}
           variant="bordered"
@@ -173,7 +175,7 @@ export default function BillsListPage() {
           variant="bordered"
           className="w-40"
         >
-          {STATUS_OPTIONS.map((option) => (
+          {statusOptions.map((option) => (
             <SelectItem key={option.key}>{option.label}</SelectItem>
           ))}
         </Select>
@@ -199,12 +201,14 @@ export default function BillsListPage() {
               </svg>
             </div>
             <p className="text-lg font-medium text-default-600">
-              {search || statusFilter !== "ALL" ? "No matching bills found" : "No bills yet"}
+              {search || statusFilter !== "ALL"
+                ? t("bills.emptyFiltered")
+                : t("bills.empty")}
             </p>
             <p className="mt-1 text-sm text-default-400">
               {search || statusFilter !== "ALL"
-                ? "Try changing your filters"
-                : "Create your first bill to get started"}
+                ? t("bills.emptyFilteredHint")
+                : t("bills.emptyHint")}
             </p>
             {!search && statusFilter === "ALL" && (
               <Button
@@ -214,7 +218,7 @@ export default function BillsListPage() {
                 className="mt-4"
                 onPress={() => router.push("/bills/new")}
               >
-                Create Bill
+                {t("bills.create")}
               </Button>
             )}
           </CardBody>
@@ -247,7 +251,7 @@ export default function BillsListPage() {
                       <p className="text-default-600">{bill.customerName}</p>
                       {bill.party && (
                         <p className="text-xs text-default-400">
-                          Party: {bill.party.name}
+                          {t("bills.partyPrefix")}: {bill.party.name}
                         </p>
                       )}
                       <p className="text-xs text-default-400">

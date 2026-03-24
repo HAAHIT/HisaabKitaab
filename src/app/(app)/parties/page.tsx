@@ -13,6 +13,7 @@ import {
   Skeleton,
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface Party {
   id: string;
@@ -26,18 +27,6 @@ interface Party {
   isActive: boolean;
   _count?: { payments: number };
 }
-
-function getOpeningBalanceDescription(partyType: SupportedPartyType) {
-  return partyType === "CUSTOMER"
-    ? "Positive means customer advance. Negative means customer outstanding."
-    : "Positive means vendor advance paid. Negative means amount you still owe the vendor.";
-}
-
-const TYPE_OPTIONS = [
-  { key: "ALL", label: "All" },
-  { key: "CUSTOMER", label: "Customers" },
-  { key: "VENDOR", label: "Vendors" },
-];
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("en-IN", {
@@ -62,6 +51,7 @@ async function readError(response: Response) {
 
 export default function PartiesPage() {
   const router = useRouter();
+  const { t } = useLanguage();
   const [parties, setParties] = useState<Party[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -103,13 +93,19 @@ export default function PartiesPage() {
     } catch (error) {
       setParties([]);
       setToast({
-        message: error instanceof Error ? error.message : "Failed to load parties",
+        message: error instanceof Error ? error.message : t("payments.loadPartiesFailed"),
         type: "error",
       });
     } finally {
       setLoading(false);
     }
-  }, [search, typeFilter]);
+  }, [search, t, typeFilter]);
+
+  const typeOptions = [
+    { key: "ALL", label: t("parties.filter.all") },
+    { key: "CUSTOMER", label: t("parties.filter.customers") },
+    { key: "VENDOR", label: t("parties.filter.vendors") },
+  ];
 
   useEffect(() => {
     fetchParties();
@@ -146,7 +142,7 @@ export default function PartiesPage() {
 
   async function handleSave() {
     if (!formName.trim()) {
-      showToast("Name is required", "error");
+      showToast(t("parties.nameRequired"), "error");
       return;
     }
 
@@ -180,18 +176,21 @@ export default function PartiesPage() {
         throw new Error(await readError(response));
       }
 
-      showToast(editingParty ? "Party updated" : "Party created", "success");
+      showToast(
+        editingParty ? t("parties.updated") : t("parties.created"),
+        "success"
+      );
       setShowPanel(false);
       await fetchParties();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Failed to save", "error");
+      showToast(error instanceof Error ? error.message : t("parties.saveFailed"), "error");
     } finally {
       setSaving(false);
     }
   }
 
   async function handleDelete(party: Party) {
-    if (!confirm(`Archive party "${party.name}"?`)) {
+    if (!confirm(`${t("parties.archiveConfirm")} "${party.name}"?`)) {
       return;
     }
 
@@ -201,10 +200,13 @@ export default function PartiesPage() {
         throw new Error(await readError(response));
       }
 
-      showToast("Party archived", "success");
+      showToast(t("parties.archived"), "success");
       await fetchParties();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Failed to delete", "error");
+      showToast(
+        error instanceof Error ? error.message : t("parties.archiveFailed"),
+        "error"
+      );
     }
   }
 
@@ -222,10 +224,10 @@ export default function PartiesPage() {
         )}
 
         <div className="mb-6 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Parties</h1>
+        <div>
+            <h1 className="text-2xl font-bold">{t("parties.title")}</h1>
             <p className="mt-1 text-sm text-default-500">
-              Manage customers and vendors from the authoritative server record.
+              {t("parties.subtitle")}
             </p>
           </div>
           <Button
@@ -243,13 +245,13 @@ export default function PartiesPage() {
               </svg>
             }
           >
-            Add Party
+            {t("parties.add")}
           </Button>
         </div>
 
         <div className="mb-6 flex flex-col gap-3 sm:flex-row">
           <Input
-            placeholder="Search by name or phone..."
+            placeholder={t("parties.searchPlaceholder")}
             value={search}
             onValueChange={setSearch}
             variant="bordered"
@@ -276,7 +278,7 @@ export default function PartiesPage() {
             variant="bordered"
             className="w-44"
           >
-            {TYPE_OPTIONS.map((option) => (
+            {typeOptions.map((option) => (
               <SelectItem key={option.key}>{option.label}</SelectItem>
             ))}
           </Select>
@@ -301,9 +303,9 @@ export default function PartiesPage() {
                   />
                 </svg>
               </div>
-              <p className="text-lg font-medium text-default-600">No parties yet</p>
+              <p className="text-lg font-medium text-default-600">{t("parties.empty")}</p>
               <Button color="primary" variant="flat" size="sm" className="mt-3" onPress={openCreate}>
-                Add First Party
+                {t("parties.addFirst")}
               </Button>
             </CardBody>
           </Card>
@@ -361,7 +363,7 @@ export default function PartiesPage() {
                           onPress={() => router.push(`/parties/${party.id}`)}
                           className="font-medium md:mr-2"
                         >
-                          View Profile
+                          {t("parties.viewProfile")}
                         </Button>
                         <Button size="sm" variant="flat" isIconOnly onPress={() => openEdit(party)}>
                           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -409,7 +411,7 @@ export default function PartiesPage() {
             <div className="p-6">
               <div className="mb-6 flex items-center justify-between">
                 <h2 className="text-xl font-bold">
-                  {editingParty ? "Edit Party" : "Add New Party"}
+                  {editingParty ? t("parties.editTitle") : t("parties.createTitle")}
                 </h2>
                 <Button isIconOnly variant="light" size="sm" onPress={() => setShowPanel(false)}>
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -425,45 +427,45 @@ export default function PartiesPage() {
 
               <div className="flex flex-col gap-4">
                 <Input
-                  label="Name"
-                  placeholder="Party name"
+                  label={t("parties.nameLabel")}
+                  placeholder={t("parties.namePlaceholder")}
                   value={formName}
                   onValueChange={setFormName}
                   variant="bordered"
                   isRequired
                 />
                 <Input
-                  label="Phone"
-                  placeholder="Phone number"
+                  label={t("parties.phoneLabel")}
+                  placeholder={t("bills.phonePlaceholder")}
                   value={formPhone}
                   onValueChange={setFormPhone}
                   variant="bordered"
                   type="tel"
                 />
                 <Input
-                  label="Email"
-                  placeholder="Email (optional)"
+                  label={t("parties.emailLabel")}
+                  placeholder={t("parties.emailPlaceholder")}
                   value={formEmail}
                   onValueChange={setFormEmail}
                   variant="bordered"
                   type="email"
                 />
                 <Input
-                  label="Address"
-                  placeholder="Address"
+                  label={t("parties.addressLabel")}
+                  placeholder={t("bills.addressPlaceholder")}
                   value={formAddress}
                   onValueChange={setFormAddress}
                   variant="bordered"
                 />
                 <Input
-                  label="GSTIN"
-                  placeholder="GST Number"
+                  label={t("parties.gstinLabel")}
+                  placeholder={t("bills.gstinPlaceholder")}
                   value={formGstin}
                   onValueChange={setFormGstin}
                   variant="bordered"
                 />
                 <Select
-                  label="Type"
+                  label={t("parties.typeLabel")}
                   selectedKeys={[formType]}
                   onSelectionChange={(keys) => {
                     const value = Array.from(keys)[0] as string;
@@ -473,27 +475,29 @@ export default function PartiesPage() {
                   }}
                   variant="bordered"
                 >
-                  <SelectItem key="CUSTOMER">Customer</SelectItem>
-                  <SelectItem key="VENDOR">Vendor</SelectItem>
+                  <SelectItem key="CUSTOMER">{t("parties.customerType")}</SelectItem>
+                  <SelectItem key="VENDOR">{t("parties.vendorType")}</SelectItem>
                 </Select>
 
                 {!editingParty && (
                   <Input
-                    label="Opening Balance (INR)"
+                    label={t("parties.openingBalance")}
                     placeholder="0"
                     type="number"
                     value={formBalance}
                     onValueChange={setFormBalance}
                     variant="bordered"
-                    description={getOpeningBalanceDescription(
-                      formType as SupportedPartyType
-                    )}
+                    description={
+                      formType === "CUSTOMER"
+                        ? t("parties.customerBalanceHelp")
+                        : t("parties.vendorBalanceHelp")
+                    }
                   />
                 )}
 
                 <div className="pt-4 flex gap-3">
                   <Button variant="flat" className="flex-1" onPress={() => setShowPanel(false)}>
-                    Cancel
+                    {t("common.cancel")}
                   </Button>
                   <Button
                     color="primary"
@@ -501,7 +505,7 @@ export default function PartiesPage() {
                     onPress={handleSave}
                     isLoading={saving}
                   >
-                    {editingParty ? "Update" : "Create Party"}
+                    {editingParty ? t("parties.updateParty") : t("parties.createParty")}
                   </Button>
                 </div>
               </div>

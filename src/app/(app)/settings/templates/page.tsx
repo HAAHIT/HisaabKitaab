@@ -10,6 +10,7 @@ import {
   Chip,
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface Template {
   id: string;
@@ -21,6 +22,7 @@ interface Template {
 
 export default function TemplatesPage() {
   const router = useRouter();
+  const { t } = useLanguage();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{
@@ -34,11 +36,11 @@ export default function TemplatesPage() {
       const data = await res.json();
       setTemplates(data.templates || []);
     } catch {
-      showToast("Failed to fetch templates", "error");
+      showToast(t("templates.fetchFailed"), "error");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     fetchTemplates();
@@ -50,16 +52,16 @@ export default function TemplatesPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Delete this template?")) return;
+    if (!confirm(t("templates.deleteConfirm"))) return;
     try {
       const res = await fetch(`/api/templates/${id}`, { method: "DELETE" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      showToast("Template deleted", "success");
+      showToast(t("templates.deleted"), "success");
       fetchTemplates();
     } catch (err) {
       showToast(
-        err instanceof Error ? err.message : "Failed to delete",
+        err instanceof Error ? err.message : t("templates.deleteFailed"),
         "error"
       );
     }
@@ -81,9 +83,9 @@ export default function TemplatesPage() {
 
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold">Bill Templates</h1>
+          <h1 className="text-2xl font-bold">{t("templates.title")}</h1>
           <p className="text-default-500 text-sm mt-1">
-            Define column structures for your invoices
+            {t("templates.subtitle")}
           </p>
         </div>
         <Button
@@ -106,7 +108,7 @@ export default function TemplatesPage() {
             </svg>
           }
         >
-          Create Template
+          {t("templates.create")}
         </Button>
       </div>
 
@@ -135,10 +137,10 @@ export default function TemplatesPage() {
               </svg>
             </div>
             <p className="text-lg font-medium text-default-600">
-              No templates yet
+              {t("templates.empty")}
             </p>
             <p className="text-sm text-default-400 mt-1">
-              Create your first bill template to start invoicing
+              {t("templates.emptySubtitle")}
             </p>
             <Button
               color="primary"
@@ -147,7 +149,7 @@ export default function TemplatesPage() {
               className="mt-4"
               onPress={() => router.push("/settings/templates/new")}
             >
-              Create Template
+              {t("templates.create")}
             </Button>
           </CardBody>
         </Card>
@@ -194,7 +196,7 @@ export default function TemplatesPage() {
                     router.push(`/settings/templates/${t.id}`)
                   }
                 >
-                  Edit
+                  {t("templates.edit")}
                 </Button>
                 <Button
                   size="sm"
@@ -202,7 +204,7 @@ export default function TemplatesPage() {
                   color="danger"
                   onPress={() => handleDelete(t.id)}
                 >
-                  Delete
+                  {t("common.delete")}
                 </Button>
               </CardFooter>
             </Card>

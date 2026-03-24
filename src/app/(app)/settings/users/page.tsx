@@ -17,6 +17,7 @@ import {
   Chip,
   Skeleton,
 } from "@heroui/react";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface User {
   id: string;
@@ -29,6 +30,7 @@ interface User {
 }
 
 export default function UserManagementPage() {
+  const { t } = useLanguage();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [showPanel, setShowPanel] = useState(false);
@@ -50,11 +52,11 @@ export default function UserManagementPage() {
       const data = await res.json();
       setUsers(data.users || []);
     } catch {
-      showToast("Failed to fetch users", "error");
+      showToast(t("users.fetchFailed"), "error");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     fetchUsers();
@@ -98,11 +100,11 @@ export default function UserManagementPage() {
 
   async function handleSave() {
     if (!formName || !formPhone) {
-      showToast("Name and phone are required", "error");
+      showToast(t("users.nameRequiredPhone"), "error");
       return;
     }
     if (!editingUser && (!formPassword || formPassword.length < 6)) {
-      showToast("Password must be at least 6 characters", "error");
+      showToast(t("users.passwordMin"), "error");
       return;
     }
 
@@ -129,28 +131,28 @@ export default function UserManagementPage() {
       if (!res.ok) throw new Error(data.error || "Failed to save user");
 
       showToast(
-        editingUser ? "User updated successfully" : "User created successfully",
+        editingUser ? t("users.updated") : t("users.createdSuccess"),
         "success"
       );
       setShowPanel(false);
       fetchUsers();
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Failed to save", "error");
+      showToast(err instanceof Error ? err.message : t("users.saveFailed"), "error");
     } finally {
       setSaving(false);
     }
   }
 
   async function handleDelete(userId: string) {
-    if (!confirm("Are you sure you want to deactivate this user?")) return;
+    if (!confirm(t("users.deactivateConfirm"))) return;
 
     try {
       const res = await fetch(`/api/users/${userId}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete user");
-      showToast("User deactivated", "success");
+      showToast(t("users.deactivated"), "success");
       fetchUsers();
     } catch {
-      showToast("Failed to deactivate user", "error");
+      showToast(t("users.deactivateFailed"), "error");
     }
   }
 
@@ -180,9 +182,9 @@ export default function UserManagementPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold">User Management</h1>
+          <h1 className="text-2xl font-bold">{t("users.title")}</h1>
           <p className="text-default-500 text-sm mt-1">
-            Manage staff, accountant, and customer accounts
+            {t("users.subtitle")}
           </p>
         </div>
         <Button
@@ -196,7 +198,7 @@ export default function UserManagementPage() {
             </svg>
           }
         >
-          Add User
+          {t("users.add")}
         </Button>
       </div>
 
@@ -219,7 +221,7 @@ export default function UserManagementPage() {
                 className="mt-3"
                 onPress={openCreatePanel}
               >
-                Create First User
+                {t("users.createFirst")}
               </Button>
             </div>
           ) : (
@@ -229,12 +231,12 @@ export default function UserManagementPage() {
               className="min-w-full"
             >
               <TableHeader>
-                <TableColumn>NAME</TableColumn>
-                <TableColumn>CONTACT</TableColumn>
-                <TableColumn>ROLE</TableColumn>
-                <TableColumn>STATUS</TableColumn>
-                <TableColumn>CREATED</TableColumn>
-                <TableColumn>ACTIONS</TableColumn>
+                <TableColumn>{t("users.name").toUpperCase()}</TableColumn>
+                <TableColumn>{t("users.contact").toUpperCase()}</TableColumn>
+                <TableColumn>{t("users.role").toUpperCase()}</TableColumn>
+                <TableColumn>{t("users.status").toUpperCase()}</TableColumn>
+                <TableColumn>{t("users.created").toUpperCase()}</TableColumn>
+                <TableColumn>{t("users.actions").toUpperCase()}</TableColumn>
               </TableHeader>
               <TableBody>
                 {users.map((user) => (
@@ -268,7 +270,7 @@ export default function UserManagementPage() {
                         color={user.isActive ? "success" : "default"}
                         variant="dot"
                       >
-                        {user.isActive ? "Active" : "Inactive"}
+                        {user.isActive ? t("users.active") : t("users.inactive")}
                       </Chip>
                     </TableCell>
                     <TableCell className="text-sm text-default-500">
@@ -323,7 +325,7 @@ export default function UserManagementPage() {
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold">
-                  {editingUser ? "Edit User" : "Add New User"}
+                  {editingUser ? t("users.edit") : t("users.createTitle")}
                 </h2>
                 <Button
                   isIconOnly
@@ -339,7 +341,7 @@ export default function UserManagementPage() {
 
               <div className="flex flex-col gap-4">
                 <Input
-                  label="Name"
+                  label={t("users.name")}
                   placeholder="Enter full name"
                   value={formName}
                   onValueChange={setFormName}
@@ -347,7 +349,7 @@ export default function UserManagementPage() {
                   isRequired
                 />
                 <Input
-                  label="Email"
+                  label={t("users.email")}
                   placeholder="Enter email (optional)"
                   type="email"
                   value={formEmail}
@@ -355,7 +357,7 @@ export default function UserManagementPage() {
                   variant="bordered"
                 />
                 <Input
-                  label="Phone"
+                  label={t("users.phone")}
                   placeholder="Enter phone number"
                   type="tel"
                   value={formPhone}
@@ -365,8 +367,8 @@ export default function UserManagementPage() {
                 />
                 <div>
                   <Input
-                    label="Password"
-                    placeholder={editingUser ? "Leave blank to keep current" : "Min 6 characters"}
+                    label={t("users.password")}
+                    placeholder={editingUser ? t("users.leaveBlank") : t("users.minChars")}
                     type={showPassword ? "text" : "password"}
                     value={formPassword}
                     onValueChange={setFormPassword}
@@ -380,7 +382,7 @@ export default function UserManagementPage() {
                           onPress={() => setShowPassword((current) => !current)}
                           className="text-xs"
                         >
-                          {showPassword ? "Hide" : "Show"}
+                          {showPassword ? t("common.hide") : t("common.show")}
                         </Button>
                         <Button
                           size="sm"
@@ -388,14 +390,14 @@ export default function UserManagementPage() {
                           onPress={generatePassword}
                           className="text-xs"
                         >
-                          Generate
+                          {t("common.generate")}
                         </Button>
                       </div>
                     }
                   />
                 </div>
                 <Select
-                  label="Role"
+                  label={t("users.role")}
                   selectedKeys={[formRole]}
                   onSelectionChange={(keys) => {
                     const selected = Array.from(keys)[0] as string;
@@ -403,9 +405,9 @@ export default function UserManagementPage() {
                   }}
                   variant="bordered"
                 >
-                  <SelectItem key="STAFF">Staff</SelectItem>
-                  <SelectItem key="ACCOUNTANT">Accountant</SelectItem>
-                  <SelectItem key="CUSTOMER">Customer</SelectItem>
+                  <SelectItem key="STAFF">{t("users.staff")}</SelectItem>
+                  <SelectItem key="ACCOUNTANT">{t("users.accountant")}</SelectItem>
+                  <SelectItem key="CUSTOMER">{t("users.customer")}</SelectItem>
                 </Select>
 
                 <div className="flex gap-3 pt-4">
@@ -414,7 +416,7 @@ export default function UserManagementPage() {
                     className="flex-1"
                     onPress={() => setShowPanel(false)}
                   >
-                    Cancel
+                    {t("common.cancel")}
                   </Button>
                   <Button
                     color="primary"
@@ -422,7 +424,7 @@ export default function UserManagementPage() {
                     onPress={handleSave}
                     isLoading={saving}
                   >
-                    {editingUser ? "Update" : "Create User"}
+                    {editingUser ? t("common.update") : t("users.createUser")}
                   </Button>
                 </div>
               </div>

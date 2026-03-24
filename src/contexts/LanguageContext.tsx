@@ -1,7 +1,22 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect } from "react";
-import { translations, Language, TranslationKey } from "@/lib/i18n/translations";
+import {
+  createContext,
+  startTransition,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { useRouter } from "next/navigation";
+import {
+  createTranslator,
+  getTranslation,
+  Language,
+  LANGUAGE_COOKIE_NAME,
+  LANGUAGE_STORAGE_KEY,
+  TranslationKey,
+} from "@/lib/i18n/translations";
 
 interface LanguageContextType {
   language: Language;
@@ -11,26 +26,38 @@ interface LanguageContextType {
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
-export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [language, setLanguageState] = useState<Language>("en");
+function persistLanguagePreference(language: Language) {
+  localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
+  document.cookie = `${LANGUAGE_COOKIE_NAME}=${language}; path=/; max-age=31536000; samesite=lax`;
+}
 
-  // Load preferred language from localStorage on mount
+export function LanguageProvider({
+  children,
+  initialLanguage,
+}: {
+  children: React.ReactNode;
+  initialLanguage: Language;
+}) {
+  const router = useRouter();
+  const [language, setLanguageState] = useState<Language>(initialLanguage);
+
   useEffect(() => {
-    const saved = localStorage.getItem("app-language") as Language;
-    if (saved && (saved === "en" || saved === "hi")) {
-      setLanguageState(saved);
-    }
-  }, []);
+    persistLanguagePreference(language);
+  }, [language]);
 
   const setLanguage = (lang: Language) => {
+    if (lang === language) {
+      return;
+    }
+
     setLanguageState(lang);
-    localStorage.setItem("app-language", lang);
+    persistLanguagePreference(lang);
+    startTransition(() => {
+      router.refresh();
+    });
   };
 
-  const t = (key: TranslationKey): string => {
-    const dict = translations[language] || translations.en;
-    return dict[key] || translations.en[key] || key;
-  };
+  const t = useMemo(() => createTranslator(language), [language]);
 
   return (
     <LanguageContext.Provider value={{ language, setLanguage, t }}>
@@ -46,3 +73,7 @@ export const useLanguage = () => {
   }
   return context;
 };
+
+export function useStaticTranslation(language: Language, key: TranslationKey) {
+  return getTranslation(language, key);
+}

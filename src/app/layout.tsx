@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { cookies } from "next/headers";
 import { Providers } from "./providers";
+import {
+  LANGUAGE_COOKIE_NAME,
+  normalizeLanguage,
+} from "@/lib/i18n/translations";
 import "./globals.css";
 
 const inter = Inter({
@@ -15,15 +20,24 @@ export const metadata: Metadata = {
   icons: { icon: "/favicon.ico" },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const cookieStore = await cookies();
+  const language = normalizeLanguage(
+    cookieStore.get(LANGUAGE_COOKIE_NAME)?.value
+  );
+
   return (
-    <html lang="en" className={`${inter.variable} h-full`} suppressHydrationWarning>
+    <html
+      lang={language}
+      className={`${inter.variable} h-full`}
+      suppressHydrationWarning
+    >
       <body className="min-h-full bg-background text-foreground antialiased">
-        <Providers>{children}</Providers>
+        <Providers initialLanguage={language}>{children}</Providers>
       </body>
     </html>
   );

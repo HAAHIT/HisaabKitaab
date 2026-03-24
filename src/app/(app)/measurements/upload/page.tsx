@@ -23,6 +23,7 @@ import { useRouter } from "next/navigation";
 import { db } from "@/lib/db";
 import { useSync } from "@/hooks/useSync";
 import { buildMeasurementUploadFormData } from "@/lib/measurement-upload-form";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const DOOR_TYPES = [
   { key: "wooden", label: "Wooden Door" },
@@ -74,6 +75,7 @@ async function compressImage(
 
 export default function UploadMeasurementsPage() {
   const router = useRouter();
+  const { t } = useLanguage();
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const { isOnline, isSyncing } = useSync();
@@ -129,7 +131,7 @@ export default function UploadMeasurementsPage() {
       setPendingPhotos(compressedPhotos);
       onReviewOpen();
     } catch {
-      showToast("Failed to process images", "error");
+      showToast(t("measurements.processImagesFailed"), "error");
     } finally {
       setProcessing(false);
       if (fileRef.current) {
@@ -160,12 +162,12 @@ export default function UploadMeasurementsPage() {
 
   async function handleSubmit() {
     if (!label.trim()) {
-      showToast("Label is required", "error");
+      showToast(t("measurements.labelRequired"), "error");
       return;
     }
 
     if (photos.length === 0) {
-      showToast("Add at least one photo", "error");
+      showToast(t("measurements.photoRequired"), "error");
       return;
     }
 
@@ -173,7 +175,7 @@ export default function UploadMeasurementsPage() {
     try {
       if (!isOnline) {
         await queueDraft();
-        showToast("Saved on this device. It will upload when you are online.", "success");
+        showToast(t("measurements.savedOnDevice"), "success");
         window.setTimeout(() => router.push("/measurements/my-uploads"), 800);
         return;
       }
@@ -194,7 +196,7 @@ export default function UploadMeasurementsPage() {
         throw new Error(data?.error || "Upload failed");
       }
 
-      showToast("Measurement uploaded", "success");
+      showToast(t("measurements.uploaded"), "success");
       window.setTimeout(() => router.push("/measurements/my-uploads"), 600);
     } catch (error) {
       const shouldQueueDraft =
@@ -204,17 +206,14 @@ export default function UploadMeasurementsPage() {
       if (shouldQueueDraft) {
         try {
           await queueDraft();
-          showToast(
-            "Network unavailable. Saved on this device for later upload.",
-            "success"
-          );
+          showToast(t("measurements.networkSaved"), "success");
           window.setTimeout(() => router.push("/measurements/my-uploads"), 800);
         } catch {
-          showToast("Failed to save local draft", "error");
+          showToast(t("measurements.saveDraftFailed"), "error");
         }
       } else {
         showToast(
-          error instanceof Error ? error.message : "Upload failed",
+          error instanceof Error ? error.message : t("measurements.uploadFailed"),
           "error"
         );
       }
@@ -257,9 +256,9 @@ export default function UploadMeasurementsPage() {
             </svg>
           </Button>
           <div>
-            <h1 className="text-2xl font-bold">Upload Measurements</h1>
+            <h1 className="text-2xl font-bold">{t("measurements.uploadTitle")}</h1>
             <p className="mt-1 text-sm text-default-500">
-              Upload directly to the server, or keep a local draft when offline.
+              {t("measurements.uploadSubtitle")}
             </p>
           </div>
         </div>
@@ -267,12 +266,12 @@ export default function UploadMeasurementsPage() {
         <div className="flex gap-2">
           {!isOnline && (
             <Chip size="sm" variant="flat" color="warning">
-              Offline
+              {t("common.offline")}
             </Chip>
           )}
           {isSyncing && (
             <Chip size="sm" variant="flat" color="primary">
-              Syncing drafts
+              {t("common.syncingDrafts")}
             </Chip>
           )}
         </div>
@@ -280,7 +279,7 @@ export default function UploadMeasurementsPage() {
 
       <Card shadow="sm" className="mb-4">
         <CardHeader className="px-6 pt-6 pb-0">
-          <h2 className="font-semibold">Photos</h2>
+          <h2 className="font-semibold">{t("measurements.photos")}</h2>
         </CardHeader>
         <CardBody className="p-6">
           {photos.length > 0 && (
@@ -353,7 +352,7 @@ export default function UploadMeasurementsPage() {
                     strokeWidth={1.5}
                   />
                 </svg>
-                <span className="text-sm font-medium">Take Photo</span>
+                <span className="text-sm font-medium">{t("measurements.takePhoto")}</span>
               </div>
             </Button>
 
@@ -377,25 +376,25 @@ export default function UploadMeasurementsPage() {
                     strokeWidth={1.5}
                   />
                 </svg>
-                <span className="text-sm font-medium">From Gallery</span>
+                <span className="text-sm font-medium">{t("measurements.fromGallery")}</span>
               </div>
             </Button>
           </div>
 
           <p className="mt-2 text-center text-xs text-default-400">
-            Images are compressed automatically before upload or local save.
+            {t("measurements.imagesCompressed")}
           </p>
         </CardBody>
       </Card>
 
       <Card shadow="sm" className="mb-6">
         <CardHeader className="px-6 pt-6 pb-0">
-          <h2 className="font-semibold">Details</h2>
+          <h2 className="font-semibold">{t("measurements.details")}</h2>
         </CardHeader>
         <CardBody className="space-y-5 p-6">
           <Input
-            label="Label"
-            placeholder="e.g. Main Door, Room 2 Window"
+            label={t("measurements.label")}
+            placeholder={t("measurements.labelPlaceholder")}
             value={label}
             onValueChange={setLabel}
             variant="bordered"
@@ -403,16 +402,16 @@ export default function UploadMeasurementsPage() {
           />
 
           <Input
-            label="Room Name"
-            placeholder="e.g. Master Bedroom, Kitchen"
+            label={t("measurements.roomName")}
+            placeholder={t("measurements.roomPlaceholder")}
             value={roomName}
             onValueChange={setRoomName}
             variant="bordered"
           />
 
           <Select
-            label="Door Type"
-            placeholder="Select door type"
+            label={t("measurements.doorType")}
+            placeholder={t("measurements.doorTypePlaceholder")}
             selectedKeys={doorType ? [doorType] : []}
             onSelectionChange={(keys) => {
               const value = Array.from(keys)[0] as string;
@@ -426,8 +425,8 @@ export default function UploadMeasurementsPage() {
           </Select>
 
           <Textarea
-            label="Notes"
-            placeholder="Any special instructions, dimensions, or details..."
+            label={t("measurements.notes")}
+            placeholder={t("measurements.notesPlaceholder")}
             value={notes}
             onValueChange={setNotes}
             variant="bordered"
@@ -438,7 +437,7 @@ export default function UploadMeasurementsPage() {
 
       <div className="flex justify-end gap-3">
         <Button variant="flat" onPress={() => router.push("/measurements/my-uploads")}>
-          Cancel
+          {t("common.cancel")}
         </Button>
         <Button
           color="primary"
@@ -447,7 +446,7 @@ export default function UploadMeasurementsPage() {
           isLoading={saving}
           isDisabled={photos.length === 0}
         >
-          {isOnline ? "Upload Measurement" : "Save Local Draft"}
+          {isOnline ? t("measurements.uploadMeasurement") : t("measurements.saveLocalDraft")}
         </Button>
       </div>
 
@@ -460,9 +459,9 @@ export default function UploadMeasurementsPage() {
       >
         <ModalContent>
           <ModalHeader className="flex flex-col gap-1">
-            <span>Review New Photos</span>
+            <span>{t("measurements.reviewTitle")}</span>
             <span className="text-xs font-normal text-default-500">
-              Check that the images are clear before using them.
+              {t("measurements.reviewSubtitle")}
             </span>
           </ModalHeader>
           <ModalBody>
@@ -485,14 +484,14 @@ export default function UploadMeasurementsPage() {
           </ModalBody>
           <ModalFooter>
             <Button color="danger" variant="light" onPress={discardPendingPhotos}>
-              Discard
+              {t("common.discard")}
             </Button>
             <Button
               color="primary"
               className="bg-gradient-to-r from-blue-600 to-indigo-600 font-semibold"
               onPress={confirmPendingPhotos}
             >
-              Confirm and Use
+              {t("measurements.confirmUse")}
             </Button>
           </ModalFooter>
         </ModalContent>

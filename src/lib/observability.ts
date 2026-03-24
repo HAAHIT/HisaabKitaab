@@ -40,7 +40,7 @@ function writeLog(severity: LogSeverity, event: string, context: LogContext = {}
     event,
     service: "doorcraft-pro",
     timestamp: new Date().toISOString(),
-    ...normalizeValue(context),
+    ...(normalizeValue(context) as Record<string, unknown>),
   };
   const serialized = JSON.stringify(payload);
 
@@ -90,10 +90,10 @@ export function getClientIp(request: RequestLike) {
   );
 }
 
-export function attachRequestIdHeader(
-  response: Response | import("next/server").NextResponse,
+export function attachRequestIdHeader<T extends Response | import("next/server").NextResponse>(
+  response: T,
   requestId: string
-) {
+): T {
   response.headers.set("x-request-id", requestId);
   return response;
 }

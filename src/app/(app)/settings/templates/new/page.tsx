@@ -12,17 +12,11 @@ import {
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { validateFormula, translateFormulaToIds, type ColumnDef } from "@/lib/formula";
-
-const COLUMN_TYPES = [
-  { key: "text", label: "Text" },
-  { key: "number", label: "Number" },
-  { key: "formula", label: "Formula" },
-  { key: "date", label: "Date" },
-  { key: "dropdown", label: "Dropdown" },
-];
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export default function CreateTemplatePage() {
   const router = useRouter();
+  const { t } = useLanguage();
   const [name, setName] = useState("");
   const [columns, setColumns] = useState<ColumnDef[]>([
     { id: crypto.randomUUID(), name: "", type: "text", position: 0 },
@@ -33,6 +27,14 @@ export default function CreateTemplatePage() {
     message: string;
     type: "success" | "error";
   } | null>(null);
+
+  const columnTypeOptions = [
+    { key: "text", label: t("templates.type.text") },
+    { key: "number", label: t("templates.type.number") },
+    { key: "formula", label: t("templates.type.formula") },
+    { key: "date", label: t("templates.type.date") },
+    { key: "dropdown", label: t("templates.type.dropdown") },
+  ];
 
   function showToast(message: string, type: "success" | "error") {
     setToast({ message, type });
@@ -108,7 +110,7 @@ export default function CreateTemplatePage() {
 
     // Check template name
     if (!name.trim()) {
-      showToast("Template name is required", "error");
+      showToast(t("templates.nameRequired"), "error");
       return false;
     }
 
@@ -116,12 +118,12 @@ export default function CreateTemplatePage() {
     const colNames = new Set<string>();
     columns.forEach((col, i) => {
       if (!col.name.trim()) {
-        newErrors[i] = "Column name is required";
+        newErrors[i] = t("templates.columnRequired");
         valid = false;
         return;
       }
       if (colNames.has(col.name)) {
-        newErrors[i] = "Duplicate column name";
+        newErrors[i] = t("templates.duplicateColumn");
         valid = false;
         return;
       }
@@ -130,13 +132,13 @@ export default function CreateTemplatePage() {
       // Validate formula
       if (col.type === "formula") {
         if (!col.formula?.trim()) {
-          newErrors[i] = "Formula is required";
+          newErrors[i] = t("templates.formulaRequired");
           valid = false;
           return;
         }
         const result = validateFormula(col.formula, col.name, columns);
         if (!result.valid) {
-          newErrors[i] = result.error || "Invalid formula";
+          newErrors[i] = result.error || t("templates.invalidFormula");
           valid = false;
         }
       }
@@ -171,7 +173,7 @@ export default function CreateTemplatePage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      showToast("Template created!", "success");
+      showToast(t("templates.createdSuccess"), "success");
       setTimeout(() => router.push("/settings/templates"), 500);
     } catch (err) {
       showToast(
@@ -218,9 +220,9 @@ export default function CreateTemplatePage() {
           </svg>
         </Button>
         <div>
-          <h1 className="text-2xl font-bold">Create Template</h1>
+          <h1 className="text-2xl font-bold">{t("templates.createTitle")}</h1>
           <p className="text-default-500 text-sm mt-1">
-            Define columns for your invoice layout
+            {t("templates.createSubtitle")}
           </p>
         </div>
       </div>
@@ -228,8 +230,8 @@ export default function CreateTemplatePage() {
       <Card shadow="sm" className="mb-6">
         <CardBody className="p-6">
           <Input
-            label="Template Name"
-            placeholder="e.g. Door Order Invoice"
+            label={t("templates.templateName")}
+            placeholder={t("templates.templateNamePlaceholder")}
             value={name}
             onValueChange={setName}
             variant="bordered"
@@ -241,7 +243,7 @@ export default function CreateTemplatePage() {
 
       <Card shadow="sm" className="mb-6">
         <CardBody className="p-6">
-          <h2 className="text-lg font-semibold mb-4">Columns</h2>
+          <h2 className="text-lg font-semibold mb-4">{t("templates.columns")}</h2>
 
           <div className="space-y-4">
             {columns.map((col, index) => (
@@ -282,8 +284,8 @@ export default function CreateTemplatePage() {
 
                   <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
                     <Input
-                      label="Column Name"
-                      placeholder="e.g. Qty, Rate, Amount"
+                      label={t("templates.columnName")}
+                      placeholder={t("templates.columnNamePlaceholder")}
                       value={col.name}
                       onValueChange={(v) => updateColumn(index, "name", v)}
                       variant="bordered"
@@ -291,7 +293,7 @@ export default function CreateTemplatePage() {
                       isRequired
                     />
                     <Select
-                      label="Type"
+                      label={t("templates.type")}
                       selectedKeys={[col.type]}
                       onSelectionChange={(keys) => {
                         const val = Array.from(keys)[0] as string;
@@ -300,8 +302,8 @@ export default function CreateTemplatePage() {
                       variant="bordered"
                       size="sm"
                     >
-                      {COLUMN_TYPES.map((t) => (
-                        <SelectItem key={t.key}>{t.label}</SelectItem>
+                      {columnTypeOptions.map((option) => (
+                        <SelectItem key={option.key}>{option.label}</SelectItem>
                       ))}
                     </Select>
                   </div>
@@ -325,19 +327,19 @@ export default function CreateTemplatePage() {
                   <div className="ml-0 md:ml-16 p-4 rounded-xl bg-warning-50 dark:bg-warning/10 border border-warning/20">
                     <p className="text-sm font-semibold text-warning-700 dark:text-warning-500 mb-3 flex items-center gap-2">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                      Build Formula
+                      {t("templates.buildFormula")}
                     </p>
                     <Input
-                      placeholder="e.g. {Qty} * {Rate}"
+                      placeholder={t("templates.formulaPlaceholder")}
                       value={col.formula || ""}
                       onValueChange={(v) => updateColumn(index, "formula", v)}
                       variant="faded"
                       isInvalid={!!errors[index]}
-                      errorMessage={errors[index] || "Formula must be valid math. Supports +, -, *, /, ()"}
+                      errorMessage={errors[index] || t("templates.formulaHelp")}
                     />
                     
                     <div className="mt-4">
-                      <p className="text-xs text-default-500 mb-2 font-medium">Click to insert existing columns:</p>
+                      <p className="text-xs text-default-500 mb-2 font-medium">{t("templates.insertColumns")}</p>
                       <div className="flex flex-wrap gap-2">
                         {columns.slice(0, index).filter(c => c.name.trim()).length > 0 ? (
                           columns.slice(0, index).filter(c => c.name.trim()).map((prevCol, i) => (
@@ -353,7 +355,7 @@ export default function CreateTemplatePage() {
                             </Chip>
                           ))
                         ) : (
-                          <span className="text-xs text-default-400 italic">No previous columns defined yet. Add columns above to use them in formulas.</span>
+                          <span className="text-xs text-default-400 italic">{t("templates.noPreviousColumns")}</span>
                         )}
                       </div>
                     </div>
@@ -364,10 +366,10 @@ export default function CreateTemplatePage() {
                   <div className="ml-0 md:ml-16 p-4 rounded-xl bg-primary-50 dark:bg-primary/10 border border-primary/20">
                     <p className="text-sm font-semibold text-primary-700 dark:text-primary-500 mb-3 flex items-center gap-2">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" /></svg>
-                      Dropdown Options
+                      {t("templates.dropdownOptions")}
                     </p>
                     <Input
-                      placeholder="e.g. Main Door, Internal, Sliding"
+                      placeholder={t("templates.dropdownPlaceholder")}
                       value={(col.options || []).join(",")}
                       onValueChange={(v) => {
                         const newCols = [...columns];
@@ -375,7 +377,7 @@ export default function CreateTemplatePage() {
                         setColumns(newCols);
                       }}
                       variant="faded"
-                      description="Separate options with commas. Example: Option 1, Option 2"
+                      description={t("templates.dropdownDescription")}
                     />
                   </div>
                 )}
@@ -397,7 +399,7 @@ export default function CreateTemplatePage() {
               </svg>
             }
           >
-            Add Another Column
+            {t("templates.addColumn")}
           </Button>
         </CardBody>
       </Card>
@@ -408,7 +410,7 @@ export default function CreateTemplatePage() {
           variant="flat"
           onPress={() => router.push("/settings/templates")}
         >
-          Cancel
+          {t("common.cancel")}
         </Button>
         <Button
           color="primary"
@@ -416,7 +418,7 @@ export default function CreateTemplatePage() {
           onPress={handleSave}
           isLoading={saving}
         >
-          Save Template
+          {t("templates.saveTemplate")}
         </Button>
       </div>
     </div>

@@ -11,6 +11,7 @@ import {
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { db } from "@/lib/db";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 async function readError(response: Response) {
   const data = await response.json().catch(() => null);
@@ -19,6 +20,7 @@ async function readError(response: Response) {
 
 export default function CompanySettingsPage() {
   const router = useRouter();
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{
@@ -69,9 +71,9 @@ export default function CompanySettingsPage() {
 
   useEffect(() => {
     loadSettings()
-      .catch(() => setToast({ message: "Failed to load settings", type: "error" }))
+      .catch(() => setToast({ message: t("company.loadFailed"), type: "error" }))
       .finally(() => setLoading(false));
-  }, [loadSettings]);
+  }, [loadSettings, t]);
 
   useEffect(() => {
     return () => revokeObjectUrl(pendingLogoPreviewUrl);
@@ -127,11 +129,11 @@ export default function CompanySettingsPage() {
       }
 
       await loadSettings();
-      showToast("Settings updated successfully!", "success");
+      showToast(t("company.updated"), "success");
     } catch (error) {
       await loadSettings().catch(() => undefined);
       showToast(
-        error instanceof Error ? error.message : "Failed to save settings",
+        error instanceof Error ? error.message : t("company.saveFailed"),
         "error"
       );
     } finally {
@@ -146,12 +148,12 @@ export default function CompanySettingsPage() {
     }
 
     if (!file.type.startsWith("image/")) {
-      showToast("Logo must be an image", "error");
+      showToast(t("company.logoMustImage"), "error");
       return;
     }
 
     if (file.size > 2 * 1024 * 1024) {
-      showToast("Logo must be smaller than 2MB", "error");
+      showToast(t("company.logoMustSmall"), "error");
       return;
     }
 
@@ -175,9 +177,7 @@ export default function CompanySettingsPage() {
 
   async function handleResetLocalData() {
     if (
-      !confirm(
-        "This will clear all local measurement drafts and legacy offline cache stored on this device. Continue?"
-      )
+      !confirm(t("company.resetConfirm"))
     ) {
       return;
     }
@@ -191,10 +191,10 @@ export default function CompanySettingsPage() {
         db.table("payments").clear(),
         db.table("templates").clear(),
       ]);
-      showToast("Local storage cleared successfully!", "success");
+      showToast(t("company.localCleared"), "success");
       window.setTimeout(() => window.location.reload(), 1000);
     } catch {
-      showToast("Failed to clear local storage", "error");
+      showToast(t("company.localClearFailed"), "error");
     }
   }
 
@@ -233,9 +233,9 @@ export default function CompanySettingsPage() {
           </svg>
         </Button>
         <div>
-          <h1 className="text-2xl font-bold">Company Profile</h1>
+          <h1 className="text-2xl font-bold">{t("company.title")}</h1>
           <p className="mt-1 text-sm text-default-500">
-            Manage business details and default preferences
+            {t("company.subtitle")}
           </p>
         </div>
       </div>
@@ -244,7 +244,7 @@ export default function CompanySettingsPage() {
         <CardBody className="space-y-8 p-6 md:p-8">
           <div>
             <h2 className="mb-6 border-b border-divider pb-2 text-lg font-semibold">
-              Business Details
+              {t("company.businessDetails")}
             </h2>
             <div className="flex flex-col items-start gap-8 md:flex-row">
               <div className="flex flex-col items-center gap-3">
@@ -278,7 +278,7 @@ export default function CompanySettingsPage() {
                         />
                       </svg>
                       <p className="mt-2 text-[10px] font-medium uppercase tracking-tighter text-default-400">
-                        Business Logo
+                        {t("company.businessLogo")}
                       </p>
                     </div>
                   )}
@@ -291,7 +291,7 @@ export default function CompanySettingsPage() {
                     className="font-semibold"
                     onPress={() => document.getElementById("logo-input")?.click()}
                   >
-                    {displayedCompanyLogo ? "Change" : "Upload"}
+                    {displayedCompanyLogo ? t("common.change") : t("common.upload")}
                   </Button>
                   {displayedCompanyLogo && (
                     <Button
@@ -329,14 +329,14 @@ export default function CompanySettingsPage() {
               <div className="w-full flex-1 space-y-4">
                 <div className="grid gap-4 md:grid-cols-2">
                   <Input
-                    label="Company Name"
-                    placeholder="DoorCraft Manufacturing"
+                    label={t("company.companyName")}
+                    placeholder={t("company.companyNamePlaceholder")}
                     value={companyName}
                     onValueChange={setCompanyName}
                     variant="bordered"
                   />
                   <Input
-                    label="GSTIN"
+                    label={t("bills.gstin")}
                     placeholder="e.g. 29ABCDE1234F1Z5"
                     value={companyGstin}
                     onValueChange={setCompanyGstin}
@@ -344,23 +344,23 @@ export default function CompanySettingsPage() {
                     className="font-mono uppercase"
                   />
                   <Input
-                    label="Phone Number"
-                    placeholder="Contact number"
+                    label={t("company.companyPhone")}
+                    placeholder={t("company.companyPhonePlaceholder")}
                     value={companyPhone}
                     onValueChange={setCompanyPhone}
                     variant="bordered"
                   />
                   <Input
-                    label="Email Address"
-                    placeholder="Email"
+                    label={t("company.companyEmail")}
+                    placeholder={t("company.companyEmailPlaceholder")}
                     value={companyEmail}
                     onValueChange={setCompanyEmail}
                     variant="bordered"
                   />
                 </div>
                 <Textarea
-                  label="Registered Address"
-                  placeholder="Full address for invoices..."
+                  label={t("company.registeredAddress")}
+                  placeholder={t("company.registeredAddressPlaceholder")}
                   value={companyAddress}
                   onValueChange={setCompanyAddress}
                   variant="bordered"
@@ -372,19 +372,19 @@ export default function CompanySettingsPage() {
 
           <div>
             <h2 className="mb-4 border-b border-divider pb-2 text-lg font-semibold">
-              Billing Defaults
+              {t("company.billingDefaults")}
             </h2>
             <div className="mb-4 grid gap-4 md:grid-cols-2">
               <Input
-                label="Bill Number Prefix"
-                placeholder="e.g. BILL or INV"
+                label={t("company.billPrefix")}
+                placeholder={t("company.billPrefixPlaceholder")}
                 value={billPrefix}
                 onValueChange={setBillPrefix}
                 variant="bordered"
-                description="Used as PREFIX-YYYYMM-NNN"
+                description={t("company.billPrefixDescription")}
               />
               <Input
-                label="Default Tax %"
+                label={t("company.defaultTax")}
                 placeholder="0"
                 type="number"
                 value={defaultTaxPercent}
@@ -394,8 +394,8 @@ export default function CompanySettingsPage() {
               />
             </div>
             <Textarea
-              label="Default Terms & Conditions"
-              placeholder="Standard terms, payment condition, warranties..."
+              label={t("company.defaultTerms")}
+              placeholder={t("company.defaultTermsPlaceholder")}
               value={defaultTerms}
               onValueChange={setDefaultTerms}
               variant="bordered"
@@ -410,7 +410,7 @@ export default function CompanySettingsPage() {
               onPress={handleSave}
               isLoading={saving}
             >
-              Save Changes
+              {t("common.saveChanges")}
             </Button>
           </div>
         </CardBody>
@@ -429,14 +429,14 @@ export default function CompanySettingsPage() {
                     strokeWidth={2}
                   />
                 </svg>
-                Danger Zone
+                {t("company.dangerZone")}
               </h3>
               <p className="mt-1 text-sm text-default-500">
-                Clear local measurement drafts and any legacy offline cache stored in this browser.
+                {t("company.dangerSubtitle")}
               </p>
             </div>
             <Button color="danger" variant="flat" onPress={handleResetLocalData}>
-              Reset Offline Storage
+              {t("company.resetOfflineStorage")}
             </Button>
           </div>
         </CardBody>

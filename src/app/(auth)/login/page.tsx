@@ -15,9 +15,11 @@ import {
   Divider,
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { t, language, setLanguage } = useLanguage();
   const [credential, setCredential] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -42,7 +44,7 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || "Login failed");
+        setError(data.error || t("login.loginFailed"));
         setLoading(false);
         return;
       }
@@ -54,7 +56,7 @@ export default function LoginPage() {
         router.push("/dashboard");
       }
     } catch {
-      setError("Network error. Please try again.");
+      setError(t("login.networkError"));
       setLoading(false);
     }
   }
@@ -89,18 +91,28 @@ export default function LoginPage() {
             DoorCraft Pro
           </h1>
           <p className="text-sm text-default-500">
-            Sign in to your account
+            {t("login.subtitle")}
           </p>
         </CardHeader>
 
         <Divider className="my-2" />
 
         <CardBody className="px-6 pb-8">
+          <div className="mb-4 flex justify-end">
+            <Button
+              size="sm"
+              variant="flat"
+              color="primary"
+              onPress={() => setLanguage(language === "en" ? "hi" : "en")}
+            >
+              {language === "en" ? "HI" : "EN"}
+            </Button>
+          </div>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <Input
               id="credential-input"
-              label="Email or Phone"
-              placeholder="Enter your email or phone number"
+              label={t("login.credentialLabel")}
+              placeholder={t("login.credentialPlaceholder")}
               type="text"
               value={credential}
               onValueChange={setCredential}
@@ -126,8 +138,8 @@ export default function LoginPage() {
 
             <Input
               id="password-input"
-              label="Password"
-              placeholder="Enter your password"
+              label={t("login.passwordLabel")}
+              placeholder={t("login.passwordPlaceholder")}
               type={showPassword ? "text" : "password"}
               value={password}
               onValueChange={setPassword}
@@ -184,7 +196,7 @@ export default function LoginPage() {
               isLoading={loading}
               isDisabled={!isFormValid}
             >
-              {loading ? "Signing in..." : "Sign In"}
+              {loading ? t("login.signingIn") : t("login.signIn")}
             </Button>
 
             <button
@@ -192,7 +204,7 @@ export default function LoginPage() {
               onClick={() => setShowForgot(true)}
               className="text-sm text-primary hover:underline text-center transition"
             >
-              Forgot Password?
+              {t("login.forgotPassword")}
             </button>
           </form>
         </CardBody>
@@ -201,10 +213,10 @@ export default function LoginPage() {
       {/* Forgot password modal */}
       <Modal isOpen={showForgot} onOpenChange={setShowForgot} placement="center">
         <ModalContent>
-          <ModalHeader>Forgot Password</ModalHeader>
+          <ModalHeader>{t("login.forgotPasswordTitle")}</ModalHeader>
           <ModalBody>
             <p className="text-default-600">
-              Please contact your administrator to reset your password.
+              {t("login.forgotPasswordBody")}
             </p>
           </ModalBody>
           <ModalFooter>
@@ -213,7 +225,7 @@ export default function LoginPage() {
               variant="light"
               onPress={() => setShowForgot(false)}
             >
-              OK
+              {t("common.ok")}
             </Button>
           </ModalFooter>
         </ModalContent>

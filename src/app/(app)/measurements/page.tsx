@@ -12,6 +12,7 @@ import {
   Skeleton,
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface Measurement {
   id: string;
@@ -26,15 +27,6 @@ interface Measurement {
   party: { id: string; name: string; type: string } | null;
 }
 
-const STATUS_OPTIONS = [
-  { key: "ALL", label: "All" },
-  { key: "UPLOADED", label: "Uploaded" },
-  { key: "PENDING", label: "Pending" },
-  { key: "REVIEWED", label: "Reviewed" },
-  { key: "IN_PRODUCTION", label: "In Production" },
-  { key: "COMPLETED", label: "Completed" },
-];
-
 const statusColorMap: Record<
   string,
   "default" | "primary" | "warning" | "success" | "secondary"
@@ -48,6 +40,7 @@ const statusColorMap: Record<
 
 export default function MeasurementsListPage() {
   const router = useRouter();
+  const { t } = useLanguage();
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -78,20 +71,29 @@ export default function MeasurementsListPage() {
     fetchMeasurements();
   }, [fetchMeasurements]);
 
+  const statusOptions = [
+    { key: "ALL", label: t("measurements.filter.all") },
+    { key: "UPLOADED", label: t("measurements.filter.uploaded") },
+    { key: "PENDING", label: t("measurements.filter.pending") },
+    { key: "REVIEWED", label: t("measurements.filter.reviewed") },
+    { key: "IN_PRODUCTION", label: t("measurements.filter.inProduction") },
+    { key: "COMPLETED", label: t("measurements.filter.completed") },
+  ];
+
   return (
     <div className="animate-fade-in p-4 lg:p-8">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Measurements Gallery</h1>
+          <h1 className="text-2xl font-bold">{t("measurements.title")}</h1>
           <p className="mt-1 text-sm text-default-500">
-            Review uploads with their linked customer and party context.
+            {t("measurements.subtitle")}
           </p>
         </div>
       </div>
 
       <div className="mb-6 flex flex-col gap-3 sm:flex-row">
         <Input
-          placeholder="Search label, room, customer, or party..."
+          placeholder={t("measurements.searchPlaceholder")}
           value={search}
           onValueChange={setSearch}
           variant="bordered"
@@ -118,7 +120,7 @@ export default function MeasurementsListPage() {
           variant="bordered"
           className="w-48"
         >
-          {STATUS_OPTIONS.map((option) => (
+          {statusOptions.map((option) => (
             <SelectItem key={option.key}>{option.label}</SelectItem>
           ))}
         </Select>
@@ -145,10 +147,10 @@ export default function MeasurementsListPage() {
             </div>
             <p className="text-lg font-medium text-default-600">
               {search || statusFilter !== "ALL"
-                ? "No matches found"
-                : "No measurements uploaded yet"}
+                ? t("measurements.emptyFiltered")
+                : t("measurements.empty")}
             </p>
-            <p className="mt-1 text-sm text-default-400">Customer uploads will appear here</p>
+            <p className="mt-1 text-sm text-default-400">{t("measurements.emptyHint")}</p>
           </CardBody>
         </Card>
       ) : (
@@ -172,7 +174,7 @@ export default function MeasurementsListPage() {
                     className="object-cover"
                   />
                   <div className="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-1 text-xs text-white">
-                    {measurement.photos.length} photos
+                    {measurement.photos.length} {t("measurements.photos")}
                   </div>
                 </div>
               ) : (
@@ -219,9 +221,9 @@ export default function MeasurementsListPage() {
                 <div className="flex items-center justify-between text-xs text-default-400">
                   <div className="flex flex-col">
                     <span className="font-medium text-default-600">
-                      Customer: {measurement.customer.name}
+                      {t("measurements.customerPrefix")}: {measurement.customer.name}
                     </span>
-                    {measurement.party && <span>Party: {measurement.party.name}</span>}
+                    {measurement.party && <span>{t("bills.partyPrefix")}: {measurement.party.name}</span>}
                   </div>
                   <span>
                     {new Date(measurement.createdAt).toLocaleDateString("en-IN", {

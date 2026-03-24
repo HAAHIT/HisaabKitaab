@@ -159,15 +159,15 @@ export default function DashboardPage() {
         <Card shadow="sm">
           <CardBody className="p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold">Cash Flow (6 months)</h3>
+              <h3 className="font-semibold">{t("dash.cashFlow")}</h3>
               <div className="flex gap-3 text-xs">
                 <div className="flex items-center gap-1">
                   <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                  <span className="text-default-400">Received</span>
+                  <span className="text-default-400">{t("dash.received")}</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <div className="w-2 h-2 rounded-full bg-orange-500"></div>
-                  <span className="text-default-400">Paid</span>
+                  <span className="text-default-400">{t("dash.paid")}</span>
                 </div>
               </div>
             </div>
@@ -175,7 +175,7 @@ export default function DashboardPage() {
               <CashFlowBar data={data.cashFlow} />
             ) : (
               <div className="h-40 flex items-center justify-center text-default-400 text-sm">
-                No payment data yet
+                {t("dash.noPaymentData")}
               </div>
             )}
           </CardBody>
@@ -185,8 +185,8 @@ export default function DashboardPage() {
         <Card shadow="sm">
           <CardBody className="p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold">Recent Payments</h3>
-              <button onClick={() => router.push("/payments")} className="text-xs text-primary hover:underline">View All →</button>
+              <h3 className="font-semibold">{t("dash.recentPayments")}</h3>
+              <button onClick={() => router.push("/payments")} className="text-xs text-primary hover:underline">{t("dash.viewAll")} →</button>
             </div>
             {data?.recentPayments && data.recentPayments.length > 0 ? (
               <div className="space-y-3">
@@ -206,7 +206,7 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="h-40 flex items-center justify-center text-default-400 text-sm">
-                No payments recorded yet
+                {t("dash.noPayments")}
               </div>
             )}
           </CardBody>
@@ -224,8 +224,8 @@ export default function DashboardPage() {
                   <svg className="w-7 h-7 text-danger" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 </div>
                 <div>
-                  <p className="font-semibold text-danger">Overdue Parties</p>
-                  <p className="text-sm text-default-500">{s?.overdueCount} parties with outstanding balance and no payment in 30+ days</p>
+                  <p className="font-semibold text-danger">{t("dash.overdueParties")}</p>
+                  <p className="text-sm text-default-500">{s?.overdueCount} {t("dash.overdueDetail")}</p>
                 </div>
               </div>
             </CardBody>
@@ -235,7 +235,7 @@ export default function DashboardPage() {
         {/* Bill Stats */}
         <Card shadow="sm">
           <CardBody className="p-6">
-            <h3 className="font-semibold mb-4">Bill Summary</h3>
+            <h3 className="font-semibold mb-4">{t("dash.billSummary")}</h3>
             <div className="flex flex-wrap gap-3">
               {data?.billStats?.map((stat) => (
                 <div key={stat.status} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-default-50 dark:bg-default-100/5">
@@ -249,7 +249,7 @@ export default function DashboardPage() {
                 </div>
               ))}
               {(!data?.billStats || data.billStats.length === 0) && (
-                <p className="text-sm text-default-400">No bills created yet</p>
+                <p className="text-sm text-default-400">{t("dash.noBills")}</p>
               )}
             </div>
           </CardBody>
