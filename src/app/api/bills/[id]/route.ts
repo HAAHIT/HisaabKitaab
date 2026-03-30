@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/prisma";
-import { buildBillSnapshotFromParty } from "@/lib/accounting";
+import {
+  buildBillSnapshotFromParty,
+  getBillBalanceDeltaForTransition,
+} from "@/lib/accounting";
 import { NextRequest, NextResponse } from "next/server";
 
 const ALLOWED_BILL_PATCH_KEYS = new Set([
@@ -121,6 +124,7 @@ export async function PATCH(
       select: {
         id: true,
         status: true,
+        grandTotal: true,
         templateId: true,
         partyId: true,
         customerName: true,
@@ -323,7 +327,7 @@ export async function PATCH(
     }
 
     const finalStatus =
-      (updateData.status as string | undefined) ?? existing.status;
+      ((updateData.status as "DRAFT" | "FINAL" | undefined) ?? existing.status);
     const finalPartyId =
       (updateData.partyId as string | null | undefined) ?? existing.partyId;
 
@@ -334,9 +338,53 @@ export async function PATCH(
       );
     }
 
-    const bill = await prisma.bill.update({
-      where: { id },
-      data: updateData,
+    const nextGrandTotal =
+      (updateData.grandTotal as number | undefined) ?? existing.grandTotal;
+
+    const bill = await prisma.$transaction(async (tx) => {
+      const updatedBill = await tx.bill.update({
+        where: { id },
+        data: updateData,
+      });
+
+      if (!finalPartyId) {
+        return updatedBill;
+      }
+
+      const party = await tx.party.findFirst({
+        where: {
+          id: finalPartyId,
+          isDeleted: false,
+          isActive: true,
+        },
+        select: {
+          id: true,
+          type: true,
+        },
+      });
+
+      if (!party) {
+        throw new Error("Party not found");
+      }
+
+      const balanceChange = getBillBalanceDeltaForTransition({
+        partyType: party.type,
+        previousStatus: existing.status,
+        previousAmount: existing.grandTotal,
+        nextStatus: finalStatus,
+        nextAmount: nextGrandTotal,
+      });
+
+      if (balanceChange !== 0) {
+        await tx.party.update({
+          where: { id: party.id },
+          data: {
+            currentBalance: { increment: balanceChange },
+          },
+        });
+      }
+
+      return updatedBill;
     });
 
     return NextResponse.json({ bill });
@@ -361,9 +409,64 @@ export async function DELETE(
 
   try {
     const { id } = await params;
-    await prisma.bill.update({
-      where: { id },
-      data: { status: "CANCELLED" },
+    const existing = await prisma.bill.findFirst({
+      where: {
+        id,
+        isDeleted: false,
+      },
+      select: {
+        id: true,
+        status: true,
+        grandTotal: true,
+        partyId: true,
+      },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: "Bill not found" }, { status: 404 });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.bill.update({
+        where: { id },
+        data: { status: "CANCELLED" },
+      });
+
+      if (!existing.partyId) {
+        return;
+      }
+
+      const party = await tx.party.findFirst({
+        where: {
+          id: existing.partyId,
+          isDeleted: false,
+        },
+        select: {
+          id: true,
+          type: true,
+        },
+      });
+
+      if (!party) {
+        return;
+      }
+
+      const balanceChange = getBillBalanceDeltaForTransition({
+        partyType: party.type,
+        previousStatus: existing.status,
+        previousAmount: existing.grandTotal,
+        nextStatus: "CANCELLED",
+        nextAmount: existing.grandTotal,
+      });
+
+      if (balanceChange !== 0) {
+        await tx.party.update({
+          where: { id: party.id },
+          data: {
+            currentBalance: { increment: balanceChange },
+          },
+        });
+      }
     });
 
     return NextResponse.json({ success: true });

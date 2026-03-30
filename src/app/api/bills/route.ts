@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/prisma";
-import { buildBillSnapshotFromParty } from "@/lib/accounting";
+import {
+  buildBillSnapshotFromParty,
+  getPostedBillBalanceDelta,
+} from "@/lib/accounting";
 import { NextRequest, NextResponse } from "next/server";
 
 const BILL_NUMBER_LOCK_KEY = 22032026;
@@ -131,6 +134,7 @@ export async function POST(request: NextRequest) {
       select: {
         id: true,
         name: true,
+        type: true,
         phone: true,
         address: true,
         gstin: true,
@@ -145,6 +149,11 @@ export async function POST(request: NextRequest) {
       where: { id: "default" },
     });
     const prefix = settings?.billPrefix || "BILL";
+    const resolvedGrandTotal =
+      typeof grandTotal === "number" && Number.isFinite(grandTotal)
+        ? grandTotal
+        : 0;
+    const billStatus = status === "FINAL" ? "FINAL" : "DRAFT";
     const now = new Date();
     const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -169,7 +178,7 @@ export async function POST(request: NextRequest) {
       });
       const billNumber = `${prefix}-${yearMonth}-${String(existingCount + 1).padStart(3, "0")}`;
 
-      return tx.bill.create({
+      const createdBill = await tx.bill.create({
         data: {
           billNumber,
           templateId,
@@ -181,11 +190,28 @@ export async function POST(request: NextRequest) {
           subtotal: subtotal || 0,
           taxPercent: taxPercent ?? (settings?.defaultTaxPercent || 0),
           taxAmount: taxAmount || 0,
-          grandTotal: grandTotal || 0,
-          status: status || "DRAFT",
+          grandTotal: resolvedGrandTotal,
+          status: billStatus,
           createdBy: userId!,
         },
       });
+
+      const balanceChange = getPostedBillBalanceDelta(
+        party.type,
+        billStatus,
+        resolvedGrandTotal
+      );
+
+      if (balanceChange !== 0) {
+        await tx.party.update({
+          where: { id: party.id },
+          data: {
+            currentBalance: { increment: balanceChange },
+          },
+        });
+      }
+
+      return createdBill;
     });
 
     return NextResponse.json({ bill }, { status: 201 });

@@ -3,6 +3,8 @@ import {
   buildPartyLedger,
   getBalanceIndicator,
   getBalanceStatusLabel,
+  getBillBalanceDeltaForTransition,
+  getPostedBillBalanceDelta,
   getLedgerAmountsForBalanceDelta,
   getPaymentBalanceDelta,
 } from "./accounting";
@@ -16,6 +18,34 @@ describe("accounting helpers", () => {
   it("maps vendor payment directions to balance deltas", () => {
     expect(getPaymentBalanceDelta("VENDOR", "OUTGOING", 1000)).toBe(1000);
     expect(getPaymentBalanceDelta("VENDOR", "INCOMING", 1000)).toBe(-1000);
+  });
+
+  it("applies bill balance deltas only to final bills", () => {
+    expect(getPostedBillBalanceDelta("CUSTOMER", "DRAFT", 1000)).toBe(0);
+    expect(getPostedBillBalanceDelta("CUSTOMER", "FINAL", 1000)).toBe(-1000);
+    expect(getPostedBillBalanceDelta("CUSTOMER", "CANCELLED", 1000)).toBe(0);
+  });
+
+  it("derives bill transition balance changes correctly", () => {
+    expect(
+      getBillBalanceDeltaForTransition({
+        partyType: "CUSTOMER",
+        previousStatus: "DRAFT",
+        previousAmount: 0,
+        nextStatus: "FINAL",
+        nextAmount: 5000,
+      })
+    ).toBe(-5000);
+
+    expect(
+      getBillBalanceDeltaForTransition({
+        partyType: "CUSTOMER",
+        previousStatus: "FINAL",
+        previousAmount: 5000,
+        nextStatus: "CANCELLED",
+        nextAmount: 5000,
+      })
+    ).toBe(5000);
   });
 
   it("maps customer balance deltas to debit and credit columns", () => {

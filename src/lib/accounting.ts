@@ -1,5 +1,6 @@
 export type SupportedPartyType = "CUSTOMER" | "VENDOR";
 export type SupportedPayDirection = "INCOMING" | "OUTGOING";
+export type SupportedBillStatus = "DRAFT" | "FINAL" | "CANCELLED";
 export type PartyLedgerEntryType = "BILL" | "PAYMENT" | "OPENING";
 
 export type PartyLedgerEntry = {
@@ -89,6 +90,37 @@ export function getBillBalanceDelta(
   amount: number
 ) {
   return -amount;
+}
+
+export function getPostedBillBalanceDelta(
+  partyType: SupportedPartyType,
+  status: SupportedBillStatus,
+  amount: number
+) {
+  if (status !== "FINAL") {
+    return 0;
+  }
+
+  return getBillBalanceDelta(partyType, amount);
+}
+
+export function getBillBalanceDeltaForTransition({
+  partyType,
+  previousStatus,
+  previousAmount,
+  nextStatus,
+  nextAmount,
+}: {
+  partyType: SupportedPartyType;
+  previousStatus: SupportedBillStatus;
+  previousAmount: number;
+  nextStatus: SupportedBillStatus;
+  nextAmount: number;
+}) {
+  return (
+    getPostedBillBalanceDelta(partyType, nextStatus, nextAmount) -
+    getPostedBillBalanceDelta(partyType, previousStatus, previousAmount)
+  );
 }
 
 export function getLedgerAmountsForBalanceDelta(
