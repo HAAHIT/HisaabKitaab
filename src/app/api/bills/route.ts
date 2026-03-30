@@ -2,7 +2,9 @@ import { prisma } from "@/lib/prisma";
 import {
   buildBillSnapshotFromParty,
   getPostedBillBalanceDelta,
+  getPaymentBalanceDelta,
 } from "@/lib/accounting";
+import { getTenantId } from "@/lib/tenant";
 import { NextRequest, NextResponse } from "next/server";
 
 const BILL_NUMBER_LOCK_KEY = 22032026;
@@ -15,6 +17,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const tenantId = await getTenantId();
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") || "";
     const status = searchParams.get("status") || "";
@@ -25,7 +28,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "20");
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const where: any = { isDeleted: false };
+    const where: any = { tenantId, isDeleted: false };
 
     if (search) {
       where.OR = [
@@ -100,6 +103,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const tenantId = await getTenantId();
     const body = await request.json();
     const {
       templateId,
@@ -118,7 +122,40 @@ export async function POST(request: NextRequest) {
       status,
     } = body;
 
-    if (!templateId || !partyId || !Array.isArray(rows) || rows.length === 0) {
+    let finalTemplateId = templateId;
+    const isQuickBill = templateId === "__QUICK_BILL__";
+
+    if (isQuickBill) {
+      if (!partyId) {
+        return NextResponse.json({ error: "Party is required for Quick Bill" }, { status: 400 });
+      }
+
+      if (!grandTotal || grandTotal <= 0) {
+        return NextResponse.json({ error: "Amount must be greater than zero" }, { status: 400 });
+      }
+
+      let quickTemplate = await prisma.billTemplate.findFirst({
+        where: { name: "__QUICK_BILL__", tenantId },
+      });
+
+      if (!quickTemplate) {
+        quickTemplate = await prisma.billTemplate.create({
+          data: {
+            tenantId,
+            name: "__QUICK_BILL__",
+            columns: [
+              { id: "desc", name: "Description", type: "text", position: 0 },
+              { id: "amt", name: "Amount", type: "number", position: 1 },
+            ],
+            createdBy: userId!,
+          },
+        });
+      }
+
+      finalTemplateId = quickTemplate.id;
+    }
+
+    if (!finalTemplateId || !partyId || !Array.isArray(rows) || rows.length === 0) {
       return NextResponse.json(
         { error: "Template, party, and at least one row are required" },
         { status: 400 }
@@ -128,6 +165,7 @@ export async function POST(request: NextRequest) {
     const party = await prisma.party.findFirst({
       where: {
         id: partyId,
+        tenantId,
         isDeleted: false,
         isActive: true,
       },
@@ -145,10 +183,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Party not found" }, { status: 404 });
     }
 
-    const settings = await prisma.companySettings.findUnique({
-      where: { id: "default" },
-    });
-    const prefix = settings?.billPrefix || "BILL";
+    // Load tenant settings (replaces CompanySettings)
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+    const settings = (tenant?.settings as Record<string, unknown>) || {};
+    const prefix = (settings.billPrefix as string) || "BILL";
+    const defaultTaxPercent = (settings.defaultTaxPercent as number) ?? 0;
+
     const resolvedGrandTotal =
       typeof grandTotal === "number" && Number.isFinite(grandTotal)
         ? grandTotal
@@ -170,6 +210,7 @@ export async function POST(request: NextRequest) {
 
       const existingCount = await tx.bill.count({
         where: {
+          tenantId,
           createdAt: {
             gte: monthStart,
             lt: nextMonthStart,
@@ -180,15 +221,16 @@ export async function POST(request: NextRequest) {
 
       const createdBill = await tx.bill.create({
         data: {
+          tenantId,
           billNumber,
-          templateId,
+          templateId: finalTemplateId,
           partyId: party.id,
           ...snapshot,
           rows,
           notes: notes || null,
           terms: terms || null,
           subtotal: subtotal || 0,
-          taxPercent: taxPercent ?? (settings?.defaultTaxPercent || 0),
+          taxPercent: taxPercent ?? defaultTaxPercent,
           taxAmount: taxAmount || 0,
           grandTotal: resolvedGrandTotal,
           status: billStatus,
@@ -208,6 +250,32 @@ export async function POST(request: NextRequest) {
           data: {
             currentBalance: { increment: balanceChange },
           },
+        });
+      }
+
+      if (isQuickBill && body.paymentMode) {
+        await tx.payment.create({
+          data: {
+            tenantId,
+            partyId: party.id,
+            direction: party.type === "CUSTOMER" ? "INCOMING" : "OUTGOING",
+            amount: resolvedGrandTotal,
+            date: now,
+            mode: body.paymentMode,
+            status: "COMPLETED",
+            linkedBillId: createdBill.id,
+            createdBy: userId!,
+          },
+        });
+
+        const paymentDelta = getPaymentBalanceDelta(
+          party.type as "CUSTOMER" | "VENDOR",
+          party.type === "CUSTOMER" ? "INCOMING" : "OUTGOING",
+          resolvedGrandTotal
+        );
+        await tx.party.update({
+          where: { id: party.id },
+          data: { currentBalance: { increment: paymentDelta } },
         });
       }
 

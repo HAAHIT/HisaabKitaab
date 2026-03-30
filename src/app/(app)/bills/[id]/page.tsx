@@ -12,6 +12,7 @@ import {
   Skeleton,
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
+import { BillActionBar } from "@/components/bills/BillActionBar";
 import type { ColumnDef } from "@/lib/formula";
 
 interface BillDetail {
@@ -340,6 +341,16 @@ export default function BillDetailPage({
           </Card>
         </div>
       </div>
+
+      <BillActionBar bill={{
+        id: bill.id,
+        billNumber: bill.billNumber,
+        customerName: bill.customerName,
+        grandTotal: bill.grandTotal,
+        status: bill.status,
+        customerPhone: bill.customerPhone,
+        partyId: bill.partyId,
+      }} />
 
       {/* Print-Only Professional Layout */}
       <div className="hidden print:block p-0 text-black">

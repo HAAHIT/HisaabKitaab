@@ -12,6 +12,10 @@ export const translations = {
     "nav.myuploads": "My Uploads",
     "nav.recordpayment": "Record Payment",
     "nav.addparty": "Add Party",
+    "nav.more": "More",
+    "nav.khata": "Khata",
+    "install.banner": "Install App",
+    "install.message": "Add to Home Screen for faster access",
     "shell.settings": "Settings",
     "shell.users": "Users",
     "shell.templates": "Templates",
@@ -327,6 +331,11 @@ export const translations = {
       "Separate options with commas. Example: Option 1, Option 2",
     "templates.addColumn": "Add Another Column",
     "templates.saveTemplate": "Save Template",
+
+    "bills.billTo": "Bill To",
+    "bills.selectCustomer": "Search customer...",
+    "bills.autoTaxNote": "Tax is auto-calculated from your business settings",
+    "bills.customer": "Customer",
   },
   hi: {
     "nav.home": "होम",
@@ -338,6 +347,10 @@ export const translations = {
     "nav.myuploads": "मेरे अपलोड",
     "nav.recordpayment": "भुगतान दर्ज करें",
     "nav.addparty": "पार्टी जोड़ें",
+    "nav.more": "और",
+    "nav.khata": "खाता",
+    "install.banner": "ऐप इंस्टॉल करें",
+    "install.message": "तेज़ एक्सेस के लिए होम स्क्रीन पर जोड़ें",
     "shell.settings": "सेटिंग्स",
     "shell.users": "यूज़र",
     "shell.templates": "टेम्पलेट्स",
@@ -653,6 +666,11 @@ export const translations = {
       "विकल्पों को कॉमा से अलग करें। उदाहरण: विकल्प 1, विकल्प 2",
     "templates.addColumn": "एक और कॉलम जोड़ें",
     "templates.saveTemplate": "टेम्पलेट सेव करें",
+
+    "bills.billTo": "बिल प्राप्तकर्ता",
+    "bills.selectCustomer": "ग्राहक खोजें...",
+    "bills.autoTaxNote": "टैक्स आपकी बिज़नेस सेटिंग्स से ऑटो-कैलकुलेट होता है",
+    "bills.customer": "ग्राहक",
   },
 } as const;
 

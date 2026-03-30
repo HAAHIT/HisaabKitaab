@@ -6,9 +6,11 @@ import {
   CardBody,
   Chip,
   Skeleton,
+  Button,
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useInstallPrompt } from "@/hooks/useInstallPrompt";
 
 interface DashboardData {
   summary: {
@@ -63,6 +65,8 @@ function CashFlowBar({ data }: { data: DashboardData["cashFlow"] }) {
 export default function DashboardPage() {
   const router = useRouter();
   const { t } = useLanguage();
+  const { canInstall, promptInstall } = useInstallPrompt();
+  const [bannerDismissed, setBannerDismissed] = useState(false);
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -96,6 +100,26 @@ export default function DashboardPage() {
 
   return (
     <div className="p-4 lg:p-8 animate-fade-in">
+      {canInstall && !bannerDismissed && (
+        <div className="mx-4 mt-4 mb-6 p-3 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">📲</span>
+            <div>
+              <p className="text-sm font-medium">{t("install.banner" as any)}</p>
+              <p className="text-xs text-default-500">{t("install.message" as any)}</p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" variant="flat" onPress={() => setBannerDismissed(true)}>
+              ✕
+            </Button>
+            <Button size="sm" color="primary" onPress={promptInstall}>
+              Install
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="mb-6">
         <h1 className="text-2xl font-bold">{t("dash.title")}</h1>
         <p className="text-default-500 text-sm mt-1">{t("dash.overview")}</p>

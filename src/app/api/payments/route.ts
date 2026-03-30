@@ -4,6 +4,7 @@ import {
   getPaymentBalanceDelta,
   getSettlementDirectionForParty,
 } from "@/lib/accounting";
+import { getTenantId } from "@/lib/tenant";
 
 const VALID_DIRECTIONS = new Set(["INCOMING", "OUTGOING"]);
 const VALID_MODES = new Set(["CASH", "UPI", "BANK_TRANSFER", "CHEQUE"]);
@@ -40,7 +41,8 @@ export async function GET(request: NextRequest) {
   const limit = parseInt(searchParams.get("limit") || "20", 10);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = { isDeleted: false };
+  const tenantId = await getTenantId();
+  const where: any = { tenantId, isDeleted: false };
 
   if (search) {
     where.OR = [
@@ -89,6 +91,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const role = request.headers.get("x-user-role");
   const userId = request.headers.get("x-user-id");
+  const tenantId = await getTenantId();
 
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -161,8 +164,13 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      if (!resolvedPartyId) {
+        throw new Error("Party ID is required");
+      }
+
       const party = await tx.party.findFirst({
         where: {
+          tenantId,
           id: resolvedPartyId,
           isDeleted: false,
           isActive: true,
@@ -176,6 +184,7 @@ export async function POST(request: NextRequest) {
 
       const newPayment = await tx.payment.create({
         data: {
+          tenantId,
           partyId: party.id,
           amount: normalizedAmount,
           direction: type,
@@ -235,9 +244,11 @@ export async function PATCH(request: NextRequest) {
     }
 
     const result = await prisma.$transaction(async (tx) => {
+      const tenantId2 = await getTenantId();
       const payment = await tx.payment.findFirst({
         where: {
           id: paymentId,
+          tenantId: tenantId2,
           isDeleted: false,
         },
         include: { party: { select: { type: true } } },

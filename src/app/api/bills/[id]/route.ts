@@ -3,6 +3,7 @@ import {
   buildBillSnapshotFromParty,
   getBillBalanceDeltaForTransition,
 } from "@/lib/accounting";
+import { getTenantId } from "@/lib/tenant";
 import { NextRequest, NextResponse } from "next/server";
 
 const ALLOWED_BILL_PATCH_KEYS = new Set([
@@ -49,10 +50,11 @@ function parseOptionalNumber(value: unknown) {
   return value;
 }
 
-async function findVisibleBill(id: string) {
+async function findVisibleBill(id: string, tenantId: string) {
   return prisma.bill.findFirst({
     where: {
       id,
+      tenantId,
       isDeleted: false,
     },
     include: {
@@ -82,8 +84,9 @@ export async function GET(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const tenantId = await getTenantId();
   const { id } = await params;
-  const bill = await findVisibleBill(id);
+  const bill = await findVisibleBill(id, tenantId);
 
   if (!bill) {
     return NextResponse.json({ error: "Bill not found" }, { status: 404 });
@@ -103,6 +106,7 @@ export async function PATCH(
   }
 
   try {
+    const tenantId = await getTenantId();
     const { id } = await params;
     const body = (await request.json()) as Record<string, unknown>;
     const unexpectedKeys = Object.keys(body).filter(
@@ -119,6 +123,7 @@ export async function PATCH(
     const existing = await prisma.bill.findFirst({
       where: {
         id,
+        tenantId,
         isDeleted: false,
       },
       select: {
@@ -272,6 +277,7 @@ export async function PATCH(
       const party = await prisma.party.findFirst({
         where: {
           id: nextPartyId,
+          tenantId,
           isDeleted: false,
           isActive: true,
         },
@@ -408,10 +414,12 @@ export async function DELETE(
   }
 
   try {
+    const tenantId = await getTenantId();
     const { id } = await params;
     const existing = await prisma.bill.findFirst({
       where: {
         id,
+        tenantId,
         isDeleted: false,
       },
       select: {

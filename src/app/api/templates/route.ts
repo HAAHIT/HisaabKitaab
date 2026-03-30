@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getTenantId } from "@/lib/tenant";
 import { NextRequest, NextResponse } from "next/server";
 
 // GET /api/templates — List all templates
@@ -8,7 +9,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const tenantId = await getTenantId();
   const templates = await prisma.billTemplate.findMany({
+    where: { tenantId, isDeleted: false },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -43,8 +46,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const tenantId = await getTenantId();
     const template = await prisma.billTemplate.create({
       data: {
+        tenantId,
         name,
         columns,
         createdBy: userId!,

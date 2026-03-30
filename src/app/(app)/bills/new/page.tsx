@@ -13,7 +13,8 @@ import {
   SelectItem,
   Textarea,
 } from "@heroui/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { evaluateRow, type ColumnDef } from "@/lib/formula";
 
@@ -23,14 +24,7 @@ interface Template {
   columns: ColumnDef[];
 }
 
-interface PartyOption {
-  id: string;
-  name: string;
-  type: "CUSTOMER" | "VENDOR";
-  phone: string | null;
-  address: string | null;
-  gstin: string | null;
-}
+
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-IN", {
@@ -85,11 +79,9 @@ export default function NewBillPage() {
     type: "success" | "error";
   } | null>(null);
 
-  const [partyId, setPartyId] = useState("");
-  const [customerName, setCustomerName] = useState("");
-  const [customerPhone, setCustomerPhone] = useState("");
-  const [customerAddress, setCustomerAddress] = useState("");
-  const [gstin, setGstin] = useState("");
+  const searchParams = useSearchParams();
+  const preselectedPartyId = searchParams.get("partyId");
+  const [selectedParty, setSelectedParty] = useState<PartyOption | null>(null);
   const [rows, setRows] = useState<Record<string, string | number>[]>([]);
   const [taxPercent, setTaxPercent] = useState(18);
   const [notes, setNotes] = useState("");
@@ -128,27 +120,22 @@ export default function NewBillPage() {
     fetchFormData();
   }, [fetchFormData]);
 
+  useEffect(() => {
+    if (preselectedPartyId && parties.length > 0 && !selectedParty) {
+      const party = parties.find((p) => p.id === preselectedPartyId);
+      if (party) setSelectedParty(party);
+    }
+  }, [preselectedPartyId, parties, selectedParty]);
+
+  useEffect(() => {
+    if (templates.length === 1 && !selectedTemplate) {
+      selectTemplate(templates[0].id);
+    }
+  }, [templates, selectedTemplate]);
+
   function showToast(message: string, type: "success" | "error") {
     setToast({ message, type });
     window.setTimeout(() => setToast(null), 3000);
-  }
-
-  function applyPartySnapshot(nextPartyId: string) {
-    setPartyId(nextPartyId);
-    const party = parties.find((item) => item.id === nextPartyId);
-    if (!party) {
-      return;
-    }
-
-    setCustomerName(party.name);
-    setCustomerPhone(party.phone || "");
-    setCustomerAddress(party.address || "");
-    setGstin(party.gstin || "");
-    setErrors((currentErrors) => ({
-      ...currentErrors,
-      partyId: false,
-      customerName: false,
-    }));
   }
 
   function selectTemplate(templateId: string) {
@@ -237,11 +224,8 @@ export default function NewBillPage() {
     }
 
     const formErrors: Record<string, boolean> = {};
-    if (!partyId) {
+    if (!selectedParty) {
       formErrors.partyId = true;
-    }
-    if (!customerName.trim()) {
-      formErrors.customerName = true;
     }
 
     if (Object.keys(formErrors).length > 0) {
@@ -261,11 +245,11 @@ export default function NewBillPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           templateId: selectedTemplate.id,
-          partyId,
-          customerName: customerName.trim(),
-          customerPhone: customerPhone.trim() || null,
-          customerAddress: customerAddress.trim() || null,
-          gstin: gstin.trim() || null,
+          partyId: selectedParty.id,
+          customerName: selectedParty.name,
+          customerPhone: selectedParty.phone || null,
+          customerAddress: selectedParty.address || null,
+          gstin: selectedParty.gstin || null,
           rows,
           subtotal,
           taxPercent,
@@ -398,84 +382,66 @@ export default function NewBillPage() {
 
             <Card shadow="sm" className="mb-6">
               <CardHeader className="px-6 pt-6 pb-0">
-                <h2 className="text-lg font-semibold">Bill To</h2>
+                <h2 className="text-lg font-semibold">{t("bills.billTo" as any) || "Bill To"}</h2>
               </CardHeader>
-              <CardBody className="space-y-4 p-6">
-                <Select
-                  label="Party"
-                  placeholder="Select customer or vendor"
-                  selectedKeys={partyId ? [partyId] : []}
-                  onSelectionChange={(keys) => {
-                    const value = Array.from(keys)[0] as string;
-                    if (value) {
-                      applyPartySnapshot(value);
+              <CardBody className="p-6">
+                <PartySearch
+                  value={selectedParty?.id || null}
+                  onChange={(party) => {
+                    setSelectedParty(party as any);
+                    if (party) {
+                      setErrors((prev) => ({ ...prev, partyId: false }));
                     }
                   }}
-                  variant="bordered"
-                  isLoading={loading}
+                  partyType="CUSTOMER"
+                  autoFocus={!selectedParty}
                   isInvalid={Boolean(errors.partyId)}
-                  errorMessage={errors.partyId ? "Party is required" : undefined}
-                >
-                  {parties.map((party) => (
-                    <SelectItem key={party.id} textValue={party.name}>
-                      <div className="flex w-full items-center justify-between">
-                        <span>{party.name}</span>
-                        <span className="text-xs capitalize text-default-400">
-                          {party.type.toLowerCase()}
-                        </span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </Select>
+                />
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Input
-                    label={t("bills.customer")}
-                    placeholder="Invoice display name"
-                    value={customerName}
-                    onValueChange={(value) => {
-                      setCustomerName(value);
-                      if (value.trim()) {
-                        setErrors((currentErrors) => ({
-                          ...currentErrors,
-                          customerName: false,
-                        }));
-                      }
-                    }}
-                    variant="bordered"
-                    isRequired
-                    isInvalid={Boolean(errors.customerName)}
-                    errorMessage={errors.customerName ? "Customer name is required" : undefined}
-                    classNames={{
-                      inputWrapper: errors.customerName
-                        ? "animate-pulse border-danger bg-danger/10"
-                        : "",
-                    }}
-                    description="This snapshot is stored on the bill even if the party record changes later."
-                  />
-                  <Input
-                    label="Phone"
-                    placeholder="Phone number"
-                    value={customerPhone}
-                    onValueChange={setCustomerPhone}
-                    variant="bordered"
-                    type="tel"
-                  />
-                  <Input
-                    label="Address"
-                    placeholder="Billing address"
-                    value={customerAddress}
-                    onValueChange={setCustomerAddress}
-                    variant="bordered"
-                  />
-                  <Input
-                    label="GSTIN"
-                    placeholder="GST Number (optional)"
-                    value={gstin}
-                    onValueChange={setGstin}
-                    variant="bordered"
-                  />
-                </div>
+                {selectedParty && (
+                  <div className="mt-4 rounded-xl bg-default-50 dark:bg-default-100/5 p-4 border border-default-200 animate-slide-up">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="font-semibold text-lg">{selectedParty.name}</h3>
+                      <Button
+                        size="sm"
+                        variant="light"
+                        onPress={() => setSelectedParty(null)}
+                      >
+                        {t("common.change" as any) || "Change"}
+                      </Button>
+                    </div>
+                    
+                    <div className="space-y-1 text-sm text-default-500">
+                      {selectedParty.phone && (
+                        <p className="flex items-center gap-2">
+                          <span>📱</span> {selectedParty.phone}
+                        </p>
+                      )}
+                      {selectedParty.address && (
+                        <p className="flex items-center gap-2">
+                          <span>📍</span> {selectedParty.address}
+                        </p>
+                      )}
+                      {selectedParty.gstin && (
+                        <p className="flex items-center gap-2">
+                          <span className="text-xs font-mono font-bold tracking-widest text-default-400">GST</span> {selectedParty.gstin}
+                        </p>
+                      )}
+                    </div>
+                    
+                    {selectedParty.currentBalance !== 0 && (
+                      <div className={`mt-3 pt-3 border-t border-default-200 text-sm font-medium flex items-center gap-2 ${
+                        selectedParty.currentBalance < 0 ? "text-success" : "text-danger"
+                      }`}>
+                        <div className={`w-2 h-2 rounded-full ${selectedParty.currentBalance < 0 ? "bg-success" : "bg-danger"}`} />
+                        {selectedParty.currentBalance < 0
+                          ? `To Get: ₹${Math.abs(selectedParty.currentBalance).toLocaleString("en-IN")}`
+                          : `To Pay: ₹${selectedParty.currentBalance.toLocaleString("en-IN")}`
+                        }
+                      </div>
+                    )}
+                  </div>
+                )}
               </CardBody>
             </Card>
 
@@ -641,18 +607,9 @@ export default function NewBillPage() {
                       <span className="font-medium">{formatCurrency(subtotal)}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-default-500">Tax</span>
-                        <Input
-                          type="number"
-                          value={String(taxPercent)}
-                          onValueChange={(value) => setTaxPercent(Number.parseFloat(value) || 0)}
-                          variant="bordered"
-                          size="sm"
-                          className="w-20"
-                          endContent={<span className="text-sm text-default-400">%</span>}
-                        />
-                      </div>
+                      <span className="text-default-500">
+                        Tax ({taxPercent}%)
+                      </span>
                       <span className="font-medium">{formatCurrency(taxAmount)}</span>
                     </div>
                     <Divider />

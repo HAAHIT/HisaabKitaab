@@ -63,6 +63,9 @@ export async function middleware(request: NextRequest) {
     requestHeaders.set("x-user-id", payload.userId as string);
     requestHeaders.set("x-user-role", payload.role as string);
     requestHeaders.set("x-user-name", payload.name as string);
+    // For now, all users belong to the default tenant.
+    // When multi-tenant auth is added, read tenantId from JWT payload.
+    requestHeaders.set("x-tenant-id", process.env.DEFAULT_TENANT_ID || "");
 
     const role = payload.role as string;
 

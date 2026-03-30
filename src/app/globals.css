@@ -97,3 +97,36 @@ body {
 .pb-safe-bottom {
   padding-bottom: max(env(safe-area-inset-bottom, 0px), 1rem);
 }
+
+/* ── Bottom Sheet Dialog ─────────────────────────────── */
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+dialog[open] {
+  display: flex;
+}
+
+/* ── Bottom Nav Glass Effect ─────────────────────────── */
+.bottom-nav-glass {
+  backdrop-filter: blur(20px) saturate(180%);
+  background-color: hsl(0 0% 100% / 0.85);
+}
+
+.dark .bottom-nav-glass {
+  background-color: hsl(0 0% 6% / 0.85);
+}
+
+/* ── Touch Feedback ──────────────────────────────────── */
+@media (hover: none) {
+  button:active {
+    transform: scale(0.97);
+  }
+}
+
+/* ── Content area padding to account for bottom nav ─── */
+@media (max-width: 1023px) {
+  .main-content-area {
+    padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px) + 1rem);
+  }
+}

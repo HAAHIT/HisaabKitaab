@@ -12,6 +12,7 @@ import {
   Tooltip,
 } from "@heroui/react";
 import { ThemeSwitcher } from "./ThemeSwitcher";
+import BottomSheet from "./BottomSheet";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { TranslationKey } from "@/lib/i18n/translations";
 
@@ -30,7 +31,7 @@ interface NavItem {
   roles: string[];
 }
 
-const NAV_ITEMS: NavItem[] = [
+const MAIN_NAV: NavItem[] = [
   {
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -61,6 +62,9 @@ const NAV_ITEMS: NavItem[] = [
     href: "/parties",
     roles: ["ADMIN", "STAFF", "ACCOUNTANT"],
   },
+];
+
+const MORE_ITEMS: NavItem[] = [
   {
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -74,7 +78,7 @@ const NAV_ITEMS: NavItem[] = [
   {
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5-5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
       </svg>
     ),
     translationKey: "nav.measures",
@@ -124,19 +128,31 @@ export default function AppShell({
   const router = useRouter();
   const { t, language, setLanguage } = useLanguage();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [fabOpenPath, setFabOpenPath] = useState<string | null>(null);
+  const [moreSheetOpen, setMoreSheetOpen] = useState(false);
 
   const navItems = useMemo(
     () =>
-      (user.role === "CUSTOMER" ? CUSTOMER_NAV : NAV_ITEMS).filter((item) =>
+      (user.role === "CUSTOMER" ? CUSTOMER_NAV : [...MAIN_NAV, ...MORE_ITEMS]).filter((item) =>
         item.roles.includes(user.role)
       ),
     [user.role]
   );
+  
+  const mainNavItems = useMemo(
+    () =>
+      (user.role === "CUSTOMER" ? CUSTOMER_NAV : MAIN_NAV).filter((item) =>
+        item.roles.includes(user.role)
+      ),
+    [user.role]
+  );
+
+  const moreItems = useMemo(
+    () => MORE_ITEMS.filter((item) => item.roles.includes(user.role)),
+    [user.role]
+  );
+
   const roleLabelKey = ROLE_TRANSLATION_KEYS[user.role];
   const roleLabel = roleLabelKey ? t(roleLabelKey) : user.role;
-
-  const showFab = fabOpenPath === pathname;
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -422,104 +438,127 @@ export default function AppShell({
         </div>
 
         {/* ── Mobile Bottom Nav ────────────────────────── */}
-        <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-background/90 backdrop-blur-xl border-t border-divider z-50 pb-safe-bottom print:hidden">
-          <div className="flex items-center justify-around h-16 relative">
-            {navItems.map((item, index) => {
-              // For non-customer, inject FAB in middle position
-              if (user.role !== "CUSTOMER" && index === 2) {
-                return (
-                  <div key="fab-group" className="contents">
-                    {/* FAB */}
-                    <div className="relative">
-                      <Button
-                        isIconOnly
-                        color="primary"
-                        size="lg"
-                        radius="full"
-                        className="shadow-lg shadow-primary/30 -mt-6 bg-gradient-to-br from-blue-600 to-indigo-600"
-                        onPress={() =>
-                          setFabOpenPath((currentPath) =>
-                            currentPath === pathname ? null : pathname
-                          )
-                        }
-                      >
-                        <svg
-                          className={`w-6 h-6 transition-transform duration-200 ${showFab ? "rotate-45" : ""}`}
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
-                      </Button>
-
-                      {/* FAB menu */}
-                      {showFab && (
-                        <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 flex flex-col gap-2 animate-slide-up">
-                          {[
-                            { label: "New Bill", transKey: "bills.new", href: "/bills/new", icon: "🧾" },
-                            { label: "Record Payment", transKey: "nav.recordpayment", href: "/payments/new", icon: "💰" },
-                            { label: "Add Party", transKey: "nav.addparty", href: "/parties", icon: "👤" },
-                          ].map((action) => (
-                            <Button
-                              key={action.href}
-                              size="sm"
-                              variant="flat"
-                              className="whitespace-nowrap glass shadow-md"
-                              onPress={() => {
-                                setFabOpenPath(null);
-                                router.push(action.href);
-                              }}
-                            >
-                              {action.icon} {t(action.transKey as TranslationKey)}
-                            </Button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    {/* Render the current item after FAB */}
-                    <button
-                      key={item.href}
-                      onClick={() => router.push(item.href)}
-                      className={`flex flex-col items-center gap-0.5 px-3 py-1 transition ${
-                        isActive(item.href) ? "text-primary" : "text-default-400"
-                      }`}
-                    >
-                      {item.icon}
-                      <span className="text-[10px] font-medium">
-                        {t(item.translationKey)}
-                      </span>
-                    </button>
-                  </div>
-                );
-              }
-
-              return (
+        <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 print:hidden text-foreground">
+          <div className="bottom-nav-glass border-t border-divider pb-safe-bottom">
+            <div className="flex items-center justify-around h-16">
+              {/* Main nav tabs */}
+              {mainNavItems.map((item) => (
                 <button
                   key={item.href}
                   onClick={() => router.push(item.href)}
-                  className={`flex flex-col items-center gap-0.5 px-3 py-1 transition ${
-                    isActive(item.href) ? "text-primary" : "text-default-400"
+                  className={`flex flex-col items-center gap-0.5 px-4 py-2 transition-all ${
+                    isActive(item.href)
+                      ? "text-primary scale-105"
+                      : "text-default-400 active:scale-95"
                   }`}
                 >
-                  {item.icon}
-                  <span className="text-[10px] font-medium">
+                  <span className={isActive(item.href) ? "text-primary" : "text-default-400"}>
+                    {item.icon}
+                  </span>
+                  <span className="text-[10px] font-medium leading-tight">
                     {t(item.translationKey)}
                   </span>
                 </button>
-              );
-            })}
+              ))}
+
+              {/* More tab (only if not CUSTOMER) */}
+              {user.role !== "CUSTOMER" && (
+                <button
+                  onClick={() => setMoreSheetOpen(true)}
+                  className={`flex flex-col items-center gap-0.5 px-4 py-2 transition-all ${
+                    moreSheetOpen ? "text-primary scale-105" : "text-default-400 active:scale-95"
+                  }`}
+                >
+                  <span className={moreSheetOpen ? "text-primary" : "text-default-400"}>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                        d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                  </span>
+                  <span className="text-[10px] font-medium leading-tight">
+                    {t("nav.more")}
+                  </span>
+                </button>
+              )}
+            </div>
           </div>
         </nav>
       </main>
 
-      {/* FAB overlay backdrop */}
-      {showFab && (
-        <div
-          className="lg:hidden fixed inset-0 bg-black/20 z-40"
-          onClick={() => setFabOpenPath(null)}
-        />
-      )}
+      <BottomSheet
+        isOpen={moreSheetOpen}
+        onClose={() => setMoreSheetOpen(false)}
+        title={t("nav.more")}
+      >
+        <div className="space-y-1">
+          {moreItems.map((item) => (
+            <button
+              key={item.href}
+              onClick={() => { setMoreSheetOpen(false); router.push(item.href); }}
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-default-100 transition text-left"
+            >
+              <span className="text-default-500">{item.icon}</span>
+              <span className="font-medium">{t(item.translationKey)}</span>
+            </button>
+          ))}
+          
+          <div className="h-px bg-divider my-2" />
+          
+          {user.role === "ADMIN" && (
+            <>
+              <button 
+                onClick={() => { setMoreSheetOpen(false); router.push("/settings/company"); }}
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-default-100 transition text-left"
+              >
+                <span className="text-default-400">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                </span>
+                <span>{t("shell.company")}</span>
+              </button>
+              <button 
+                onClick={() => { setMoreSheetOpen(false); router.push("/settings/users"); }}
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-default-100 transition text-left"
+              >
+                <span className="text-default-400">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                </span>
+                <span>{t("shell.users")}</span>
+              </button>
+              <button 
+                onClick={() => { setMoreSheetOpen(false); router.push("/settings/templates"); }}
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-default-100 transition text-left"
+              >
+                <span className="text-default-400">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                </span>
+                <span>{t("shell.templates")}</span>
+              </button>
+            </>
+          )}
+          
+          <div className="h-px bg-divider my-2" />
+          
+          <div className="flex items-center justify-between px-3 py-2">
+            <span className="text-default-500 font-medium">{t("shell.settings" as TranslationKey)}</span>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="flat" color="primary" onPress={() => setLanguage(language === "en" ? "hi" : "en")}>
+                {language === "en" ? "HI" : "EN"}
+              </Button>
+              <ThemeSwitcher />
+            </div>
+          </div>
+          
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-danger hover:bg-danger/10 transition text-left"
+          >
+            <span className="text-danger">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+            </span>
+            <span className="font-semibold">{t("shell.signOut")}</span>
+          </button>
+        </div>
+      </BottomSheet>
     </div>
   );
 }
