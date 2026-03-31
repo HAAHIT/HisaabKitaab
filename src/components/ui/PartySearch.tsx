@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { Autocomplete, AutocompleteItem, Button } from "@heroui/react";
-import { useLanguage } from "@/contexts/LanguageContext";
 import { useRouter } from "next/navigation";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { getBalanceStatusLabel } from "@/lib/accounting";
 
 export interface PartyOption {
   id: string;
@@ -24,6 +25,15 @@ interface PartySearchProps {
   isInvalid?: boolean;
 }
 
+function formatSignedBalance(value: number) {
+  const absolute = Math.abs(value).toLocaleString("en-IN");
+  if (value === 0) {
+    return `INR ${absolute}`;
+  }
+
+  return `${value > 0 ? "+" : "-"}INR ${absolute}`;
+}
+
 export function PartySearch({
   value,
   onChange,
@@ -42,17 +52,18 @@ export function PartySearch({
       setIsLoading(true);
       try {
         const url = partyType ? `/api/parties?type=${partyType}` : "/api/parties";
-        const res = await fetch(url);
-        if (res.ok) {
-          const data = await res.json();
+        const response = await fetch(url);
+        if (response.ok) {
+          const data = await response.json();
           setParties(data.parties || []);
         }
-      } catch (e) {
-        console.error("Failed to load parties", e);
+      } catch (fetchError) {
+        console.error("Failed to load parties", fetchError);
       } finally {
         setIsLoading(false);
       }
     }
+
     fetchParties();
   }, [partyType]);
 
@@ -61,7 +72,7 @@ export function PartySearch({
   return (
     <div className="flex flex-col gap-2">
       <Autocomplete
-        label={placeholder || t("parties.searchPlaceholder" as any) || "Search Party..."}
+        label={placeholder || t("parties.searchPlaceholder")}
         variant="bordered"
         items={parties}
         isLoading={isLoading}
@@ -69,16 +80,17 @@ export function PartySearch({
         onSelectionChange={(key) => {
           if (!key) {
             onChange(null);
-          } else {
-            const selected = parties.find((p) => p.id === key);
-            onChange(selected || null);
+            return;
           }
+
+          const selected = parties.find((party) => party.id === String(key));
+          onChange(selected || null);
         }}
         autoFocus={autoFocus}
         isInvalid={isInvalid}
         listboxProps={{
           emptyContent: (
-            <div className="flex flex-col items-center justify-center p-4 gap-3 text-center">
+            <div className="flex flex-col items-center justify-center gap-3 p-4 text-center">
               <p className="text-default-500">No parties found.</p>
               <Button
                 size="sm"
@@ -94,34 +106,27 @@ export function PartySearch({
       >
         {(party) => (
           <AutocompleteItem key={party.id} textValue={party.name}>
-            <div className="flex justify-between items-center w-full">
+            <div className="flex w-full items-center justify-between">
               <div className="flex flex-col">
                 <span className="font-semibold">{party.name}</span>
-                {party.phone && <span className="text-xs text-default-500">📱 {party.phone}</span>}
+                {party.phone && (
+                  <span className="text-xs text-default-500">Phone {party.phone}</span>
+                )}
               </div>
               {party.currentBalance !== 0 && (
                 <div className="flex flex-col items-end">
                   <span
                     className={`text-sm font-semibold ${
-                      party.type === "CUSTOMER"
-                        ? party.currentBalance < 0
-                          ? "text-success"
-                          : "text-danger"
-                        : party.currentBalance < 0
-                        ? "text-danger"
-                        : "text-success"
+                      party.currentBalance > 0 ? "text-success" : "text-danger"
                     }`}
                   >
-                    ₹{Math.abs(party.currentBalance).toLocaleString("en-IN")}
+                    {formatSignedBalance(party.currentBalance)}
                   </span>
                   <span className="text-[10px] text-default-400">
-                    {party.type === "CUSTOMER"
-                      ? party.currentBalance < 0
-                        ? "To Get ↙"
-                        : "To Pay ↗"
-                      : party.currentBalance < 0
-                      ? "To Pay ↗"
-                      : "To Get ↙"}
+                    {getBalanceStatusLabel(
+                      party.type as "CUSTOMER" | "VENDOR",
+                      party.currentBalance
+                    )}
                   </span>
                 </div>
               )}

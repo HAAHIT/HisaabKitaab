@@ -1,13 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   getPaymentBalanceDelta,
   getSettlementDirectionForParty,
 } from "@/lib/accounting";
+import {
+  journalForPaymentMade,
+  journalForPaymentReceived,
+} from "@/lib/journal";
 import { getTenantId } from "@/lib/tenant";
 
 const VALID_DIRECTIONS = new Set(["INCOMING", "OUTGOING"]);
 const VALID_MODES = new Set(["CASH", "UPI", "BANK_TRANSFER", "CHEQUE"]);
+const VALID_STATUSES = new Set(["EXPECTED", "COMPLETED"]);
+type SupportedPaymentDirection = "INCOMING" | "OUTGOING";
+type SupportedPaymentMode = "CASH" | "UPI" | "BANK_TRANSFER" | "CHEQUE";
+type SupportedPaymentStatus = "EXPECTED" | "COMPLETED";
+
+function isPaymentDirection(value: string): value is SupportedPaymentDirection {
+  return VALID_DIRECTIONS.has(value);
+}
+
+function isPaymentStatus(value: string): value is SupportedPaymentStatus {
+  return VALID_STATUSES.has(value);
+}
+
+function normalizePaymentMode(value: unknown): SupportedPaymentMode | null {
+  if (value === "BANK") {
+    return "BANK_TRANSFER";
+  }
+
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  return VALID_MODES.has(value) ? (value as SupportedPaymentMode) : null;
+}
 
 function parsePaymentAmount(value: unknown) {
   const numericValue =
@@ -40,9 +69,8 @@ export async function GET(request: NextRequest) {
   const page = parseInt(searchParams.get("page") || "1", 10);
   const limit = parseInt(searchParams.get("limit") || "20", 10);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tenantId = await getTenantId();
-  const where: any = { tenantId, isDeleted: false };
+  const where: Prisma.PaymentWhereInput = { tenantId, isDeleted: false };
 
   if (search) {
     where.OR = [
@@ -51,11 +79,11 @@ export async function GET(request: NextRequest) {
     ];
   }
 
-  if (type && type !== "ALL") {
+  if (type && type !== "ALL" && isPaymentDirection(type)) {
     where.direction = type;
   }
 
-  if (status && status !== "ALL") {
+  if (status && status !== "ALL" && isPaymentStatus(status)) {
     where.status = status;
   }
 
@@ -101,8 +129,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { partyId, amount, type, mode, date, notes, billId, status } = body;
     const normalizedAmount = parsePaymentAmount(amount);
+    const normalizedMode = normalizePaymentMode(mode);
 
-    if ((!partyId && !billId) || !normalizedAmount || !type || !mode) {
+    if ((!partyId && !billId) || !normalizedAmount || !type || !normalizedMode) {
       return NextResponse.json(
         { error: "Party or linked bill, amount, type, and mode are required" },
         { status: 400 }
@@ -112,13 +141,6 @@ export async function POST(request: NextRequest) {
     if (!VALID_DIRECTIONS.has(type)) {
       return NextResponse.json(
         { error: "Invalid payment direction" },
-        { status: 400 }
-      );
-    }
-
-    if (!VALID_MODES.has(mode)) {
-      return NextResponse.json(
-        { error: "Invalid payment mode" },
         { status: 400 }
       );
     }
@@ -188,7 +210,7 @@ export async function POST(request: NextRequest) {
           partyId: party.id,
           amount: normalizedAmount,
           direction: type,
-          mode,
+          mode: normalizedMode,
           status: paymentStatus,
           date: date ? new Date(date) : new Date(),
           notes: notes || null,
@@ -214,6 +236,28 @@ export async function POST(request: NextRequest) {
             currentBalance: { increment: balanceChange },
           },
         });
+
+        if (type === "INCOMING") {
+          await journalForPaymentReceived(tx, tenantId, {
+            id: newPayment.id,
+            partyId: party.id,
+            partyName: party.name,
+            amount: newPayment.amount,
+            mode: newPayment.mode,
+            date: newPayment.date,
+            createdBy: userId!,
+          });
+        } else {
+          await journalForPaymentMade(tx, tenantId, {
+            id: newPayment.id,
+            partyId: party.id,
+            partyName: party.name,
+            amount: newPayment.amount,
+            mode: newPayment.mode,
+            date: newPayment.date,
+            createdBy: userId!,
+          });
+        }
       }
 
       return newPayment;
@@ -230,6 +274,7 @@ export async function POST(request: NextRequest) {
 // PATCH /api/payments - Mark an expected payment as completed
 export async function PATCH(request: NextRequest) {
   const role = request.headers.get("x-user-role");
+  const userId = request.headers.get("x-user-id");
 
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -280,6 +325,28 @@ export async function PATCH(request: NextRequest) {
           currentBalance: { increment: balanceChange },
         },
       });
+
+      if (payment.direction === "INCOMING") {
+        await journalForPaymentReceived(tx, tenantId2, {
+          id: updated.id,
+          partyId: payment.partyId,
+          partyName: updated.party.name,
+          amount: payment.amount,
+          mode: payment.mode,
+          date: payment.date,
+          createdBy: userId || payment.createdBy,
+        });
+      } else {
+        await journalForPaymentMade(tx, tenantId2, {
+          id: updated.id,
+          partyId: payment.partyId,
+          partyName: updated.party.name,
+          amount: payment.amount,
+          mode: payment.mode,
+          date: payment.date,
+          createdBy: userId || payment.createdBy,
+        });
+      }
 
       return updated;
     });

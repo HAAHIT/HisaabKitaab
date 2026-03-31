@@ -86,6 +86,7 @@ export default function NewBillPage() {
   const [taxPercent, setTaxPercent] = useState(18);
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("");
+  const [didAutoFocusRow, setDidAutoFocusRow] = useState(false);
 
   const fetchFormData = useCallback(async () => {
     setLoading(true);
@@ -127,18 +128,12 @@ export default function NewBillPage() {
     }
   }, [preselectedPartyId, parties, selectedParty]);
 
-  useEffect(() => {
-    if (templates.length === 1 && !selectedTemplate) {
-      selectTemplate(templates[0].id);
-    }
-  }, [templates, selectedTemplate]);
-
   function showToast(message: string, type: "success" | "error") {
     setToast({ message, type });
     window.setTimeout(() => setToast(null), 3000);
   }
 
-  function selectTemplate(templateId: string) {
+  const selectTemplate = useCallback((templateId: string) => {
     const template = templates.find((item) => item.id === templateId);
     if (!template) {
       return;
@@ -146,7 +141,13 @@ export default function NewBillPage() {
 
     setSelectedTemplate(template);
     setRows([buildEmptyRow(template)]);
-  }
+  }, [templates]);
+
+  useEffect(() => {
+    if (templates.length === 1 && !selectedTemplate) {
+      selectTemplate(templates[0].id);
+    }
+  }, [selectTemplate, selectedTemplate, templates]);
 
   function addRow() {
     if (!selectedTemplate) {
@@ -214,6 +215,39 @@ export default function NewBillPage() {
     };
   }, [rows, selectedTemplate, taxPercent]);
 
+  const firstEditableColumnId = useMemo(() => {
+    if (!selectedTemplate) {
+      return null;
+    }
+
+    return (
+      selectedTemplate.columns.find((column) => column.type !== "formula")?.id ?? null
+    );
+  }, [selectedTemplate]);
+
+  useEffect(() => {
+    setDidAutoFocusRow(false);
+  }, [selectedParty?.id, selectedTemplate?.id]);
+
+  useEffect(() => {
+    if (!selectedParty || !selectedTemplate || rows.length === 0 || didAutoFocusRow) {
+      return;
+    }
+
+    const focusTimer = window.setTimeout(() => {
+      const target = document.querySelector<
+        HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement
+      >(
+        '[data-bill-focus-target="true"] input, [data-bill-focus-target="true"] textarea, [data-bill-focus-target="true"] button'
+      );
+
+      target?.focus();
+      setDidAutoFocusRow(true);
+    }, 0);
+
+    return () => window.clearTimeout(focusTimer);
+  }, [didAutoFocusRow, rows.length, selectedParty, selectedTemplate]);
+
   async function handleSave(status: "DRAFT" | "FINAL") {
     const mainScroll = document.querySelector("main");
 
@@ -236,6 +270,12 @@ export default function NewBillPage() {
       return;
     }
 
+    const currentParty = selectedParty;
+    if (!currentParty) {
+      showToast("Please select a party", "error");
+      return;
+    }
+
     setErrors({});
     setSaving(true);
 
@@ -245,11 +285,11 @@ export default function NewBillPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           templateId: selectedTemplate.id,
-          partyId: selectedParty.id,
-          customerName: selectedParty.name,
-          customerPhone: selectedParty.phone || null,
-          customerAddress: selectedParty.address || null,
-          gstin: selectedParty.gstin || null,
+          partyId: currentParty.id,
+          customerName: currentParty.name,
+          customerPhone: currentParty.phone || null,
+          customerAddress: currentParty.address || null,
+          gstin: currentParty.gstin || null,
           rows,
           subtotal,
           taxPercent,
@@ -382,18 +422,19 @@ export default function NewBillPage() {
 
             <Card shadow="sm" className="mb-6">
               <CardHeader className="px-6 pt-6 pb-0">
-                <h2 className="text-lg font-semibold">{t("bills.billTo" as any) || "Bill To"}</h2>
+                <h2 className="text-lg font-semibold">{t("bills.billTo")}</h2>
               </CardHeader>
               <CardBody className="p-6">
                 <PartySearch
                   value={selectedParty?.id || null}
                   onChange={(party) => {
-                    setSelectedParty(party as any);
+                    setSelectedParty(party);
                     if (party) {
                       setErrors((prev) => ({ ...prev, partyId: false }));
                     }
                   }}
                   partyType="CUSTOMER"
+                  placeholder={t("bills.selectCustomer")}
                   autoFocus={!selectedParty}
                   isInvalid={Boolean(errors.partyId)}
                 />
@@ -407,7 +448,7 @@ export default function NewBillPage() {
                         variant="light"
                         onPress={() => setSelectedParty(null)}
                       >
-                        {t("common.change" as any) || "Change"}
+                        {t("common.change")}
                       </Button>
                     </div>
                     
@@ -447,7 +488,15 @@ export default function NewBillPage() {
 
             <Card shadow="sm" className="mb-6">
               <CardHeader className="flex items-center justify-between px-6 pt-6 pb-0">
-                <h2 className="text-lg font-semibold">Line Items</h2>
+                <div className="flex flex-wrap items-center gap-3">
+                  <h2 className="text-lg font-semibold">Line Items</h2>
+                  <Chip size="sm" variant="flat" color="default">
+                    Subtotal {formatCurrency(subtotal)}
+                  </Chip>
+                  <Chip size="sm" variant="flat" color="primary">
+                    Total {formatCurrency(grandTotal)}
+                  </Chip>
+                </div>
                 <Button
                   size="sm"
                   variant="flat"
@@ -496,7 +545,15 @@ export default function NewBillPage() {
                       >
                         <td className="px-2 py-2 text-default-400">{rowIndex + 1}</td>
                         {selectedTemplate.columns.map((column) => (
-                          <td key={column.id} className="px-2 py-2">
+                          <td
+                            key={column.id}
+                            className="px-2 py-2"
+                            data-bill-focus-target={
+                              rowIndex === 0 && column.id === firstEditableColumnId
+                                ? "true"
+                                : undefined
+                            }
+                          >
                             {column.type === "formula" ? (
                               <span className="font-mono font-medium text-success">
                                 {typeof row[column.id] === "number"
@@ -612,6 +669,7 @@ export default function NewBillPage() {
                       </span>
                       <span className="font-medium">{formatCurrency(taxAmount)}</span>
                     </div>
+                    <p className="text-xs text-default-400">{t("bills.autoTaxNote")}</p>
                     <Divider />
                     <div className="flex justify-between">
                       <span className="text-lg font-bold">Grand Total</span>

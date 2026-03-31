@@ -1,6 +1,12 @@
 import { headers } from "next/headers";
 
 const DEFAULT_TENANT_ID = process.env.DEFAULT_TENANT_ID || "";
+type TenantHeaderSource = Headers | { headers: Headers };
+
+function resolveTenantId(headerSource?: Headers | null) {
+  const tenantId = headerSource?.get("x-tenant-id")?.trim();
+  return tenantId || DEFAULT_TENANT_ID;
+}
 
 /**
  * Reads tenantId from request headers (set by middleware).
@@ -8,9 +14,21 @@ const DEFAULT_TENANT_ID = process.env.DEFAULT_TENANT_ID || "";
  *
  * Use in API routes: const tenantId = await getTenantId();
  */
-export async function getTenantId(): Promise<string> {
-  const headerList = await headers();
-  return headerList.get("x-tenant-id") || DEFAULT_TENANT_ID;
+export async function getTenantId(
+  source?: TenantHeaderSource | null
+): Promise<string> {
+  if (source) {
+    return resolveTenantId(
+      source instanceof Headers ? source : source.headers
+    );
+  }
+
+  try {
+    const headerList = await headers();
+    return resolveTenantId(headerList);
+  } catch {
+    return DEFAULT_TENANT_ID;
+  }
 }
 
 /**

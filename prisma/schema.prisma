@@ -28,6 +28,8 @@ model Tenant {
   parties      Party[]
   payments     Payment[]
   templates    BillTemplate[]
+  items        ItemCatalog[]
+  journalEntries JournalEntry[]
   measurements MeasurementUpload[]
 }
 
@@ -94,6 +96,23 @@ model BillTemplate {
   bills     Bill[]
 
   @@index([tenantId])
+}
+
+model ItemCatalog {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  name      String
+  hsnCode   String?
+  unit      String   @default("pcs")
+  rate      Float    @default(0)
+  taxRate   Float?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([tenantId, name])
 }
 
 model Bill {
@@ -186,6 +205,47 @@ model Payment {
   @@index([tenantId, direction])
 }
 
+model JournalEntry {
+  id          String       @id @default(cuid())
+  tenantId    String
+  tenant      Tenant       @relation(fields: [tenantId], references: [id])
+  entryDate   DateTime
+  narration   String
+  voucherType VoucherType
+  billId      String?
+  purchaseId  String?
+  paymentId   String?
+  lines       JournalLine[]
+  isBalanced  Boolean      @default(false)
+  totalDebit  Float        @default(0)
+  totalCredit Float        @default(0)
+  createdBy   String
+  createdAt   DateTime     @default(now())
+
+  @@index([tenantId])
+  @@index([tenantId, entryDate])
+  @@index([tenantId, voucherType])
+  @@index([billId])
+  @@index([purchaseId])
+  @@index([paymentId])
+}
+
+model JournalLine {
+  id          String       @id @default(cuid())
+  journalId   String
+  journal     JournalEntry @relation(fields: [journalId], references: [id], onDelete: Cascade)
+  accountCode String
+  accountName String
+  tallyGroup  String
+  partyId     String?
+  partyName   String?
+  debit       Float        @default(0)
+  credit      Float        @default(0)
+
+  @@index([journalId])
+  @@index([accountCode])
+}
+
 // ─── Media & Measurements ────────────────────────────────────────────────────
 
 model MediaAsset {
@@ -250,6 +310,8 @@ model MeasurementUpload {
 //   companyAddress: string
 //   companyGstin: string
 //   upiId: string
+//   businessType: string
+//   taxRegistrationType: string
 // }
 
 // ─── Enums ───────────────────────────────────────────────────────────────────
@@ -292,6 +354,14 @@ enum PaymentMode {
 enum PaymentStatus {
   EXPECTED
   COMPLETED
+}
+
+enum VoucherType {
+  SALES
+  PURCHASE
+  RECEIPT
+  PAYMENT
+  JOURNAL
 }
 
 enum MediaAssetKind {

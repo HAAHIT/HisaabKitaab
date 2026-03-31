@@ -5,6 +5,7 @@ import {
 } from "@/lib/media";
 import { prisma } from "@/lib/prisma";
 import { getTenantId } from "@/lib/tenant";
+import { serializeTenantSettings } from "@/lib/tenant-settings";
 
 export const runtime = "nodejs";
 
@@ -73,22 +74,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Reconstruct settings for response
-    const s = (updatedTenant.settings as Record<string, unknown>) || {};
-    const settings = {
-        companyName: (s.companyName as string) || updatedTenant.name || "",
-        companyAddress: (s.companyAddress as string) || updatedTenant.address || "",
-        companyPhone: (s.companyPhone as string) || updatedTenant.phone || "",
-        companyEmail: (s.companyEmail as string) || updatedTenant.email || "",
-        companyGstin: (s.companyGstin as string) || updatedTenant.gstin || "",
-        defaultTaxPercent: (s.defaultTaxPercent as number) ?? 18,
-        defaultTerms: (s.defaultTerms as string) || "",
-        billPrefix: (s.billPrefix as string) || "BILL",
-        upiId: (s.upiId as string) || "",
-        companyLogoUrl: updatedTenant.logoUrl || null,
-    };
-
-    return NextResponse.json({ settings });
+    return NextResponse.json({
+      settings: serializeTenantSettings(updatedTenant),
+    });
   } catch (error) {
     if (nextAsset) {
       await deleteMediaAsset(nextAsset).catch(() => undefined);
@@ -131,22 +119,9 @@ export async function DELETE(request: NextRequest) {
       }
     }
 
-    // Reconstruct settings for response
-    const s = (updatedTenant.settings as Record<string, unknown>) || {};
-    const settings = {
-        companyName: (s.companyName as string) || updatedTenant.name || "",
-        companyAddress: (s.companyAddress as string) || updatedTenant.address || "",
-        companyPhone: (s.companyPhone as string) || updatedTenant.phone || "",
-        companyEmail: (s.companyEmail as string) || updatedTenant.email || "",
-        companyGstin: (s.companyGstin as string) || updatedTenant.gstin || "",
-        defaultTaxPercent: (s.defaultTaxPercent as number) ?? 18,
-        defaultTerms: (s.defaultTerms as string) || "",
-        billPrefix: (s.billPrefix as string) || "BILL",
-        upiId: (s.upiId as string) || "",
-        companyLogoUrl: updatedTenant.logoUrl || null,
-    };
-
-    return NextResponse.json({ settings });
+    return NextResponse.json({
+      settings: serializeTenantSettings(updatedTenant),
+    });
   } catch (error) {
     console.error("Delete logo error:", error);
     return NextResponse.json(

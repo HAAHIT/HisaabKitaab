@@ -3,9 +3,20 @@ import { jwtVerify } from "jose";
 import { getJwtSecret } from "@/lib/jwt-secret";
 import { attachRequestIdHeader, logError } from "@/lib/observability";
 
-const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/health"];
+const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/health", "/api/bills/*/public"];
 
-export async function middleware(request: NextRequest) {
+function isPublicPath(pathname: string) {
+  return PUBLIC_PATHS.some((pattern) => {
+    if (pattern.includes("*")) {
+      const regex = new RegExp(`^${pattern.replace(/\*/g, "[^/]+")}$`);
+      return regex.test(pathname);
+    }
+
+    return pathname.startsWith(pattern);
+  });
+}
+
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const requestId = request.headers.get("x-request-id")?.trim() || crypto.randomUUID();
   const requestHeaders = new Headers(request.headers);
@@ -30,7 +41,7 @@ export async function middleware(request: NextRequest) {
   try {
     jwtSecret = getJwtSecret();
   } catch (error) {
-    logError("middleware.auth.misconfigured", {
+    logError("proxy.auth.misconfigured", {
       requestId,
       pathname,
       error,
@@ -42,7 +53,7 @@ export async function middleware(request: NextRequest) {
   }
 
   if (
-    PUBLIC_PATHS.some((p) => pathname.startsWith(p)) ||
+    isPublicPath(pathname) ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
     pathname.includes(".")
@@ -63,8 +74,6 @@ export async function middleware(request: NextRequest) {
     requestHeaders.set("x-user-id", payload.userId as string);
     requestHeaders.set("x-user-role", payload.role as string);
     requestHeaders.set("x-user-name", payload.name as string);
-    // For now, all users belong to the default tenant.
-    // When multi-tenant auth is added, read tenantId from JWT payload.
     requestHeaders.set("x-tenant-id", process.env.DEFAULT_TENANT_ID || "");
 
     const role = payload.role as string;
@@ -85,6 +94,15 @@ export async function middleware(request: NextRequest) {
     }
 
     if (pathname.startsWith("/settings") && role !== "ADMIN") {
+      const redirectUrl = new URL("/dashboard", request.url);
+      return redirectWithRequestId(redirectUrl);
+    }
+
+    if (
+      pathname.startsWith("/reports") &&
+      role !== "ADMIN" &&
+      role !== "ACCOUNTANT"
+    ) {
       const redirectUrl = new URL("/dashboard", request.url);
       return redirectWithRequestId(redirectUrl);
     }

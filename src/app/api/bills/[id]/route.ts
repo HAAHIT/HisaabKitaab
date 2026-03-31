@@ -3,6 +3,10 @@ import {
   buildBillSnapshotFromParty,
   getBillBalanceDeltaForTransition,
 } from "@/lib/accounting";
+import {
+  journalForCancelledSalesBill,
+  journalForSalesBill,
+} from "@/lib/journal";
 import { getTenantId } from "@/lib/tenant";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -101,6 +105,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
+  const userId = request.headers.get("x-user-id");
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -128,16 +133,20 @@ export async function PATCH(
       },
       select: {
         id: true,
-        status: true,
-        grandTotal: true,
-        templateId: true,
-        partyId: true,
-        customerName: true,
-        customerPhone: true,
-        customerAddress: true,
-        gstin: true,
-      },
-    });
+      status: true,
+      billNumber: true,
+      subtotal: true,
+      taxAmount: true,
+      grandTotal: true,
+      templateId: true,
+      partyId: true,
+      customerName: true,
+      customerPhone: true,
+      customerAddress: true,
+      gstin: true,
+      createdBy: true,
+    },
+  });
 
     if (!existing) {
       return NextResponse.json({ error: "Bill not found" }, { status: 404 });
@@ -346,6 +355,17 @@ export async function PATCH(
 
     const nextGrandTotal =
       (updateData.grandTotal as number | undefined) ?? existing.grandTotal;
+    const nextSubtotal =
+      (updateData.subtotal as number | undefined) ?? existing.subtotal;
+    const nextTaxAmount =
+      (updateData.taxAmount as number | undefined) ?? existing.taxAmount;
+
+    if (finalStatus === "FINAL" && nextGrandTotal <= 0) {
+      return NextResponse.json(
+        { error: "Final bills must have a positive total" },
+        { status: 400 }
+      );
+    }
 
     const bill = await prisma.$transaction(async (tx) => {
       const updatedBill = await tx.bill.update({
@@ -360,11 +380,13 @@ export async function PATCH(
       const party = await tx.party.findFirst({
         where: {
           id: finalPartyId,
+          tenantId,
           isDeleted: false,
           isActive: true,
         },
         select: {
           id: true,
+          name: true,
           type: true,
         },
       });
@@ -390,6 +412,20 @@ export async function PATCH(
         });
       }
 
+      if (existing.status !== "FINAL" && finalStatus === "FINAL") {
+        await journalForSalesBill(tx, tenantId, {
+          id: updatedBill.id,
+          billNumber: updatedBill.billNumber,
+          partyId: party.id,
+          partyName: party.name,
+          subtotal: nextSubtotal,
+          taxAmount: nextTaxAmount,
+          grandTotal: nextGrandTotal,
+          createdBy: userId || updatedBill.createdBy,
+          entryDate: updatedBill.updatedAt,
+        });
+      }
+
       return updatedBill;
     });
 
@@ -409,6 +445,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
+  const userId = request.headers.get("x-user-id");
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -425,8 +462,12 @@ export async function DELETE(
       select: {
         id: true,
         status: true,
+        billNumber: true,
+        subtotal: true,
+        taxAmount: true,
         grandTotal: true,
         partyId: true,
+        createdBy: true,
       },
     });
 
@@ -447,10 +488,12 @@ export async function DELETE(
       const party = await tx.party.findFirst({
         where: {
           id: existing.partyId,
+          tenantId,
           isDeleted: false,
         },
         select: {
           id: true,
+          name: true,
           type: true,
         },
       });
@@ -473,6 +516,20 @@ export async function DELETE(
           data: {
             currentBalance: { increment: balanceChange },
           },
+        });
+      }
+
+      if (existing.status === "FINAL") {
+        await journalForCancelledSalesBill(tx, tenantId, {
+          id: existing.id,
+          billNumber: existing.billNumber,
+          partyId: party.id,
+          partyName: party.name,
+          subtotal: existing.subtotal,
+          taxAmount: existing.taxAmount,
+          grandTotal: existing.grandTotal,
+          createdBy: userId || existing.createdBy,
+          entryDate: new Date(),
         });
       }
     });

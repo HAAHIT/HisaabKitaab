@@ -13,6 +13,7 @@ import {
 } from "@heroui/react";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 import BottomSheet from "./BottomSheet";
+import { QuickBillSheet } from "@/components/bills/QuickBillSheet";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { TranslationKey } from "@/lib/i18n/translations";
 
@@ -78,6 +79,21 @@ const MORE_ITEMS: NavItem[] = [
   {
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={1.5}
+          d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+        />
+      </svg>
+    ),
+    translationKey: "nav.reports",
+    href: "/reports",
+    roles: ["ADMIN", "ACCOUNTANT"],
+  },
+  {
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5-5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
       </svg>
     ),
@@ -129,6 +145,7 @@ export default function AppShell({
   const { t, language, setLanguage } = useLanguage();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [moreSheetOpen, setMoreSheetOpen] = useState(false);
+  const [quickBillOpen, setQuickBillOpen] = useState(false);
 
   const navItems = useMemo(
     () =>
@@ -153,10 +170,19 @@ export default function AppShell({
 
   const roleLabelKey = ROLE_TRANSLATION_KEYS[user.role];
   const roleLabel = roleLabelKey ? t(roleLabelKey) : user.role;
+  const mobileNavLabel = (item: NavItem) =>
+    item.href === "/parties" ? t("nav.khata") : t(item.translationKey);
+  const hasMoreSheet = user.role !== "CUSTOMER" || moreItems.length === 0;
+  const canQuickBill = user.role !== "CUSTOMER";
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
+  }
+
+  function openQuickBill() {
+    setMoreSheetOpen(false);
+    setQuickBillOpen(true);
   }
 
   const isActive = (href: string) => {
@@ -188,6 +214,33 @@ export default function AppShell({
 
         {/* Nav Links */}
         <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
+          {canQuickBill && (
+            <Tooltip
+              content={t("bills.quickBill")}
+              placement="right"
+              isDisabled={!sidebarCollapsed}
+            >
+              <button
+                onClick={openQuickBill}
+                className="mb-3 flex w-full items-center gap-3 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-3 text-white shadow-lg shadow-blue-500/20 transition hover:shadow-xl hover:shadow-blue-500/25"
+              >
+                <span className="flex-shrink-0">
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      d="M12 4v16m8-8H4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                    />
+                  </svg>
+                </span>
+                {!sidebarCollapsed && (
+                  <span className="truncate font-semibold">{t("bills.quickBill")}</span>
+                )}
+              </button>
+            </Tooltip>
+          )}
+
           {navItems.map((item) => {
             return (
             <Tooltip
@@ -273,7 +326,7 @@ export default function AppShell({
               </Tooltip>
 
               <Tooltip
-                content={t("shell.company")}
+                content={t("settings.businessProfile")}
                 placement="right"
                 isDisabled={!sidebarCollapsed}
               >
@@ -289,7 +342,39 @@ export default function AppShell({
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                   </svg>
                   {!sidebarCollapsed && (
-                    <span className="truncate">{t("shell.company")}</span>
+                    <span className="truncate">{t("settings.businessProfile")}</span>
+                  )}
+                </button>
+              </Tooltip>
+
+              <Tooltip
+                content={t("settings.items")}
+                placement="right"
+                isDisabled={!sidebarCollapsed}
+              >
+                <button
+                  onClick={() => router.push("/settings/items")}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group ${
+                    pathname === "/settings/items"
+                      ? "bg-primary/10 text-primary font-semibold"
+                      : "text-default-600 hover:bg-default-100 hover:text-default-900"
+                  }`}
+                >
+                  <svg
+                    className="w-5 h-5 flex-shrink-0 text-default-400 group-hover:text-default-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+                    />
+                  </svg>
+                  {!sidebarCollapsed && (
+                    <span className="truncate">{t("settings.items")}</span>
                   )}
                 </button>
               </Tooltip>
@@ -388,52 +473,34 @@ export default function AppShell({
               DoorCraft
             </span>
           </div>
-          <div className="flex items-center gap-2">
-            <Button 
-              size="sm" 
-              variant="flat" 
-              color="primary"
-              onPress={() => setLanguage(language === "en" ? "hi" : "en")}
+          {hasMoreSheet ? (
+            <Button
+              isIconOnly
+              size="sm"
+              variant="light"
+              aria-label={t("nav.more")}
+              onPress={() => setMoreSheetOpen(true)}
             >
-              {language === "en" ? "HI" : "EN"}
-            </Button>
-            <ThemeSwitcher />
-            <Dropdown>
-              <DropdownTrigger>
-                <Avatar
-                  name={user.name}
-                  size="sm"
-                  className="cursor-pointer bg-gradient-to-br from-blue-500 to-indigo-500 text-white"
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.5}
+                  d="M4 6h16M4 12h16M4 18h16"
                 />
-              </DropdownTrigger>
-            <DropdownMenu aria-label="User menu">
-              <DropdownItem key="info" className="h-14 gap-2" textValue={user.name}>
-                <p className="font-semibold">{user.name}</p>
-                <p className="text-sm text-default-500">{roleLabel}</p>
-              </DropdownItem>
-              {user.role === "ADMIN" ? (
-                <>
-                  <DropdownItem key="settings-users" onPress={() => router.push("/settings/users")}>
-                    {t("shell.userManagement")}
-                  </DropdownItem>
-                  <DropdownItem key="settings-templates" onPress={() => router.push("/settings/templates")}>
-                    {t("shell.billTemplates")}
-                  </DropdownItem>
-                  <DropdownItem key="settings-company" onPress={() => router.push("/settings/company")}>
-                    {t("shell.companySettings")}
-                  </DropdownItem>
-                </>
-              ) : null}
-              <DropdownItem key="logout" color="danger" onPress={handleLogout}>
-                {t("shell.signOut")}
-              </DropdownItem>
-            </DropdownMenu>
-          </Dropdown>
-          </div>
+              </svg>
+            </Button>
+          ) : (
+            <Avatar
+              name={user.name}
+              size="sm"
+              className="bg-gradient-to-br from-blue-500 to-indigo-500 text-white"
+            />
+          )}
         </header>
 
         {/* Content area */}
-        <div className="flex-1 overflow-y-auto pb-20 lg:pb-4">
+        <div className="main-content-area flex-1 overflow-y-auto lg:pb-4">
           {children}
         </div>
 
@@ -456,13 +523,13 @@ export default function AppShell({
                     {item.icon}
                   </span>
                   <span className="text-[10px] font-medium leading-tight">
-                    {t(item.translationKey)}
+                    {mobileNavLabel(item)}
                   </span>
                 </button>
               ))}
 
-              {/* More tab (only if not CUSTOMER) */}
-              {user.role !== "CUSTOMER" && (
+              {/* More tab */}
+              {hasMoreSheet && (
                 <button
                   onClick={() => setMoreSheetOpen(true)}
                   className={`flex flex-col items-center gap-0.5 px-4 py-2 transition-all ${
@@ -491,6 +558,44 @@ export default function AppShell({
         title={t("nav.more")}
       >
         <div className="space-y-1">
+          <div className="flex items-center gap-3 rounded-2xl bg-default-100 px-3 py-3">
+            <Avatar
+              name={user.name}
+              size="md"
+              className="flex-shrink-0 bg-gradient-to-br from-blue-500 to-indigo-500 text-white"
+            />
+            <div className="min-w-0">
+              <p className="truncate font-semibold text-default-900">{user.name}</p>
+              <p className="truncate text-sm text-default-500">
+                {user.email || user.phone || roleLabel}
+              </p>
+            </div>
+          </div>
+
+          {canQuickBill && (
+            <button
+              onClick={openQuickBill}
+              className="w-full rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-3 text-left text-white shadow-lg shadow-blue-500/20 transition hover:shadow-xl hover:shadow-blue-500/25"
+            >
+              <div className="flex items-center gap-3">
+                <span className="flex-shrink-0">
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      d="M12 4v16m8-8H4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                    />
+                  </svg>
+                </span>
+                <div>
+                  <p className="font-semibold">{t("bills.quickBill")}</p>
+                  <p className="text-xs text-white/80">{t("bills.quickCreate")}</p>
+                </div>
+              </div>
+            </button>
+          )}
+
           {moreItems.map((item) => (
             <button
               key={item.href}
@@ -513,7 +618,7 @@ export default function AppShell({
                 <span className="text-default-400">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
                 </span>
-                <span>{t("shell.company")}</span>
+                <span>{t("settings.businessProfile")}</span>
               </button>
               <button 
                 onClick={() => { setMoreSheetOpen(false); router.push("/settings/users"); }}
@@ -533,13 +638,22 @@ export default function AppShell({
                 </span>
                 <span>{t("shell.templates")}</span>
               </button>
+              <button
+                onClick={() => { setMoreSheetOpen(false); router.push("/settings/items"); }}
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-default-100 transition text-left"
+              >
+                <span className="text-default-400">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                </span>
+                <span>{t("settings.items")}</span>
+              </button>
             </>
           )}
           
           <div className="h-px bg-divider my-2" />
           
           <div className="flex items-center justify-between px-3 py-2">
-            <span className="text-default-500 font-medium">{t("shell.settings" as TranslationKey)}</span>
+            <span className="text-default-500 font-medium">{t("shell.settings")}</span>
             <div className="flex items-center gap-2">
               <Button size="sm" variant="flat" color="primary" onPress={() => setLanguage(language === "en" ? "hi" : "en")}>
                 {language === "en" ? "HI" : "EN"}
@@ -559,6 +673,14 @@ export default function AppShell({
           </button>
         </div>
       </BottomSheet>
+
+      {canQuickBill && (
+        <QuickBillSheet
+          isOpen={quickBillOpen}
+          onClose={() => setQuickBillOpen(false)}
+          onBillCreated={({ id }) => router.push(`/bills/${id}`)}
+        />
+      )}
     </div>
   );
 }

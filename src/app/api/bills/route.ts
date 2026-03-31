@@ -4,10 +4,34 @@ import {
   getPostedBillBalanceDelta,
   getPaymentBalanceDelta,
 } from "@/lib/accounting";
+import {
+  journalForPaymentMade,
+  journalForPaymentReceived,
+  journalForSalesBill,
+} from "@/lib/journal";
 import { getTenantId } from "@/lib/tenant";
 import { NextRequest, NextResponse } from "next/server";
 
 const BILL_NUMBER_LOCK_KEY = 22032026;
+type SupportedPaymentMode = "CASH" | "UPI" | "BANK_TRANSFER" | "CHEQUE";
+const VALID_PAYMENT_MODES = new Set([
+  "CASH",
+  "UPI",
+  "BANK_TRANSFER",
+  "CHEQUE",
+]);
+
+function normalizePaymentMode(mode: unknown): SupportedPaymentMode | null {
+  if (mode === "BANK") {
+    return "BANK_TRANSFER";
+  }
+
+  if (typeof mode !== "string") {
+    return null;
+  }
+
+  return VALID_PAYMENT_MODES.has(mode) ? (mode as SupportedPaymentMode) : null;
+}
 
 // GET /api/bills — List bills with filtering
 export async function GET(request: NextRequest) {
@@ -194,6 +218,7 @@ export async function POST(request: NextRequest) {
         ? grandTotal
         : 0;
     const billStatus = status === "FINAL" ? "FINAL" : "DRAFT";
+    const normalizedPaymentMode = normalizePaymentMode(body.paymentMode);
     const now = new Date();
     const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -204,6 +229,27 @@ export async function POST(request: NextRequest) {
       customerAddress,
       gstin,
     });
+
+    if (body.paymentMode && !normalizedPaymentMode) {
+      return NextResponse.json(
+        { error: "Invalid payment mode for Quick Bill" },
+        { status: 400 }
+      );
+    }
+
+    if (billStatus === "FINAL" && resolvedGrandTotal <= 0) {
+      return NextResponse.json(
+        { error: "Final bills must have a positive total" },
+        { status: 400 }
+      );
+    }
+
+    if (normalizedPaymentMode && billStatus !== "FINAL") {
+      return NextResponse.json(
+        { error: "Quick Bill payments can only be recorded on final bills" },
+        { status: 400 }
+      );
+    }
 
     const bill = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${BILL_NUMBER_LOCK_KEY})`;
@@ -253,15 +299,29 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      if (isQuickBill && body.paymentMode) {
-        await tx.payment.create({
+      if (billStatus === "FINAL") {
+        await journalForSalesBill(tx, tenantId, {
+          id: createdBill.id,
+          billNumber,
+          partyId: party.id,
+          partyName: party.name,
+          subtotal: createdBill.subtotal,
+          taxAmount: createdBill.taxAmount,
+          grandTotal: createdBill.grandTotal,
+          createdBy: userId!,
+          entryDate: createdBill.createdAt,
+        });
+      }
+
+      if (isQuickBill && normalizedPaymentMode) {
+        const createdPayment = await tx.payment.create({
           data: {
             tenantId,
             partyId: party.id,
             direction: party.type === "CUSTOMER" ? "INCOMING" : "OUTGOING",
             amount: resolvedGrandTotal,
             date: now,
-            mode: body.paymentMode,
+            mode: normalizedPaymentMode,
             status: "COMPLETED",
             linkedBillId: createdBill.id,
             createdBy: userId!,
@@ -277,6 +337,28 @@ export async function POST(request: NextRequest) {
           where: { id: party.id },
           data: { currentBalance: { increment: paymentDelta } },
         });
+
+        if (party.type === "CUSTOMER") {
+          await journalForPaymentReceived(tx, tenantId, {
+            id: createdPayment.id,
+            partyId: party.id,
+            partyName: party.name,
+            amount: createdPayment.amount,
+            mode: createdPayment.mode,
+            date: createdPayment.date,
+            createdBy: userId!,
+          });
+        } else {
+          await journalForPaymentMade(tx, tenantId, {
+            id: createdPayment.id,
+            partyId: party.id,
+            partyName: party.name,
+            amount: createdPayment.amount,
+            mode: createdPayment.mode,
+            date: createdPayment.date,
+            createdBy: userId!,
+          });
+        }
       }
 
       return createdBill;
