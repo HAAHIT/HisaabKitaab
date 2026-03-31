@@ -88,7 +88,7 @@ export default async function LoginPage({
           <div className="mb-5 flex justify-end">
             <a
               href={languageSwitchUrl}
-              className="inline-flex min-h-10 min-w-16 items-center justify-center rounded-xl bg-primary/10 px-4 text-sm font-semibold text-primary transition hover:bg-primary/15"
+              className="inline-flex min-h-10 min-w-16 items-center justify-center rounded-xl bg-primary/10 px-4 text-sm font-semibold text-primary shadow-sm transition hover:bg-primary/15"
             >
               {nextLanguage.toUpperCase()}
             </a>
@@ -161,9 +161,43 @@ export default async function LoginPage({
                   aria-pressed="false"
                   data-show-label={t("common.show")}
                   data-hide-label={t("common.hide")}
-                  className="shrink-0 rounded-lg px-2 py-1 text-sm font-medium text-default-500 transition hover:bg-default-100 hover:text-default-700"
+                  className="shrink-0 rounded-lg p-1.5 text-default-400 transition hover:bg-default-100 hover:text-default-700"
                 >
-                  {t("common.show")}
+                  <span className="sr-only">{t("common.show")}</span>
+                  <svg
+                    id="password-icon-hidden"
+                    className="h-5 w-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                    />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                    />
+                  </svg>
+                  <svg
+                    id="password-icon-visible"
+                    className="hidden h-5 w-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
+                    />
+                  </svg>
                 </button>
               </div>
             </label>
@@ -185,17 +219,41 @@ export default async function LoginPage({
               {t("login.signIn")}
             </button>
 
-            <details className="rounded-xl border border-default-200 bg-default-50/80 px-4 py-3 text-sm dark:border-zinc-800 dark:bg-zinc-950/50">
-              <summary className="cursor-pointer list-none font-medium text-primary">
-                {t("login.forgotPassword")}
-              </summary>
-              <p className="mt-3 text-default-600">
-                {t("login.forgotPasswordBody")}
-              </p>
-            </details>
+            <button
+              id="forgot-password-trigger"
+              type="button"
+              className="text-center text-sm font-medium text-primary transition hover:underline"
+            >
+              {t("login.forgotPassword")}
+            </button>
           </form>
         </div>
       </div>
+
+      <dialog
+        id="forgot-password-dialog"
+        className="w-[calc(100vw-2rem)] max-w-md rounded-3xl border border-white/60 bg-white p-0 text-left text-foreground shadow-2xl shadow-blue-950/15 backdrop:bg-black/35 dark:border-zinc-800 dark:bg-zinc-900"
+      >
+        <div className="border-b border-default-100 px-6 py-4 dark:border-zinc-800">
+          <h2 className="text-lg font-semibold text-foreground">
+            {t("login.forgotPasswordTitle")}
+          </h2>
+        </div>
+        <div className="px-6 py-5">
+          <p className="text-sm leading-6 text-default-600">
+            {t("login.forgotPasswordBody")}
+          </p>
+        </div>
+        <div className="flex justify-end border-t border-default-100 px-6 py-4 dark:border-zinc-800">
+          <button
+            id="forgot-password-close"
+            type="button"
+            className="inline-flex h-10 items-center justify-center rounded-xl bg-primary/10 px-4 text-sm font-semibold text-primary transition hover:bg-primary/15"
+          >
+            {t("common.ok")}
+          </button>
+        </div>
+      </dialog>
 
       <script
         dangerouslySetInnerHTML={{
@@ -203,15 +261,59 @@ export default async function LoginPage({
             (() => {
               const input = document.getElementById("password-input");
               const toggle = document.getElementById("password-toggle");
-              if (!input || !toggle) return;
-              toggle.addEventListener("click", () => {
-                const nextVisible = input.type === "password";
-                input.type = nextVisible ? "text" : "password";
-                toggle.setAttribute("aria-pressed", String(nextVisible));
-                toggle.textContent = nextVisible
-                  ? toggle.getAttribute("data-hide-label") || "Hide"
-                  : toggle.getAttribute("data-show-label") || "Show";
-              });
+              const hiddenIcon = document.getElementById("password-icon-hidden");
+              const visibleIcon = document.getElementById("password-icon-visible");
+              if (input && toggle) {
+                toggle.addEventListener("click", () => {
+                  const nextVisible = input.type === "password";
+                  input.type = nextVisible ? "text" : "password";
+                  toggle.setAttribute("aria-pressed", String(nextVisible));
+                  toggle.setAttribute(
+                    "aria-label",
+                    nextVisible
+                      ? toggle.getAttribute("data-hide-label") || "Hide"
+                      : toggle.getAttribute("data-show-label") || "Show"
+                  );
+                  if (hiddenIcon && visibleIcon) {
+                    hiddenIcon.classList.toggle("hidden", nextVisible);
+                    visibleIcon.classList.toggle("hidden", !nextVisible);
+                  }
+                });
+              }
+
+              const dialog = document.getElementById("forgot-password-dialog");
+              const trigger = document.getElementById("forgot-password-trigger");
+              const closeButton = document.getElementById("forgot-password-close");
+              if (dialog instanceof HTMLDialogElement) {
+                dialog.addEventListener("close", () => {
+                  document.body.classList.remove("overflow-hidden");
+                });
+                if (trigger) {
+                  trigger.addEventListener("click", () => {
+                    dialog.showModal();
+                    document.body.classList.add("overflow-hidden");
+                  });
+                }
+                if (closeButton) {
+                  closeButton.addEventListener("click", () => dialog.close());
+                }
+                dialog.addEventListener("click", (event) => {
+                  const rect = dialog.getBoundingClientRect();
+                  const withinDialog =
+                    rect.top <= event.clientY &&
+                    event.clientY <= rect.top + rect.height &&
+                    rect.left <= event.clientX &&
+                    event.clientX <= rect.left + rect.width;
+                  if (!withinDialog) {
+                    dialog.close();
+                  }
+                });
+                dialog.style.position = "fixed";
+                dialog.style.left = "50%";
+                dialog.style.top = "50%";
+                dialog.style.transform = "translate(-50%, -50%)";
+                dialog.style.margin = "0";
+              }
             })();
           `,
         }}
