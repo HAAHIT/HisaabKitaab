@@ -3,7 +3,13 @@ import { jwtVerify } from "jose";
 import { getJwtSecret } from "@/lib/jwt-secret";
 import { attachRequestIdHeader, logError } from "@/lib/observability";
 
-const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/health", "/api/bills/*/public"];
+const PUBLIC_PATHS = [
+  "/login",
+  "/api/auth/login",
+  "/api/preferences/language",
+  "/api/health",
+  "/api/bills/*/public",
+];
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.some((pattern) => {
