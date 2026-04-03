@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { serializeCompanySettings } from "@/lib/media";
 import { prisma } from "@/lib/prisma";
 
 type TenantSettingsRow = {
@@ -39,28 +38,6 @@ const DEFAULT_SETTINGS: NormalizedSettings = {
   defaultTerms: "",
   billPrefix: "BILL",
 };
-
-function isCompanySettingsTableMissing(error: unknown) {
-  if (
-    !error ||
-    typeof error !== "object" ||
-    !("code" in error) ||
-    error.code !== "P2021"
-  ) {
-    return false;
-  }
-
-  const tableName =
-    "meta" in error &&
-    error.meta &&
-    typeof error.meta === "object" &&
-    "table" in error.meta &&
-    typeof error.meta.table === "string"
-      ? error.meta.table
-      : "";
-
-  return tableName.includes("CompanySettings");
-}
 
 function parseTenantSettings(value: unknown) {
   if (value && typeof value === "object" && !Array.isArray(value)) {
@@ -173,22 +150,9 @@ async function loadSettingsFromTenant(request: Request | null) {
 // GET /api/settings - Get company settings
 export async function GET(request: Request) {
   try {
-    const settings = await prisma.companySettings.findUnique({
-      where: { id: "default" },
-      include: {
-        companyLogoAsset: {
-          select: { id: true },
-        },
-      },
-    });
-
-    return NextResponse.json({ settings: serializeCompanySettings(settings) });
+    const settings = await loadSettingsFromTenant(request);
+    return NextResponse.json({ settings });
   } catch (error) {
-    if (isCompanySettingsTableMissing(error)) {
-      const tenantSettings = await loadSettingsFromTenant(request);
-      return NextResponse.json({ settings: tenantSettings });
-    }
-
     console.error("Load settings error:", error);
     return NextResponse.json({ settings: null });
   }
@@ -203,6 +167,10 @@ export async function PATCH(request: Request) {
 
   try {
     const body = await request.json();
+    const rawDefaultTaxPercent =
+      typeof body.defaultTaxPercent === "number"
+        ? body.defaultTaxPercent
+        : Number.NaN;
     const data: SettingsPayload = {
       companyName:
         typeof body.companyName === "string" ? body.companyName.trim() : "",
@@ -214,8 +182,9 @@ export async function PATCH(request: Request) {
         typeof body.companyEmail === "string" ? body.companyEmail.trim() : "",
       companyGstin:
         typeof body.companyGstin === "string" ? body.companyGstin.trim() : "",
-      defaultTaxPercent:
-        typeof body.defaultTaxPercent === "number" ? body.defaultTaxPercent : 0,
+      defaultTaxPercent: Number.isFinite(rawDefaultTaxPercent)
+        ? rawDefaultTaxPercent
+        : DEFAULT_SETTINGS.defaultTaxPercent,
       defaultTerms:
         typeof body.defaultTerms === "string" ? body.defaultTerms.trim() : "",
       billPrefix:
@@ -224,61 +193,42 @@ export async function PATCH(request: Request) {
           : "BILL",
     };
 
-    try {
-      const settings = await prisma.companySettings.upsert({
-        where: { id: "default" },
-        update: data,
-        create: { id: "default", ...data },
-        include: {
-          companyLogoAsset: {
-            select: { id: true },
-          },
-        },
-      });
-
-      return NextResponse.json({ settings: serializeCompanySettings(settings) });
-    } catch (error) {
-      if (!isCompanySettingsTableMissing(error)) {
-        throw error;
-      }
-
-      const tenant = await findTenantSettingsRow(request);
-      if (!tenant) {
-        throw new Error("Tenant not found");
-      }
-
-      const existingTenantSettings = parseTenantSettings(tenant.settings);
-      const nextTenantSettings = {
-        ...existingTenantSettings,
-        defaultTaxPercent: data.defaultTaxPercent,
-        defaultTerms: data.defaultTerms,
-        billPrefix: data.billPrefix,
-      };
-      const serializedTenantSettings = JSON.stringify(nextTenantSettings);
-
-      const updatedTenantRows = await prisma.$queryRaw<TenantSettingsRow[]>`
-        UPDATE "Tenant"
-        SET
-          "name" = ${data.companyName},
-          "address" = ${asTrimmedString(data.companyAddress)},
-          "phone" = ${asTrimmedString(data.companyPhone)},
-          "email" = ${asTrimmedString(data.companyEmail)},
-          "gstin" = ${asTrimmedString(data.companyGstin)},
-          "settings" = ${serializedTenantSettings}::jsonb,
-          "updatedAt" = NOW()
-        WHERE "id" = ${tenant.id}
-        RETURNING "id", "name", "phone", "email", "address", "gstin", "logoUrl", "settings", "createdAt"
-      `;
-
-      const updatedTenant = updatedTenantRows[0];
-      if (!updatedTenant) {
-        throw new Error("Failed to update tenant settings");
-      }
-
-      return NextResponse.json({
-        settings: normalizeTenantSettings(updatedTenant),
-      });
+    const tenant = await findTenantSettingsRow(request);
+    if (!tenant) {
+      return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
     }
+
+    const existingTenantSettings = parseTenantSettings(tenant.settings);
+    const nextTenantSettings = {
+      ...existingTenantSettings,
+      defaultTaxPercent: data.defaultTaxPercent,
+      defaultTerms: data.defaultTerms,
+      billPrefix: data.billPrefix,
+    };
+    const serializedTenantSettings = JSON.stringify(nextTenantSettings);
+
+    const updatedTenantRows = await prisma.$queryRaw<TenantSettingsRow[]>`
+      UPDATE "Tenant"
+      SET
+        "name" = ${data.companyName},
+        "address" = ${asTrimmedString(data.companyAddress)},
+        "phone" = ${asTrimmedString(data.companyPhone)},
+        "email" = ${asTrimmedString(data.companyEmail)},
+        "gstin" = ${asTrimmedString(data.companyGstin)},
+        "settings" = ${serializedTenantSettings}::jsonb,
+        "updatedAt" = NOW()
+      WHERE "id" = ${tenant.id}
+      RETURNING "id", "name", "phone", "email", "address", "gstin", "logoUrl", "settings", "createdAt"
+    `;
+
+    const updatedTenant = updatedTenantRows[0];
+    if (!updatedTenant) {
+      throw new Error("Failed to update tenant settings");
+    }
+
+    return NextResponse.json({
+      settings: normalizeTenantSettings(updatedTenant),
+    });
   } catch (error) {
     console.error("Update settings error:", error);
     return NextResponse.json(

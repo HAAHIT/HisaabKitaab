@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import {
   buildMediaAssetCreateInputFromFile,
   deleteMediaAsset,
-  serializeCompanySettings,
 } from "@/lib/media";
 import { prisma } from "@/lib/prisma";
 
@@ -13,28 +12,6 @@ type TenantLogoRow = {
   logoUrl: string | null;
   createdAt: Date;
 };
-
-function isCompanySettingsTableMissing(error: unknown) {
-  if (
-    !error ||
-    typeof error !== "object" ||
-    !("code" in error) ||
-    error.code !== "P2021"
-  ) {
-    return false;
-  }
-
-  const tableName =
-    "meta" in error &&
-    error.meta &&
-    typeof error.meta === "object" &&
-    "table" in error.meta &&
-    typeof error.meta.table === "string"
-      ? error.meta.table
-      : "";
-
-  return tableName.includes("CompanySettings");
-}
 
 function resolveTenantId(request: Request) {
   const fromHeader = request.headers.get("x-tenant-id")?.trim();
@@ -138,84 +115,41 @@ export async function POST(request: Request) {
       namespace: "company-logos",
     });
 
-    try {
-      const currentSettings = await prisma.companySettings.findUnique({
-        where: { id: "default" },
-        include: {
-          companyLogoAsset: true,
-        },
-      });
-
-      const settings = await prisma.$transaction(async (tx) => {
-        await tx.mediaAsset.create({ data: nextAsset! });
-
-        return tx.companySettings.upsert({
-          where: { id: "default" },
-          update: {
-            companyLogoAssetId: nextAsset!.id,
-            companyLogoLegacy: null,
-          },
-          create: {
-            id: "default",
-            companyLogoAssetId: nextAsset!.id,
-          },
-          include: {
-            companyLogoAsset: {
-              select: { id: true },
-            },
-          },
-        });
-      });
-
-      if (currentSettings?.companyLogoAsset) {
-        await prisma.mediaAsset.delete({
-          where: { id: currentSettings.companyLogoAsset.id },
-        });
-        await deleteMediaAsset(currentSettings.companyLogoAsset);
-      }
-
-      return NextResponse.json({ settings: serializeCompanySettings(settings) });
-    } catch (error) {
-      if (!isCompanySettingsTableMissing(error)) {
-        throw error;
-      }
-
-      const tenant = await findTenantLogoRow(request);
-      if (!tenant) {
-        throw new Error("Tenant not found");
-      }
-
-      const previousAssetId = extractAssetIdFromLogoUrl(tenant.logoUrl);
-      const nextLogoUrl = `/api/assets/${nextAsset.id}`;
-
-      const updatedTenantRows = await prisma.$transaction(async (tx) => {
-        await tx.mediaAsset.create({ data: nextAsset! });
-
-        return tx.$queryRaw<TenantLogoRow[]>`
-          UPDATE "Tenant"
-          SET
-            "logoUrl" = ${nextLogoUrl},
-            "updatedAt" = NOW()
-          WHERE "id" = ${tenant.id}
-          RETURNING "id", "logoUrl", "createdAt"
-        `;
-      });
-
-      const updatedTenant = updatedTenantRows[0];
-      if (!updatedTenant) {
-        throw new Error("Failed to update tenant logo");
-      }
-
-      if (previousAssetId && previousAssetId !== nextAsset.id) {
-        await deleteAssetById(previousAssetId);
-      }
-
-      return NextResponse.json({
-        settings: {
-          companyLogo: updatedTenant.logoUrl,
-        },
-      });
+    const tenant = await findTenantLogoRow(request);
+    if (!tenant) {
+      return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
     }
+
+    const previousAssetId = extractAssetIdFromLogoUrl(tenant.logoUrl);
+    const nextLogoUrl = `/api/assets/${nextAsset.id}`;
+
+    const updatedTenantRows = await prisma.$transaction(async (tx) => {
+      await tx.mediaAsset.create({ data: nextAsset! });
+
+      return tx.$queryRaw<TenantLogoRow[]>`
+        UPDATE "Tenant"
+        SET
+          "logoUrl" = ${nextLogoUrl},
+          "updatedAt" = NOW()
+        WHERE "id" = ${tenant.id}
+        RETURNING "id", "logoUrl", "createdAt"
+      `;
+    });
+
+    const updatedTenant = updatedTenantRows[0];
+    if (!updatedTenant) {
+      throw new Error("Failed to update tenant logo");
+    }
+
+    if (previousAssetId && previousAssetId !== nextAsset.id) {
+      await deleteAssetById(previousAssetId).catch(() => undefined);
+    }
+
+    return NextResponse.json({
+      settings: {
+        companyLogo: updatedTenant.logoUrl,
+      },
+    });
   } catch (error) {
     if (nextAsset) {
       await deleteMediaAsset(nextAsset).catch(() => undefined);
@@ -235,67 +169,28 @@ export async function DELETE(request: Request) {
   }
 
   try {
-    try {
-      const currentSettings = await prisma.companySettings.findUnique({
-        where: { id: "default" },
-        include: {
-          companyLogoAsset: true,
-        },
-      });
-
-      const settings = await prisma.companySettings.upsert({
-        where: { id: "default" },
-        update: {
-          companyLogoAssetId: null,
-          companyLogoLegacy: null,
-        },
-        create: {
-          id: "default",
-        },
-        include: {
-          companyLogoAsset: {
-            select: { id: true },
-          },
-        },
-      });
-
-      if (currentSettings?.companyLogoAsset) {
-        await prisma.mediaAsset.delete({
-          where: { id: currentSettings.companyLogoAsset.id },
-        });
-        await deleteMediaAsset(currentSettings.companyLogoAsset);
-      }
-
-      return NextResponse.json({ settings: serializeCompanySettings(settings) });
-    } catch (error) {
-      if (!isCompanySettingsTableMissing(error)) {
-        throw error;
-      }
-
-      const tenant = await findTenantLogoRow(request);
-      if (!tenant) {
-        return NextResponse.json({ settings: { companyLogo: null } });
-      }
-
-      const previousAssetId = extractAssetIdFromLogoUrl(tenant.logoUrl);
-
-      const updatedTenantRows = await prisma.$queryRaw<TenantLogoRow[]>`
-        UPDATE "Tenant"
-        SET
-          "logoUrl" = NULL,
-          "updatedAt" = NOW()
-        WHERE "id" = ${tenant.id}
-        RETURNING "id", "logoUrl", "createdAt"
-      `;
-
-      await deleteAssetById(previousAssetId);
-
-      return NextResponse.json({
-        settings: {
-          companyLogo: updatedTenantRows[0]?.logoUrl ?? null,
-        },
-      });
+    const tenant = await findTenantLogoRow(request);
+    if (!tenant) {
+      return NextResponse.json({ settings: { companyLogo: null } });
     }
+
+    const previousAssetId = extractAssetIdFromLogoUrl(tenant.logoUrl);
+    const updatedTenantRows = await prisma.$queryRaw<TenantLogoRow[]>`
+      UPDATE "Tenant"
+      SET
+        "logoUrl" = NULL,
+        "updatedAt" = NOW()
+      WHERE "id" = ${tenant.id}
+      RETURNING "id", "logoUrl", "createdAt"
+    `;
+
+    await deleteAssetById(previousAssetId).catch(() => undefined);
+
+    return NextResponse.json({
+      settings: {
+        companyLogo: updatedTenantRows[0]?.logoUrl ?? null,
+      },
+    });
   } catch (error) {
     console.error("Delete logo error:", error);
     return NextResponse.json(

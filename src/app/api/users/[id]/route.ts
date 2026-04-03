@@ -5,6 +5,16 @@ import { NextRequest, NextResponse } from "next/server";
 
 const VALID_ROLES = new Set(Object.values(Role));
 
+function resolveTenantId(request: NextRequest) {
+  const fromHeader = request.headers.get("x-tenant-id")?.trim();
+  if (fromHeader) {
+    return fromHeader;
+  }
+
+  const fromEnv = process.env.DEFAULT_TENANT_ID?.trim();
+  return fromEnv || null;
+}
+
 function hasOwn(body: Record<string, unknown>, key: string) {
   return Object.prototype.hasOwnProperty.call(body, key);
 }
@@ -28,15 +38,25 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
+  const tenantId = resolveTenantId(request);
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: "Tenant context missing. Set x-tenant-id or DEFAULT_TENANT_ID." },
+      { status: 500 }
+    );
   }
 
   try {
     const { id } = await params;
     const body = (await request.json()) as Record<string, unknown>;
-    const existingUser = await prisma.user.findUnique({
-      where: { id },
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        id,
+        tenantId,
+      },
       select: { id: true },
     });
 
@@ -69,7 +89,8 @@ export async function PATCH(
       if (email) {
         const existingEmail = await prisma.user.findFirst({
           where: {
-            email,
+            tenantId,
+            email: { equals: email, mode: "insensitive" },
             NOT: { id },
           },
           select: { id: true },
@@ -97,6 +118,7 @@ export async function PATCH(
 
       const existingPhone = await prisma.user.findFirst({
         where: {
+          tenantId,
           phone,
           NOT: { id },
         },
@@ -179,12 +201,30 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
+  const tenantId = resolveTenantId(request);
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: "Tenant context missing. Set x-tenant-id or DEFAULT_TENANT_ID." },
+      { status: 500 }
+    );
   }
 
   try {
     const { id } = await params;
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        id,
+        tenantId,
+      },
+      select: { id: true },
+    });
+    if (!existingUser) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
     await prisma.user.update({
       where: { id },
       data: { isActive: false },

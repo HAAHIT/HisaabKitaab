@@ -31,11 +31,19 @@ function normalizeOptionalString(value: unknown) {
 // GET /api/users — List all users (Admin only)
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
+  const tenantId = resolveTenantId(request);
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: "Tenant context missing. Set x-tenant-id or DEFAULT_TENANT_ID." },
+      { status: 500 }
+    );
+  }
 
   const users = await prisma.user.findMany({
+    where: { tenantId },
     select: {
       id: true,
       name: true,
@@ -110,7 +118,13 @@ export async function POST(request: NextRequest) {
 
     // Check for duplicates
     if (email) {
-      const existing = await prisma.user.findUnique({ where: { email } });
+      const existing = await prisma.user.findFirst({
+        where: {
+          tenantId,
+          email: { equals: email, mode: "insensitive" },
+        },
+        select: { id: true },
+      });
       if (existing) {
         return NextResponse.json(
           { error: "A user with this email already exists" },
@@ -119,7 +133,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const existingPhone = await prisma.user.findUnique({ where: { phone } });
+    const existingPhone = await prisma.user.findFirst({
+      where: {
+        tenantId,
+        phone,
+      },
+      select: { id: true },
+    });
     if (existingPhone) {
       return NextResponse.json(
         { error: "A user with this phone already exists" },

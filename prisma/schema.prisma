@@ -10,18 +10,24 @@ datasource db {
 model User {
   id            String              @id @default(cuid())
   name          String
-  email         String?             @unique
-  phone         String?             @unique
+  email         String?
+  phone         String?
   password      String
   role          Role                @default(CUSTOMER)
   isActive      Boolean             @default(true)
   createdBy     String?
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
+  tenantId      String
   authThrottles AuthThrottle[]
   billsCreated  Bill[]
   measurements  MeasurementUpload[]
   payments      Payment[]
+  Tenant        Tenant              @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, email])
+  @@unique([tenantId, phone])
+  @@index([tenantId])
 }
 
 model AuthThrottle {
@@ -50,12 +56,16 @@ model BillTemplate {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   isDeleted Boolean  @default(false)
+  tenantId  String
   bills     Bill[]
+  Tenant    Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
 
 model Bill {
   id              String       @id @default(cuid())
-  billNumber      String       @unique
+  billNumber      String
   templateId      String
   customerName    String
   customerPhone   String?
@@ -74,10 +84,17 @@ model Bill {
   updatedAt       DateTime     @updatedAt
   isDeleted       Boolean      @default(false)
   partyId         String?
+  tenantId        String
   creator         User         @relation(fields: [createdBy], references: [id])
   party           Party?       @relation(fields: [partyId], references: [id])
   template        BillTemplate @relation(fields: [templateId], references: [id])
+  Tenant          Tenant       @relation(fields: [tenantId], references: [id])
   payments        Payment[]
+
+  @@unique([tenantId, billNumber])
+  @@index([tenantId])
+  @@index([tenantId, partyId])
+  @@index([tenantId, status])
 }
 
 model Party {
@@ -95,9 +112,14 @@ model Party {
   createdBy      String?
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
+  tenantId       String
   bills          Bill[]
   measurements   MeasurementUpload[]
+  Tenant         Tenant              @relation(fields: [tenantId], references: [id])
   payments       Payment[]
+
+  @@index([tenantId])
+  @@index([tenantId, type])
 }
 
 model Payment {
@@ -116,9 +138,15 @@ model Payment {
   createdAt    DateTime      @default(now())
   isDeleted    Boolean       @default(false)
   updatedAt    DateTime      @updatedAt
+  tenantId     String
   creator      User          @relation(fields: [createdBy], references: [id])
   linkedBill   Bill?         @relation(fields: [linkedBillId], references: [id])
   party        Party         @relation(fields: [partyId], references: [id])
+  Tenant       Tenant        @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, direction])
+  @@index([tenantId])
+  @@index([tenantId, partyId])
 }
 
 model MediaAsset {
@@ -131,7 +159,6 @@ model MediaAsset {
   originalName      String?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
-  companyLogoFor    CompanySettings[]  @relation("CompanyLogoAsset")
   measurementPhotos MeasurementPhoto[]
 }
 
@@ -163,24 +190,98 @@ model MeasurementUpload {
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
   partyId      String?
+  tenantId     String
   photoAssets  MeasurementPhoto[]
   customer     User               @relation(fields: [customerId], references: [id])
   party        Party?             @relation(fields: [partyId], references: [id])
+  Tenant       Tenant             @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
 
-model CompanySettings {
-  id                 String      @id @default("default")
-  companyName        String      @default("")
-  companyAddress     String      @default("")
-  companyPhone       String      @default("")
-  companyEmail       String      @default("")
-  companyGstin       String      @default("")
-  companyLogoLegacy  String?     @map("companyLogo")
-  defaultTaxPercent  Float       @default(18)
-  defaultTerms       String      @default("")
-  billPrefix         String      @default("BILL")
-  companyLogoAssetId String?
-  companyLogoAsset   MediaAsset? @relation("CompanyLogoAsset", fields: [companyLogoAssetId], references: [id])
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ItemCatalog {
+  id        String   @id
+  tenantId  String
+  name      String
+  hsnCode   String?
+  unit      String   @default("pcs")
+  rate      Float    @default(0)
+  taxRate   Float?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+  Tenant    Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, name])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model JournalEntry {
+  id          String        @id
+  tenantId    String
+  entryDate   DateTime
+  narration   String
+  voucherType VoucherType
+  billId      String?
+  purchaseId  String?
+  paymentId   String?
+  isBalanced  Boolean       @default(false)
+  totalDebit  Float         @default(0)
+  totalCredit Float         @default(0)
+  createdBy   String
+  createdAt   DateTime      @default(now())
+  Tenant      Tenant        @relation(fields: [tenantId], references: [id])
+  JournalLine JournalLine[]
+
+  @@index([billId])
+  @@index([paymentId])
+  @@index([purchaseId])
+  @@index([tenantId, entryDate])
+  @@index([tenantId])
+  @@index([tenantId, voucherType])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model JournalLine {
+  id           String       @id
+  journalId    String
+  accountCode  String
+  accountName  String
+  tallyGroup   String
+  partyId      String?
+  partyName    String?
+  debit        Float        @default(0)
+  credit       Float        @default(0)
+  JournalEntry JournalEntry @relation(fields: [journalId], references: [id], onDelete: Cascade)
+
+  @@index([accountCode])
+  @@index([journalId])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model Tenant {
+  id                String              @id
+  name              String
+  slug              String              @unique
+  phone             String?
+  email             String?
+  address           String?
+  gstin             String?
+  logoUrl           String?
+  plan              TenantPlan          @default(FREE)
+  settings          Json                @default("{}")
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime
+  Bill              Bill[]
+  BillTemplate      BillTemplate[]
+  ItemCatalog       ItemCatalog[]
+  JournalEntry      JournalEntry[]
+  MeasurementUpload MeasurementUpload[]
+  Party             Party[]
+  Payment           Payment[]
+  User              User[]
 }
 
 enum Role {
@@ -234,4 +335,17 @@ enum MeasurementStatus {
   REVIEWED
   IN_PRODUCTION
   COMPLETED
+}
+
+enum TenantPlan {
+  FREE
+  PRO
+}
+
+enum VoucherType {
+  SALES
+  PURCHASE
+  RECEIPT
+  PAYMENT
+  JOURNAL
 }

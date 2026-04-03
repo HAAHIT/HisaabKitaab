@@ -13,28 +13,6 @@ type TenantBillingSettingsRow = {
   createdAt: Date;
 };
 
-function isCompanySettingsTableMissing(error: unknown) {
-  if (
-    !error ||
-    typeof error !== "object" ||
-    !("code" in error) ||
-    error.code !== "P2021"
-  ) {
-    return false;
-  }
-
-  const tableName =
-    "meta" in error &&
-    error.meta &&
-    typeof error.meta === "object" &&
-    "table" in error.meta &&
-    typeof error.meta.table === "string"
-      ? error.meta.table
-      : "";
-
-  return tableName.includes("CompanySettings");
-}
-
 function parseTenantSettings(value: unknown) {
   if (value && typeof value === "object" && !Array.isArray(value)) {
     return value as Record<string, unknown>;
@@ -63,68 +41,46 @@ function resolveTenantId(request: NextRequest) {
 }
 
 async function loadBillingSettings(request: NextRequest) {
-  try {
-    const settings = await prisma.companySettings.findUnique({
-      where: { id: "default" },
-      select: {
-        billPrefix: true,
-        defaultTaxPercent: true,
-      },
-    });
+  const scopedTenantId = resolveTenantId(request);
 
-    return {
-      billPrefix:
-        settings?.billPrefix && settings.billPrefix.trim()
-          ? settings.billPrefix.trim()
-          : "BILL",
-      defaultTaxPercent: settings?.defaultTaxPercent ?? 0,
-    };
-  } catch (error) {
-    if (!isCompanySettingsTableMissing(error)) {
-      throw error;
-    }
-
-    const scopedTenantId = resolveTenantId(request);
-
-    let tenantRows: TenantBillingSettingsRow[] = [];
-    if (scopedTenantId) {
-      tenantRows = await prisma.$queryRaw<TenantBillingSettingsRow[]>`
-        SELECT "id", "settings", "createdAt"
-        FROM "Tenant"
-        WHERE "id" = ${scopedTenantId}
-        LIMIT 1
-      `;
-    }
-
-    if (!tenantRows[0]) {
-      tenantRows = await prisma.$queryRaw<TenantBillingSettingsRow[]>`
-        SELECT "id", "settings", "createdAt"
-        FROM "Tenant"
-        ORDER BY "createdAt" ASC
-        LIMIT 1
-      `;
-    }
-
-    const tenantSettings = parseTenantSettings(tenantRows[0]?.settings);
-    const billPrefixCandidate =
-      typeof tenantSettings.billPrefix === "string"
-        ? tenantSettings.billPrefix.trim()
-        : "";
-    const defaultTaxPercentRaw = tenantSettings.defaultTaxPercent;
-    const defaultTaxPercent =
-      typeof defaultTaxPercentRaw === "number"
-        ? defaultTaxPercentRaw
-        : typeof defaultTaxPercentRaw === "string"
-          ? Number.parseFloat(defaultTaxPercentRaw)
-          : Number.NaN;
-
-    return {
-      billPrefix: billPrefixCandidate || "BILL",
-      defaultTaxPercent: Number.isFinite(defaultTaxPercent)
-        ? defaultTaxPercent
-        : 0,
-    };
+  let tenantRows: TenantBillingSettingsRow[] = [];
+  if (scopedTenantId) {
+    tenantRows = await prisma.$queryRaw<TenantBillingSettingsRow[]>`
+      SELECT "id", "settings", "createdAt"
+      FROM "Tenant"
+      WHERE "id" = ${scopedTenantId}
+      LIMIT 1
+    `;
   }
+
+  if (!tenantRows[0]) {
+    tenantRows = await prisma.$queryRaw<TenantBillingSettingsRow[]>`
+      SELECT "id", "settings", "createdAt"
+      FROM "Tenant"
+      ORDER BY "createdAt" ASC
+      LIMIT 1
+    `;
+  }
+
+  const tenantSettings = parseTenantSettings(tenantRows[0]?.settings);
+  const billPrefixCandidate =
+    typeof tenantSettings.billPrefix === "string"
+      ? tenantSettings.billPrefix.trim()
+      : "";
+  const defaultTaxPercentRaw = tenantSettings.defaultTaxPercent;
+  const defaultTaxPercent =
+    typeof defaultTaxPercentRaw === "number"
+      ? defaultTaxPercentRaw
+      : typeof defaultTaxPercentRaw === "string"
+        ? Number.parseFloat(defaultTaxPercentRaw)
+        : Number.NaN;
+
+  return {
+    billPrefix: billPrefixCandidate || "BILL",
+    defaultTaxPercent: Number.isFinite(defaultTaxPercent)
+      ? defaultTaxPercent
+      : 0,
+  };
 }
 
 // GET /api/bills — List bills with filtering
