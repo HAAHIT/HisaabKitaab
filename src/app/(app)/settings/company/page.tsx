@@ -336,7 +336,7 @@ export default function CompanySettingsPage() {
                     variant="bordered"
                   />
                   <Input
-                    label={t("bills.gstin")}
+                    label={t("parties.gstinLabel")}
                     placeholder="e.g. 29ABCDE1234F1Z5"
                     value={companyGstin}
                     onValueChange={setCompanyGstin}

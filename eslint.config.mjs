@@ -12,6 +12,14 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Local one-off tooling scripts and artifacts outside app runtime.
+    "check_bill.js",
+    "fuzz-api.ts",
+    "migrate.js",
+    "migrate.ts",
+    "run-vitest.js",
+    "tmp_*.ts",
+    "verify.ts",
   ]),
 ]);
 

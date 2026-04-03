@@ -5,9 +5,10 @@ import { attachRequestIdHeader, logError } from "@/lib/observability";
 
 const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/health"];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const requestId = request.headers.get("x-request-id")?.trim() || crypto.randomUUID();
+  const requestId =
+    request.headers.get("x-request-id")?.trim() || crypto.randomUUID();
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-request-id", requestId);
   let jwtSecret: Uint8Array;
@@ -30,13 +31,16 @@ export async function middleware(request: NextRequest) {
   try {
     jwtSecret = getJwtSecret();
   } catch (error) {
-    logError("middleware.auth.misconfigured", {
+    logError("proxy.auth.misconfigured", {
       requestId,
       pathname,
       error,
     });
     return attachRequestIdHeader(
-      NextResponse.json({ error: "Server auth is misconfigured" }, { status: 500 }),
+      NextResponse.json(
+        { error: "Server auth is misconfigured" },
+        { status: 500 }
+      ),
       requestId
     );
   }
@@ -96,7 +100,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    "/((?!_next/static|_next/image|favicon.ico).*)",
-  ],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };

@@ -5,6 +5,12 @@ import { readStoredObject } from "@/lib/object-storage";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+function isDirectReadableStorageProvider(
+  provider: string
+): provider is "local" | "gcs" {
+  return provider === "local" || provider === "gcs";
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -56,12 +62,16 @@ export async function GET(
     return NextResponse.redirect(asset.storageKey);
   }
 
+  if (!isDirectReadableStorageProvider(asset.storageProvider)) {
+    return NextResponse.json({ error: "Unsupported storage provider" }, { status: 500 });
+  }
+
   try {
     const fileBuffer = await readStoredObject(
       asset.storageProvider,
       asset.storageKey
     );
-    return new NextResponse(fileBuffer, {
+    return new NextResponse(new Uint8Array(fileBuffer), {
       headers: {
         "Content-Type": asset.mimeType,
         "Cache-Control": "private, max-age=3600",
@@ -71,4 +81,3 @@ export async function GET(
     return NextResponse.json({ error: "File missing" }, { status: 404 });
   }
 }
-
