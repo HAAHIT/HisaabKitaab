@@ -8,6 +8,8 @@ import {
   resolveTenantIdFromRequest,
   TENANT_CONTEXT_MISSING_MESSAGE,
 } from "@/lib/tenant";
+import { resolveVerifiedTenantId } from "@/lib/session-server";
+import { checkRateLimit } from "@/lib/api-rate-limit";
 
 const BILL_NUMBER_LOCK_KEY = 22032026;
 
@@ -165,9 +167,14 @@ export async function GET(request: NextRequest) {
 
 // POST /api/bills — Create a new bill
 export async function POST(request: NextRequest) {
+  const rateLimitResponse = checkRateLimit(request, "bills.create", 30);
+  if (rateLimitResponse) return rateLimitResponse;
+
   const role = request.headers.get("x-user-role");
   const userId = request.headers.get("x-user-id");
-  const tenantId = resolveTenantIdFromRequest(request);
+  // Verify tenantId directly from the JWT cookie — not from the header —
+  // so the value used in raw SQL is always cryptographically verified.
+  const tenantId = await resolveVerifiedTenantId(request);
 
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

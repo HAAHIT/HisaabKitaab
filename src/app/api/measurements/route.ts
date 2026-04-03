@@ -12,6 +12,8 @@ import {
   resolveTenantIdFromRequest,
   TENANT_CONTEXT_MISSING_MESSAGE,
 } from "@/lib/tenant";
+import { resolveVerifiedTenantId } from "@/lib/session-server";
+import { checkRateLimit } from "@/lib/api-rate-limit";
 
 export const runtime = "nodejs";
 
@@ -57,6 +59,30 @@ async function readMeasurementPayload(request: NextRequest) {
   };
 }
 
+// Validate file contents by magic bytes — MIME type is client-controlled and
+// can be spoofed. We check the actual file signature instead.
+async function isValidImageFile(file: File): Promise<boolean> {
+  const buffer = await file.slice(0, 12).arrayBuffer();
+  const b = new Uint8Array(buffer);
+
+  const isJpeg = b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
+  const isPng =
+    b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47;
+  const isGif =
+    b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38;
+  const isWebp =
+    b[0] === 0x52 &&
+    b[1] === 0x49 &&
+    b[2] === 0x46 &&
+    b[3] === 0x46 &&
+    b[8] === 0x57 &&
+    b[9] === 0x45 &&
+    b[10] === 0x42 &&
+    b[11] === 0x50;
+
+  return isJpeg || isPng || isGif || isWebp;
+}
+
 async function buildPhotoAssetInputs({
   files,
   legacyPhotoUrls,
@@ -69,8 +95,8 @@ async function buildPhotoAssetInputs({
   try {
     if (files.length > 0) {
       for (const file of files) {
-        if (!file.type.startsWith("image/")) {
-          throw new Error("All uploaded files must be images");
+        if (!(await isValidImageFile(file))) {
+          throw new Error("All uploaded files must be valid images");
         }
 
         if (file.size > 8 * 1024 * 1024) {
@@ -182,8 +208,13 @@ export async function GET(request: NextRequest) {
 
 // POST /api/measurements - Upload a measurement with photo assets
 export async function POST(request: NextRequest) {
+  const rateLimitResponse = checkRateLimit(request, "measurements.upload", 20);
+  if (rateLimitResponse) return rateLimitResponse;
+
   const userId = request.headers.get("x-user-id");
-  const tenantId = resolveTenantIdFromRequest(request);
+  // Verify tenantId directly from the JWT cookie — not from the header —
+  // so the value used in raw SQL is always cryptographically verified.
+  const tenantId = await resolveVerifiedTenantId(request);
 
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

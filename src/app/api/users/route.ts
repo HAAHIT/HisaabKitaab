@@ -6,6 +6,8 @@ import {
   resolveTenantIdFromRequest,
   TENANT_CONTEXT_MISSING_MESSAGE,
 } from "@/lib/tenant";
+import { resolveVerifiedTenantId } from "@/lib/session-server";
+import { checkRateLimit } from "@/lib/api-rate-limit";
 
 const VALID_ROLES = new Set(Object.values(Role));
 
@@ -55,9 +57,14 @@ export async function GET(request: NextRequest) {
 
 // POST /api/users — Create a new user (Admin only)
 export async function POST(request: NextRequest) {
+  const rateLimitResponse = checkRateLimit(request, "users.create", 20);
+  if (rateLimitResponse) return rateLimitResponse;
+
   const role = request.headers.get("x-user-role");
   const adminId = request.headers.get("x-user-id");
-  const tenantId = resolveTenantIdFromRequest(request);
+  // Verify tenantId directly from the JWT cookie — not from the header —
+  // so the value used in raw SQL is always cryptographically verified.
+  const tenantId = await resolveVerifiedTenantId(request);
 
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
