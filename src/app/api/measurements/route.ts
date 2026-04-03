@@ -19,6 +19,16 @@ function parseOptionalString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function resolveTenantId(request: NextRequest) {
+  const fromHeader = request.headers.get("x-tenant-id")?.trim();
+  if (fromHeader) {
+    return fromHeader;
+  }
+
+  const fromEnv = process.env.DEFAULT_TENANT_ID?.trim();
+  return fromEnv || null;
+}
+
 async function readMeasurementPayload(request: NextRequest) {
   const contentType = request.headers.get("content-type") || "";
 
@@ -171,9 +181,16 @@ export async function GET(request: NextRequest) {
 // POST /api/measurements - Upload a measurement with photo assets
 export async function POST(request: NextRequest) {
   const userId = request.headers.get("x-user-id");
+  const tenantId = resolveTenantId(request);
 
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: "Tenant context missing. Set x-tenant-id or DEFAULT_TENANT_ID." },
+      { status: 500 }
+    );
   }
 
   let photoAssets: MeasurementPhotoAssetCreateInput[] = [];
@@ -221,25 +238,58 @@ export async function POST(request: NextRequest) {
         await tx.mediaAsset.create({ data: asset });
       }
 
-      return tx.measurementUpload.create({
-        data: {
-          customerId: userId,
-          partyId: resolvedPartyId ?? undefined,
-          label,
-          roomName: payload.roomName ?? undefined,
-          doorType: payload.doorType ?? undefined,
-          notes: payload.notes ?? undefined,
-          photosLegacy: [],
-          status: "UPLOADED",
-          photoAssets: {
-            create: photoAssets.map((asset, index) => ({
-              sortOrder: index,
-              assetId: asset.id,
-            })),
-          },
-        },
+      const measurementId = crypto.randomUUID();
+      await tx.$executeRaw`
+        INSERT INTO "MeasurementUpload" (
+          "id",
+          "tenantId",
+          "customerId",
+          "partyId",
+          "label",
+          "roomName",
+          "doorType",
+          "notes",
+          "photos",
+          "status",
+          "isDeleted",
+          "createdAt",
+          "updatedAt"
+        )
+        VALUES (
+          ${measurementId},
+          ${tenantId},
+          ${userId},
+          ${resolvedPartyId},
+          ${label},
+          ${payload.roomName},
+          ${payload.doorType},
+          ${payload.notes},
+          ${JSON.stringify([])}::jsonb,
+          'UPLOADED'::"MeasurementStatus",
+          false,
+          NOW(),
+          NOW()
+        )
+      `;
+
+      await tx.measurementPhoto.createMany({
+        data: photoAssets.map((asset, index) => ({
+          measurementId,
+          assetId: asset.id,
+          sortOrder: index,
+        })),
+      });
+
+      const createdMeasurement = await tx.measurementUpload.findUnique({
+        where: { id: measurementId },
         include: measurementInclude,
       });
+
+      if (!createdMeasurement) {
+        throw new Error("Failed to create measurement");
+      }
+
+      return createdMeasurement;
     });
 
     return NextResponse.json(

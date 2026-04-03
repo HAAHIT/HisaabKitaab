@@ -36,6 +36,16 @@ function parseOpeningBalance(value: unknown) {
   return Math.round(numericValue * 100) / 100;
 }
 
+function resolveTenantId(request: NextRequest) {
+  const fromHeader = request.headers.get("x-tenant-id")?.trim();
+  if (fromHeader) {
+    return fromHeader;
+  }
+
+  const fromEnv = process.env.DEFAULT_TENANT_ID?.trim();
+  return fromEnv || null;
+}
+
 // GET /api/parties — List all parties with balance info
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
@@ -76,9 +86,19 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const role = request.headers.get("x-user-role");
   const userId = request.headers.get("x-user-id");
+  const tenantId = resolveTenantId(request);
 
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!userId) {
+    return NextResponse.json({ error: "Missing user context" }, { status: 401 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: "Tenant context missing. Set x-tenant-id or DEFAULT_TENANT_ID." },
+      { status: 500 }
+    );
   }
 
   try {
@@ -110,19 +130,51 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const party = await prisma.party.create({
-      data: {
-        name: normalizedName,
-        phone: normalizeOptionalString(phone),
-        email: normalizeOptionalString(email),
-        address: normalizeOptionalString(address),
-        gstin: normalizeOptionalString(gstin),
-        type: normalizedType,
-        openingBalance: normalizedOpeningBalance,
-        currentBalance: normalizedOpeningBalance,
-        createdBy: userId!,
-      },
+    const partyId = crypto.randomUUID();
+    await prisma.$executeRaw`
+      INSERT INTO "Party" (
+        "id",
+        "tenantId",
+        "name",
+        "type",
+        "phone",
+        "email",
+        "address",
+        "gstin",
+        "openingBalance",
+        "currentBalance",
+        "isActive",
+        "isDeleted",
+        "createdBy",
+        "createdAt",
+        "updatedAt"
+      )
+      VALUES (
+        ${partyId},
+        ${tenantId},
+        ${normalizedName},
+        ${normalizedType}::"PartyType",
+        ${normalizeOptionalString(phone)},
+        ${normalizeOptionalString(email)},
+        ${normalizeOptionalString(address)},
+        ${normalizeOptionalString(gstin)},
+        ${normalizedOpeningBalance},
+        ${normalizedOpeningBalance},
+        true,
+        false,
+        ${userId},
+        NOW(),
+        NOW()
+      )
+    `;
+
+    const party = await prisma.party.findUnique({
+      where: { id: partyId },
     });
+
+    if (!party) {
+      throw new Error("Failed to create party");
+    }
 
     return NextResponse.json({ party }, { status: 201 });
   } catch (error) {

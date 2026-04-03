@@ -54,6 +54,14 @@ function parseTenantSettings(value: unknown) {
   return {};
 }
 
+function resolveTenantId(request: NextRequest) {
+  return (
+    request.headers.get("x-tenant-id")?.trim() ||
+    process.env.DEFAULT_TENANT_ID?.trim() ||
+    null
+  );
+}
+
 async function loadBillingSettings(request: NextRequest) {
   try {
     const settings = await prisma.companySettings.findUnique({
@@ -76,10 +84,7 @@ async function loadBillingSettings(request: NextRequest) {
       throw error;
     }
 
-    const scopedTenantId =
-      request.headers.get("x-tenant-id")?.trim() ||
-      process.env.DEFAULT_TENANT_ID?.trim() ||
-      null;
+    const scopedTenantId = resolveTenantId(request);
 
     let tenantRows: TenantBillingSettingsRow[] = [];
     if (scopedTenantId) {
@@ -209,9 +214,19 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const role = request.headers.get("x-user-role");
   const userId = request.headers.get("x-user-id");
+  const tenantId = resolveTenantId(request);
 
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!userId) {
+    return NextResponse.json({ error: "Missing user context" }, { status: 401 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: "Tenant context missing. Set x-tenant-id or DEFAULT_TENANT_ID." },
+      { status: 500 }
+    );
   }
 
   try {
@@ -281,33 +296,74 @@ export async function POST(request: NextRequest) {
     const bill = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${BILL_NUMBER_LOCK_KEY})`;
 
-      const existingCount = await tx.bill.count({
-        where: {
-          createdAt: {
-            gte: monthStart,
-            lt: nextMonthStart,
-          },
-        },
-      });
+      const existingCountRows = await tx.$queryRaw<Array<{ count: bigint }>>`
+        SELECT COUNT(*)::bigint AS count
+        FROM "Bill"
+        WHERE
+          "tenantId" = ${tenantId}
+          AND "createdAt" >= ${monthStart}
+          AND "createdAt" < ${nextMonthStart}
+      `;
+      const existingCount = Number(existingCountRows[0]?.count || 0);
       const billNumber = `${prefix}-${yearMonth}-${String(existingCount + 1).padStart(3, "0")}`;
 
-      const createdBill = await tx.bill.create({
-        data: {
-          billNumber,
-          templateId,
-          partyId: party.id,
-          ...snapshot,
-          rows,
-          notes: notes || null,
-          terms: terms || null,
-          subtotal: subtotal || 0,
-          taxPercent: taxPercent ?? billingSettings.defaultTaxPercent,
-          taxAmount: taxAmount || 0,
-          grandTotal: resolvedGrandTotal,
-          status: billStatus,
-          createdBy: userId!,
-        },
+      const billId = crypto.randomUUID();
+      await tx.$executeRaw`
+        INSERT INTO "Bill" (
+          "id",
+          "tenantId",
+          "billNumber",
+          "templateId",
+          "partyId",
+          "customerName",
+          "customerPhone",
+          "customerAddress",
+          "gstin",
+          "rows",
+          "notes",
+          "terms",
+          "subtotal",
+          "taxPercent",
+          "taxAmount",
+          "grandTotal",
+          "status",
+          "createdBy",
+          "createdAt",
+          "updatedAt",
+          "isDeleted"
+        )
+        VALUES (
+          ${billId},
+          ${tenantId},
+          ${billNumber},
+          ${templateId},
+          ${party.id},
+          ${snapshot.customerName},
+          ${snapshot.customerPhone},
+          ${snapshot.customerAddress},
+          ${snapshot.gstin},
+          ${JSON.stringify(rows)}::jsonb,
+          ${notes || null},
+          ${terms || null},
+          ${subtotal || 0},
+          ${taxPercent ?? billingSettings.defaultTaxPercent},
+          ${taxAmount || 0},
+          ${resolvedGrandTotal},
+          ${billStatus}::"BillStatus",
+          ${userId},
+          NOW(),
+          NOW(),
+          false
+        )
+      `;
+
+      const createdBill = await tx.bill.findUnique({
+        where: { id: billId },
       });
+
+      if (!createdBill) {
+        throw new Error("Failed to create bill");
+      }
 
       const balanceChange = getPostedBillBalanceDelta(
         party.type,

@@ -34,6 +34,7 @@ export default async function RootLayout({
     <html
       lang={language}
       className={`${inter.variable} h-full`}
+      data-scroll-behavior="smooth"
       suppressHydrationWarning
     >
       <body className="min-h-full bg-background text-foreground antialiased">

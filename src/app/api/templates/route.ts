@@ -1,6 +1,16 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
+function resolveTenantId(request: NextRequest) {
+  const fromHeader = request.headers.get("x-tenant-id")?.trim();
+  if (fromHeader) {
+    return fromHeader;
+  }
+
+  const fromEnv = process.env.DEFAULT_TENANT_ID?.trim();
+  return fromEnv || null;
+}
+
 // GET /api/templates — List all templates
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
@@ -27,9 +37,19 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const role = request.headers.get("x-user-role");
   const userId = request.headers.get("x-user-id");
+  const tenantId = resolveTenantId(request);
 
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!userId) {
+    return NextResponse.json({ error: "Missing user context" }, { status: 401 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: "Tenant context missing. Set x-tenant-id or DEFAULT_TENANT_ID." },
+      { status: 500 }
+    );
   }
 
   try {
@@ -43,13 +63,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const template = await prisma.billTemplate.create({
-      data: {
-        name,
-        columns,
-        createdBy: userId!,
-      },
+    const templateId = crypto.randomUUID();
+    await prisma.$executeRaw`
+      INSERT INTO "BillTemplate" (
+        "id",
+        "tenantId",
+        "name",
+        "columns",
+        "createdBy",
+        "createdAt",
+        "updatedAt",
+        "isDeleted"
+      )
+      VALUES (
+        ${templateId},
+        ${tenantId},
+        ${name},
+        ${JSON.stringify(columns)}::jsonb,
+        ${userId},
+        NOW(),
+        NOW(),
+        false
+      )
+    `;
+
+    const template = await prisma.billTemplate.findUnique({
+      where: { id: templateId },
     });
+
+    if (!template) {
+      throw new Error("Failed to create template");
+    }
 
     return NextResponse.json({ template }, { status: 201 });
   } catch (error) {
