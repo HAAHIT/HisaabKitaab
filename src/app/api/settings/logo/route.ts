@@ -4,6 +4,10 @@ import {
   deleteMediaAsset,
 } from "@/lib/media";
 import { prisma } from "@/lib/prisma";
+import {
+  resolveTenantIdFromRequest,
+  TENANT_CONTEXT_MISSING_MESSAGE,
+} from "@/lib/tenant";
 
 export const runtime = "nodejs";
 
@@ -13,40 +17,20 @@ type TenantLogoRow = {
   createdAt: Date;
 };
 
-function resolveTenantId(request: Request) {
-  const fromHeader = request.headers.get("x-tenant-id")?.trim();
-  if (fromHeader) {
-    return fromHeader;
-  }
-
-  const fromEnv = process.env.DEFAULT_TENANT_ID?.trim();
-  return fromEnv || null;
-}
-
 async function findTenantLogoRow(request: Request): Promise<TenantLogoRow | null> {
-  const tenantId = resolveTenantId(request);
-
-  if (tenantId) {
-    const scoped = await prisma.$queryRaw<TenantLogoRow[]>`
-      SELECT "id", "logoUrl", "createdAt"
-      FROM "Tenant"
-      WHERE "id" = ${tenantId}
-      LIMIT 1
-    `;
-
-    if (scoped[0]) {
-      return scoped[0];
-    }
+  const tenantId = resolveTenantIdFromRequest(request);
+  if (!tenantId) {
+    return null;
   }
 
-  const fallback = await prisma.$queryRaw<TenantLogoRow[]>`
+  const scoped = await prisma.$queryRaw<TenantLogoRow[]>`
     SELECT "id", "logoUrl", "createdAt"
     FROM "Tenant"
-    ORDER BY "createdAt" ASC
+    WHERE "id" = ${tenantId}
     LIMIT 1
   `;
 
-  return fallback[0] || null;
+  return scoped[0] || null;
 }
 
 function extractAssetIdFromLogoUrl(url: string | null) {
@@ -82,8 +66,15 @@ function isAdmin(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const tenantId = resolveTenantIdFromRequest(request);
   if (!isAdmin(request)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
   }
 
   let nextAsset:
@@ -164,8 +155,15 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const tenantId = resolveTenantIdFromRequest(request);
   if (!isAdmin(request)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
   }
 
   try {

@@ -4,19 +4,13 @@ import {
   getPaymentBalanceDelta,
   getSettlementDirectionForParty,
 } from "@/lib/accounting";
+import {
+  resolveTenantIdFromRequest,
+  TENANT_CONTEXT_MISSING_MESSAGE,
+} from "@/lib/tenant";
 
 const VALID_DIRECTIONS = new Set(["INCOMING", "OUTGOING"]);
 const VALID_MODES = new Set(["CASH", "UPI", "BANK_TRANSFER", "CHEQUE"]);
-
-function resolveTenantId(request: NextRequest) {
-  const headerTenantId = request.headers.get("x-tenant-id")?.trim();
-  if (headerTenantId) {
-    return headerTenantId;
-  }
-
-  const defaultTenantId = process.env.DEFAULT_TENANT_ID?.trim();
-  return defaultTenantId || null;
-}
 
 function parsePaymentAmount(value: unknown) {
   const numericValue =
@@ -36,8 +30,15 @@ function parsePaymentAmount(value: unknown) {
 // GET /api/payments - List payments with filters
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
+  const tenantId = resolveTenantIdFromRequest(request);
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
   }
 
   const { searchParams } = new URL(request.url);
@@ -50,7 +51,7 @@ export async function GET(request: NextRequest) {
   const limit = parseInt(searchParams.get("limit") || "20", 10);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = { isDeleted: false };
+  const where: any = { isDeleted: false, tenantId };
 
   if (search) {
     where.OR = [
@@ -99,7 +100,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const role = request.headers.get("x-user-role");
   const userId = request.headers.get("x-user-id");
-  const tenantId = resolveTenantId(request);
+  const tenantId = resolveTenantIdFromRequest(request);
 
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -109,7 +110,7 @@ export async function POST(request: NextRequest) {
   }
   if (!tenantId) {
     return NextResponse.json(
-      { error: "Tenant context missing. Set x-tenant-id or DEFAULT_TENANT_ID." },
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
       { status: 500 }
     );
   }
@@ -155,6 +156,7 @@ export async function POST(request: NextRequest) {
           where: { id: billId },
           select: {
             id: true,
+            tenantId: true,
             partyId: true,
             status: true,
             party: {
@@ -168,6 +170,7 @@ export async function POST(request: NextRequest) {
 
         if (
           !linkedBill ||
+          linkedBill.tenantId !== tenantId ||
           linkedBill.status !== "FINAL" ||
           !linkedBill.partyId ||
           !linkedBill.party
@@ -192,6 +195,7 @@ export async function POST(request: NextRequest) {
       const party = await tx.party.findFirst({
         where: {
           id: resolvedPartyId,
+          tenantId,
           isDeleted: false,
           isActive: true,
         },
@@ -279,9 +283,16 @@ export async function POST(request: NextRequest) {
 // PATCH /api/payments - Mark an expected payment as completed
 export async function PATCH(request: NextRequest) {
   const role = request.headers.get("x-user-role");
+  const tenantId = resolveTenantIdFromRequest(request);
 
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
   }
 
   try {
@@ -296,6 +307,7 @@ export async function PATCH(request: NextRequest) {
       const payment = await tx.payment.findFirst({
         where: {
           id: paymentId,
+          tenantId,
           isDeleted: false,
         },
         include: { party: { select: { type: true } } },

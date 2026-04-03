@@ -1,6 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import type { PartyType } from "@prisma/client";
+import {
+  resolveTenantIdFromRequest,
+  TENANT_CONTEXT_MISSING_MESSAGE,
+} from "@/lib/tenant";
 
 const VALID_PARTY_TYPES = new Set<PartyType>(["CUSTOMER", "VENDOR"]);
 
@@ -17,10 +21,11 @@ function normalizeOptionalString(value: unknown) {
   return trimmed ? trimmed : null;
 }
 
-async function findVisibleParty(id: string) {
+async function findVisibleParty(id: string, tenantId: string) {
   return prisma.party.findFirst({
     where: {
       id,
+      tenantId,
       isDeleted: false,
     },
     include: {
@@ -39,12 +44,19 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
+  const tenantId = resolveTenantIdFromRequest(request);
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
+  }
 
   const { id } = await params;
-  const party = await findVisibleParty(id);
+  const party = await findVisibleParty(id, tenantId);
 
   if (!party) {
     return NextResponse.json({ error: "Party not found" }, { status: 404 });
@@ -59,14 +71,21 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
+  const tenantId = resolveTenantIdFromRequest(request);
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
   }
 
   try {
     const { id } = await params;
     const body = await request.json();
-    const existingParty = await findVisibleParty(id);
+    const existingParty = await findVisibleParty(id, tenantId);
 
     if (!existingParty) {
       return NextResponse.json({ error: "Party not found" }, { status: 404 });
@@ -102,8 +121,11 @@ export async function PATCH(
     }
 
     if (nextType !== existingParty.type) {
-      const relationCounts = await prisma.party.findUnique({
-        where: { id },
+      const relationCounts = await prisma.party.findFirst({
+        where: {
+          id,
+          tenantId,
+        },
         select: {
           _count: {
             select: {
@@ -159,13 +181,20 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
+  const tenantId = resolveTenantIdFromRequest(request);
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
   }
 
   try {
     const { id } = await params;
-    const existingParty = await findVisibleParty(id);
+    const existingParty = await findVisibleParty(id, tenantId);
 
     if (!existingParty) {
       return NextResponse.json({ error: "Party not found" }, { status: 404 });

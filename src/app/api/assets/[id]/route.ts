@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { readStoredObject } from "@/lib/object-storage";
+import {
+  resolveTenantIdFromRequest,
+  TENANT_CONTEXT_MISSING_MESSAGE,
+} from "@/lib/tenant";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,9 +21,16 @@ export async function GET(
 ) {
   const userId = request.headers.get("x-user-id");
   const role = request.headers.get("x-user-role");
+  const tenantId = resolveTenantIdFromRequest(request);
 
   if (!userId || !role) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
   }
 
   const { id } = await params;
@@ -33,12 +44,13 @@ export async function GET(
       mimeType: true,
       measurementPhotos: {
         select: {
-          measurement: {
-            select: {
-              customerId: true,
+              measurement: {
+                select: {
+                  customerId: true,
+                  tenantId: true,
+                },
+              },
             },
-          },
-        },
         take: 1,
       },
     },
@@ -46,6 +58,28 @@ export async function GET(
 
   if (!asset) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  if (
+    asset.kind === "MEASUREMENT_PHOTO" &&
+    !asset.measurementPhotos.some(
+      (photo) => photo.measurement.tenantId === tenantId
+    )
+  ) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  if (asset.kind === "COMPANY_LOGO") {
+    const tenantLogoMatch = await prisma.tenant.findFirst({
+      where: {
+        id: tenantId,
+        logoUrl: `/api/assets/${id}`,
+      },
+      select: { id: true },
+    });
+    if (!tenantLogoMatch) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
   if (

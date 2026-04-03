@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { serializeMeasurementUpload } from "@/lib/media";
 import { prisma } from "@/lib/prisma";
+import {
+  resolveTenantIdFromRequest,
+  TENANT_CONTEXT_MISSING_MESSAGE,
+} from "@/lib/tenant";
 
 const measurementInclude = {
   customer: { select: { name: true, phone: true, email: true } },
@@ -16,10 +20,11 @@ const measurementInclude = {
   },
 };
 
-async function findVisibleMeasurement(id: string) {
+async function findVisibleMeasurement(id: string, tenantId: string) {
   return prisma.measurementUpload.findFirst({
     where: {
       id,
+      tenantId,
       isDeleted: false,
     },
     include: measurementInclude,
@@ -33,13 +38,20 @@ export async function GET(
 ) {
   const role = request.headers.get("x-user-role");
   const userId = request.headers.get("x-user-id");
+  const tenantId = resolveTenantIdFromRequest(request);
 
   if (!role || !userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
+  }
 
   const { id } = await params;
-  const measurement = await findVisibleMeasurement(id);
+  const measurement = await findVisibleMeasurement(id, tenantId);
 
   if (!measurement) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -61,16 +73,23 @@ export async function PATCH(
 ) {
   const role = request.headers.get("x-user-role");
   const userId = request.headers.get("x-user-id");
+  const tenantId = resolveTenantIdFromRequest(request);
 
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
   }
 
   try {
     const { id } = await params;
     const body = await request.json();
     const { status, reviewNotes, partyId } = body;
-    const existingMeasurement = await findVisibleMeasurement(id);
+    const existingMeasurement = await findVisibleMeasurement(id, tenantId);
 
     if (!existingMeasurement) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -98,6 +117,7 @@ export async function PATCH(
         const party = await prisma.party.findFirst({
           where: {
             id: partyId,
+            tenantId,
             type: "CUSTOMER",
             isDeleted: false,
             isActive: true,
@@ -137,9 +157,16 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
+  const tenantId = resolveTenantIdFromRequest(request);
 
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
   }
 
   try {
@@ -147,6 +174,7 @@ export async function DELETE(
     const measurement = await prisma.measurementUpload.findFirst({
       where: {
         id,
+        tenantId,
         isDeleted: false,
       },
     });

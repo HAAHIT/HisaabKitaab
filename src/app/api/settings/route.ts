@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import {
+  resolveTenantIdFromRequest,
+  TENANT_CONTEXT_MISSING_MESSAGE,
+} from "@/lib/tenant";
 
 type TenantSettingsRow = {
   id: string;
@@ -67,42 +71,22 @@ function asTrimmedString(value: unknown) {
   return trimmed || null;
 }
 
-function resolveTenantId(request: Request | null) {
-  const fromHeader = request?.headers.get("x-tenant-id")?.trim();
-  if (fromHeader) {
-    return fromHeader;
-  }
-
-  const fromEnv = process.env.DEFAULT_TENANT_ID?.trim();
-  return fromEnv || null;
-}
-
 async function findTenantSettingsRow(
   request: Request | null
 ): Promise<TenantSettingsRow | null> {
-  const tenantId = resolveTenantId(request);
-
-  if (tenantId) {
-    const scoped = await prisma.$queryRaw<TenantSettingsRow[]>`
-      SELECT "id", "name", "phone", "email", "address", "gstin", "logoUrl", "settings", "createdAt"
-      FROM "Tenant"
-      WHERE "id" = ${tenantId}
-      LIMIT 1
-    `;
-
-    if (scoped[0]) {
-      return scoped[0];
-    }
+  const tenantId = resolveTenantIdFromRequest(request);
+  if (!tenantId) {
+    return null;
   }
 
-  const fallback = await prisma.$queryRaw<TenantSettingsRow[]>`
+  const scoped = await prisma.$queryRaw<TenantSettingsRow[]>`
     SELECT "id", "name", "phone", "email", "address", "gstin", "logoUrl", "settings", "createdAt"
     FROM "Tenant"
-    ORDER BY "createdAt" ASC
+    WHERE "id" = ${tenantId}
     LIMIT 1
   `;
 
-  return fallback[0] || null;
+  return scoped[0] || null;
 }
 
 function normalizeTenantSettings(row: TenantSettingsRow | null): NormalizedSettings {
@@ -150,6 +134,14 @@ async function loadSettingsFromTenant(request: Request | null) {
 // GET /api/settings - Get company settings
 export async function GET(request: Request) {
   try {
+    const tenantId = resolveTenantIdFromRequest(request);
+    if (!tenantId) {
+      return NextResponse.json(
+        { error: TENANT_CONTEXT_MISSING_MESSAGE },
+        { status: 500 }
+      );
+    }
+
     const settings = await loadSettingsFromTenant(request);
     return NextResponse.json({ settings });
   } catch (error) {
@@ -161,8 +153,15 @@ export async function GET(request: Request) {
 // PATCH /api/settings - Update company settings
 export async function PATCH(request: Request) {
   const role = request.headers.get("x-user-role");
+  const tenantId = resolveTenantIdFromRequest(request);
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
   }
 
   try {

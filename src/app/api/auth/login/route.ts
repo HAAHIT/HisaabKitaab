@@ -14,6 +14,10 @@ import {
   logInfo,
   logWarn,
 } from "@/lib/observability";
+import {
+  resolveTenantIdFromRequest,
+  TENANT_CONTEXT_MISSING_MESSAGE,
+} from "@/lib/tenant";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,6 +48,19 @@ export async function POST(request: NextRequest) {
     const credential =
       typeof body.credential === "string" ? body.credential.trim() : "";
     const password = typeof body.password === "string" ? body.password : "";
+    const tenantId = resolveTenantIdFromRequest(request);
+
+    if (!tenantId) {
+      logError("auth.login.tenant_missing", {
+        requestId,
+        clientIp,
+      });
+      return jsonWithRequestId(
+        requestId,
+        { error: TENANT_CONTEXT_MISSING_MESSAGE },
+        500
+      );
+    }
 
     if (!credential || !password) {
       logWarn("auth.login.validation_failed", {
@@ -80,6 +97,7 @@ export async function POST(request: NextRequest) {
 
     const user = await prisma.user.findFirst({
       where: {
+        tenantId,
         isActive: true,
         OR: [
           { email: { equals: credential, mode: "insensitive" } },
@@ -135,6 +153,7 @@ export async function POST(request: NextRequest) {
 
     await createSession({
       userId: user.id,
+      tenantId: user.tenantId,
       name: user.name,
       role: user.role,
       email: user.email || undefined,
@@ -153,6 +172,7 @@ export async function POST(request: NextRequest) {
       {
         user: {
           id: user.id,
+          tenantId: user.tenantId,
           name: user.name,
           role: user.role,
           email: user.email,

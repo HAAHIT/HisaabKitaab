@@ -4,7 +4,8 @@ type PartyRelationClient = Pick<PrismaClient, "party" | "user">;
 
 export async function findUniqueCustomerPartyIdForUser(
   prisma: PartyRelationClient,
-  userId: string
+  userId: string,
+  tenantId: string
 ) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -18,6 +19,7 @@ export async function findUniqueCustomerPartyIdForUser(
   if (user.phone) {
     const phoneMatches = await prisma.party.findMany({
       where: {
+        tenantId,
         type: "CUSTOMER",
         isActive: true,
         isDeleted: false,
@@ -35,6 +37,7 @@ export async function findUniqueCustomerPartyIdForUser(
   if (user.email) {
     const emailMatches = await prisma.party.findMany({
       where: {
+        tenantId,
         type: "CUSTOMER",
         isActive: true,
         isDeleted: false,

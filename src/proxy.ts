@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 import { getJwtSecret } from "@/lib/jwt-secret";
 import { attachRequestIdHeader, logError } from "@/lib/observability";
+import { TENANT_HEADER } from "@/lib/tenant";
 
 const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/health"];
 
@@ -11,6 +12,13 @@ export async function proxy(request: NextRequest) {
     request.headers.get("x-request-id")?.trim() || crypto.randomUUID();
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-request-id", requestId);
+  const requestedTenantId =
+    request.headers.get(TENANT_HEADER)?.trim() ||
+    process.env.DEFAULT_TENANT_ID?.trim() ||
+    null;
+  if (requestedTenantId) {
+    requestHeaders.set(TENANT_HEADER, requestedTenantId);
+  }
   let jwtSecret: Uint8Array;
 
   function nextWithRequestHeaders() {
@@ -67,6 +75,13 @@ export async function proxy(request: NextRequest) {
     requestHeaders.set("x-user-id", payload.userId as string);
     requestHeaders.set("x-user-role", payload.role as string);
     requestHeaders.set("x-user-name", payload.name as string);
+    const tenantId =
+      (typeof payload.tenantId === "string" && payload.tenantId.trim()
+        ? payload.tenantId.trim()
+        : null) || process.env.DEFAULT_TENANT_ID?.trim() || null;
+    if (tenantId) {
+      requestHeaders.set(TENANT_HEADER, tenantId);
+    }
 
     const role = payload.role as string;
 

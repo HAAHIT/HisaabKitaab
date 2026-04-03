@@ -8,6 +8,10 @@ import {
 } from "@/lib/media";
 import { findUniqueCustomerPartyIdForUser } from "@/lib/party-relations";
 import { prisma } from "@/lib/prisma";
+import {
+  resolveTenantIdFromRequest,
+  TENANT_CONTEXT_MISSING_MESSAGE,
+} from "@/lib/tenant";
 
 export const runtime = "nodejs";
 
@@ -17,16 +21,6 @@ type MeasurementPhotoAssetCreateInput =
 
 function parseOptionalString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
-}
-
-function resolveTenantId(request: NextRequest) {
-  const fromHeader = request.headers.get("x-tenant-id")?.trim();
-  if (fromHeader) {
-    return fromHeader;
-  }
-
-  const fromEnv = process.env.DEFAULT_TENANT_ID?.trim();
-  return fromEnv || null;
 }
 
 async function readMeasurementPayload(request: NextRequest) {
@@ -133,9 +127,16 @@ const measurementInclude = {
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
   const userId = request.headers.get("x-user-id");
+  const tenantId = resolveTenantIdFromRequest(request);
 
   if (!role || !userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
   }
 
   const { searchParams } = new URL(request.url);
@@ -145,6 +146,7 @@ export async function GET(request: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: any = {
     isDeleted: false,
+    tenantId,
   };
 
   if (role === "CUSTOMER") {
@@ -181,14 +183,14 @@ export async function GET(request: NextRequest) {
 // POST /api/measurements - Upload a measurement with photo assets
 export async function POST(request: NextRequest) {
   const userId = request.headers.get("x-user-id");
-  const tenantId = resolveTenantId(request);
+  const tenantId = resolveTenantIdFromRequest(request);
 
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   if (!tenantId) {
     return NextResponse.json(
-      { error: "Tenant context missing. Set x-tenant-id or DEFAULT_TENANT_ID." },
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
       { status: 500 }
     );
   }
@@ -209,6 +211,7 @@ export async function POST(request: NextRequest) {
       const party = await prisma.party.findFirst({
         where: {
           id: payload.partyId,
+          tenantId,
           type: "CUSTOMER",
           isDeleted: false,
           isActive: true,
@@ -222,7 +225,11 @@ export async function POST(request: NextRequest) {
 
       resolvedPartyId = party.id;
     } else {
-      resolvedPartyId = await findUniqueCustomerPartyIdForUser(prisma, userId);
+      resolvedPartyId = await findUniqueCustomerPartyIdForUser(
+        prisma,
+        userId,
+        tenantId
+      );
     }
 
     photoAssets = await buildPhotoAssetInputs(payload);

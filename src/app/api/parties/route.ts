@@ -1,6 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import type { PartyType } from "@prisma/client";
+import {
+  resolveTenantIdFromRequest,
+  TENANT_CONTEXT_MISSING_MESSAGE,
+} from "@/lib/tenant";
 
 const VALID_PARTY_TYPES = new Set<PartyType>(["CUSTOMER", "VENDOR"]);
 
@@ -36,21 +40,18 @@ function parseOpeningBalance(value: unknown) {
   return Math.round(numericValue * 100) / 100;
 }
 
-function resolveTenantId(request: NextRequest) {
-  const fromHeader = request.headers.get("x-tenant-id")?.trim();
-  if (fromHeader) {
-    return fromHeader;
-  }
-
-  const fromEnv = process.env.DEFAULT_TENANT_ID?.trim();
-  return fromEnv || null;
-}
-
 // GET /api/parties — List all parties with balance info
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
+  const tenantId = resolveTenantIdFromRequest(request);
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
   }
 
   const { searchParams } = new URL(request.url);
@@ -58,7 +59,7 @@ export async function GET(request: NextRequest) {
   const type = searchParams.get("type") || "";
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = { isActive: true, isDeleted: false };
+  const where: any = { isActive: true, isDeleted: false, tenantId };
 
   if (search) {
     where.OR = [
@@ -86,7 +87,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const role = request.headers.get("x-user-role");
   const userId = request.headers.get("x-user-id");
-  const tenantId = resolveTenantId(request);
+  const tenantId = resolveTenantIdFromRequest(request);
 
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -96,7 +97,7 @@ export async function POST(request: NextRequest) {
   }
   if (!tenantId) {
     return NextResponse.json(
-      { error: "Tenant context missing. Set x-tenant-id or DEFAULT_TENANT_ID." },
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
       { status: 500 }
     );
   }

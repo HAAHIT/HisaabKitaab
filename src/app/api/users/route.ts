@@ -2,18 +2,12 @@ import { Role } from "@prisma/client";
 import { hashPassword } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import {
+  resolveTenantIdFromRequest,
+  TENANT_CONTEXT_MISSING_MESSAGE,
+} from "@/lib/tenant";
 
 const VALID_ROLES = new Set(Object.values(Role));
-
-function resolveTenantId(request: NextRequest) {
-  const fromHeader = request.headers.get("x-tenant-id")?.trim();
-  if (fromHeader) {
-    return fromHeader;
-  }
-
-  const fromEnv = process.env.DEFAULT_TENANT_ID?.trim();
-  return fromEnv || null;
-}
 
 function normalizeOptionalString(value: unknown) {
   if (value === null) {
@@ -31,13 +25,13 @@ function normalizeOptionalString(value: unknown) {
 // GET /api/users — List all users (Admin only)
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
-  const tenantId = resolveTenantId(request);
+  const tenantId = resolveTenantIdFromRequest(request);
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   if (!tenantId) {
     return NextResponse.json(
-      { error: "Tenant context missing. Set x-tenant-id or DEFAULT_TENANT_ID." },
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
       { status: 500 }
     );
   }
@@ -63,7 +57,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const role = request.headers.get("x-user-role");
   const adminId = request.headers.get("x-user-id");
-  const tenantId = resolveTenantId(request);
+  const tenantId = resolveTenantIdFromRequest(request);
 
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -73,7 +67,7 @@ export async function POST(request: NextRequest) {
   }
   if (!tenantId) {
     return NextResponse.json(
-      { error: "Tenant context missing. Set x-tenant-id or DEFAULT_TENANT_ID." },
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
       { status: 500 }
     );
   }

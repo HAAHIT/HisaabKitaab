@@ -4,6 +4,10 @@ import {
   getBillBalanceDeltaForTransition,
 } from "@/lib/accounting";
 import { NextRequest, NextResponse } from "next/server";
+import {
+  resolveTenantIdFromRequest,
+  TENANT_CONTEXT_MISSING_MESSAGE,
+} from "@/lib/tenant";
 
 const ALLOWED_BILL_PATCH_KEYS = new Set([
   "templateId",
@@ -49,10 +53,11 @@ function parseOptionalNumber(value: unknown) {
   return value;
 }
 
-async function findVisibleBill(id: string) {
+async function findVisibleBill(id: string, tenantId: string) {
   return prisma.bill.findFirst({
     where: {
       id,
+      tenantId,
       isDeleted: false,
     },
     include: {
@@ -78,12 +83,19 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
+  const tenantId = resolveTenantIdFromRequest(request);
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
+  }
 
   const { id } = await params;
-  const bill = await findVisibleBill(id);
+  const bill = await findVisibleBill(id, tenantId);
 
   if (!bill) {
     return NextResponse.json({ error: "Bill not found" }, { status: 404 });
@@ -98,8 +110,15 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
+  const tenantId = resolveTenantIdFromRequest(request);
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
   }
 
   try {
@@ -119,6 +138,7 @@ export async function PATCH(
     const existing = await prisma.bill.findFirst({
       where: {
         id,
+        tenantId,
         isDeleted: false,
       },
       select: {
@@ -158,6 +178,7 @@ export async function PATCH(
       const template = await prisma.billTemplate.findFirst({
         where: {
           id: body.templateId.trim(),
+          tenantId,
           isDeleted: false,
         },
         select: { id: true },
@@ -272,6 +293,7 @@ export async function PATCH(
       const party = await prisma.party.findFirst({
         where: {
           id: nextPartyId,
+          tenantId,
           isDeleted: false,
           isActive: true,
         },
@@ -354,6 +376,7 @@ export async function PATCH(
       const party = await tx.party.findFirst({
         where: {
           id: finalPartyId,
+          tenantId,
           isDeleted: false,
           isActive: true,
         },
@@ -403,8 +426,15 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
+  const tenantId = resolveTenantIdFromRequest(request);
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
   }
 
   try {
@@ -412,6 +442,7 @@ export async function DELETE(
     const existing = await prisma.bill.findFirst({
       where: {
         id,
+        tenantId,
         isDeleted: false,
       },
       select: {
@@ -439,6 +470,7 @@ export async function DELETE(
       const party = await tx.party.findFirst({
         where: {
           id: existing.partyId,
+          tenantId,
           isDeleted: false,
         },
         select: {

@@ -4,6 +4,10 @@ import {
   getPostedBillBalanceDelta,
 } from "@/lib/accounting";
 import { NextRequest, NextResponse } from "next/server";
+import {
+  resolveTenantIdFromRequest,
+  TENANT_CONTEXT_MISSING_MESSAGE,
+} from "@/lib/tenant";
 
 const BILL_NUMBER_LOCK_KEY = 22032026;
 
@@ -32,35 +36,21 @@ function parseTenantSettings(value: unknown) {
   return {};
 }
 
-function resolveTenantId(request: NextRequest) {
-  return (
-    request.headers.get("x-tenant-id")?.trim() ||
-    process.env.DEFAULT_TENANT_ID?.trim() ||
-    null
-  );
-}
-
 async function loadBillingSettings(request: NextRequest) {
-  const scopedTenantId = resolveTenantId(request);
-
-  let tenantRows: TenantBillingSettingsRow[] = [];
-  if (scopedTenantId) {
-    tenantRows = await prisma.$queryRaw<TenantBillingSettingsRow[]>`
-      SELECT "id", "settings", "createdAt"
-      FROM "Tenant"
-      WHERE "id" = ${scopedTenantId}
-      LIMIT 1
-    `;
+  const scopedTenantId = resolveTenantIdFromRequest(request);
+  if (!scopedTenantId) {
+    return {
+      billPrefix: "BILL",
+      defaultTaxPercent: 0,
+    };
   }
 
-  if (!tenantRows[0]) {
-    tenantRows = await prisma.$queryRaw<TenantBillingSettingsRow[]>`
-      SELECT "id", "settings", "createdAt"
-      FROM "Tenant"
-      ORDER BY "createdAt" ASC
-      LIMIT 1
-    `;
-  }
+  const tenantRows = await prisma.$queryRaw<TenantBillingSettingsRow[]>`
+    SELECT "id", "settings", "createdAt"
+    FROM "Tenant"
+    WHERE "id" = ${scopedTenantId}
+    LIMIT 1
+  `;
 
   const tenantSettings = parseTenantSettings(tenantRows[0]?.settings);
   const billPrefixCandidate =
@@ -86,8 +76,15 @@ async function loadBillingSettings(request: NextRequest) {
 // GET /api/bills — List bills with filtering
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
+  const tenantId = resolveTenantIdFromRequest(request);
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
   }
 
   try {
@@ -101,7 +98,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "20");
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const where: any = { isDeleted: false };
+    const where: any = { isDeleted: false, tenantId };
 
     if (search) {
       where.OR = [
@@ -170,7 +167,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const role = request.headers.get("x-user-role");
   const userId = request.headers.get("x-user-id");
-  const tenantId = resolveTenantId(request);
+  const tenantId = resolveTenantIdFromRequest(request);
 
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -180,7 +177,7 @@ export async function POST(request: NextRequest) {
   }
   if (!tenantId) {
     return NextResponse.json(
-      { error: "Tenant context missing. Set x-tenant-id or DEFAULT_TENANT_ID." },
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
       { status: 500 }
     );
   }
@@ -211,9 +208,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const template = await prisma.billTemplate.findFirst({
+      where: {
+        id: templateId,
+        tenantId,
+        isDeleted: false,
+      },
+      select: { id: true },
+    });
+
+    if (!template) {
+      return NextResponse.json({ error: "Template not found" }, { status: 404 });
+    }
+
     const party = await prisma.party.findFirst({
       where: {
         id: partyId,
+        tenantId,
         isDeleted: false,
         isActive: true,
       },
@@ -292,7 +303,7 @@ export async function POST(request: NextRequest) {
           ${billId},
           ${tenantId},
           ${billNumber},
-          ${templateId},
+          ${template.id},
           ${party.id},
           ${snapshot.customerName},
           ${snapshot.customerPhone},

@@ -8,6 +8,7 @@ const SESSION_DURATION = 7 * 24 * 60 * 60; // 7 days in seconds
 
 export interface SessionPayload {
   userId: string;
+  tenantId?: string;
   name: string;
   role: string;
   email?: string;
