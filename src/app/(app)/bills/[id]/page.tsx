@@ -12,9 +12,7 @@ import {
   Skeleton,
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
-import { BillActionBar } from "@/components/bills/BillActionBar";
 import type { ColumnDef } from "@/lib/formula";
-import { shareBill } from "@/lib/share";
 
 interface BillDetail {
   id: string;
@@ -55,7 +53,6 @@ interface CompanySettings {
   companyEmail: string | null;
   companyGstin: string | null;
   companyLogo: string | null;
-  upiId?: string | null;
 }
 
 const statusColorMap: Record<
@@ -141,11 +138,6 @@ export default function BillDetailPage({
   }, [id]);
 
   async function handleStatusChange(status: "FINAL" | "CANCELLED") {
-    if (!bill) {
-      return;
-    }
-
-    const currentBill = bill;
     const msg =
       status === "FINAL"
         ? "Finalize this bill? It cannot be edited after."
@@ -154,24 +146,7 @@ export default function BillDetailPage({
 
     try {
       const method = status === "CANCELLED" ? "DELETE" : "PATCH";
-      const body =
-        status === "CANCELLED"
-          ? undefined
-          : JSON.stringify({
-              partyId: currentBill.partyId,
-              customerName: currentBill.customerName,
-              customerPhone: currentBill.customerPhone,
-              customerAddress: currentBill.customerAddress,
-              gstin: currentBill.gstin,
-              rows: currentBill.rows,
-              notes: currentBill.notes,
-              terms: currentBill.terms,
-              taxPercent: currentBill.taxPercent,
-              subtotal: currentBill.subtotal,
-              taxAmount: currentBill.taxAmount,
-              grandTotal: currentBill.grandTotal,
-              status,
-            });
+      const body = status === "CANCELLED" ? undefined : JSON.stringify({ status });
       const headers: Record<string, string> = {};
       if (body) headers["Content-Type"] = "application/json";
 
@@ -193,26 +168,6 @@ export default function BillDetailPage({
         err instanceof Error ? err.message : "Action failed",
         "error"
       );
-    }
-  }
-
-  async function handleShare() {
-    if (!bill || bill.status !== "FINAL") {
-      return;
-    }
-
-    const didShare = await shareBill({
-      billNumber: bill.billNumber,
-      customerName: bill.customerName,
-      grandTotal: bill.grandTotal,
-      customerPhone: bill.customerPhone,
-      companyName: settings?.companyName || "My Business",
-      companyUpiId: settings?.upiId || null,
-      billUrl: `${window.location.origin}/api/bills/${bill.id}/public`,
-    });
-
-    if (didShare) {
-      showToast("Share flow opened", "success");
     }
   }
 
@@ -385,16 +340,6 @@ export default function BillDetailPage({
           </Card>
         </div>
       </div>
-
-      <BillActionBar bill={{
-        id: bill.id,
-        billNumber: bill.billNumber,
-        customerName: bill.customerName,
-        grandTotal: bill.grandTotal,
-        status: bill.status,
-        customerPhone: bill.customerPhone,
-        partyId: bill.partyId,
-      }} onShare={handleShare} />
 
       {/* Print-Only Professional Layout */}
       <div className="hidden print:block p-0 text-black">

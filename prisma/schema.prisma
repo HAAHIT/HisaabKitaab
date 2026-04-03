@@ -3,65 +3,25 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
-
-// ─── Multi-Tenant Foundation ─────────────────────────────────────────────────
-
-model Tenant {
-  id        String     @id @default(cuid())
-  name      String
-  slug      String     @unique
-  phone     String?
-  email     String?
-  address   String?
-  gstin     String?
-  logoUrl   String?
-  plan      TenantPlan @default(FREE)
-  settings  Json       @default("{}")
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-
-  users        User[]
-  bills        Bill[]
-  parties      Party[]
-  payments     Payment[]
-  templates    BillTemplate[]
-  items        ItemCatalog[]
-  journalEntries JournalEntry[]
-  measurements MeasurementUpload[]
-}
-
-enum TenantPlan {
-  FREE
-  PRO
-}
-
-// ─── Users & Auth ────────────────────────────────────────────────────────────
 
 model User {
-  id            String         @id @default(cuid())
-  tenantId      String
-  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  id            String              @id @default(cuid())
   name          String
-  email         String?
-  phone         String?
+  email         String?             @unique
+  phone         String?             @unique
   password      String
-  role          Role           @default(CUSTOMER)
-  isActive      Boolean        @default(true)
+  role          Role                @default(CUSTOMER)
+  isActive      Boolean             @default(true)
   createdBy     String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
   authThrottles AuthThrottle[]
   billsCreated  Bill[]
   measurements  MeasurementUpload[]
   payments      Payment[]
-
-  @@unique([tenantId, email])
-  @@unique([tenantId, phone])
-  @@index([tenantId])
 }
 
 model AuthThrottle {
@@ -82,12 +42,8 @@ model AuthThrottle {
   @@index([userId])
 }
 
-// ─── Billing ─────────────────────────────────────────────────────────────────
-
 model BillTemplate {
   id        String   @id @default(cuid())
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
   name      String
   columns   Json
   createdBy String
@@ -95,32 +51,11 @@ model BillTemplate {
   updatedAt DateTime @updatedAt
   isDeleted Boolean  @default(false)
   bills     Bill[]
-
-  @@index([tenantId])
-}
-
-model ItemCatalog {
-  id        String   @id @default(cuid())
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
-  name      String
-  hsnCode   String?
-  unit      String   @default("pcs")
-  rate      Float    @default(0)
-  taxRate   Float?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([tenantId])
-  @@index([tenantId, name])
 }
 
 model Bill {
   id              String       @id @default(cuid())
-  tenantId        String
-  tenant          Tenant       @relation(fields: [tenantId], references: [id])
-  billNumber      String
+  billNumber      String       @unique
   templateId      String
   customerName    String
   customerPhone   String?
@@ -143,19 +78,10 @@ model Bill {
   party           Party?       @relation(fields: [partyId], references: [id])
   template        BillTemplate @relation(fields: [templateId], references: [id])
   payments        Payment[]
-
-  @@unique([tenantId, billNumber])
-  @@index([tenantId])
-  @@index([tenantId, partyId])
-  @@index([tenantId, status])
 }
-
-// ─── Parties (Customers & Vendors) ──────────────────────────────────────────
 
 model Party {
   id             String              @id @default(cuid())
-  tenantId       String
-  tenant         Tenant              @relation(fields: [tenantId], references: [id])
   name           String
   type           PartyType
   phone          String?
@@ -172,17 +98,10 @@ model Party {
   bills          Bill[]
   measurements   MeasurementUpload[]
   payments       Payment[]
-
-  @@index([tenantId])
-  @@index([tenantId, type])
 }
-
-// ─── Payments ────────────────────────────────────────────────────────────────
 
 model Payment {
   id           String        @id @default(cuid())
-  tenantId     String
-  tenant       Tenant        @relation(fields: [tenantId], references: [id])
   partyId      String
   direction    PayDirection
   amount       Float
@@ -200,54 +119,7 @@ model Payment {
   creator      User          @relation(fields: [createdBy], references: [id])
   linkedBill   Bill?         @relation(fields: [linkedBillId], references: [id])
   party        Party         @relation(fields: [partyId], references: [id])
-
-  @@index([tenantId])
-  @@index([tenantId, partyId])
-  @@index([tenantId, direction])
 }
-
-model JournalEntry {
-  id          String       @id @default(cuid())
-  tenantId    String
-  tenant      Tenant       @relation(fields: [tenantId], references: [id])
-  entryDate   DateTime
-  narration   String
-  voucherType VoucherType
-  billId      String?
-  purchaseId  String?
-  paymentId   String?
-  lines       JournalLine[]
-  isBalanced  Boolean      @default(false)
-  totalDebit  Float        @default(0)
-  totalCredit Float        @default(0)
-  createdBy   String
-  createdAt   DateTime     @default(now())
-
-  @@index([tenantId])
-  @@index([tenantId, entryDate])
-  @@index([tenantId, voucherType])
-  @@index([billId])
-  @@index([purchaseId])
-  @@index([paymentId])
-}
-
-model JournalLine {
-  id          String       @id @default(cuid())
-  journalId   String
-  journal     JournalEntry @relation(fields: [journalId], references: [id], onDelete: Cascade)
-  accountCode String
-  accountName String
-  tallyGroup  String
-  partyId     String?
-  partyName   String?
-  debit       Float        @default(0)
-  credit      Float        @default(0)
-
-  @@index([journalId])
-  @@index([accountCode])
-}
-
-// ─── Media & Measurements ────────────────────────────────────────────────────
 
 model MediaAsset {
   id                String             @id @default(cuid())
@@ -259,6 +131,7 @@ model MediaAsset {
   originalName      String?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
+  companyLogoFor    CompanySettings[]  @relation("CompanyLogoAsset")
   measurementPhotos MeasurementPhoto[]
 }
 
@@ -277,8 +150,6 @@ model MeasurementPhoto {
 
 model MeasurementUpload {
   id           String             @id @default(cuid())
-  tenantId     String
-  tenant       Tenant             @relation(fields: [tenantId], references: [id])
   customerId   String
   label        String
   roomName     String?
@@ -295,27 +166,22 @@ model MeasurementUpload {
   photoAssets  MeasurementPhoto[]
   customer     User               @relation(fields: [customerId], references: [id])
   party        Party?             @relation(fields: [partyId], references: [id])
-
-  @@index([tenantId])
 }
 
-// ─── Company Settings (Tenant settings stored in Tenant.settings JSON) ───────
-// CompanySettings model has been REMOVED. Use tenant.settings JSON field:
-// {
-//   billPrefix: string       // default: "BILL"
-//   defaultTaxPercent: number // default: 18
-//   defaultTerms: string     // default: ""
-//   companyName: string
-//   companyPhone: string
-//   companyEmail: string
-//   companyAddress: string
-//   companyGstin: string
-//   upiId: string
-//   businessType: string
-//   taxRegistrationType: string
-// }
-
-// ─── Enums ───────────────────────────────────────────────────────────────────
+model CompanySettings {
+  id                 String      @id @default("default")
+  companyName        String      @default("")
+  companyAddress     String      @default("")
+  companyPhone       String      @default("")
+  companyEmail       String      @default("")
+  companyGstin       String      @default("")
+  companyLogoLegacy  String?     @map("companyLogo")
+  defaultTaxPercent  Float       @default(18)
+  defaultTerms       String      @default("")
+  billPrefix         String      @default("BILL")
+  companyLogoAssetId String?
+  companyLogoAsset   MediaAsset? @relation("CompanyLogoAsset", fields: [companyLogoAssetId], references: [id])
+}
 
 enum Role {
   ADMIN
@@ -357,14 +223,6 @@ enum PaymentStatus {
   COMPLETED
 }
 
-enum VoucherType {
-  SALES
-  PURCHASE
-  RECEIPT
-  PAYMENT
-  JOURNAL
-}
-
 enum MediaAssetKind {
   COMPANY_LOGO
   MEASUREMENT_PHOTO
@@ -377,6 +235,3 @@ enum MeasurementStatus {
   IN_PRODUCTION
   COMPLETED
 }
-
-
-

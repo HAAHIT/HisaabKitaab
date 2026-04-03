@@ -1,24 +1,33 @@
 import { prisma } from "@/lib/prisma";
-import { getTenantId } from "@/lib/tenant";
 import { NextRequest, NextResponse } from "next/server";
 
 const VALID_PARTY_TYPES = new Set(["CUSTOMER", "VENDOR"]);
 
 function normalizeOptionalString(value: unknown) {
-  if (typeof value !== "string") return null;
+  if (typeof value !== "string") {
+    return null;
+  }
+
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
 }
 
 function parseOpeningBalance(value: unknown) {
-  if (value === undefined || value === null || value === "") return 0;
+  if (value === undefined || value === null || value === "") {
+    return 0;
+  }
+
   const numericValue =
     typeof value === "number"
       ? value
       : typeof value === "string"
         ? Number.parseFloat(value)
         : Number.NaN;
-  if (!Number.isFinite(numericValue)) return null;
+
+  if (!Number.isFinite(numericValue)) {
+    return null;
+  }
+
   return Math.round(numericValue * 100) / 100;
 }
 
@@ -29,13 +38,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const tenantId = await getTenantId();
   const { searchParams } = new URL(request.url);
   const search = searchParams.get("search") || "";
   const type = searchParams.get("type") || "";
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = { tenantId, isActive: true, isDeleted: false };
+  const where: any = { isActive: true, isDeleted: false };
 
   if (search) {
     where.OR = [
@@ -69,7 +77,6 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const tenantId = await getTenantId();
     const body = await request.json();
     const { name, phone, email, address, gstin, type, openingBalance } = body;
     const normalizedName = normalizeOptionalString(name);
@@ -100,13 +107,12 @@ export async function POST(request: NextRequest) {
 
     const party = await prisma.party.create({
       data: {
-        tenantId,
         name: normalizedName,
         phone: normalizeOptionalString(phone),
         email: normalizeOptionalString(email),
         address: normalizeOptionalString(address),
         gstin: normalizeOptionalString(gstin),
-        type: normalizedType as any,
+        type: normalizedType,
         openingBalance: normalizedOpeningBalance,
         currentBalance: normalizedOpeningBalance,
         createdBy: userId!,

@@ -3,26 +3,9 @@ import { jwtVerify } from "jose";
 import { getJwtSecret } from "@/lib/jwt-secret";
 import { attachRequestIdHeader, logError } from "@/lib/observability";
 
-const PUBLIC_PATHS = [
-  "/login",
-  "/api/auth/login",
-  "/api/preferences/language",
-  "/api/health",
-  "/api/bills/*/public",
-];
+const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/health"];
 
-function isPublicPath(pathname: string) {
-  return PUBLIC_PATHS.some((pattern) => {
-    if (pattern.includes("*")) {
-      const regex = new RegExp(`^${pattern.replace(/\*/g, "[^/]+")}$`);
-      return regex.test(pathname);
-    }
-
-    return pathname.startsWith(pattern);
-  });
-}
-
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const requestId = request.headers.get("x-request-id")?.trim() || crypto.randomUUID();
   const requestHeaders = new Headers(request.headers);
@@ -47,7 +30,7 @@ export async function proxy(request: NextRequest) {
   try {
     jwtSecret = getJwtSecret();
   } catch (error) {
-    logError("proxy.auth.misconfigured", {
+    logError("middleware.auth.misconfigured", {
       requestId,
       pathname,
       error,
@@ -59,7 +42,7 @@ export async function proxy(request: NextRequest) {
   }
 
   if (
-    isPublicPath(pathname) ||
+    PUBLIC_PATHS.some((p) => pathname.startsWith(p)) ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
     pathname.includes(".")
@@ -80,7 +63,6 @@ export async function proxy(request: NextRequest) {
     requestHeaders.set("x-user-id", payload.userId as string);
     requestHeaders.set("x-user-role", payload.role as string);
     requestHeaders.set("x-user-name", payload.name as string);
-    requestHeaders.set("x-tenant-id", process.env.DEFAULT_TENANT_ID || "");
 
     const role = payload.role as string;
 
@@ -100,15 +82,6 @@ export async function proxy(request: NextRequest) {
     }
 
     if (pathname.startsWith("/settings") && role !== "ADMIN") {
-      const redirectUrl = new URL("/dashboard", request.url);
-      return redirectWithRequestId(redirectUrl);
-    }
-
-    if (
-      pathname.startsWith("/reports") &&
-      role !== "ADMIN" &&
-      role !== "ACCOUNTANT"
-    ) {
       const redirectUrl = new URL("/dashboard", request.url);
       return redirectWithRequestId(redirectUrl);
     }

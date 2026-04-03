@@ -1,7 +1,6 @@
 import { Role } from "@prisma/client";
 import { hashPassword } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getTenantId } from "@/lib/tenant";
 import { NextRequest, NextResponse } from "next/server";
 
 const VALID_ROLES = new Set(Object.values(Role));
@@ -51,8 +50,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const tenantId = await getTenantId();
-
   try {
     const body = await request.json();
     const name = typeof body.name === "string" ? body.name.trim() : "";
@@ -93,7 +90,7 @@ export async function POST(request: NextRequest) {
 
     // Check for duplicates
     if (email) {
-      const existing = await prisma.user.findUnique({ where: { tenantId_email: { tenantId, email } } });
+      const existing = await prisma.user.findUnique({ where: { email } });
       if (existing) {
         return NextResponse.json(
           { error: "A user with this email already exists" },
@@ -102,7 +99,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const existingPhone = await prisma.user.findUnique({ where: { tenantId_phone: { tenantId, phone } } });
+    const existingPhone = await prisma.user.findUnique({ where: { phone } });
     if (existingPhone) {
       return NextResponse.json(
         { error: "A user with this phone already exists" },
@@ -114,7 +111,6 @@ export async function POST(request: NextRequest) {
 
     const user = await prisma.user.create({
       data: {
-        tenantId,
         name,
         email: email || null,
         phone,

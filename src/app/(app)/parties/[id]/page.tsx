@@ -58,7 +58,6 @@ export default async function PartyProfilePage({
 
   return (
     <PartyProfileClient
-      partyId={party.id}
       party={party}
       ledger={ledger}
       measurements={measurements}

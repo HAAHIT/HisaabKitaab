@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import { getTenantId } from "@/lib/tenant";
 import { NextRequest, NextResponse } from "next/server";
 
 // GET /api/dashboard — Dashboard aggregated data
@@ -10,7 +9,6 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const tenantId = await getTenantId();
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -27,7 +25,6 @@ export async function GET(request: NextRequest) {
       // Total receivable (customers who still owe us, negative balance)
       prisma.party.aggregate({
         where: {
-          tenantId,
           type: "CUSTOMER",
           currentBalance: { lt: 0 },
           isActive: true,
@@ -38,7 +35,6 @@ export async function GET(request: NextRequest) {
       // Total payable (vendors we still owe, negative balance)
       prisma.party.aggregate({
         where: {
-          tenantId,
           type: "VENDOR",
           currentBalance: { lt: 0 },
           isActive: true,
@@ -49,7 +45,6 @@ export async function GET(request: NextRequest) {
       // Payments this month (only completed)
       prisma.payment.aggregate({
         where: {
-          tenantId,
           direction: "INCOMING",
           status: "COMPLETED",
           date: { gte: monthStart, lte: monthEnd },
@@ -58,7 +53,7 @@ export async function GET(request: NextRequest) {
       }),
       // Recent payments (last 5, completed only)
       prisma.payment.findMany({
-        where: { tenantId, status: "COMPLETED" },
+        where: { status: "COMPLETED" },
         orderBy: { date: "desc" },
         take: 5,
         include: { party: { select: { name: true, type: true } } },
@@ -66,7 +61,6 @@ export async function GET(request: NextRequest) {
       // Overdue count (parties with outstanding balance and no payment in 30 days)
       prisma.party.count({
         where: {
-          tenantId,
           currentBalance: { lt: 0 },
           isActive: true,
           isDeleted: false,
@@ -81,7 +75,6 @@ export async function GET(request: NextRequest) {
       // Bill stats
       prisma.bill.groupBy({
         by: ["status"],
-        where: { tenantId, isDeleted: false },
         _count: true,
         _sum: { grandTotal: true },
       }),
@@ -95,11 +88,11 @@ export async function GET(request: NextRequest) {
 
       const [received, paid] = await Promise.all([
         prisma.payment.aggregate({
-          where: { tenantId, direction: "INCOMING", status: "COMPLETED", date: { gte: mStart, lte: mEnd } },
+          where: { direction: "INCOMING", status: "COMPLETED", date: { gte: mStart, lte: mEnd } },
           _sum: { amount: true },
         }),
         prisma.payment.aggregate({
-          where: { tenantId, direction: "OUTGOING", status: "COMPLETED", date: { gte: mStart, lte: mEnd } },
+          where: { direction: "OUTGOING", status: "COMPLETED", date: { gte: mStart, lte: mEnd } },
           _sum: { amount: true },
         }),
       ]);

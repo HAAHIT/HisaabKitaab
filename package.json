@@ -10,7 +10,6 @@
     "db:push": "npx prisma db push",
     "db:seed": "npx prisma db seed",
     "db:studio": "npx prisma studio",
-    "journal:backfill": "npx tsx scripts/backfill-journal.ts",
     "media:migrate": "npx tsx scripts/migrate-legacy-media.ts",
     "postinstall": "prisma generate",
     "test": "vitest"
