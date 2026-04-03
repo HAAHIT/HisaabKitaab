@@ -1,7 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import type { PartyType } from "@prisma/client";
 
-const VALID_PARTY_TYPES = new Set(["CUSTOMER", "VENDOR"]);
+const VALID_PARTY_TYPES = new Set<PartyType>(["CUSTOMER", "VENDOR"]);
+
+function isPartyType(value: string | undefined): value is PartyType {
+  return Boolean(value && VALID_PARTY_TYPES.has(value as PartyType));
+}
 
 function normalizeOptionalString(value: unknown) {
   if (typeof value !== "string") {
@@ -91,7 +96,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!VALID_PARTY_TYPES.has(normalizedType)) {
+    if (!isPartyType(normalizedType)) {
       return NextResponse.json(
         { error: "Invalid party type" },
         { status: 400 }

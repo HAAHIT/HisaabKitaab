@@ -3,9 +3,7 @@ import { randomUUID } from "crypto";
 import { mkdir, readFile, unlink, writeFile } from "fs/promises";
 import path from "path";
 
-const STORAGE_ROOT = path.resolve(
-  process.env.STORAGE_ROOT || path.join(process.cwd(), ".storage")
-);
+const STORAGE_ROOT = path.resolve(process.env.STORAGE_ROOT || ".storage");
 const OBJECT_STORAGE_PROVIDER = (
   process.env.OBJECT_STORAGE_PROVIDER || "local"
 ).trim().toLowerCase();

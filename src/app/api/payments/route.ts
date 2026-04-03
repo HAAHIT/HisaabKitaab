@@ -161,6 +161,10 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      if (!resolvedPartyId) {
+        throw new Error("Party not found");
+      }
+
       const party = await tx.party.findFirst({
         where: {
           id: resolvedPartyId,

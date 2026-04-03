@@ -11,6 +11,10 @@ import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
+type MeasurementPhotoAssetCreateInput =
+  | Awaited<ReturnType<typeof buildMediaAssetCreateInputFromFile>>
+  | Awaited<ReturnType<typeof buildMediaAssetCreateInputFromLegacyUrl>>;
+
 function parseOptionalString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
@@ -56,9 +60,7 @@ async function buildPhotoAssetInputs({
   files: File[];
   legacyPhotoUrls: string[];
 }) {
-  const assets: Array<
-    Awaited<ReturnType<typeof buildMediaAssetCreateInputFromFile>>
-  > = [];
+  const assets: MeasurementPhotoAssetCreateInput[] = [];
 
   try {
     if (files.length > 0) {
@@ -174,9 +176,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let photoAssets: Array<
-    Awaited<ReturnType<typeof buildMediaAssetCreateInputFromFile>>
-  > = [];
+  let photoAssets: MeasurementPhotoAssetCreateInput[] = [];
 
   try {
     const payload = await readMeasurementPayload(request);
