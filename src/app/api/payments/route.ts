@@ -8,6 +8,16 @@ import {
 const VALID_DIRECTIONS = new Set(["INCOMING", "OUTGOING"]);
 const VALID_MODES = new Set(["CASH", "UPI", "BANK_TRANSFER", "CHEQUE"]);
 
+function resolveTenantId(request: NextRequest) {
+  const headerTenantId = request.headers.get("x-tenant-id")?.trim();
+  if (headerTenantId) {
+    return headerTenantId;
+  }
+
+  const defaultTenantId = process.env.DEFAULT_TENANT_ID?.trim();
+  return defaultTenantId || null;
+}
+
 function parsePaymentAmount(value: unknown) {
   const numericValue =
     typeof value === "number"
@@ -89,21 +99,35 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const role = request.headers.get("x-user-role");
   const userId = request.headers.get("x-user-id");
+  const tenantId = resolveTenantId(request);
 
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!userId) {
+    return NextResponse.json({ error: "Missing user context" }, { status: 401 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: "Tenant context missing. Set x-tenant-id or DEFAULT_TENANT_ID." },
+      { status: 500 }
+    );
   }
 
   try {
     const body = await request.json();
     const { partyId, amount, type, mode, date, notes, billId, status } = body;
     const normalizedAmount = parsePaymentAmount(amount);
+    const paymentDate = date ? new Date(date) : new Date();
 
     if ((!partyId && !billId) || !normalizedAmount || !type || !mode) {
       return NextResponse.json(
         { error: "Party or linked bill, amount, type, and mode are required" },
         { status: 400 }
       );
+    }
+    if (Number.isNaN(paymentDate.getTime())) {
+      return NextResponse.json({ error: "Invalid payment date" }, { status: 400 });
     }
 
     if (!VALID_DIRECTIONS.has(type)) {
@@ -178,23 +202,53 @@ export async function POST(request: NextRequest) {
         throw new Error("Party not found");
       }
 
-      const newPayment = await tx.payment.create({
-        data: {
-          partyId: party.id,
-          amount: normalizedAmount,
-          direction: type,
-          mode,
-          status: paymentStatus,
-          date: date ? new Date(date) : new Date(),
-          notes: notes || null,
-          linkedBillId: resolvedBillId,
-          createdBy: userId!,
-        },
+      const paymentId = crypto.randomUUID();
+      await tx.$executeRaw`
+        INSERT INTO "Payment" (
+          "id",
+          "tenantId",
+          "partyId",
+          "direction",
+          "amount",
+          "date",
+          "mode",
+          "status",
+          "linkedBillId",
+          "notes",
+          "createdBy",
+          "createdAt",
+          "isDeleted",
+          "updatedAt"
+        )
+        VALUES (
+          ${paymentId},
+          ${tenantId},
+          ${party.id},
+          ${type}::"PayDirection",
+          ${normalizedAmount},
+          ${paymentDate},
+          ${mode}::"PaymentMode",
+          ${paymentStatus}::"PaymentStatus",
+          ${resolvedBillId},
+          ${notes || null},
+          ${userId},
+          NOW(),
+          false,
+          NOW()
+        )
+      `;
+
+      const newPayment = await tx.payment.findUnique({
+        where: { id: paymentId },
         include: {
           party: { select: { name: true, type: true } },
           linkedBill: { select: { id: true, billNumber: true } },
         },
       });
+
+      if (!newPayment) {
+        throw new Error("Failed to create payment");
+      }
 
       if (paymentStatus === "COMPLETED") {
         const balanceChange = getPaymentBalanceDelta(
