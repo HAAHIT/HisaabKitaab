@@ -43,6 +43,7 @@ For developers joining the project, please review the following documents in ord
     - `DATABASE_URL` (PostgreSQL)
     - `GEMINI_API_KEY` (for OCR features)
     - `DEFAULT_TENANT_ID` (obtained after running step 3)
+    - `NEXT_PUBLIC_FEATURE_MEASUREMENTS_UI` (optional, defaults to `true`; set to `false` to hide measurement navigation in UI)
 
 3.  **Database Initial Setup**:
     ```bash

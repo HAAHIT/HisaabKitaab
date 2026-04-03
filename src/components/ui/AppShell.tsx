@@ -14,6 +14,7 @@ import {
 import { ThemeSwitcher } from "./ThemeSwitcher";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { TranslationKey } from "@/lib/i18n/translations";
+import { FEATURE_FLAGS, type FeatureFlagKey } from "@/lib/feature-flags";
 
 interface UserSession {
   userId: string;
@@ -28,6 +29,7 @@ interface NavItem {
   translationKey: TranslationKey;
   href: string;
   roles: string[];
+  featureFlag?: FeatureFlagKey;
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -80,6 +82,7 @@ const NAV_ITEMS: NavItem[] = [
     translationKey: "nav.measures",
     href: "/measurements",
     roles: ["ADMIN", "STAFF"],
+    featureFlag: "measurementsUi",
   },
 ];
 
@@ -93,6 +96,7 @@ const CUSTOMER_NAV: NavItem[] = [
     translationKey: "nav.upload",
     href: "/measurements/upload",
     roles: ["CUSTOMER"],
+    featureFlag: "measurementsUi",
   },
   {
     icon: (
@@ -103,6 +107,7 @@ const CUSTOMER_NAV: NavItem[] = [
     translationKey: "nav.myuploads",
     href: "/measurements/my-uploads",
     roles: ["CUSTOMER"],
+    featureFlag: "measurementsUi",
   },
 ];
 
@@ -129,7 +134,8 @@ export default function AppShell({
   const navItems = useMemo(
     () =>
       (user.role === "CUSTOMER" ? CUSTOMER_NAV : NAV_ITEMS).filter((item) =>
-        item.roles.includes(user.role)
+        item.roles.includes(user.role) &&
+        (!item.featureFlag || FEATURE_FLAGS[item.featureFlag])
       ),
     [user.role]
   );
