@@ -105,7 +105,7 @@ async function main() {
     where: {
       tenantId_email: {
         tenantId: tenant.id,
-        email: "admin@doorcraft.com",
+        email: "admin@hisaabkitaab.com",
       },
     },
     update: {
@@ -118,7 +118,7 @@ async function main() {
     create: {
       tenantId: tenant.id,
       name: "Suraj Admin",
-      email: "admin@doorcraft.com",
+      email: "admin@hisaabkitaab.com",
       phone: "9999999999",
       password: adminPassword,
       role: "ADMIN",
@@ -130,7 +130,7 @@ async function main() {
   const existingTemplate = await prisma.billTemplate.findFirst({
     where: {
       tenantId: tenant.id,
-      name: "Door Order Invoice",
+      name: "Order Invoice",
       isDeleted: false,
     },
     orderBy: { createdAt: "asc" },
@@ -140,7 +140,7 @@ async function main() {
     (await prisma.billTemplate.create({
       data: {
         tenantId: tenant.id,
-        name: "Door Order Invoice",
+        name: "Order Invoice",
         createdBy: admin.id,
         columns: [
           { id: "desc-col-001", name: "Description", type: "text", position: 0 },
@@ -203,7 +203,7 @@ async function main() {
     where: {
       tenantId_email: {
         tenantId: tenant.id,
-        email: "staff@doorcraft.com",
+        email: "staff@hisaabkitaab.com",
       },
     },
     update: {
@@ -217,14 +217,14 @@ async function main() {
     create: {
       tenantId: tenant.id,
       name: "Ravi Staff",
-      email: "staff@doorcraft.com",
+      email: "staff@hisaabkitaab.com",
       phone: "8888888888",
       password: staffPassword,
       role: "STAFF",
       createdBy: admin.id,
     },
   });
-  console.log("✅ Staff user created: staff@doorcraft.com");
+  console.log("✅ Staff user created: staff@hisaabkitaab.com");
 
   // ── Sample Customer user ────────────────────────────
   const custPassword = await bcrypt.hash(

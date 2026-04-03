@@ -183,11 +183,11 @@ export const translations = {
       "Images are compressed automatically before upload or local save.",
     "measurements.details": "Details",
     "measurements.label": "Label",
-    "measurements.labelPlaceholder": "e.g. Main Door, Room 2 Window",
+    "measurements.labelPlaceholder": "e.g. Main Window, Room 2",
     "measurements.roomName": "Room Name",
     "measurements.roomPlaceholder": "e.g. Master Bedroom, Kitchen",
-    "measurements.doorType": "Door Type",
-    "measurements.doorTypePlaceholder": "Select door type",
+    "measurements.itemType": "Item Type",
+    "measurements.itemTypePlaceholder": "Select item type",
     "measurements.notes": "Notes",
     "measurements.notesPlaceholder":
       "Any special instructions, dimensions, or details...",
@@ -204,7 +204,7 @@ export const translations = {
     "measurements.newUpload": "New Upload",
     "measurements.noUploads": "No uploads yet",
     "measurements.noUploadsSubtitle":
-      "Upload photos of doors and measurements so the factory team can review them.",
+      "Upload photos and measurements so the factory team can review them.",
     "measurements.firstUpload": "Upload Your First Measurement",
     "measurements.pendingDeviceTitle": "Pending On This Device",
     "measurements.pendingDeviceSubtitle":
@@ -222,7 +222,7 @@ export const translations = {
     "company.businessLogo": "Business Logo",
     "company.billingDefaults": "Billing Defaults",
     "company.companyName": "Company Name",
-    "company.companyNamePlaceholder": "DoorCraft Manufacturing",
+    "company.companyNamePlaceholder": "HisaabKitaab",
     "company.companyPhone": "Phone Number",
     "company.companyPhonePlaceholder": "Contact number",
     "company.companyEmail": "Email Address",
@@ -305,7 +305,7 @@ export const translations = {
     "templates.createSubtitle": "Define columns for your invoice layout",
     "templates.columns": "Columns",
     "templates.templateName": "Template Name",
-    "templates.templateNamePlaceholder": "e.g. Door Order Invoice",
+    "templates.templateNamePlaceholder": "e.g. Order Invoice",
     "templates.columnName": "Column Name",
     "templates.columnNamePlaceholder": "e.g. Qty, Rate, Amount",
     "templates.type": "Type",
@@ -322,7 +322,7 @@ export const translations = {
     "templates.noPreviousColumns":
       "No previous columns defined yet. Add columns above to use them in formulas.",
     "templates.dropdownOptions": "Dropdown Options",
-    "templates.dropdownPlaceholder": "e.g. Main Door, Internal, Sliding",
+    "templates.dropdownPlaceholder": "e.g. Main, Internal, Sliding",
     "templates.dropdownDescription":
       "Separate options with commas. Example: Option 1, Option 2",
     "templates.addColumn": "Add Another Column",
@@ -512,8 +512,8 @@ export const translations = {
     "measurements.labelPlaceholder": "जैसे मुख्य दरवाज़ा, कमरा 2 खिड़की",
     "measurements.roomName": "कमरे का नाम",
     "measurements.roomPlaceholder": "जैसे मास्टर बेडरूम, किचन",
-    "measurements.doorType": "दरवाज़े का प्रकार",
-    "measurements.doorTypePlaceholder": "दरवाज़े का प्रकार चुनें",
+    "measurements.itemType": "वस्तु का प्रकार",
+    "measurements.itemTypePlaceholder": "वस्तु का प्रकार चुनें",
     "measurements.notes": "नोट्स",
     "measurements.notesPlaceholder":
       "कोई विशेष निर्देश, माप या विवरण...",
@@ -548,7 +548,7 @@ export const translations = {
     "company.businessLogo": "व्यवसाय लोगो",
     "company.billingDefaults": "बिलिंग डिफॉल्ट",
     "company.companyName": "कंपनी का नाम",
-    "company.companyNamePlaceholder": "DoorCraft Manufacturing",
+    "company.companyNamePlaceholder": "HisaabKitaab",
     "company.companyPhone": "फोन नंबर",
     "company.companyPhonePlaceholder": "संपर्क नंबर",
     "company.companyEmail": "ईमेल पता",
@@ -631,7 +631,7 @@ export const translations = {
     "templates.createSubtitle": "अपने इनवॉइस लेआउट के लिए कॉलम तय करें",
     "templates.columns": "कॉलम",
     "templates.templateName": "टेम्पलेट नाम",
-    "templates.templateNamePlaceholder": "जैसे Door Order Invoice",
+    "templates.templateNamePlaceholder": "जैसे Order Invoice",
     "templates.columnName": "कॉलम नाम",
     "templates.columnNamePlaceholder": "जैसे Qty, Rate, Amount",
     "templates.type": "प्रकार",
@@ -648,7 +648,7 @@ export const translations = {
     "templates.noPreviousColumns":
       "अभी कोई पिछला कॉलम तय नहीं है। फ़ॉर्मूला में उपयोग के लिए ऊपर कॉलम जोड़ें।",
     "templates.dropdownOptions": "ड्रॉपडाउन विकल्प",
-    "templates.dropdownPlaceholder": "जैसे Main Door, Internal, Sliding",
+    "templates.dropdownPlaceholder": "जैसे Main, Internal, Sliding",
     "templates.dropdownDescription":
       "विकल्पों को कॉमा से अलग करें। उदाहरण: विकल्प 1, विकल्प 2",
     "templates.addColumn": "एक और कॉलम जोड़ें",
@@ -657,8 +657,8 @@ export const translations = {
 } as const;
 
 export const DEFAULT_LANGUAGE: Language = "en";
-export const LANGUAGE_COOKIE_NAME = "doorcraft-language";
-export const LANGUAGE_STORAGE_KEY = "doorcraft-language-pref";
+export const LANGUAGE_COOKIE_NAME = "hisaabkitaab-language";
+export const LANGUAGE_STORAGE_KEY = "hisaabkitaab-language-pref";
 
 export type TranslationKey = keyof typeof translations.en;
 

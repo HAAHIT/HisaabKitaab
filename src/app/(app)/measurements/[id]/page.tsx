@@ -18,7 +18,7 @@ interface Measurement {
   id: string;
   label: string;
   roomName: string | null;
-  doorType: string | null;
+  itemType: string | null;
   notes: string | null;
   photos: { url: string }[];
   status: string;
@@ -243,8 +243,8 @@ export default function MeasurementDetailPage({
                   <p className="font-medium">{data.roomName || "-"}</p>
                 </div>
                 <div>
-                  <span className="text-default-400">Door Type</span>
-                  <p className="font-medium">{data.doorType || "-"}</p>
+                  <span className="text-default-400">Item Type</span>
+                  <p className="font-medium">{data.itemType || "-"}</p>
                 </div>
               </div>
               <div>

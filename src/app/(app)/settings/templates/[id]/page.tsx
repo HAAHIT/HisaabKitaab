@@ -264,7 +264,7 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
         <CardBody className="p-6">
           <Input
             label="Template Name"
-            placeholder="e.g. Door Order Invoice"
+            placeholder="e.g. Order Invoice"
             value={name}
             onValueChange={setName}
             variant="bordered"
@@ -400,7 +400,7 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
                     </p>
                     <Input
                       aria-label="Dropdown options"
-                      placeholder="e.g. Main Door, Internal, Sliding"
+                      placeholder="e.g. Main, Internal, Sliding"
                       value={(col.options || []).join(",")}
                       onValueChange={(v) => {
                         const newCols = [...columns];

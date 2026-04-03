@@ -14,9 +14,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "HisaabKitaab — Door Manufacturing Management",
+  title: "HisaabKitaab — Manufacturing Management",
   description:
-    "Manage bills, payments, and measurements for your door manufacturing business.",
+    "Manage bills, payments, and measurements for your manufacturing business.",
   icons: { icon: "/favicon.ico" },
 };
 

@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { getJwtSecret } from "@/lib/jwt-secret";
 
-const COOKIE_NAME = "doorcraft-session";
+const COOKIE_NAME = "hisaabkitaab-session";
 const SESSION_DURATION = 7 * 24 * 60 * 60; // 7 days in seconds
 
 export interface SessionPayload {

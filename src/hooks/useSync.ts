@@ -46,7 +46,7 @@ export function useSync() {
             body: buildMeasurementUploadFormData({
               label: draft.label,
               roomName: draft.roomName,
-              doorType: draft.doorType,
+              itemType: draft.itemType,
               notes: draft.notes,
               photos: draft.photos,
             }),

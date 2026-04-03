@@ -61,7 +61,7 @@ describe("tenant isolation for critical mutations", () => {
       {
         templateId: "tmpl-shared",
         partyId: "party-1",
-        rows: [{ item: "Door", qty: 1 }],
+        rows: [{ item: "Item", qty: 1 }],
       }
     );
 

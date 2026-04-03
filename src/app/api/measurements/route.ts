@@ -31,7 +31,7 @@ async function readMeasurementPayload(request: NextRequest) {
     return {
       label: parseOptionalString(formData.get("label")),
       roomName: parseOptionalString(formData.get("roomName")),
-      doorType: parseOptionalString(formData.get("doorType")),
+      itemType: parseOptionalString(formData.get("itemType")),
       notes: parseOptionalString(formData.get("notes")),
       partyId: parseOptionalString(formData.get("partyId")),
       files: formData
@@ -45,7 +45,7 @@ async function readMeasurementPayload(request: NextRequest) {
   return {
     label: parseOptionalString(body.label),
     roomName: parseOptionalString(body.roomName),
-    doorType: parseOptionalString(body.doorType),
+    itemType: parseOptionalString(body.itemType),
     notes: parseOptionalString(body.notes),
     partyId: parseOptionalString(body.partyId),
     files: [] as File[],
@@ -161,7 +161,7 @@ export async function GET(request: NextRequest) {
     where.OR = [
       { label: { contains: search, mode: "insensitive" } },
       { roomName: { contains: search, mode: "insensitive" } },
-      { doorType: { contains: search, mode: "insensitive" } },
+      { itemType: { contains: search, mode: "insensitive" } },
       { customer: { name: { contains: search, mode: "insensitive" } } },
       { party: { name: { contains: search, mode: "insensitive" } } },
     ];
@@ -254,7 +254,7 @@ export async function POST(request: NextRequest) {
           "partyId",
           "label",
           "roomName",
-          "doorType",
+          "itemType",
           "notes",
           "photos",
           "status",
@@ -269,7 +269,7 @@ export async function POST(request: NextRequest) {
           ${resolvedPartyId},
           ${label},
           ${payload.roomName},
-          ${payload.doorType},
+          ${payload.itemType},
           ${payload.notes},
           ${JSON.stringify([])}::jsonb,
           'UPLOADED'::"MeasurementStatus",

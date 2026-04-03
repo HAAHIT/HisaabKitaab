@@ -62,7 +62,7 @@ export async function proxy(request: NextRequest) {
     return nextWithRequestHeaders();
   }
 
-  const token = request.cookies.get("doorcraft-session")?.value;
+  const token = request.cookies.get("hisaabkitaab-session")?.value;
 
   if (!token) {
     const loginUrl = new URL("/login", request.url);
@@ -109,7 +109,7 @@ export async function proxy(request: NextRequest) {
   } catch {
     const loginUrl = new URL("/login", request.url);
     const response = redirectWithRequestId(loginUrl);
-    response.cookies.delete("doorcraft-session");
+    response.cookies.delete("hisaabkitaab-session");
     return response;
   }
 }

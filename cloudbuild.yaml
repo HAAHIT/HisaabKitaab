@@ -8,8 +8,8 @@ substitutions:
   _MIGRATOR_JOB_NAME: hisaabkitaab-migrate
   _SERVICE_ACCOUNT: hisaabkitaab-runner
   _CLOUDSQL_INSTANCE: CHANGE_ME
-  _DATABASE_URL_SECRET: doorcraft-database-url
-  _JWT_SECRET_SECRET: doorcraft-jwt-secret
+  _DATABASE_URL_SECRET: hisaabkitaab-database-url
+  _JWT_SECRET_SECRET: hisaabkitaab-jwt-secret
   _GCS_BUCKET_NAME: CHANGE_ME
   _CPU: "1"
   _MEMORY: 1Gi

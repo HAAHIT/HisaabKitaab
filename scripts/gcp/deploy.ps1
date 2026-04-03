@@ -6,8 +6,8 @@ param(
   [string]$MigratorJobName = "hisaabkitaab-migrate",
   [string]$ServiceAccount = "hisaabkitaab-runner",
   [string]$CloudSqlInstance,
-  [string]$DatabaseUrlSecret = "doorcraft-database-url",
-  [string]$JwtSecretSecret = "doorcraft-jwt-secret",
+  [string]$DatabaseUrlSecret = "hisaabkitaab-database-url",
+  [string]$JwtSecretSecret = "hisaabkitaab-jwt-secret",
   [string]$GcsBucketName,
   [string]$Cpu = "1",
   [string]$Memory = "1Gi",
@@ -21,7 +21,7 @@ if (-not $ProjectId) {
 }
 
 if (-not $CloudSqlInstance) {
-  throw "CloudSqlInstance is required. Example: my-project:asia-south1:doorcraft-db"
+  throw "CloudSqlInstance is required. Example: my-project:asia-south1:hisaabkitaab-db"
 }
 
 if (-not $GcsBucketName) {

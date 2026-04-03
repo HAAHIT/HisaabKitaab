@@ -21,14 +21,14 @@ function dataUrlToFile(dataUrl: string, fileName: string) {
 export function buildMeasurementUploadFormData({
   label,
   roomName,
-  doorType,
+  itemType,
   notes,
   photos,
   partyId,
 }: {
   label: string;
   roomName?: string | null;
-  doorType?: string | null;
+  itemType?: string | null;
   notes?: string | null;
   photos: string[];
   partyId?: string | null;
@@ -39,8 +39,8 @@ export function buildMeasurementUploadFormData({
   if (roomName?.trim()) {
     formData.set("roomName", roomName.trim());
   }
-  if (doorType?.trim()) {
-    formData.set("doorType", doorType.trim());
+  if (itemType?.trim()) {
+    formData.set("itemType", itemType.trim());
   }
   if (notes?.trim()) {
     formData.set("notes", notes.trim());

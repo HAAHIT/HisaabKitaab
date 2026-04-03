@@ -1,7 +1,7 @@
 # MSME Bookkeeping Platform — Epic Breakdown (Part 1/2)
 
 > **Audience**: Starter-level developer. Every instruction is exact.  
-> **Codebase**: `d:\Sadhguru Door\hisaabkitaab` (Next.js 16 + HeroUI + Prisma + PostgreSQL)  
+> **Codebase**: `hisaabkitaab` (Next.js 16 + HeroUI + Prisma + PostgreSQL)
 > **Naming**: The product is referred to as **"HisaabKitaab"** internally. The existing branding ("HisaabKitaab") stays in code until Epic 2 completes.
 
 ---

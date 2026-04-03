@@ -180,7 +180,7 @@ model MeasurementUpload {
   customerId   String
   label        String
   roomName     String?
-  doorType     String?
+  itemType     String?
   notes        String?
   photosLegacy Json               @map("photos")
   status       MeasurementStatus  @default(UPLOADED)
