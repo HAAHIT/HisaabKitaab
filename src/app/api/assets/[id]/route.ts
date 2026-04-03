@@ -58,10 +58,10 @@ export async function GET(
 
   try {
     const fileBuffer = await readStoredObject(
-      asset.storageProvider as "local" | "gcs",
+      asset.storageProvider,
       asset.storageKey
     );
-    return new NextResponse(fileBuffer as any, {
+    return new NextResponse(fileBuffer, {
       headers: {
         "Content-Type": asset.mimeType,
         "Cache-Control": "private, max-age=3600",

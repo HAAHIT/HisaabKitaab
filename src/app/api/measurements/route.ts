@@ -8,7 +8,6 @@ import {
 } from "@/lib/media";
 import { findUniqueCustomerPartyIdForUser } from "@/lib/party-relations";
 import { prisma } from "@/lib/prisma";
-import { getTenantId } from "@/lib/tenant";
 
 export const runtime = "nodejs";
 
@@ -86,12 +85,12 @@ async function buildPhotoAssetInputs({
 
     for (let index = 0; index < legacyPhotoUrls.length; index += 1) {
       assets.push(
-        (await buildMediaAssetCreateInputFromLegacyUrl({
+        await buildMediaAssetCreateInputFromLegacyUrl({
           url: legacyPhotoUrls[index],
           kind: "MEASUREMENT_PHOTO",
           namespace: "measurement-photos",
           originalName: `measurement-${index + 1}`,
-        })) as any
+        })
       );
     }
 
@@ -175,8 +174,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const tenantId = await getTenantId();
-  let photoAssets: any[] = [];
+  let photoAssets: Array<
+    Awaited<ReturnType<typeof buildMediaAssetCreateInputFromFile>>
+  > = [];
 
   try {
     const payload = await readMeasurementPayload(request);
@@ -223,7 +223,6 @@ export async function POST(request: NextRequest) {
 
       return tx.measurementUpload.create({
         data: {
-          tenantId,
           customerId: userId,
           partyId: resolvedPartyId ?? undefined,
           label,

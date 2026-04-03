@@ -1,69 +1,80 @@
-import { cookies } from "next/headers";
+"use client";
+
+import { useState } from "react";
 import {
-  getTranslation,
-  LANGUAGE_COOKIE_NAME,
-  normalizeLanguage,
-  type Language,
-  type TranslationKey,
-} from "@/lib/i18n/translations";
+  Card,
+  CardBody,
+  CardHeader,
+  Input,
+  Button,
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Divider,
+} from "@heroui/react";
+import { useRouter } from "next/navigation";
+import { useLanguage } from "@/contexts/LanguageContext";
 
-type LoginSearchParams = {
-  error?: string | string[] | undefined;
-};
+export default function LoginPage() {
+  const router = useRouter();
+  const { t, language, setLanguage } = useLanguage();
+  const [credential, setCredential] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [showForgot, setShowForgot] = useState(false);
 
-function firstValue(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] : value;
-}
+  const isFormValid = credential.trim() !== "" && password.trim() !== "";
 
-function getErrorMessage(language: Language, errorCode: string | undefined) {
-  const errorMessages: Record<string, TranslationKey> = {
-    missing_credentials: "login.emailPasswordRequired",
-    invalid_credentials: "login.invalidCredentials",
-    throttled: "login.tooManyAttempts",
-    server_error: "login.serverError",
-  };
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
 
-  const key = errorCode ? errorMessages[errorCode] : undefined;
-  return key ? getTranslation(language, key) : "";
-}
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ credential, password }),
+      });
 
-function getSafeReturnPath(pathname: string) {
-  if (!pathname.startsWith("/") || pathname.startsWith("//")) {
-    return "/login";
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || t("login.loginFailed"));
+        setLoading(false);
+        return;
+      }
+
+      // Role-based redirect
+      if (data.user.role === "CUSTOMER") {
+        router.push("/measurements/upload");
+      } else {
+        router.push("/dashboard");
+      }
+    } catch {
+      setError(t("login.networkError"));
+      setLoading(false);
+    }
   }
 
-  return pathname;
-}
-
-export default async function LoginPage({
-  searchParams,
-}: {
-  searchParams: Promise<LoginSearchParams>;
-}) {
-  const cookieStore = await cookies();
-  const language = normalizeLanguage(
-    cookieStore.get(LANGUAGE_COOKIE_NAME)?.value
-  );
-  const t = (key: TranslationKey) => getTranslation(language, key);
-  const params = await searchParams;
-  const errorMessage = getErrorMessage(language, firstValue(params.error));
-  const nextLanguage = language === "en" ? "hi" : "en";
-  const languageSwitchUrl = `/api/preferences/language?lang=${nextLanguage}&returnTo=${encodeURIComponent(
-    getSafeReturnPath("/login")
-  )}`;
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 px-4 py-10 text-foreground dark:from-zinc-950 dark:via-zinc-900 dark:to-blue-950">
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 h-80 w-80 rounded-full bg-blue-400/20 blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-indigo-400/20 blur-3xl" />
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-blue-950 p-4">
+      {/* Background gradient orbs */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-400/20 rounded-full blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-indigo-400/20 rounded-full blur-3xl" />
       </div>
 
-      <div className="relative mx-auto w-full max-w-md rounded-3xl border border-white/60 bg-white/95 shadow-2xl shadow-blue-950/10 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95">
-        <div className="flex flex-col items-center gap-3 px-6 pb-4 pt-8 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 shadow-lg shadow-blue-500/25">
+      <Card className="w-full max-w-md animate-scale-in shadow-2xl" isBlurred>
+        <CardHeader className="flex flex-col items-center gap-2 pt-8 pb-2">
+          {/* Logo / Icon */}
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
             <svg
-              className="h-9 w-9 text-white"
+              className="w-9 h-9 text-white"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -76,36 +87,41 @@ export default async function LoginPage({
               />
             </svg>
           </div>
-          <div className="space-y-1">
-            <h1 className="text-3xl font-bold tracking-tight text-blue-600">
-              DoorCraft Pro
-            </h1>
-            <p className="text-sm text-default-500">{t("login.subtitle")}</p>
-          </div>
-        </div>
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+            DoorCraft Pro
+          </h1>
+          <p className="text-sm text-default-500">
+            {t("login.subtitle")}
+          </p>
+        </CardHeader>
 
-        <div className="border-t border-default-100 px-6 pb-8 pt-5 dark:border-zinc-800">
-          <div className="mb-5 flex justify-end">
-            <a
-              href={languageSwitchUrl}
-              className="inline-flex min-h-10 min-w-16 items-center justify-center rounded-xl bg-primary/10 px-4 text-sm font-semibold text-primary shadow-sm transition hover:bg-primary/15"
+        <Divider className="my-2" />
+
+        <CardBody className="px-6 pb-8">
+          <div className="mb-4 flex justify-end">
+            <Button
+              size="sm"
+              variant="flat"
+              color="primary"
+              onPress={() => setLanguage(language === "en" ? "hi" : "en")}
             >
-              {nextLanguage.toUpperCase()}
-            </a>
+              {language === "en" ? "HI" : "EN"}
+            </Button>
           </div>
-
-          <form
-            action="/api/auth/login"
-            method="post"
-            className="flex flex-col gap-4"
-          >
-            <label htmlFor="credential-input" className="space-y-1.5">
-              <span className="text-sm font-medium text-default-700">
-                {t("login.credentialLabel")}
-              </span>
-              <div className="flex items-center gap-3 rounded-xl border border-default-200 bg-background px-4 py-3 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <Input
+              id="credential-input"
+              label={t("login.credentialLabel")}
+              placeholder={t("login.credentialPlaceholder")}
+              type="text"
+              value={credential}
+              onValueChange={setCredential}
+              variant="bordered"
+              size="lg"
+              autoComplete="username"
+              startContent={
                 <svg
-                  className="h-5 w-5 shrink-0 text-default-400"
+                  className="w-5 h-5 text-default-400"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -117,24 +133,22 @@ export default async function LoginPage({
                     d="M16 7a4 4 0 11-8 0 4 4 0 018 0zm-4 7a7 7 0 00-7 7h14a7 7 0 00-7-7z"
                   />
                 </svg>
-                <input
-                  id="credential-input"
-                  name="credential"
-                  type="text"
-                  autoComplete="username"
-                  className="w-full bg-transparent text-base outline-none placeholder:text-default-400"
-                  placeholder={t("login.credentialPlaceholder")}
-                />
-              </div>
-            </label>
+              }
+            />
 
-            <label htmlFor="password-input" className="space-y-1.5">
-              <span className="text-sm font-medium text-default-700">
-                {t("login.passwordLabel")}
-              </span>
-              <div className="flex items-center gap-3 rounded-xl border border-default-200 bg-background px-4 py-3 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
+            <Input
+              id="password-input"
+              label={t("login.passwordLabel")}
+              placeholder={t("login.passwordPlaceholder")}
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onValueChange={setPassword}
+              variant="bordered"
+              size="lg"
+              autoComplete="current-password"
+              startContent={
                 <svg
-                  className="h-5 w-5 shrink-0 text-default-400"
+                  className="w-5 h-5 text-default-400"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -146,178 +160,76 @@ export default async function LoginPage({
                     d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
                   />
                 </svg>
-                <input
-                  id="password-input"
-                  name="password"
-                  type="password"
-                  autoComplete="current-password"
-                  className="w-full bg-transparent text-base outline-none placeholder:text-default-400"
-                  placeholder={t("login.passwordPlaceholder")}
-                />
+              }
+              endContent={
                 <button
-                  id="password-toggle"
                   type="button"
-                  aria-controls="password-input"
-                  aria-pressed="false"
-                  data-show-label={t("common.show")}
-                  data-hide-label={t("common.hide")}
-                  className="shrink-0 rounded-lg p-1.5 text-default-400 transition hover:bg-default-100 hover:text-default-700"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="text-default-400 hover:text-default-600 transition"
                 >
-                  <span className="sr-only">{t("common.show")}</span>
-                  <svg
-                    id="password-icon-hidden"
-                    className="h-5 w-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.5}
-                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                    />
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.5}
-                      d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                    />
-                  </svg>
-                  <svg
-                    id="password-icon-visible"
-                    className="hidden h-5 w-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.5}
-                      d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
-                    />
-                  </svg>
+                  {showPassword ? (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  )}
                 </button>
-              </div>
-            </label>
+              }
+            />
 
-            {errorMessage && (
-              <p
-                className="rounded-xl border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger"
-                aria-live="polite"
-              >
-                {errorMessage}
+            {error && (
+              <p className="text-danger text-sm text-center animate-fade-in">
+                {error}
               </p>
             )}
 
-            <button
+            <Button
               id="login-button"
               type="submit"
-              className="mt-2 inline-flex h-12 items-center justify-center rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 text-base font-semibold text-white shadow-lg shadow-blue-500/25 transition hover:opacity-95"
+              color="primary"
+              size="lg"
+              className="mt-2 font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 shadow-lg shadow-blue-500/25"
+              isLoading={loading}
+              isDisabled={!isFormValid}
             >
-              {t("login.signIn")}
-            </button>
+              {loading ? t("login.signingIn") : t("login.signIn")}
+            </Button>
 
             <button
-              id="forgot-password-trigger"
               type="button"
-              className="text-center text-sm font-medium text-primary transition hover:underline"
+              onClick={() => setShowForgot(true)}
+              className="text-sm text-primary hover:underline text-center transition"
             >
               {t("login.forgotPassword")}
             </button>
           </form>
-        </div>
-      </div>
+        </CardBody>
+      </Card>
 
-      <dialog
-        id="forgot-password-dialog"
-        className="w-[calc(100vw-2rem)] max-w-md rounded-3xl border border-white/60 bg-white p-0 text-left text-foreground shadow-2xl shadow-blue-950/15 backdrop:bg-black/35 dark:border-zinc-800 dark:bg-zinc-900"
-      >
-        <div className="border-b border-default-100 px-6 py-4 dark:border-zinc-800">
-          <h2 className="text-lg font-semibold text-foreground">
-            {t("login.forgotPasswordTitle")}
-          </h2>
-        </div>
-        <div className="px-6 py-5">
-          <p className="text-sm leading-6 text-default-600">
-            {t("login.forgotPasswordBody")}
-          </p>
-        </div>
-        <div className="flex justify-end border-t border-default-100 px-6 py-4 dark:border-zinc-800">
-          <button
-            id="forgot-password-close"
-            type="button"
-            className="inline-flex h-10 items-center justify-center rounded-xl bg-primary/10 px-4 text-sm font-semibold text-primary transition hover:bg-primary/15"
-          >
-            {t("common.ok")}
-          </button>
-        </div>
-      </dialog>
-
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `
-            (() => {
-              const input = document.getElementById("password-input");
-              const toggle = document.getElementById("password-toggle");
-              const hiddenIcon = document.getElementById("password-icon-hidden");
-              const visibleIcon = document.getElementById("password-icon-visible");
-              if (input && toggle) {
-                toggle.addEventListener("click", () => {
-                  const nextVisible = input.type === "password";
-                  input.type = nextVisible ? "text" : "password";
-                  toggle.setAttribute("aria-pressed", String(nextVisible));
-                  toggle.setAttribute(
-                    "aria-label",
-                    nextVisible
-                      ? toggle.getAttribute("data-hide-label") || "Hide"
-                      : toggle.getAttribute("data-show-label") || "Show"
-                  );
-                  if (hiddenIcon && visibleIcon) {
-                    hiddenIcon.classList.toggle("hidden", nextVisible);
-                    visibleIcon.classList.toggle("hidden", !nextVisible);
-                  }
-                });
-              }
-
-              const dialog = document.getElementById("forgot-password-dialog");
-              const trigger = document.getElementById("forgot-password-trigger");
-              const closeButton = document.getElementById("forgot-password-close");
-              if (dialog instanceof HTMLDialogElement) {
-                dialog.addEventListener("close", () => {
-                  document.body.classList.remove("overflow-hidden");
-                });
-                if (trigger) {
-                  trigger.addEventListener("click", () => {
-                    dialog.showModal();
-                    document.body.classList.add("overflow-hidden");
-                  });
-                }
-                if (closeButton) {
-                  closeButton.addEventListener("click", () => dialog.close());
-                }
-                dialog.addEventListener("click", (event) => {
-                  const rect = dialog.getBoundingClientRect();
-                  const withinDialog =
-                    rect.top <= event.clientY &&
-                    event.clientY <= rect.top + rect.height &&
-                    rect.left <= event.clientX &&
-                    event.clientX <= rect.left + rect.width;
-                  if (!withinDialog) {
-                    dialog.close();
-                  }
-                });
-                dialog.style.position = "fixed";
-                dialog.style.left = "50%";
-                dialog.style.top = "50%";
-                dialog.style.transform = "translate(-50%, -50%)";
-                dialog.style.margin = "0";
-              }
-            })();
-          `,
-        }}
-      />
+      {/* Forgot password modal */}
+      <Modal isOpen={showForgot} onOpenChange={setShowForgot} placement="center">
+        <ModalContent>
+          <ModalHeader>{t("login.forgotPasswordTitle")}</ModalHeader>
+          <ModalBody>
+            <p className="text-default-600">
+              {t("login.forgotPasswordBody")}
+            </p>
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              color="primary"
+              variant="light"
+              onPress={() => setShowForgot(false)}
+            >
+              {t("common.ok")}
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </div>
   );
 }

@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import { getTenantId } from "@/lib/tenant";
 import { NextRequest, NextResponse } from "next/server";
 
 const VALID_PARTY_TYPES = new Set(["CUSTOMER", "VENDOR"]);
@@ -13,11 +12,10 @@ function normalizeOptionalString(value: unknown) {
   return trimmed ? trimmed : null;
 }
 
-async function findVisibleParty(id: string, tenantId: string) {
+async function findVisibleParty(id: string) {
   return prisma.party.findFirst({
     where: {
       id,
-      tenantId,
       isDeleted: false,
     },
     include: {
@@ -40,9 +38,8 @@ export async function GET(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const tenantId = await getTenantId();
   const { id } = await params;
-  const party = await findVisibleParty(id, tenantId);
+  const party = await findVisibleParty(id);
 
   if (!party) {
     return NextResponse.json({ error: "Party not found" }, { status: 404 });
@@ -62,10 +59,9 @@ export async function PATCH(
   }
 
   try {
-    const tenantId = await getTenantId();
     const { id } = await params;
     const body = await request.json();
-    const existingParty = await findVisibleParty(id, tenantId);
+    const existingParty = await findVisibleParty(id);
 
     if (!existingParty) {
       return NextResponse.json({ error: "Party not found" }, { status: 404 });
@@ -163,9 +159,8 @@ export async function DELETE(
   }
 
   try {
-    const tenantId = await getTenantId();
     const { id } = await params;
-    const existingParty = await findVisibleParty(id, tenantId);
+    const existingParty = await findVisibleParty(id);
 
     if (!existingParty) {
       return NextResponse.json({ error: "Party not found" }, { status: 404 });
