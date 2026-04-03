@@ -224,16 +224,15 @@ export default function RecordPaymentPage() {
           aria-label="Payment status"
           value={paymentStatus}
           onValueChange={setPaymentStatus}
-          orientation="horizontal"
-          classNames={{ wrapper: "gap-4" }}
+          classNames={{ wrapper: "grid w-full grid-cols-1 gap-4 md:grid-cols-2" }}
         >
           <Radio
             value="COMPLETED"
             classNames={{
-              base: `group m-0 flex-1 max-w-full cursor-pointer rounded-2xl border-2 p-4 transition-all duration-300 ${
+              base: `group relative m-0 max-w-full cursor-pointer rounded-2xl border p-4 transition-all duration-300 ${
                 paymentStatus === "COMPLETED"
-                  ? "border-emerald-500 bg-emerald-50/50 shadow-sm"
-                  : "border-default-100 bg-white hover:border-default-300"
+                  ? "border-emerald-400/70 bg-gradient-to-br from-emerald-500/15 to-emerald-400/5 shadow-[0_10px_30px_-18px_rgba(16,185,129,0.8)] ring-1 ring-emerald-400/40"
+                  : "border-default-200 bg-content1 hover:border-emerald-300/60 hover:bg-emerald-500/[0.04]"
               }`,
               label: "block w-full",
               wrapper: "hidden",
@@ -243,8 +242,8 @@ export default function RecordPaymentPage() {
               <div
                 className={`rounded-xl p-3 transition-colors ${
                   paymentStatus === "COMPLETED"
-                    ? "bg-emerald-500 text-white"
-                    : "bg-emerald-100 text-emerald-600"
+                    ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30"
+                    : "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
                 }`}
               >
                 <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -259,7 +258,9 @@ export default function RecordPaymentPage() {
               <div className="flex-1">
                 <p
                   className={`text-base font-bold ${
-                    paymentStatus === "COMPLETED" ? "text-emerald-700" : "text-foreground"
+                    paymentStatus === "COMPLETED"
+                      ? "text-emerald-700 dark:text-emerald-300"
+                      : "text-default-900 dark:text-default-100"
                   }`}
                 >
                   Already Received / Paid
@@ -267,7 +268,7 @@ export default function RecordPaymentPage() {
                 <p
                   className={`text-xs ${
                     paymentStatus === "COMPLETED"
-                      ? "text-emerald-600/80"
+                      ? "text-emerald-700/80 dark:text-emerald-300/80"
                       : "text-default-500"
                   }`}
                 >
@@ -280,10 +281,10 @@ export default function RecordPaymentPage() {
           <Radio
             value="EXPECTED"
             classNames={{
-              base: `group m-0 flex-1 max-w-full cursor-pointer rounded-2xl border-2 p-4 transition-all duration-300 ${
+              base: `group relative m-0 max-w-full cursor-pointer rounded-2xl border p-4 transition-all duration-300 ${
                 paymentStatus === "EXPECTED"
-                  ? "border-amber-500 bg-amber-50/50 shadow-sm"
-                  : "border-default-100 bg-white hover:border-default-300"
+                  ? "border-amber-400/70 bg-gradient-to-br from-amber-500/15 to-amber-400/5 shadow-[0_10px_30px_-18px_rgba(245,158,11,0.8)] ring-1 ring-amber-400/40"
+                  : "border-default-200 bg-content1 hover:border-amber-300/60 hover:bg-amber-500/[0.04]"
               }`,
               label: "block w-full",
               wrapper: "hidden",
@@ -293,8 +294,8 @@ export default function RecordPaymentPage() {
               <div
                 className={`rounded-xl p-3 transition-colors ${
                   paymentStatus === "EXPECTED"
-                    ? "bg-amber-500 text-white"
-                    : "bg-amber-100 text-amber-600"
+                    ? "bg-amber-500 text-white shadow-lg shadow-amber-500/30"
+                    : "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"
                 }`}
               >
                 <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -309,7 +310,9 @@ export default function RecordPaymentPage() {
               <div className="flex-1">
                 <p
                   className={`text-base font-bold ${
-                    paymentStatus === "EXPECTED" ? "text-amber-700" : "text-foreground"
+                    paymentStatus === "EXPECTED"
+                      ? "text-amber-700 dark:text-amber-300"
+                      : "text-default-900 dark:text-default-100"
                   }`}
                 >
                   Expected / Planned
@@ -317,7 +320,7 @@ export default function RecordPaymentPage() {
                 <p
                   className={`text-xs ${
                     paymentStatus === "EXPECTED"
-                      ? "text-amber-600/80"
+                      ? "text-amber-700/80 dark:text-amber-300/80"
                       : "text-default-500"
                   }`}
                 >

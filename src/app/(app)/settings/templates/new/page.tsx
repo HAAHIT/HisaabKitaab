@@ -250,7 +250,7 @@ export default function CreateTemplatePage() {
             {columns.map((col, index) => (
               <div
                 key={index}
-                className="flex flex-col gap-4 p-5 rounded-2xl bg-white dark:bg-default-50 border shadow-sm border-default-200 transition-all hover:border-primary/30"
+                className="flex flex-col gap-4 p-5 rounded-2xl bg-default-50 border shadow-sm border-default-200 transition-all hover:border-primary/30"
               >
                 <div className="flex items-start md:items-center gap-4">
                   <div className="flex flex-col gap-1 items-center bg-default-100 dark:bg-default-200/50 rounded-lg p-1">
@@ -295,7 +295,8 @@ export default function CreateTemplatePage() {
                     />
                     <Select
                       label={t("templates.type")}
-                      selectedKeys={[col.type]}
+                      placeholder={t("templates.type")}
+                      selectedKeys={new Set([col.type])}
                       onSelectionChange={(keys) => {
                         const val = Array.from(keys)[0] as string;
                         if (val) updateColumn(index, "type", val);

@@ -354,10 +354,35 @@ export default function NewBillPage() {
                       key={template.id}
                       type="button"
                       onClick={() => selectTemplate(template.id)}
-                      className="rounded-xl border-2 border-default-200 p-4 text-left transition hover:border-primary hover:bg-primary/5"
+                      className="group relative w-full rounded-2xl border border-default-200 bg-content1 p-4 text-left transition-all duration-300 hover:-translate-y-0.5 hover:border-primary-300/60 hover:bg-primary-500/[0.04] hover:shadow-[0_12px_28px_-20px_rgba(59,130,246,0.9)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                     >
-                      <p className="font-semibold">{template.name}</p>
-                      <div className="mt-2 flex flex-wrap gap-1">
+                      <div className="flex items-start gap-3">
+                        <div className="rounded-xl bg-primary-100 p-3 text-primary transition-colors group-hover:bg-primary group-hover:text-white group-hover:shadow-lg group-hover:shadow-primary/30 dark:bg-primary/15 dark:text-primary-300">
+                          <svg
+                            aria-hidden="true"
+                            className="h-5 w-5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M9 12h6m-6 4h6M8 4h8a2 2 0 012 2v12a2 2 0 01-2 2H8a2 2 0 01-2-2V6a2 2 0 012-2z"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={1.8}
+                            />
+                          </svg>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-base font-semibold text-default-900 dark:text-default-100">
+                            {template.name}
+                          </p>
+                          <p className="mt-1 text-xs text-default-500">
+                            {template.columns.length} column{template.columns.length === 1 ? "" : "s"}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-1">
                         {template.columns.map((column) => (
                           <Chip
                             key={column.id}

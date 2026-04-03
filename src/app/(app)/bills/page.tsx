@@ -184,7 +184,7 @@ export default function BillsListPage() {
       </div>
 
       {loading ? (
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3, 4].map((item) => (
             <Skeleton key={item} className="h-16 w-full rounded-xl" />
           ))}
@@ -227,7 +227,7 @@ export default function BillsListPage() {
         </Card>
       ) : (
         <>
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {bills.map((bill) => (
               <Card
                 key={bill.id}
