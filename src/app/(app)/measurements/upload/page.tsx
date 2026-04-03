@@ -413,7 +413,7 @@ export default function UploadMeasurementsPage() {
           <Select
             label={t("measurements.itemType")}
             placeholder={t("measurements.itemTypePlaceholder")}
-            selectedKeys={itemType ? [itemType] : []}
+            selectedKeys={itemType ? new Set([itemType]) : new Set([])}
             onSelectionChange={(keys) => {
               const value = Array.from(keys)[0] as string;
               setItemType(value || "");

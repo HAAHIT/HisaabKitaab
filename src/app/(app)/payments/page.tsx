@@ -196,7 +196,8 @@ export default function PaymentsListPage() {
         />
         <Select
           aria-label={t("payments.filter.allTypes")}
-          selectedKeys={[typeFilter]}
+          placeholder={t("payments.filter.allTypes")}
+          selectedKeys={new Set([typeFilter])}
           onSelectionChange={(keys) => {
             const value = Array.from(keys)[0] as string;
             if (value) {
@@ -213,7 +214,8 @@ export default function PaymentsListPage() {
         </Select>
         <Select
           aria-label={t("payments.filter.allStatus")}
-          selectedKeys={[statusFilter]}
+          placeholder={t("payments.filter.allStatus")}
+          selectedKeys={new Set([statusFilter])}
           onSelectionChange={(keys) => {
             const value = Array.from(keys)[0] as string;
             if (value) {

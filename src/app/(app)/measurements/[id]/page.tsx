@@ -309,7 +309,8 @@ export default function MeasurementDetailPage({
               <h2 className="font-semibold text-primary">Workflow Status</h2>
               <Select
                 label="Current Status"
-                selectedKeys={[status]}
+                placeholder="Select status"
+                selectedKeys={new Set([status])}
                 onSelectionChange={(keys) => {
                   const value = Array.from(keys)[0] as string;
                   if (value) {

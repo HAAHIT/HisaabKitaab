@@ -401,7 +401,8 @@ export default function UserManagementPage() {
                 </div>
                 <Select
                   label={t("users.role")}
-                  selectedKeys={[formRole]}
+                  placeholder={t("users.role")}
+                  selectedKeys={new Set([formRole])}
                   onSelectionChange={(keys) => {
                     const selected = Array.from(keys)[0] as string;
                     if (selected) setFormRole(selected);

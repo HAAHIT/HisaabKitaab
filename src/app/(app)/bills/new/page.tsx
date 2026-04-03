@@ -434,7 +434,7 @@ export default function NewBillPage() {
                 <Select
                   label="Party"
                   placeholder="Select customer or vendor"
-                  selectedKeys={partyId ? [partyId] : []}
+                  selectedKeys={partyId ? new Set([partyId]) : new Set([])}
                   onSelectionChange={(keys) => {
                     const value = Array.from(keys)[0] as string;
                     if (value) {
@@ -580,7 +580,8 @@ export default function NewBillPage() {
                             ) : column.type === "dropdown" && column.options ? (
                               <Select
                                 aria-label={`Row ${rowIndex + 1} ${column.name}`}
-                                selectedKeys={row[column.id] ? [String(row[column.id])] : []}
+                                placeholder={column.name}
+                                selectedKeys={row[column.id] ? new Set([String(row[column.id])]) : new Set([])}
                                 onSelectionChange={(keys) => {
                                   const value = Array.from(keys)[0] as string;
                                   if (value) {

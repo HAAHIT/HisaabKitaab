@@ -112,7 +112,8 @@ export default function MeasurementsListPage() {
         />
         <Select
           aria-label={t("measurements.filter.all")}
-          selectedKeys={[statusFilter]}
+          placeholder={t("measurements.filter.all")}
+          selectedKeys={new Set([statusFilter])}
           onSelectionChange={(keys) => {
             const value = Array.from(keys)[0] as string;
             if (value) {

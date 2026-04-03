@@ -270,7 +270,8 @@ export default function PartiesPage() {
           />
           <Select
             aria-label={t("parties.filter.all")}
-            selectedKeys={[typeFilter]}
+            placeholder={t("parties.filter.all")}
+            selectedKeys={new Set([typeFilter])}
             onSelectionChange={(keys) => {
               const value = Array.from(keys)[0] as string;
               if (value) {
@@ -481,7 +482,8 @@ export default function PartiesPage() {
                 />
                 <Select
                   label={t("parties.typeLabel")}
-                  selectedKeys={[formType]}
+                  placeholder={t("parties.typeLabel")}
+                  selectedKeys={new Set([formType])}
                   onSelectionChange={(keys) => {
                     const value = Array.from(keys)[0] as string;
                     if (value) {

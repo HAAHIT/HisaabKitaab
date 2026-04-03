@@ -340,7 +340,7 @@ export default function RecordPaymentPage() {
           <Select
             label="Party"
             placeholder="Select customer or vendor"
-            selectedKeys={partyId ? [partyId] : []}
+            selectedKeys={partyId ? new Set([partyId]) : new Set([])}
             onSelectionChange={(keys) => {
               const value = Array.from(keys)[0] as string;
               if (value) {
@@ -389,7 +389,7 @@ export default function RecordPaymentPage() {
           <Select
             label="Linked Bill"
             placeholder={selectedParty ? "Optional: settle against a bill" : "Select a party first"}
-            selectedKeys={billId ? [billId] : []}
+            selectedKeys={billId ? new Set([billId]) : new Set([])}
             onSelectionChange={(keys) => {
               const value = Array.from(keys)[0] as string;
               if (value) {
@@ -446,7 +446,8 @@ export default function RecordPaymentPage() {
           <div className="grid grid-cols-2 gap-4">
             <Select
               label="Type"
-              selectedKeys={[direction]}
+              placeholder="Select direction"
+              selectedKeys={new Set([direction])}
               onSelectionChange={(keys) => {
                 const value = Array.from(keys)[0] as string;
                 if (value) {
@@ -461,7 +462,8 @@ export default function RecordPaymentPage() {
 
             <Select
               label="Payment Mode"
-              selectedKeys={[mode]}
+              placeholder="Select mode"
+              selectedKeys={new Set([mode])}
               onSelectionChange={(keys) => {
                 const value = Array.from(keys)[0] as string;
                 if (value) {
