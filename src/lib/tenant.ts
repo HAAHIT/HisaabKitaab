@@ -1,6 +1,6 @@
 export const TENANT_HEADER = "x-tenant-id";
 export const TENANT_CONTEXT_MISSING_MESSAGE =
-  "Tenant context missing. Set x-tenant-id or DEFAULT_TENANT_ID.";
+  "Tenant context missing. Ensure DEFAULT_TENANT_ID is set or the session contains a tenantId.";
 
 type RequestLike = {
   headers: Headers;

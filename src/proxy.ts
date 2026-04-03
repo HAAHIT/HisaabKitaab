@@ -12,13 +12,9 @@ export async function proxy(request: NextRequest) {
     request.headers.get("x-request-id")?.trim() || crypto.randomUUID();
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-request-id", requestId);
-  const requestedTenantId =
-    request.headers.get(TENANT_HEADER)?.trim() ||
-    process.env.DEFAULT_TENANT_ID?.trim() ||
-    null;
-  if (requestedTenantId) {
-    requestHeaders.set(TENANT_HEADER, requestedTenantId);
-  }
+  // Strip any client-supplied tenant header immediately — it will be set
+  // authoritatively from the verified JWT payload below.
+  requestHeaders.delete(TENANT_HEADER);
   let jwtSecret: Uint8Array;
 
   function nextWithRequestHeaders() {
@@ -78,7 +74,10 @@ export async function proxy(request: NextRequest) {
     const tenantId =
       (typeof payload.tenantId === "string" && payload.tenantId.trim()
         ? payload.tenantId.trim()
-        : null) || process.env.DEFAULT_TENANT_ID?.trim() || null;
+        : null) ?? process.env.DEFAULT_TENANT_ID?.trim() ?? null;
+    // Always overwrite — header was stripped above so only the server-derived
+    // value reaches API routes. If no tenant can be resolved the header stays
+    // absent and routes will return a 500 tenant-context-missing error.
     if (tenantId) {
       requestHeaders.set(TENANT_HEADER, tenantId);
     }
