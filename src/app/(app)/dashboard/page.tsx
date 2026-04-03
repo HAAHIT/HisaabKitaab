@@ -6,9 +6,15 @@ import {
   CardBody,
   Chip,
   Skeleton,
+  Button,
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useInstallPrompt } from "@/hooks/useInstallPrompt";
+import {
+  ONBOARDING_DISMISSED_KEY,
+  SetupWizard,
+} from "@/components/onboarding/SetupWizard";
 
 interface DashboardData {
   summary: {
@@ -63,8 +69,12 @@ function CashFlowBar({ data }: { data: DashboardData["cashFlow"] }) {
 export default function DashboardPage() {
   const router = useRouter();
   const { t } = useLanguage();
+  const { canInstall, promptInstall } = useInstallPrompt();
+  const [bannerDismissed, setBannerDismissed] = useState(false);
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingReady, setOnboardingReady] = useState(false);
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -76,7 +86,66 @@ export default function DashboardPage() {
 
   useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
 
-  if (loading) {
+  useEffect(() => {
+    let isMounted = true;
+
+    async function checkOnboarding() {
+      try {
+        const dismissed =
+          typeof window !== "undefined" &&
+          window.localStorage.getItem(ONBOARDING_DISMISSED_KEY) === "1";
+
+        if (dismissed) {
+          if (isMounted) {
+            setShowOnboarding(false);
+            setOnboardingReady(true);
+          }
+          return;
+        }
+
+        const [partiesRes, templatesRes] = await Promise.all([
+          fetch("/api/parties?limit=1"),
+          fetch("/api/templates?limit=1"),
+        ]);
+
+        if (!partiesRes.ok || !templatesRes.ok) {
+          if (isMounted) {
+            setShowOnboarding(false);
+            setOnboardingReady(true);
+          }
+          return;
+        }
+
+        const [partiesData, templatesData] = await Promise.all([
+          partiesRes.json().catch(() => ({ parties: [] })),
+          templatesRes.json().catch(() => ({ templates: [] })),
+        ]);
+
+        if (!isMounted) {
+          return;
+        }
+
+        const noParties = !partiesData.parties?.length;
+        const noTemplates = !templatesData.templates?.length;
+
+        setShowOnboarding(noParties && noTemplates);
+        setOnboardingReady(true);
+      } catch {
+        if (isMounted) {
+          setShowOnboarding(false);
+          setOnboardingReady(true);
+        }
+      }
+    }
+
+    checkOnboarding();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  if (loading || !onboardingReady) {
     return (
       <div className="p-4 lg:p-8 space-y-4">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -90,12 +159,43 @@ export default function DashboardPage() {
     );
   }
 
+  if (showOnboarding) {
+    return (
+      <SetupWizard
+        onComplete={() => {
+          setShowOnboarding(false);
+          void fetchDashboard();
+        }}
+      />
+    );
+  }
+
   const s = data?.summary;
   const billTotal = data?.billStats?.reduce((acc, b) => acc + (b._sum.grandTotal || 0), 0) || 0;
   const billCount = data?.billStats?.reduce((acc, b) => acc + b._count, 0) || 0;
 
   return (
     <div className="p-4 lg:p-8 animate-fade-in">
+      {canInstall && !bannerDismissed && (
+        <div className="mx-4 mt-4 mb-6 p-3 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">📲</span>
+            <div>
+              <p className="text-sm font-medium">{t("install.banner")}</p>
+              <p className="text-xs text-default-500">{t("install.message")}</p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" variant="flat" onPress={() => setBannerDismissed(true)}>
+              ✕
+            </Button>
+            <Button size="sm" color="primary" onPress={promptInstall}>
+              Install
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="mb-6">
         <h1 className="text-2xl font-bold">{t("dash.title")}</h1>
         <p className="text-default-500 text-sm mt-1">{t("dash.overview")}</p>

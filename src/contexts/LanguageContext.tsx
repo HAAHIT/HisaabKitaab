@@ -2,13 +2,11 @@
 
 import {
   createContext,
-  startTransition,
   useContext,
   useEffect,
   useMemo,
   useState,
 } from "react";
-import { useRouter } from "next/navigation";
 import {
   createTranslator,
   getTranslation,
@@ -38,7 +36,6 @@ export function LanguageProvider({
   children: React.ReactNode;
   initialLanguage: Language;
 }) {
-  const router = useRouter();
   const [language, setLanguageState] = useState<Language>(initialLanguage);
 
   useEffect(() => {
@@ -52,9 +49,9 @@ export function LanguageProvider({
 
     setLanguageState(lang);
     persistLanguagePreference(lang);
-    startTransition(() => {
-      router.refresh();
-    });
+    const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    const target = `/api/preferences/language?lang=${lang}&returnTo=${encodeURIComponent(returnTo || "/dashboard")}`;
+    window.location.assign(target);
   };
 
   const t = useMemo(() => createTranslator(language), [language]);

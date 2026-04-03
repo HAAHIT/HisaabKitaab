@@ -2,10 +2,36 @@ import { prisma } from "@/lib/prisma";
 import {
   buildBillSnapshotFromParty,
   getPostedBillBalanceDelta,
+  getPaymentBalanceDelta,
 } from "@/lib/accounting";
+import {
+  journalForPaymentMade,
+  journalForPaymentReceived,
+  journalForSalesBill,
+} from "@/lib/journal";
+import { getTenantId } from "@/lib/tenant";
 import { NextRequest, NextResponse } from "next/server";
 
 const BILL_NUMBER_LOCK_KEY = 22032026;
+type SupportedPaymentMode = "CASH" | "UPI" | "BANK_TRANSFER" | "CHEQUE";
+const VALID_PAYMENT_MODES = new Set([
+  "CASH",
+  "UPI",
+  "BANK_TRANSFER",
+  "CHEQUE",
+]);
+
+function normalizePaymentMode(mode: unknown): SupportedPaymentMode | null {
+  if (mode === "BANK") {
+    return "BANK_TRANSFER";
+  }
+
+  if (typeof mode !== "string") {
+    return null;
+  }
+
+  return VALID_PAYMENT_MODES.has(mode) ? (mode as SupportedPaymentMode) : null;
+}
 
 // GET /api/bills — List bills with filtering
 export async function GET(request: NextRequest) {
@@ -15,6 +41,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const tenantId = await getTenantId();
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") || "";
     const status = searchParams.get("status") || "";
@@ -25,7 +52,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "20");
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const where: any = { isDeleted: false };
+    const where: any = { tenantId, isDeleted: false };
 
     if (search) {
       where.OR = [
@@ -100,6 +127,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const tenantId = await getTenantId();
     const body = await request.json();
     const {
       templateId,
@@ -118,7 +146,40 @@ export async function POST(request: NextRequest) {
       status,
     } = body;
 
-    if (!templateId || !partyId || !Array.isArray(rows) || rows.length === 0) {
+    let finalTemplateId = templateId;
+    const isQuickBill = templateId === "__QUICK_BILL__";
+
+    if (isQuickBill) {
+      if (!partyId) {
+        return NextResponse.json({ error: "Party is required for Quick Bill" }, { status: 400 });
+      }
+
+      if (!grandTotal || grandTotal <= 0) {
+        return NextResponse.json({ error: "Amount must be greater than zero" }, { status: 400 });
+      }
+
+      let quickTemplate = await prisma.billTemplate.findFirst({
+        where: { name: "__QUICK_BILL__", tenantId },
+      });
+
+      if (!quickTemplate) {
+        quickTemplate = await prisma.billTemplate.create({
+          data: {
+            tenantId,
+            name: "__QUICK_BILL__",
+            columns: [
+              { id: "desc", name: "Description", type: "text", position: 0 },
+              { id: "amt", name: "Amount", type: "number", position: 1 },
+            ],
+            createdBy: userId!,
+          },
+        });
+      }
+
+      finalTemplateId = quickTemplate.id;
+    }
+
+    if (!finalTemplateId || !partyId || !Array.isArray(rows) || rows.length === 0) {
       return NextResponse.json(
         { error: "Template, party, and at least one row are required" },
         { status: 400 }
@@ -128,6 +189,7 @@ export async function POST(request: NextRequest) {
     const party = await prisma.party.findFirst({
       where: {
         id: partyId,
+        tenantId,
         isDeleted: false,
         isActive: true,
       },
@@ -145,15 +207,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Party not found" }, { status: 404 });
     }
 
-    const settings = await prisma.companySettings.findUnique({
-      where: { id: "default" },
-    });
-    const prefix = settings?.billPrefix || "BILL";
+    // Load tenant settings (replaces CompanySettings)
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+    const settings = (tenant?.settings as Record<string, unknown>) || {};
+    const prefix = (settings.billPrefix as string) || "BILL";
+    const defaultTaxPercent = (settings.defaultTaxPercent as number) ?? 0;
+
     const resolvedGrandTotal =
       typeof grandTotal === "number" && Number.isFinite(grandTotal)
         ? grandTotal
         : 0;
     const billStatus = status === "FINAL" ? "FINAL" : "DRAFT";
+    const normalizedPaymentMode = normalizePaymentMode(body.paymentMode);
     const now = new Date();
     const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -165,11 +230,33 @@ export async function POST(request: NextRequest) {
       gstin,
     });
 
+    if (body.paymentMode && !normalizedPaymentMode) {
+      return NextResponse.json(
+        { error: "Invalid payment mode for Quick Bill" },
+        { status: 400 }
+      );
+    }
+
+    if (billStatus === "FINAL" && resolvedGrandTotal <= 0) {
+      return NextResponse.json(
+        { error: "Final bills must have a positive total" },
+        { status: 400 }
+      );
+    }
+
+    if (normalizedPaymentMode && billStatus !== "FINAL") {
+      return NextResponse.json(
+        { error: "Quick Bill payments can only be recorded on final bills" },
+        { status: 400 }
+      );
+    }
+
     const bill = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${BILL_NUMBER_LOCK_KEY})`;
 
       const existingCount = await tx.bill.count({
         where: {
+          tenantId,
           createdAt: {
             gte: monthStart,
             lt: nextMonthStart,
@@ -180,15 +267,16 @@ export async function POST(request: NextRequest) {
 
       const createdBill = await tx.bill.create({
         data: {
+          tenantId,
           billNumber,
-          templateId,
+          templateId: finalTemplateId,
           partyId: party.id,
           ...snapshot,
           rows,
           notes: notes || null,
           terms: terms || null,
           subtotal: subtotal || 0,
-          taxPercent: taxPercent ?? (settings?.defaultTaxPercent || 0),
+          taxPercent: taxPercent ?? defaultTaxPercent,
           taxAmount: taxAmount || 0,
           grandTotal: resolvedGrandTotal,
           status: billStatus,
@@ -209,6 +297,68 @@ export async function POST(request: NextRequest) {
             currentBalance: { increment: balanceChange },
           },
         });
+      }
+
+      if (billStatus === "FINAL") {
+        await journalForSalesBill(tx, tenantId, {
+          id: createdBill.id,
+          billNumber,
+          partyId: party.id,
+          partyName: party.name,
+          subtotal: createdBill.subtotal,
+          taxAmount: createdBill.taxAmount,
+          grandTotal: createdBill.grandTotal,
+          createdBy: userId!,
+          entryDate: createdBill.createdAt,
+        });
+      }
+
+      if (isQuickBill && normalizedPaymentMode) {
+        const createdPayment = await tx.payment.create({
+          data: {
+            tenantId,
+            partyId: party.id,
+            direction: party.type === "CUSTOMER" ? "INCOMING" : "OUTGOING",
+            amount: resolvedGrandTotal,
+            date: now,
+            mode: normalizedPaymentMode,
+            status: "COMPLETED",
+            linkedBillId: createdBill.id,
+            createdBy: userId!,
+          },
+        });
+
+        const paymentDelta = getPaymentBalanceDelta(
+          party.type as "CUSTOMER" | "VENDOR",
+          party.type === "CUSTOMER" ? "INCOMING" : "OUTGOING",
+          resolvedGrandTotal
+        );
+        await tx.party.update({
+          where: { id: party.id },
+          data: { currentBalance: { increment: paymentDelta } },
+        });
+
+        if (party.type === "CUSTOMER") {
+          await journalForPaymentReceived(tx, tenantId, {
+            id: createdPayment.id,
+            partyId: party.id,
+            partyName: party.name,
+            amount: createdPayment.amount,
+            mode: createdPayment.mode,
+            date: createdPayment.date,
+            createdBy: userId!,
+          });
+        } else {
+          await journalForPaymentMade(tx, tenantId, {
+            id: createdPayment.id,
+            partyId: party.id,
+            partyName: party.name,
+            amount: createdPayment.amount,
+            mode: createdPayment.mode,
+            date: createdPayment.date,
+            createdBy: userId!,
+          });
+        }
       }
 
       return createdBill;
