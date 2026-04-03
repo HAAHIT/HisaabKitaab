@@ -93,6 +93,7 @@ export default function MeasurementsListPage() {
 
       <div className="mb-6 flex flex-col gap-3 sm:flex-row">
         <Input
+          aria-label={t("measurements.searchPlaceholder")}
           placeholder={t("measurements.searchPlaceholder")}
           value={search}
           onValueChange={setSearch}
@@ -110,6 +111,7 @@ export default function MeasurementsListPage() {
           }
         />
         <Select
+          aria-label={t("measurements.filter.all")}
           selectedKeys={[statusFilter]}
           onSelectionChange={(keys) => {
             const value = Array.from(keys)[0] as string;

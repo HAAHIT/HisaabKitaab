@@ -147,6 +147,7 @@ export default function BillsListPage() {
 
       <div className="mb-6 flex flex-col gap-3 sm:flex-row">
         <Input
+          aria-label={t("bills.searchPlaceholder")}
           placeholder={t("bills.searchPlaceholder")}
           value={search}
           onValueChange={setSearch}
@@ -164,6 +165,7 @@ export default function BillsListPage() {
           }
         />
         <Select
+          aria-label={t("bills.filter.allStatus")}
           selectedKeys={[statusFilter]}
           onSelectionChange={(keys) => {
             const value = Array.from(keys)[0] as string;

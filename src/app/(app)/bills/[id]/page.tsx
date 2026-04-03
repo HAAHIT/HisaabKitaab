@@ -232,6 +232,7 @@ export default function BillDetailPage({
             <Button
               isIconOnly
               variant="light"
+              aria-label="Back to bills"
               onPress={() => router.push("/bills")}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>

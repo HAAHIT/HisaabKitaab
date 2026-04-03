@@ -442,6 +442,7 @@ export default function AppShell({
                         color="primary"
                         size="lg"
                         radius="full"
+                        aria-label={showFab ? "Close quick actions" : "Open quick actions"}
                         className="shadow-lg shadow-primary/30 -mt-6 bg-gradient-to-br from-blue-600 to-indigo-600"
                         onPress={() =>
                           setFabOpenPath((currentPath) =>

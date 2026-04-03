@@ -235,6 +235,7 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
         <Button
           isIconOnly
           variant="light"
+          aria-label="Back to templates"
           onPress={() => router.push("/settings/templates")}
         >
           <svg
@@ -339,6 +340,7 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
                     isIconOnly
                     variant="flat"
                     color="danger"
+                    aria-label={`Remove column ${index + 1}`}
                     onPress={() => removeColumn(index)}
                     isDisabled={columns.length === 1}
                     className="mt-1 md:mt-0"
@@ -356,6 +358,7 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
                       Build Formula
                     </p>
                     <Input
+                      aria-label="Formula expression"
                       placeholder="e.g. {Qty} * {Rate}"
                       value={col.formula || ""}
                       onValueChange={(v) => updateColumn(index, "formula", v)}
@@ -395,6 +398,7 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
                       Dropdown Options
                     </p>
                     <Input
+                      aria-label="Dropdown options"
                       placeholder="e.g. Main Door, Internal, Sliding"
                       value={(col.options || []).join(",")}
                       onValueChange={(v) => {

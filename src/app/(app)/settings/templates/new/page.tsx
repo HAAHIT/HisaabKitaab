@@ -203,6 +203,7 @@ export default function CreateTemplatePage() {
         <Button
           isIconOnly
           variant="light"
+          aria-label="Back to templates"
           onPress={() => router.push("/settings/templates")}
         >
           <svg
@@ -313,6 +314,7 @@ export default function CreateTemplatePage() {
                     isIconOnly
                     variant="flat"
                     color="danger"
+                    aria-label={`Remove column ${index + 1}`}
                     onPress={() => removeColumn(index)}
                     isDisabled={columns.length === 1}
                     className="mt-1 md:mt-0"
@@ -330,6 +332,7 @@ export default function CreateTemplatePage() {
                       {t("templates.buildFormula")}
                     </p>
                     <Input
+                      aria-label={t("templates.buildFormula")}
                       placeholder={t("templates.formulaPlaceholder")}
                       value={col.formula || ""}
                       onValueChange={(v) => updateColumn(index, "formula", v)}
@@ -369,6 +372,7 @@ export default function CreateTemplatePage() {
                       {t("templates.dropdownOptions")}
                     </p>
                     <Input
+                      aria-label={t("templates.dropdownOptions")}
                       placeholder={t("templates.dropdownPlaceholder")}
                       value={(col.options || []).join(",")}
                       onValueChange={(v) => {

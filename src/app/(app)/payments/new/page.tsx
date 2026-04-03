@@ -196,7 +196,12 @@ export default function RecordPaymentPage() {
       )}
 
       <div className="mb-6 flex items-center gap-3">
-        <Button isIconOnly variant="light" onPress={() => router.push("/payments")}>
+        <Button
+          isIconOnly
+          variant="light"
+          aria-label="Back to payments"
+          onPress={() => router.push("/payments")}
+        >
           <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               d="M10 19l-7-7m0 0l7-7m-7 7h18"
@@ -216,7 +221,7 @@ export default function RecordPaymentPage() {
 
       <section className="mb-6">
         <RadioGroup
-          label={null}
+          aria-label="Payment status"
           value={paymentStatus}
           onValueChange={setPaymentStatus}
           orientation="horizontal"

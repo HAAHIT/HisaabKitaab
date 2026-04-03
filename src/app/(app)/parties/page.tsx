@@ -251,6 +251,7 @@ export default function PartiesPage() {
 
         <div className="mb-6 flex flex-col gap-3 sm:flex-row">
           <Input
+            aria-label={t("parties.searchPlaceholder")}
             placeholder={t("parties.searchPlaceholder")}
             value={search}
             onValueChange={setSearch}
@@ -268,6 +269,7 @@ export default function PartiesPage() {
             }
           />
           <Select
+            aria-label={t("parties.filter.allTypes")}
             selectedKeys={[typeFilter]}
             onSelectionChange={(keys) => {
               const value = Array.from(keys)[0] as string;
@@ -365,7 +367,13 @@ export default function PartiesPage() {
                         >
                           {t("parties.viewProfile")}
                         </Button>
-                        <Button size="sm" variant="flat" isIconOnly onPress={() => openEdit(party)}>
+                        <Button
+                          size="sm"
+                          variant="flat"
+                          isIconOnly
+                          aria-label={`Edit ${party.name}`}
+                          onPress={() => openEdit(party)}
+                        >
                           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path
                               d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
@@ -380,6 +388,7 @@ export default function PartiesPage() {
                           variant="flat"
                           color="danger"
                           isIconOnly
+                          aria-label={`Delete ${party.name}`}
                           onPress={() => handleDelete(party)}
                         >
                           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -413,7 +422,13 @@ export default function PartiesPage() {
                 <h2 className="text-xl font-bold">
                   {editingParty ? t("parties.editTitle") : t("parties.createTitle")}
                 </h2>
-                <Button isIconOnly variant="light" size="sm" onPress={() => setShowPanel(false)}>
+                <Button
+                  isIconOnly
+                  variant="light"
+                  size="sm"
+                  aria-label="Close panel"
+                  onPress={() => setShowPanel(false)}
+                >
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       d="M6 18L18 6M6 6l12 12"

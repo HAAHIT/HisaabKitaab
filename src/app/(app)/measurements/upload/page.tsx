@@ -239,6 +239,7 @@ export default function UploadMeasurementsPage() {
           <Button
             isIconOnly
             variant="light"
+            aria-label="Back to my uploads"
             onPress={() => router.push("/measurements/my-uploads")}
           >
             <svg
