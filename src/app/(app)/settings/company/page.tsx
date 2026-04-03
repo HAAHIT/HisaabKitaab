@@ -1,17 +1,23 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Button,
   Card,
   CardBody,
   Input,
+  Select,
+  SelectItem,
   Skeleton,
   Textarea,
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { db } from "@/lib/db";
 import { useLanguage } from "@/contexts/LanguageContext";
+import {
+  BUSINESS_TYPES,
+  TAX_REGISTRATION_TYPES,
+} from "@/lib/tenant-settings";
 
 async function readError(response: Response) {
   const data = await response.json().catch(() => null);
@@ -40,6 +46,10 @@ export default function CompanySettingsPage() {
   const [defaultTaxPercent, setDefaultTaxPercent] = useState("18");
   const [defaultTerms, setDefaultTerms] = useState("");
   const [billPrefix, setBillPrefix] = useState("BILL");
+  const [upiId, setUpiId] = useState("");
+  const [businessType, setBusinessType] = useState("INDIVIDUAL");
+  const [taxRegistrationType, setTaxRegistrationType] =
+    useState("REGISTERED");
 
   const revokeObjectUrl = useCallback((url: string | null) => {
     if (url?.startsWith("blob:")) {
@@ -57,10 +67,13 @@ export default function CompanySettingsPage() {
     setCompanyPhone(settings?.companyPhone || "");
     setCompanyEmail(settings?.companyEmail || "");
     setCompanyGstin(settings?.companyGstin || "");
-    setCompanyLogoUrl(settings?.companyLogo || null);
+    setCompanyLogoUrl(settings?.companyLogo || settings?.companyLogoUrl || null);
     setDefaultTaxPercent(String(settings?.defaultTaxPercent ?? 18));
     setDefaultTerms(settings?.defaultTerms || "");
     setBillPrefix(settings?.billPrefix || "BILL");
+    setUpiId(settings?.upiId || "");
+    setBusinessType(settings?.businessType || "INDIVIDUAL");
+    setTaxRegistrationType(settings?.taxRegistrationType || "REGISTERED");
     setPendingLogoFile(null);
     setLogoRemoved(false);
     setPendingLogoPreviewUrl((currentUrl) => {
@@ -71,13 +84,33 @@ export default function CompanySettingsPage() {
 
   useEffect(() => {
     loadSettings()
-      .catch(() => setToast({ message: t("company.loadFailed"), type: "error" }))
+      .catch(() =>
+        setToast({ message: t("company.loadFailed"), type: "error" })
+      )
       .finally(() => setLoading(false));
   }, [loadSettings, t]);
 
   useEffect(() => {
     return () => revokeObjectUrl(pendingLogoPreviewUrl);
   }, [pendingLogoPreviewUrl, revokeObjectUrl]);
+
+  const businessTypeOptions = useMemo(
+    () =>
+      BUSINESS_TYPES.map((value) => ({
+        value,
+        label: t(`company.businessType.${value}` as never),
+      })),
+    [t]
+  );
+
+  const taxRegistrationOptions = useMemo(
+    () =>
+      TAX_REGISTRATION_TYPES.map((value) => ({
+        value,
+        label: t(`company.taxRegistration.${value}` as never),
+      })),
+    [t]
+  );
 
   function showToast(message: string, type: "success" | "error") {
     setToast({ message, type });
@@ -113,9 +146,12 @@ export default function CompanySettingsPage() {
         companyPhone,
         companyEmail,
         companyGstin,
-        defaultTaxPercent: Number.parseFloat(defaultTaxPercent) || 0,
+        defaultTaxPercent,
         defaultTerms,
         billPrefix,
+        upiId,
+        businessType,
+        taxRegistrationType,
       };
 
       const response = await fetch("/api/settings", {
@@ -176,9 +212,7 @@ export default function CompanySettingsPage() {
   }
 
   async function handleResetLocalData() {
-    if (
-      !confirm(t("company.resetConfirm"))
-    ) {
+    if (!confirm(t("company.resetConfirm"))) {
       return;
     }
 
@@ -202,15 +236,15 @@ export default function CompanySettingsPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-4xl p-4 lg:p-8">
-        <Skeleton className="mb-6 h-12 w-48 rounded-lg" />
+      <div className="mx-auto max-w-5xl p-4 lg:p-8">
+        <Skeleton className="mb-6 h-12 w-56 rounded-lg" />
         <Skeleton className="h-96 w-full rounded-xl" />
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-4xl animate-fade-in p-4 lg:p-8">
+    <div className="mx-auto max-w-5xl animate-fade-in p-4 lg:p-8">
       {toast && (
         <div
           className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${
@@ -233,19 +267,18 @@ export default function CompanySettingsPage() {
           </svg>
         </Button>
         <div>
-          <h1 className="text-2xl font-bold">{t("company.title")}</h1>
-          <p className="mt-1 text-sm text-default-500">
-            {t("company.subtitle")}
-          </p>
+          <h1 className="text-2xl font-bold">{t("settings.businessProfile")}</h1>
+          <p className="mt-1 text-sm text-default-500">{t("company.subtitle")}</p>
         </div>
       </div>
 
       <Card shadow="sm" className="mb-6">
         <CardBody className="space-y-8 p-6 md:p-8">
-          <div>
+          <section>
             <h2 className="mb-6 border-b border-divider pb-2 text-lg font-semibold">
               {t("company.businessDetails")}
             </h2>
+
             <div className="flex flex-col items-start gap-8 md:flex-row">
               <div className="flex flex-col items-center gap-3">
                 <div
@@ -283,6 +316,7 @@ export default function CompanySettingsPage() {
                     </div>
                   )}
                 </div>
+
                 <div className="flex gap-2">
                   <Button
                     size="sm"
@@ -329,20 +363,27 @@ export default function CompanySettingsPage() {
               <div className="w-full flex-1 space-y-4">
                 <div className="grid gap-4 md:grid-cols-2">
                   <Input
-                    label={t("company.companyName")}
+                    label={t("company.businessName")}
                     placeholder={t("company.companyNamePlaceholder")}
                     value={companyName}
                     onValueChange={setCompanyName}
                     variant="bordered"
                   />
-                  <Input
-                    label={t("bills.gstin")}
-                    placeholder="e.g. 29ABCDE1234F1Z5"
-                    value={companyGstin}
-                    onValueChange={setCompanyGstin}
+                  <Select
+                    label={t("company.businessType")}
+                    selectedKeys={[businessType]}
+                    onSelectionChange={(keys) => {
+                      const nextValue = Array.from(keys)[0];
+                      if (typeof nextValue === "string") {
+                        setBusinessType(nextValue);
+                      }
+                    }}
                     variant="bordered"
-                    className="font-mono uppercase"
-                  />
+                  >
+                    {businessTypeOptions.map((option) => (
+                      <SelectItem key={option.value}>{option.label}</SelectItem>
+                    ))}
+                  </Select>
                   <Input
                     label={t("company.companyPhone")}
                     placeholder={t("company.companyPhonePlaceholder")}
@@ -357,24 +398,48 @@ export default function CompanySettingsPage() {
                     onValueChange={setCompanyEmail}
                     variant="bordered"
                   />
+                  <Input
+                    label={t("company.gstin")}
+                    placeholder="e.g. 29ABCDE1234F1Z5"
+                    value={companyGstin}
+                    onValueChange={setCompanyGstin}
+                    variant="bordered"
+                    className="font-mono uppercase"
+                  />
+                  <Select
+                    label={t("company.taxRegistrationType")}
+                    selectedKeys={[taxRegistrationType]}
+                    onSelectionChange={(keys) => {
+                      const nextValue = Array.from(keys)[0];
+                      if (typeof nextValue === "string") {
+                        setTaxRegistrationType(nextValue);
+                      }
+                    }}
+                    variant="bordered"
+                  >
+                    {taxRegistrationOptions.map((option) => (
+                      <SelectItem key={option.value}>{option.label}</SelectItem>
+                    ))}
+                  </Select>
                 </div>
+
                 <Textarea
                   label={t("company.registeredAddress")}
                   placeholder={t("company.registeredAddressPlaceholder")}
                   value={companyAddress}
                   onValueChange={setCompanyAddress}
                   variant="bordered"
-                  minRows={2}
+                  minRows={3}
                 />
               </div>
             </div>
-          </div>
+          </section>
 
-          <div>
+          <section>
             <h2 className="mb-4 border-b border-divider pb-2 text-lg font-semibold">
-              {t("company.billingDefaults")}
+              {t("settings.billingConfig")}
             </h2>
-            <div className="mb-4 grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-2">
               <Input
                 label={t("company.billPrefix")}
                 placeholder={t("company.billPrefixPlaceholder")}
@@ -391,9 +456,30 @@ export default function CompanySettingsPage() {
                 onValueChange={setDefaultTaxPercent}
                 variant="bordered"
                 endContent={<span className="text-default-400">%</span>}
+                description={t("bills.autoTaxNote")}
               />
+              <Input
+                label={t("company.upiId")}
+                placeholder={t("company.upiIdPlaceholder")}
+                description={t("company.upiIdDescription")}
+                value={upiId}
+                onValueChange={setUpiId}
+                variant="bordered"
+              />
+              <div className="rounded-2xl border border-divider bg-default-50/80 p-4 text-sm text-default-500">
+                <p className="font-medium text-default-700">
+                  {t("company.taxRegistrationType")}
+                </p>
+                <p className="mt-1">
+                  {taxRegistrationType === "REGISTERED"
+                    ? t("company.taxRegistrationHelp.registered")
+                    : t("company.taxRegistrationHelp.unregistered")}
+                </p>
+              </div>
             </div>
+
             <Textarea
+              className="mt-4"
               label={t("company.defaultTerms")}
               placeholder={t("company.defaultTermsPlaceholder")}
               value={defaultTerms}
@@ -401,7 +487,7 @@ export default function CompanySettingsPage() {
               variant="bordered"
               minRows={3}
             />
-          </div>
+          </section>
 
           <div className="flex justify-end gap-3 border-t border-divider pt-4">
             <Button
