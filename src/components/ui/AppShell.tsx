@@ -165,7 +165,7 @@ export default function AppShell({
           </div>
           {!sidebarCollapsed && (
             <span className="text-lg font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent truncate">
-              DoorCraft Pro
+              HisaabKitaab
             </span>
           )}
         </div>

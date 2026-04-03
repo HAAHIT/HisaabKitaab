@@ -1,8 +1,8 @@
 param(
   [string]$ProjectId,
   [string]$Region = "asia-south1",
-  [string]$Repository = "doorcraft-pro",
-  [string]$ServiceAccount = "doorcraft-pro-runner",
+  [string]$Repository = "hisaabkitaab",
+  [string]$ServiceAccount = "hisaabkitaab-runner",
   [string]$BucketName
 )
 
@@ -31,11 +31,11 @@ gcloud artifacts repositories create $Repository `
   --project=$ProjectId `
   --location=$Region `
   --repository-format=docker `
-  --description="DoorCraft Pro application images" 2>$null
+  --description="HisaabKitaab application images" 2>$null
 
 gcloud iam service-accounts create $ServiceAccount `
   --project=$ProjectId `
-  --display-name="DoorCraft Pro runtime" 2>$null
+  --display-name="HisaabKitaab runtime" 2>$null
 
 gcloud projects add-iam-policy-binding $ProjectId `
   --member="serviceAccount:$serviceAccountEmail" `

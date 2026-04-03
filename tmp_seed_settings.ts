@@ -8,7 +8,7 @@ async function main() {
     await prisma.companySettings.create({
       data: {
         id: 'default',
-        companyName: 'DoorCraft Pro',
+        companyName: 'HisaabKitaab',
         defaultTaxPercent: 18,
       }
     })

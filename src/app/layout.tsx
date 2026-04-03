@@ -14,7 +14,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "DoorCraft Pro — Door Manufacturing Management",
+  title: "HisaabKitaab — Door Manufacturing Management",
   description:
     "Manage bills, payments, and measurements for your door manufacturing business.",
   icons: { icon: "/favicon.ico" },

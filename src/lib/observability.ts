@@ -38,7 +38,7 @@ function writeLog(severity: LogSeverity, event: string, context: LogContext = {}
   const payload = {
     severity,
     event,
-    service: "doorcraft-pro",
+    service: "hisaabkitaab",
     timestamp: new Date().toISOString(),
     ...(normalizeValue(context) as Record<string, unknown>),
   };

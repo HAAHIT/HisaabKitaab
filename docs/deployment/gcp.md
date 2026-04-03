@@ -44,7 +44,7 @@ postgresql://APP_USER:APP_PASSWORD@localhost:5432/doorcraft_pro?host=/cloudsql/P
 
 ## Bootstrap Script
 
-The repo includes [scripts/gcp/bootstrap.ps1](/D:/Sadhguru%20Door/doorcraft-pro/scripts/gcp/bootstrap.ps1) for first-time setup.
+The repo includes [scripts/gcp/bootstrap.ps1](/D:/Sadhguru%20Door/hisaabkitaab/scripts/gcp/bootstrap.ps1) for first-time setup.
 
 It enables required APIs, creates the Artifact Registry repository, creates the runtime service account, creates the storage bucket, enforces public access prevention, and grants the runtime roles.
 
@@ -53,12 +53,12 @@ Example:
 ```powershell
 ./scripts/gcp/bootstrap.ps1 `
   -ProjectId "my-gcp-project" `
-  -BucketName "doorcraft-pro-media-prod"
+  -BucketName "hisaabkitaab-media-prod"
 ```
 
 ## Container Build
 
-The app container uses the root [Dockerfile](/D:/Sadhguru%20Door/doorcraft-pro/Dockerfile) with standalone output enabled in [next.config.ts](/D:/Sadhguru%20Door/doorcraft-pro/next.config.ts).
+The app container uses the root [Dockerfile](/D:/Sadhguru%20Door/hisaabkitaab/Dockerfile) with standalone output enabled in [next.config.ts](/D:/Sadhguru%20Door/hisaabkitaab/next.config.ts).
 
 - Web target: `runner`
 - Migration target: `migrator`
@@ -66,13 +66,13 @@ The app container uses the root [Dockerfile](/D:/Sadhguru%20Door/doorcraft-pro/D
 Example image build flow:
 
 ```bash
-docker build -t doorcraft-pro:web --target runner .
-docker build -t doorcraft-pro:migrator --target migrator .
+docker build -t hisaabkitaab:web --target runner .
+docker build -t hisaabkitaab:migrator --target migrator .
 ```
 
 ## Cloud Build Pipeline
 
-The repo now includes [cloudbuild.yaml](/D:/Sadhguru%20Door/doorcraft-pro/cloudbuild.yaml). It does five things in one release:
+The repo now includes [cloudbuild.yaml](/D:/Sadhguru%20Door/hisaabkitaab/cloudbuild.yaml). It does five things in one release:
 
 1. Build the web image from the `runner` target.
 2. Build the migration image from the `migrator` target.
@@ -85,7 +85,7 @@ The default substitutions are placeholders. You must set at least:
 - `_CLOUDSQL_INSTANCE`
 - `_GCS_BUCKET_NAME`
 
-You can submit the pipeline from Windows with [scripts/gcp/deploy.ps1](/D:/Sadhguru%20Door/doorcraft-pro/scripts/gcp/deploy.ps1).
+You can submit the pipeline from Windows with [scripts/gcp/deploy.ps1](/D:/Sadhguru%20Door/hisaabkitaab/scripts/gcp/deploy.ps1).
 
 Example:
 
@@ -93,7 +93,7 @@ Example:
 ./scripts/gcp/deploy.ps1 `
   -ProjectId "my-gcp-project" `
   -CloudSqlInstance "my-gcp-project:asia-south1:doorcraft-db" `
-  -GcsBucketName "doorcraft-pro-media-prod"
+  -GcsBucketName "hisaabkitaab-media-prod"
 ```
 
 Before the first deploy, create:
@@ -122,23 +122,23 @@ Do not run Prisma migrations during the normal web container startup.
 
 ## Security And Abuse Protection
 
-- Login throttling is now database-backed in [src/lib/login-rate-limit.ts](/D:/Sadhguru%20Door/doorcraft-pro/src/lib/login-rate-limit.ts).
-- The login route records structured success, failure, and throttle events in [src/app/api/auth/login/route.ts](/D:/Sadhguru%20Door/doorcraft-pro/src/app/api/auth/login/route.ts).
-- Request IDs are propagated from [src/middleware.ts](/D:/Sadhguru%20Door/doorcraft-pro/src/middleware.ts) and returned in responses.
+- Login throttling is now database-backed in [src/lib/login-rate-limit.ts](/D:/Sadhguru%20Door/hisaabkitaab/src/lib/login-rate-limit.ts).
+- The login route records structured success, failure, and throttle events in [src/app/api/auth/login/route.ts](/D:/Sadhguru%20Door/hisaabkitaab/src/app/api/auth/login/route.ts).
+- Request IDs are propagated from [src/middleware.ts](/D:/Sadhguru%20Door/hisaabkitaab/src/middleware.ts) and returned in responses.
 - Keep `JWT_SECRET` only in `Secret Manager`.
 - Put the public hostname behind `Cloud Armor`.
 - Keep the Cloud Storage bucket private and rely on the app route for measurement-photo authorization.
 
 ## Observability
 
-- Health endpoint: [src/app/api/health/route.ts](/D:/Sadhguru%20Door/doorcraft-pro/src/app/api/health/route.ts)
-- Structured JSON logging helper: [src/lib/observability.ts](/D:/Sadhguru%20Door/doorcraft-pro/src/lib/observability.ts)
+- Health endpoint: [src/app/api/health/route.ts](/D:/Sadhguru%20Door/hisaabkitaab/src/app/api/health/route.ts)
+- Structured JSON logging helper: [src/lib/observability.ts](/D:/Sadhguru%20Door/hisaabkitaab/src/lib/observability.ts)
 
 Recommended alert policies in GCP:
 
 - Cloud Run 5xx error rate spike
 - Cloud Run request latency spike
-- Cloud Run job execution failure for `doorcraft-pro-migrate`
+- Cloud Run job execution failure for `hisaabkitaab-migrate`
 - Cloud SQL CPU/storage pressure
 - Log-based metric for repeated `auth.login.throttled` events
 - Log-based metric for repeated `health.check.failed` events
@@ -146,7 +146,7 @@ Recommended alert policies in GCP:
 ## Media Storage Notes
 
 - New uploaded media is stored in `Cloud Storage` when `OBJECT_STORAGE_PROVIDER=gcs`.
-- The app keeps asset authorization in [src/app/api/assets/[id]/route.ts](/D:/Sadhguru%20Door/doorcraft-pro/src/app/api/assets/%5Bid%5D/route.ts) and streams GCS-backed files through the app instead of redirecting to a public object URL.
+- The app keeps asset authorization in [src/app/api/assets/[id]/route.ts](/D:/Sadhguru%20Door/hisaabkitaab/src/app/api/assets/%5Bid%5D/route.ts) and streams GCS-backed files through the app instead of redirecting to a public object URL.
 - Keep the bucket private. Do not expose measurement photos with public object ACLs.
 
 ## Remaining Work

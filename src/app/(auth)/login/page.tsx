@@ -88,7 +88,7 @@ export default function LoginPage() {
             </svg>
           </div>
           <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-            DoorCraft Pro
+            HisaabKitaab
           </h1>
           <p className="text-sm text-default-500">
             {t("login.subtitle")}
