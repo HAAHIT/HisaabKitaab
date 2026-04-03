@@ -165,7 +165,7 @@ export default function BillsListPage() {
           }
         />
         <Select
-          aria-label={t("bills.filter.allStatus")}
+          aria-label={t("bills.filter.all")}
           selectedKeys={[statusFilter]}
           onSelectionChange={(keys) => {
             const value = Array.from(keys)[0] as string;

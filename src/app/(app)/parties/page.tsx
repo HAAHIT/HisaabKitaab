@@ -269,7 +269,7 @@ export default function PartiesPage() {
             }
           />
           <Select
-            aria-label={t("parties.filter.allTypes")}
+            aria-label={t("parties.filter.all")}
             selectedKeys={[typeFilter]}
             onSelectionChange={(keys) => {
               const value = Array.from(keys)[0] as string;

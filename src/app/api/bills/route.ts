@@ -7,6 +7,121 @@ import { NextRequest, NextResponse } from "next/server";
 
 const BILL_NUMBER_LOCK_KEY = 22032026;
 
+type TenantBillingSettingsRow = {
+  id: string;
+  settings: unknown;
+  createdAt: Date;
+};
+
+function isCompanySettingsTableMissing(error: unknown) {
+  if (
+    !error ||
+    typeof error !== "object" ||
+    !("code" in error) ||
+    error.code !== "P2021"
+  ) {
+    return false;
+  }
+
+  const tableName =
+    "meta" in error &&
+    error.meta &&
+    typeof error.meta === "object" &&
+    "table" in error.meta &&
+    typeof error.meta.table === "string"
+      ? error.meta.table
+      : "";
+
+  return tableName.includes("CompanySettings");
+}
+
+function parseTenantSettings(value: unknown) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      return {};
+    }
+  }
+
+  return {};
+}
+
+async function loadBillingSettings(request: NextRequest) {
+  try {
+    const settings = await prisma.companySettings.findUnique({
+      where: { id: "default" },
+      select: {
+        billPrefix: true,
+        defaultTaxPercent: true,
+      },
+    });
+
+    return {
+      billPrefix:
+        settings?.billPrefix && settings.billPrefix.trim()
+          ? settings.billPrefix.trim()
+          : "BILL",
+      defaultTaxPercent: settings?.defaultTaxPercent ?? 0,
+    };
+  } catch (error) {
+    if (!isCompanySettingsTableMissing(error)) {
+      throw error;
+    }
+
+    const scopedTenantId =
+      request.headers.get("x-tenant-id")?.trim() ||
+      process.env.DEFAULT_TENANT_ID?.trim() ||
+      null;
+
+    let tenantRows: TenantBillingSettingsRow[] = [];
+    if (scopedTenantId) {
+      tenantRows = await prisma.$queryRaw<TenantBillingSettingsRow[]>`
+        SELECT "id", "settings", "createdAt"
+        FROM "Tenant"
+        WHERE "id" = ${scopedTenantId}
+        LIMIT 1
+      `;
+    }
+
+    if (!tenantRows[0]) {
+      tenantRows = await prisma.$queryRaw<TenantBillingSettingsRow[]>`
+        SELECT "id", "settings", "createdAt"
+        FROM "Tenant"
+        ORDER BY "createdAt" ASC
+        LIMIT 1
+      `;
+    }
+
+    const tenantSettings = parseTenantSettings(tenantRows[0]?.settings);
+    const billPrefixCandidate =
+      typeof tenantSettings.billPrefix === "string"
+        ? tenantSettings.billPrefix.trim()
+        : "";
+    const defaultTaxPercentRaw = tenantSettings.defaultTaxPercent;
+    const defaultTaxPercent =
+      typeof defaultTaxPercentRaw === "number"
+        ? defaultTaxPercentRaw
+        : typeof defaultTaxPercentRaw === "string"
+          ? Number.parseFloat(defaultTaxPercentRaw)
+          : Number.NaN;
+
+    return {
+      billPrefix: billPrefixCandidate || "BILL",
+      defaultTaxPercent: Number.isFinite(defaultTaxPercent)
+        ? defaultTaxPercent
+        : 0,
+    };
+  }
+}
+
 // GET /api/bills — List bills with filtering
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
@@ -145,10 +260,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Party not found" }, { status: 404 });
     }
 
-    const settings = await prisma.companySettings.findUnique({
-      where: { id: "default" },
-    });
-    const prefix = settings?.billPrefix || "BILL";
+    const billingSettings = await loadBillingSettings(request);
+    const prefix = billingSettings.billPrefix;
     const resolvedGrandTotal =
       typeof grandTotal === "number" && Number.isFinite(grandTotal)
         ? grandTotal
@@ -188,7 +301,7 @@ export async function POST(request: NextRequest) {
           notes: notes || null,
           terms: terms || null,
           subtotal: subtotal || 0,
-          taxPercent: taxPercent ?? (settings?.defaultTaxPercent || 0),
+          taxPercent: taxPercent ?? billingSettings.defaultTaxPercent,
           taxAmount: taxAmount || 0,
           grandTotal: resolvedGrandTotal,
           status: billStatus,
