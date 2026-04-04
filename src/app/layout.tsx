@@ -14,9 +14,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "DoorCraft Pro — Door Manufacturing Management",
+  title: "HisaabKitaab — Manufacturing Management",
   description:
-    "Manage bills, payments, and measurements for your door manufacturing business.",
+    "Manage bills, payments, and measurements for your manufacturing business.",
   icons: { icon: "/favicon.ico" },
 };
 
@@ -34,6 +34,7 @@ export default async function RootLayout({
     <html
       lang={language}
       className={`${inter.variable} h-full`}
+      data-scroll-behavior="smooth"
       suppressHydrationWarning
     >
       <head>

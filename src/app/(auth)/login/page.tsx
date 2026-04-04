@@ -78,7 +78,7 @@ export default async function LoginPage({
           </div>
           <div className="space-y-1">
             <h1 className="text-3xl font-bold tracking-tight text-blue-600">
-              DoorCraft Pro
+              HisaabKitaab
             </h1>
             <p className="text-sm text-default-500">{t("login.subtitle")}</p>
           </div>
@@ -233,6 +233,13 @@ export default async function LoginPage({
       <dialog
         id="forgot-password-dialog"
         className="w-[calc(100vw-2rem)] max-w-md rounded-3xl border border-white/60 bg-white p-0 text-left text-foreground shadow-2xl shadow-blue-950/15 backdrop:bg-black/35 dark:border-zinc-800 dark:bg-zinc-900"
+        style={{
+          position: "fixed",
+          left: "50%",
+          top: "50%",
+          transform: "translate(-50%, -50%)",
+          margin: 0,
+        }}
       >
         <div className="border-b border-default-100 px-6 py-4 dark:border-zinc-800">
           <h2 className="text-lg font-semibold text-foreground">
@@ -308,11 +315,6 @@ export default async function LoginPage({
                     dialog.close();
                   }
                 });
-                dialog.style.position = "fixed";
-                dialog.style.left = "50%";
-                dialog.style.top = "50%";
-                dialog.style.transform = "translate(-50%, -50%)";
-                dialog.style.margin = "0";
               }
             })();
           `,

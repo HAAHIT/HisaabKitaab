@@ -54,6 +54,7 @@ model User {
   createdBy     String?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+  
   authThrottles AuthThrottle[]
   billsCreated  Bill[]
   measurements  MeasurementUpload[]
@@ -139,6 +140,7 @@ model Bill {
   updatedAt       DateTime     @updatedAt
   isDeleted       Boolean      @default(false)
   partyId         String?
+  
   creator         User         @relation(fields: [createdBy], references: [id])
   party           Party?       @relation(fields: [partyId], references: [id])
   template        BillTemplate @relation(fields: [templateId], references: [id])
@@ -197,6 +199,7 @@ model Payment {
   createdAt    DateTime      @default(now())
   isDeleted    Boolean       @default(false)
   updatedAt    DateTime      @updatedAt
+  
   creator      User          @relation(fields: [createdBy], references: [id])
   linkedBill   Bill?         @relation(fields: [linkedBillId], references: [id])
   party        Party         @relation(fields: [partyId], references: [id])
@@ -241,7 +244,7 @@ model JournalLine {
   partyId     String?
   partyName   String?
   debit       Float        @default(0)
-  credit      Float        @default(0)
+  credit       Float        @default(0)
 
   @@index([journalId])
   @@index([accountCode])
@@ -282,7 +285,7 @@ model MeasurementUpload {
   customerId   String
   label        String
   roomName     String?
-  doorType     String?
+  itemType     String?
   notes        String?
   photosLegacy Json               @map("photos")
   status       MeasurementStatus  @default(UPLOADED)
@@ -292,30 +295,13 @@ model MeasurementUpload {
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
   partyId      String?
+  
   photoAssets  MeasurementPhoto[]
   customer     User               @relation(fields: [customerId], references: [id])
   party        Party?             @relation(fields: [partyId], references: [id])
 
   @@index([tenantId])
 }
-
-// ─── Company Settings (Tenant settings stored in Tenant.settings JSON) ───────
-// CompanySettings model has been REMOVED. Use tenant.settings JSON field:
-// {
-//   billPrefix: string       // default: "BILL"
-//   defaultTaxPercent: number // default: 18
-//   defaultTerms: string     // default: ""
-//   companyName: string
-//   companyPhone: string
-//   companyEmail: string
-//   companyAddress: string
-//   companyGstin: string
-//   upiId: string
-//   businessType: string
-//   taxRegistrationType: string
-// }
-
-// ─── Enums ───────────────────────────────────────────────────────────────────
 
 enum Role {
   ADMIN
@@ -377,6 +363,3 @@ enum MeasurementStatus {
   IN_PRODUCTION
   COMPLETED
 }
-
-
-

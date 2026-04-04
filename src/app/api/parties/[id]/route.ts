@@ -1,8 +1,13 @@
 import { prisma } from "@/lib/prisma";
-import { getTenantId } from "@/lib/tenant";
+import { resolveTenantIdFromRequest, TENANT_CONTEXT_MISSING_MESSAGE } from "@/lib/tenant";
 import { NextRequest, NextResponse } from "next/server";
+import type { PartyType } from "@prisma/client";
 
-const VALID_PARTY_TYPES = new Set(["CUSTOMER", "VENDOR"]);
+const VALID_PARTY_TYPES = new Set<PartyType>(["CUSTOMER", "VENDOR"]);
+
+function isPartyType(value: string | undefined): value is PartyType {
+  return Boolean(value && VALID_PARTY_TYPES.has(value as PartyType));
+}
 
 function normalizeOptionalString(value: unknown) {
   if (typeof value !== "string") {
@@ -36,11 +41,17 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
+  const tenantId = resolveTenantIdFromRequest(request);
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
+  }
 
-  const tenantId = await getTenantId();
   const { id } = await params;
   const party = await findVisibleParty(id, tenantId);
 
@@ -57,12 +68,18 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
+  const tenantId = resolveTenantIdFromRequest(request);
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
+  }
 
   try {
-    const tenantId = await getTenantId();
     const { id } = await params;
     const body = await request.json();
     const existingParty = await findVisibleParty(id, tenantId);
@@ -96,13 +113,16 @@ export async function PATCH(
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
 
-    if (!nextType || !VALID_PARTY_TYPES.has(nextType)) {
+    if (!isPartyType(nextType)) {
       return NextResponse.json({ error: "Invalid party type" }, { status: 400 });
     }
 
     if (nextType !== existingParty.type) {
-      const relationCounts = await prisma.party.findUnique({
-        where: { id },
+      const relationCounts = await prisma.party.findFirst({
+        where: {
+          id,
+          tenantId,
+        },
         select: {
           _count: {
             select: {
@@ -158,12 +178,18 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
+  const tenantId = resolveTenantIdFromRequest(request);
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
+  }
 
   try {
-    const tenantId = await getTenantId();
     const { id } = await params;
     const existingParty = await findVisibleParty(id, tenantId);
 

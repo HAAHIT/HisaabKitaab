@@ -256,7 +256,12 @@ export default function CompanySettingsPage() {
       )}
 
       <div className="mb-6 flex items-center gap-3">
-        <Button isIconOnly variant="light" onPress={() => router.push("/dashboard")}>
+        <Button
+          isIconOnly
+          variant="light"
+          aria-label="Back to dashboard"
+          onPress={() => router.push("/dashboard")}
+        >
           <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               d="M10 19l-7-7m0 0l7-7m-7 7h18"
@@ -333,6 +338,7 @@ export default function CompanySettingsPage() {
                       variant="light"
                       color="danger"
                       isIconOnly
+                      aria-label="Remove logo"
                       onPress={handleRemoveLogo}
                     >
                       <svg

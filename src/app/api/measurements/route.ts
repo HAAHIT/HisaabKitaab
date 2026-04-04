@@ -8,9 +8,18 @@ import {
 } from "@/lib/media";
 import { findUniqueCustomerPartyIdForUser } from "@/lib/party-relations";
 import { prisma } from "@/lib/prisma";
-import { getTenantId } from "@/lib/tenant";
+import {
+  resolveTenantIdFromRequest,
+  TENANT_CONTEXT_MISSING_MESSAGE,
+} from "@/lib/tenant";
+import { resolveVerifiedTenantId } from "@/lib/session-server";
+import { checkRateLimit } from "@/lib/api-rate-limit";
 
 export const runtime = "nodejs";
+
+type MeasurementPhotoAssetCreateInput =
+  | Awaited<ReturnType<typeof buildMediaAssetCreateInputFromFile>>
+  | Awaited<ReturnType<typeof buildMediaAssetCreateInputFromLegacyUrl>>;
 
 function parseOptionalString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
@@ -24,7 +33,7 @@ async function readMeasurementPayload(request: NextRequest) {
     return {
       label: parseOptionalString(formData.get("label")),
       roomName: parseOptionalString(formData.get("roomName")),
-      doorType: parseOptionalString(formData.get("doorType")),
+      itemType: parseOptionalString(formData.get("itemType") || formData.get("doorType")),
       notes: parseOptionalString(formData.get("notes")),
       partyId: parseOptionalString(formData.get("partyId")),
       files: formData
@@ -38,7 +47,7 @@ async function readMeasurementPayload(request: NextRequest) {
   return {
     label: parseOptionalString(body.label),
     roomName: parseOptionalString(body.roomName),
-    doorType: parseOptionalString(body.doorType),
+    itemType: parseOptionalString(body.itemType || body.doorType),
     notes: parseOptionalString(body.notes),
     partyId: parseOptionalString(body.partyId),
     files: [] as File[],
@@ -50,6 +59,29 @@ async function readMeasurementPayload(request: NextRequest) {
   };
 }
 
+// Validate file contents by magic bytes
+async function isValidImageFile(file: File): Promise<boolean> {
+  const buffer = await file.slice(0, 12).arrayBuffer();
+  const b = new Uint8Array(buffer);
+
+  const isJpeg = b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
+  const isPng =
+    b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47;
+  const isGif =
+    b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38;
+  const isWebp =
+    b[0] === 0x52 &&
+    b[1] === 0x49 &&
+    b[2] === 0x46 &&
+    b[3] === 0x46 &&
+    b[8] === 0x57 &&
+    b[9] === 0x45 &&
+    b[10] === 0x42 &&
+    b[11] === 0x50;
+
+  return isJpeg || isPng || isGif || isWebp;
+}
+
 async function buildPhotoAssetInputs({
   files,
   legacyPhotoUrls,
@@ -57,15 +89,13 @@ async function buildPhotoAssetInputs({
   files: File[];
   legacyPhotoUrls: string[];
 }) {
-  const assets: Array<
-    Awaited<ReturnType<typeof buildMediaAssetCreateInputFromFile>>
-  > = [];
+  const assets: MeasurementPhotoAssetCreateInput[] = [];
 
   try {
     if (files.length > 0) {
       for (const file of files) {
-        if (!file.type.startsWith("image/")) {
-          throw new Error("All uploaded files must be images");
+        if (!(await isValidImageFile(file))) {
+          throw new Error("All uploaded files must be valid images");
         }
 
         if (file.size > 8 * 1024 * 1024) {
@@ -122,9 +152,16 @@ const measurementInclude = {
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
   const userId = request.headers.get("x-user-id");
+  const tenantId = resolveTenantIdFromRequest(request);
 
   if (!role || !userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
   }
 
   const { searchParams } = new URL(request.url);
@@ -134,6 +171,7 @@ export async function GET(request: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: any = {
     isDeleted: false,
+    tenantId,
   };
 
   if (role === "CUSTOMER") {
@@ -148,7 +186,7 @@ export async function GET(request: NextRequest) {
     where.OR = [
       { label: { contains: search, mode: "insensitive" } },
       { roomName: { contains: search, mode: "insensitive" } },
-      { doorType: { contains: search, mode: "insensitive" } },
+      { itemType: { contains: search, mode: "insensitive" } },
       { customer: { name: { contains: search, mode: "insensitive" } } },
       { party: { name: { contains: search, mode: "insensitive" } } },
     ];
@@ -169,14 +207,23 @@ export async function GET(request: NextRequest) {
 
 // POST /api/measurements - Upload a measurement with photo assets
 export async function POST(request: NextRequest) {
+  const rateLimitResponse = checkRateLimit(request, "measurements.upload", 20);
+  if (rateLimitResponse) return rateLimitResponse;
+
   const userId = request.headers.get("x-user-id");
+  const tenantId = await resolveVerifiedTenantId(request);
 
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
+  }
 
-  const tenantId = await getTenantId();
-  let photoAssets: any[] = [];
+  let photoAssets: MeasurementPhotoAssetCreateInput[] = [];
 
   try {
     const payload = await readMeasurementPayload(request);
@@ -192,6 +239,7 @@ export async function POST(request: NextRequest) {
       const party = await prisma.party.findFirst({
         where: {
           id: payload.partyId,
+          tenantId,
           type: "CUSTOMER",
           isDeleted: false,
           isActive: true,
@@ -205,7 +253,11 @@ export async function POST(request: NextRequest) {
 
       resolvedPartyId = party.id;
     } else {
-      resolvedPartyId = await findUniqueCustomerPartyIdForUser(prisma, userId);
+      resolvedPartyId = await findUniqueCustomerPartyIdForUser(
+        prisma,
+        userId,
+        tenantId
+      );
     }
 
     photoAssets = await buildPhotoAssetInputs(payload);
@@ -218,29 +270,61 @@ export async function POST(request: NextRequest) {
 
     const measurement = await prisma.$transaction(async (tx) => {
       for (const asset of photoAssets) {
-        await tx.mediaAsset.create({ data: asset });
+        await tx.mediaAsset.create({ data: asset as any });
       }
 
-      return tx.measurementUpload.create({
-        data: {
-          tenantId,
-          customerId: userId,
-          partyId: resolvedPartyId ?? undefined,
-          label,
-          roomName: payload.roomName ?? undefined,
-          doorType: payload.doorType ?? undefined,
-          notes: payload.notes ?? undefined,
-          photosLegacy: [],
-          status: "UPLOADED",
-          photoAssets: {
-            create: photoAssets.map((asset, index) => ({
-              sortOrder: index,
-              assetId: asset.id,
-            })),
-          },
-        },
+      const measurementId = crypto.randomUUID();
+      await tx.$executeRaw`
+        INSERT INTO "MeasurementUpload" (
+          "id",
+          "tenantId",
+          "customerId",
+          "partyId",
+          "label",
+          "roomName",
+          "itemType",
+          "notes",
+          "photos",
+          "status",
+          "isDeleted",
+          "createdAt",
+          "updatedAt"
+        )
+        VALUES (
+          ${measurementId},
+          ${tenantId},
+          ${userId},
+          ${resolvedPartyId},
+          ${label},
+          ${payload.roomName},
+          ${payload.itemType},
+          ${payload.notes},
+          ${JSON.stringify([])}::jsonb,
+          'UPLOADED'::"MeasurementStatus",
+          false,
+          NOW(),
+          NOW()
+        )
+      `;
+
+      await tx.measurementPhoto.createMany({
+        data: photoAssets.map((asset, index) => ({
+          measurementId,
+          assetId: asset.id,
+          sortOrder: index,
+        })),
+      });
+
+      const createdMeasurement = await tx.measurementUpload.findUnique({
+        where: { id: measurementId },
         include: measurementInclude,
       });
+
+      if (!createdMeasurement) {
+        throw new Error("Failed to create measurement");
+      }
+
+      return createdMeasurement;
     });
 
     return NextResponse.json(

@@ -80,10 +80,11 @@ function tokenizeMathExpression(expression: string): MathToken[] | null {
 }
 
 function evaluateMathExpression(expression: string): number | null {
-  const tokens = tokenizeMathExpression(expression) || [];
-  if (tokens.length === 0) {
+  const parsedTokens = tokenizeMathExpression(expression);
+  if (!parsedTokens || parsedTokens.length === 0) {
     return null;
   }
+  const tokens = parsedTokens;
 
   let index = 0;
 

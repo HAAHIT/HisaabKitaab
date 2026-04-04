@@ -9,7 +9,13 @@ import {
   journalForPaymentMade,
   journalForPaymentReceived,
 } from "@/lib/journal";
-import { getTenantId } from "@/lib/tenant";
+import {
+  resolveTenantIdFromRequest,
+  TENANT_CONTEXT_MISSING_MESSAGE,
+} from "@/lib/tenant";
+import { resolveVerifiedTenantId } from "@/lib/session-server";
+
+export const runtime = "nodejs";
 
 const VALID_DIRECTIONS = new Set(["INCOMING", "OUTGOING"]);
 const VALID_MODES = new Set(["CASH", "UPI", "BANK_TRANSFER", "CHEQUE"]);
@@ -56,8 +62,16 @@ function parsePaymentAmount(value: unknown) {
 // GET /api/payments - List payments with filters
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
+  const tenantId = resolveTenantIdFromRequest(request);
+
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
   }
 
   const { searchParams } = new URL(request.url);
@@ -69,8 +83,8 @@ export async function GET(request: NextRequest) {
   const page = parseInt(searchParams.get("page") || "1", 10);
   const limit = parseInt(searchParams.get("limit") || "20", 10);
 
-  const tenantId = await getTenantId();
-  const where: Prisma.PaymentWhereInput = { tenantId, isDeleted: false };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const where: any = { isDeleted: false, tenantId };
 
   if (search) {
     where.OR = [
@@ -119,10 +133,19 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const role = request.headers.get("x-user-role");
   const userId = request.headers.get("x-user-id");
-  const tenantId = await getTenantId();
+  const tenantId = await resolveVerifiedTenantId(request);
 
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!userId) {
+    return NextResponse.json({ error: "Missing user context" }, { status: 401 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
   }
 
   try {
@@ -130,12 +153,16 @@ export async function POST(request: NextRequest) {
     const { partyId, amount, type, mode, date, notes, billId, status } = body;
     const normalizedAmount = parsePaymentAmount(amount);
     const normalizedMode = normalizePaymentMode(mode);
+    const paymentDate = date ? new Date(date) : new Date();
 
     if ((!partyId && !billId) || !normalizedAmount || !type || !normalizedMode) {
       return NextResponse.json(
         { error: "Party or linked bill, amount, type, and mode are required" },
         { status: 400 }
       );
+    }
+    if (Number.isNaN(paymentDate.getTime())) {
+      return NextResponse.json({ error: "Invalid payment date" }, { status: 400 });
     }
 
     if (!VALID_DIRECTIONS.has(type)) {
@@ -156,6 +183,7 @@ export async function POST(request: NextRequest) {
           where: { id: billId },
           select: {
             id: true,
+            tenantId: true,
             partyId: true,
             status: true,
             party: {
@@ -169,6 +197,7 @@ export async function POST(request: NextRequest) {
 
         if (
           !linkedBill ||
+          linkedBill.tenantId !== tenantId ||
           linkedBill.status !== "FINAL" ||
           !linkedBill.partyId ||
           !linkedBill.party
@@ -187,13 +216,13 @@ export async function POST(request: NextRequest) {
       }
 
       if (!resolvedPartyId) {
-        throw new Error("Party ID is required");
+        throw new Error("Party not found");
       }
 
       const party = await tx.party.findFirst({
         where: {
-          tenantId,
           id: resolvedPartyId,
+          tenantId,
           isDeleted: false,
           isActive: true,
         },
@@ -204,24 +233,53 @@ export async function POST(request: NextRequest) {
         throw new Error("Party not found");
       }
 
-      const newPayment = await tx.payment.create({
-        data: {
-          tenantId,
-          partyId: party.id,
-          amount: normalizedAmount,
-          direction: type,
-          mode: normalizedMode,
-          status: paymentStatus,
-          date: date ? new Date(date) : new Date(),
-          notes: notes || null,
-          linkedBillId: resolvedBillId,
-          createdBy: userId!,
-        },
+      const paymentId = crypto.randomUUID();
+      await tx.$executeRaw`
+        INSERT INTO "Payment" (
+          "id",
+          "tenantId",
+          "partyId",
+          "direction",
+          "amount",
+          "date",
+          "mode",
+          "status",
+          "linkedBillId",
+          "notes",
+          "createdBy",
+          "createdAt",
+          "isDeleted",
+          "updatedAt"
+        )
+        VALUES (
+          ${paymentId},
+          ${tenantId},
+          ${party.id},
+          ${type}::"PayDirection",
+          ${normalizedAmount},
+          ${paymentDate},
+          ${normalizedMode}::"PaymentMode",
+          ${paymentStatus}::"PaymentStatus",
+          ${resolvedBillId},
+          ${notes || null},
+          ${userId},
+          NOW(),
+          false,
+          NOW()
+        )
+      `;
+
+      const newPayment = await tx.payment.findUnique({
+        where: { id: paymentId },
         include: {
           party: { select: { name: true, type: true } },
           linkedBill: { select: { id: true, billNumber: true } },
         },
       });
+
+      if (!newPayment) {
+        throw new Error("Failed to create payment");
+      }
 
       if (paymentStatus === "COMPLETED") {
         const balanceChange = getPaymentBalanceDelta(
@@ -275,9 +333,16 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   const role = request.headers.get("x-user-role");
   const userId = request.headers.get("x-user-id");
+  const tenantId = await resolveVerifiedTenantId(request);
 
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
   }
 
   try {
@@ -289,14 +354,13 @@ export async function PATCH(request: NextRequest) {
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      const tenantId2 = await getTenantId();
       const payment = await tx.payment.findFirst({
         where: {
           id: paymentId,
-          tenantId: tenantId2,
+          tenantId,
           isDeleted: false,
         },
-        include: { party: { select: { type: true } } },
+        include: { party: { select: { name: true, type: true } } },
       });
 
       if (!payment) {
@@ -327,7 +391,7 @@ export async function PATCH(request: NextRequest) {
       });
 
       if (payment.direction === "INCOMING") {
-        await journalForPaymentReceived(tx, tenantId2, {
+        await journalForPaymentReceived(tx, tenantId, {
           id: updated.id,
           partyId: payment.partyId,
           partyName: updated.party.name,
@@ -337,7 +401,7 @@ export async function PATCH(request: NextRequest) {
           createdBy: userId || payment.createdBy,
         });
       } else {
-        await journalForPaymentMade(tx, tenantId2, {
+        await journalForPaymentMade(tx, tenantId, {
           id: updated.id,
           partyId: payment.partyId,
           partyName: updated.party.name,

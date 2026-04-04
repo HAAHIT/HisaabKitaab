@@ -9,8 +9,13 @@ import {
   journalForPaymentReceived,
   journalForSalesBill,
 } from "@/lib/journal";
-import { getTenantId } from "@/lib/tenant";
 import { NextRequest, NextResponse } from "next/server";
+import {
+  resolveTenantIdFromRequest,
+  TENANT_CONTEXT_MISSING_MESSAGE,
+} from "@/lib/tenant";
+import { resolveVerifiedTenantId } from "@/lib/session-server";
+import { checkRateLimit } from "@/lib/api-rate-limit";
 
 const BILL_NUMBER_LOCK_KEY = 22032026;
 type SupportedPaymentMode = "CASH" | "UPI" | "BANK_TRANSFER" | "CHEQUE";
@@ -25,23 +30,79 @@ function normalizePaymentMode(mode: unknown): SupportedPaymentMode | null {
   if (mode === "BANK") {
     return "BANK_TRANSFER";
   }
-
   if (typeof mode !== "string") {
     return null;
   }
-
   return VALID_PAYMENT_MODES.has(mode) ? (mode as SupportedPaymentMode) : null;
+}
+
+type TenantBillingSettingsRow = {
+  id: string;
+  settings: unknown;
+  createdAt: Date;
+};
+
+function parseTenantSettings(value: unknown) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+async function loadBillingSettings(tenantId: string) {
+  const tenantRows = await prisma.$queryRaw<TenantBillingSettingsRow[]>`
+    SELECT "id", "settings", "createdAt"
+    FROM "Tenant"
+    WHERE "id" = ${tenantId}
+    LIMIT 1
+  `;
+
+  const tenantSettings = parseTenantSettings(tenantRows[0]?.settings);
+  const billPrefixCandidate =
+    typeof tenantSettings.billPrefix === "string"
+      ? tenantSettings.billPrefix.trim()
+      : "";
+  const defaultTaxPercentRaw = tenantSettings.defaultTaxPercent;
+  const defaultTaxPercent =
+    typeof defaultTaxPercentRaw === "number"
+      ? defaultTaxPercentRaw
+      : typeof defaultTaxPercentRaw === "string"
+        ? Number.parseFloat(defaultTaxPercentRaw)
+        : Number.NaN;
+
+  return {
+    billPrefix: billPrefixCandidate || "BILL",
+    defaultTaxPercent: Number.isFinite(defaultTaxPercent)
+      ? defaultTaxPercent
+      : 0,
+  };
 }
 
 // GET /api/bills — List bills with filtering
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
+  const tenantId = resolveTenantIdFromRequest(request);
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
+  }
 
   try {
-    const tenantId = await getTenantId();
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") || "";
     const status = searchParams.get("status") || "";
@@ -52,7 +113,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "20");
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const where: any = { tenantId, isDeleted: false };
+    const where: any = { isDeleted: false, tenantId };
 
     if (search) {
       where.OR = [
@@ -119,15 +180,27 @@ export async function GET(request: NextRequest) {
 
 // POST /api/bills — Create a new bill
 export async function POST(request: NextRequest) {
+  const rateLimitResponse = checkRateLimit(request, "bills.create", 30);
+  if (rateLimitResponse) return rateLimitResponse;
+
   const role = request.headers.get("x-user-role");
   const userId = request.headers.get("x-user-id");
+  const tenantId = await resolveVerifiedTenantId(request);
 
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (!userId) {
+    return NextResponse.json({ error: "Missing user context" }, { status: 401 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
+  }
 
   try {
-    const tenantId = await getTenantId();
     const body = await request.json();
     const {
       templateId,
@@ -153,7 +226,6 @@ export async function POST(request: NextRequest) {
       if (!partyId) {
         return NextResponse.json({ error: "Party is required for Quick Bill" }, { status: 400 });
       }
-
       if (!grandTotal || grandTotal <= 0) {
         return NextResponse.json({ error: "Amount must be greater than zero" }, { status: 400 });
       }
@@ -175,7 +247,6 @@ export async function POST(request: NextRequest) {
           },
         });
       }
-
       finalTemplateId = quickTemplate.id;
     }
 
@@ -184,6 +255,19 @@ export async function POST(request: NextRequest) {
         { error: "Template, party, and at least one row are required" },
         { status: 400 }
       );
+    }
+
+    const template = await prisma.billTemplate.findFirst({
+      where: {
+        id: finalTemplateId,
+        tenantId,
+        isDeleted: false,
+      },
+      select: { id: true },
+    });
+
+    if (!template) {
+      return NextResponse.json({ error: "Template not found" }, { status: 404 });
     }
 
     const party = await prisma.party.findFirst({
@@ -207,12 +291,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Party not found" }, { status: 404 });
     }
 
-    // Load tenant settings (replaces CompanySettings)
-    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
-    const settings = (tenant?.settings as Record<string, unknown>) || {};
-    const prefix = (settings.billPrefix as string) || "BILL";
-    const defaultTaxPercent = (settings.defaultTaxPercent as number) ?? 0;
-
+    const billingSettings = await loadBillingSettings(tenantId);
+    const prefix = billingSettings.billPrefix;
+    
     const resolvedGrandTotal =
       typeof grandTotal === "number" && Number.isFinite(grandTotal)
         ? grandTotal
@@ -223,6 +304,7 @@ export async function POST(request: NextRequest) {
     const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    
     const snapshot = buildBillSnapshotFromParty(party, {
       customerName,
       customerPhone,
@@ -254,35 +336,74 @@ export async function POST(request: NextRequest) {
     const bill = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${BILL_NUMBER_LOCK_KEY})`;
 
-      const existingCount = await tx.bill.count({
-        where: {
-          tenantId,
-          createdAt: {
-            gte: monthStart,
-            lt: nextMonthStart,
-          },
-        },
-      });
+      const existingCountRows = await tx.$queryRaw<Array<{ count: bigint }>>`
+        SELECT COUNT(*)::bigint AS count
+        FROM "Bill"
+        WHERE
+          "tenantId" = ${tenantId}
+          AND "createdAt" >= ${monthStart}
+          AND "createdAt" < ${nextMonthStart}
+      `;
+      const existingCount = Number(existingCountRows[0]?.count || 0);
       const billNumber = `${prefix}-${yearMonth}-${String(existingCount + 1).padStart(3, "0")}`;
 
-      const createdBill = await tx.bill.create({
-        data: {
-          tenantId,
-          billNumber,
-          templateId: finalTemplateId,
-          partyId: party.id,
-          ...snapshot,
-          rows,
-          notes: notes || null,
-          terms: terms || null,
-          subtotal: subtotal || 0,
-          taxPercent: taxPercent ?? defaultTaxPercent,
-          taxAmount: taxAmount || 0,
-          grandTotal: resolvedGrandTotal,
-          status: billStatus,
-          createdBy: userId!,
-        },
+      const billId = crypto.randomUUID();
+      await tx.$executeRaw`
+        INSERT INTO "Bill" (
+          "id",
+          "tenantId",
+          "billNumber",
+          "templateId",
+          "partyId",
+          "customerName",
+          "customerPhone",
+          "customerAddress",
+          "gstin",
+          "rows",
+          "notes",
+          "terms",
+          "subtotal",
+          "taxPercent",
+          "taxAmount",
+          "grandTotal",
+          "status",
+          "createdBy",
+          "createdAt",
+          "updatedAt",
+          "isDeleted"
+        )
+        VALUES (
+          ${billId},
+          ${tenantId},
+          ${billNumber},
+          ${template.id},
+          ${party.id},
+          ${snapshot.customerName},
+          ${snapshot.customerPhone},
+          ${snapshot.customerAddress},
+          ${snapshot.gstin},
+          ${JSON.stringify(rows)}::jsonb,
+          ${notes || null},
+          ${terms || null},
+          ${subtotal || 0},
+          ${taxPercent ?? billingSettings.defaultTaxPercent},
+          ${taxAmount || 0},
+          ${resolvedGrandTotal},
+          ${billStatus}::"BillStatus",
+          ${userId},
+          NOW(),
+          NOW(),
+          false
+        )
+      `;
+
+      const createdBill = await tx.bill.findUnique({
+        where: { id: billId },
       });
+
+      if (!createdBill) {
+        throw new Error("Failed to create bill");
+      }
 
       const balanceChange = getPostedBillBalanceDelta(
         party.type,

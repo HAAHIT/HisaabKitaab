@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getTenantId } from "@/lib/tenant";
+import {
+  resolveTenantIdFromRequest,
+  TENANT_CONTEXT_MISSING_MESSAGE,
+} from "@/lib/tenant";
+import { resolveVerifiedTenantId } from "@/lib/session-server";
 import {
   mergeTenantSettings,
   normalizeBusinessType,
@@ -12,9 +16,16 @@ import {
 } from "@/lib/tenant-settings";
 
 // GET /api/settings - Get company settings from Tenant record
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const tenantId = await getTenantId();
+    const tenantId = resolveTenantIdFromRequest(request);
+    if (!tenantId) {
+      return NextResponse.json(
+        { error: TENANT_CONTEXT_MISSING_MESSAGE },
+        { status: 500 }
+      );
+    }
+
     const tenant = await prisma.tenant.findUnique({
       where: { id: tenantId },
       select: {
@@ -34,20 +45,28 @@ export async function GET() {
     }
 
     return NextResponse.json({ settings: serializeTenantSettings(tenant) });
-  } catch {
-    return NextResponse.json({ settings: null });
+  } catch (error) {
+    console.error("Load settings error:", error);
+    return NextResponse.json({ settings: null }, { status: 500 });
   }
 }
 
 // PATCH /api/settings - Update company settings in Tenant.settings JSON
 export async function PATCH(request: NextRequest) {
   const role = request.headers.get("x-user-role");
+  const tenantId = await resolveVerifiedTenantId(request);
+
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
+  }
 
   try {
-    const tenantId = await getTenantId();
     const body = await request.json();
     const existingTenant = await prisma.tenant.findUnique({
       where: { id: tenantId },
@@ -68,17 +87,13 @@ export async function PATCH(request: NextRequest) {
     const companyPhone = normalizeOptionalString(body.companyPhone);
     const companyEmail = normalizeOptionalString(body.companyEmail);
     const companyGstin = normalizeOptionalString(body.companyGstin);
-    const companyAddressSetting = normalizeString(body.companyAddress);
-    const companyPhoneSetting = normalizeString(body.companyPhone);
-    const companyEmailSetting = normalizeString(body.companyEmail);
-    const companyGstinSetting = normalizeString(body.companyGstin);
 
-    const newSettings = mergeTenantSettings(existingTenant.settings, {
+    const newSettings = mergeTenantSettings(existingTenant.settings as Record<string, unknown> | null, {
       companyName,
-      companyAddress: companyAddressSetting,
-      companyPhone: companyPhoneSetting,
-      companyEmail: companyEmailSetting,
-      companyGstin: companyGstinSetting,
+      companyAddress: normalizeString(body.companyAddress),
+      companyPhone: normalizeString(body.companyPhone),
+      companyEmail: normalizeString(body.companyEmail),
+      companyGstin: normalizeString(body.companyGstin),
       defaultTaxPercent: normalizeTaxPercent(body.defaultTaxPercent),
       defaultTerms: normalizeString(body.defaultTerms),
       billPrefix: normalizeString(body.billPrefix, "BILL"),
@@ -98,7 +113,7 @@ export async function PATCH(request: NextRequest) {
         email: companyEmail,
         address: companyAddress,
         gstin: companyGstin,
-        settings: newSettings,
+        settings: newSettings as any,
       },
       select: {
         id: true,

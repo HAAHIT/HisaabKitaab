@@ -1,19 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getTenantId } from "@/lib/tenant";
+import {
+  resolveTenantIdFromRequest,
+  TENANT_CONTEXT_MISSING_MESSAGE,
+} from "@/lib/tenant";
 import {
   escapeCsv,
   formatDateForCsv,
   parseIndianDateRange,
 } from "@/lib/journal-reporting";
 
+export const runtime = "nodejs";
+
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
+  const tenantId = resolveTenantIdFromRequest(request);
+
   if (role !== "ADMIN" && role !== "ACCOUNTANT") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
+  }
 
-  const tenantId = await getTenantId();
   const { searchParams } = new URL(request.url);
   const from = searchParams.get("from");
   const to = searchParams.get("to");
@@ -60,11 +72,23 @@ export async function GET(request: NextRequest) {
         lte: toDate,
       },
     },
-    include: {
-      lines: true,
-    },
     orderBy: [{ entryDate: "asc" }, { createdAt: "asc" }],
   });
+
+  // Fetch all lines for these entries to avoid "lines" relation type error
+  const entryIds = entries.map(e => e.id);
+  const allLines = await prisma.journalLine.findMany({
+    where: {
+      journalId: { in: entryIds }
+    }
+  });
+
+  // Group lines by journalId
+  const linesMap = allLines.reduce((acc, line) => {
+    if (!acc[line.journalId]) acc[line.journalId] = [];
+    acc[line.journalId].push(line);
+    return acc;
+  }, {} as Record<string, typeof allLines>);
 
   if (format === "json") {
     return NextResponse.json({ entries, totalEntries: entries.length });
@@ -87,7 +111,8 @@ export async function GET(request: NextRequest) {
   ];
 
   for (const entry of entries) {
-    for (const line of entry.lines) {
+    const entryLines = linesMap[entry.id] || [];
+    for (const line of entryLines) {
       csvRows.push(
         [
           formatDateForCsv(entry.entryDate),

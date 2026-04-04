@@ -18,7 +18,7 @@ interface Measurement {
   id: string;
   label: string;
   roomName: string | null;
-  doorType: string | null;
+  itemType: string | null;
   notes: string | null;
   photos: { url: string }[];
   status: string;
@@ -159,7 +159,12 @@ export default function MeasurementDetailPage({
       )}
 
       <div className="mb-6 flex items-center gap-3">
-        <Button isIconOnly variant="light" onPress={() => router.push("/measurements")}>
+        <Button
+          isIconOnly
+          variant="light"
+          aria-label="Back to measurements"
+          onPress={() => router.push("/measurements")}
+        >
           <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               d="M10 19l-7-7m0 0l7-7m-7 7h18"
@@ -238,8 +243,8 @@ export default function MeasurementDetailPage({
                   <p className="font-medium">{data.roomName || "-"}</p>
                 </div>
                 <div>
-                  <span className="text-default-400">Door Type</span>
-                  <p className="font-medium">{data.doorType || "-"}</p>
+                  <span className="text-default-400">Item Type</span>
+                  <p className="font-medium">{data.itemType || "-"}</p>
                 </div>
               </div>
               <div>
@@ -304,7 +309,8 @@ export default function MeasurementDetailPage({
               <h2 className="font-semibold text-primary">Workflow Status</h2>
               <Select
                 label="Current Status"
-                selectedKeys={[status]}
+                placeholder="Select status"
+                selectedKeys={new Set([status])}
                 onSelectionChange={(keys) => {
                   const value = Array.from(keys)[0] as string;
                   if (value) {

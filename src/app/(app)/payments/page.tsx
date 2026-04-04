@@ -177,6 +177,7 @@ export default function PaymentsListPage() {
 
       <div className="mb-6 flex flex-col gap-3 sm:flex-row">
         <Input
+          aria-label={t("payments.searchPlaceholder")}
           placeholder={t("payments.searchPlaceholder")}
           value={search}
           onValueChange={setSearch}
@@ -194,7 +195,9 @@ export default function PaymentsListPage() {
           }
         />
         <Select
-          selectedKeys={[typeFilter]}
+          aria-label={t("payments.filter.allTypes")}
+          placeholder={t("payments.filter.allTypes")}
+          selectedKeys={new Set([typeFilter])}
           onSelectionChange={(keys) => {
             const value = Array.from(keys)[0] as string;
             if (value) {
@@ -210,7 +213,9 @@ export default function PaymentsListPage() {
           ))}
         </Select>
         <Select
-          selectedKeys={[statusFilter]}
+          aria-label={t("payments.filter.allStatus")}
+          placeholder={t("payments.filter.allStatus")}
+          selectedKeys={new Set([statusFilter])}
           onSelectionChange={(keys) => {
             const value = Array.from(keys)[0] as string;
             if (value) {

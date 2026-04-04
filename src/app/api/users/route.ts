@@ -1,8 +1,15 @@
 import { Role } from "@prisma/client";
 import { hashPassword } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getTenantId } from "@/lib/tenant";
 import { NextRequest, NextResponse } from "next/server";
+import {
+  resolveTenantIdFromRequest,
+  TENANT_CONTEXT_MISSING_MESSAGE,
+} from "@/lib/tenant";
+import { resolveVerifiedTenantId } from "@/lib/session-server";
+import { checkRateLimit } from "@/lib/api-rate-limit";
+
+export const runtime = "nodejs";
 
 const VALID_ROLES = new Set(Object.values(Role));
 
@@ -22,11 +29,19 @@ function normalizeOptionalString(value: unknown) {
 // GET /api/users — List all users (Admin only)
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
+  const tenantId = resolveTenantIdFromRequest(request);
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
+  }
 
   const users = await prisma.user.findMany({
+    where: { tenantId },
     select: {
       id: true,
       name: true,
@@ -44,14 +59,25 @@ export async function GET(request: NextRequest) {
 
 // POST /api/users — Create a new user (Admin only)
 export async function POST(request: NextRequest) {
+  const rateLimitResponse = checkRateLimit(request, "users.create", 20);
+  if (rateLimitResponse) return rateLimitResponse;
+
   const role = request.headers.get("x-user-role");
   const adminId = request.headers.get("x-user-id");
+  const tenantId = await resolveVerifiedTenantId(request);
 
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-
-  const tenantId = await getTenantId();
+  if (!adminId) {
+    return NextResponse.json({ error: "Missing user context" }, { status: 401 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
+  }
 
   try {
     const body = await request.json();
@@ -93,7 +119,13 @@ export async function POST(request: NextRequest) {
 
     // Check for duplicates
     if (email) {
-      const existing = await prisma.user.findUnique({ where: { tenantId_email: { tenantId, email } } });
+      const existing = await prisma.user.findFirst({
+        where: {
+          tenantId,
+          email: { equals: email, mode: "insensitive" },
+        },
+        select: { id: true },
+      });
       if (existing) {
         return NextResponse.json(
           { error: "A user with this email already exists" },
@@ -102,7 +134,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const existingPhone = await prisma.user.findUnique({ where: { tenantId_phone: { tenantId, phone } } });
+    const existingPhone = await prisma.user.findFirst({
+      where: {
+        tenantId,
+        phone,
+      },
+      select: { id: true },
+    });
     if (existingPhone) {
       return NextResponse.json(
         { error: "A user with this phone already exists" },
@@ -112,16 +150,38 @@ export async function POST(request: NextRequest) {
 
     const hashedPassword = await hashPassword(password);
 
-    const user = await prisma.user.create({
-      data: {
-        tenantId,
-        name,
-        email: email || null,
-        phone,
-        password: hashedPassword,
-        role: userRole,
-        createdBy: adminId,
-      },
+    const userId = crypto.randomUUID();
+    await prisma.$executeRaw`
+      INSERT INTO "User" (
+        "id",
+        "tenantId",
+        "name",
+        "email",
+        "phone",
+        "password",
+        "role",
+        "isActive",
+        "createdBy",
+        "createdAt",
+        "updatedAt"
+      )
+      VALUES (
+        ${userId},
+        ${tenantId},
+        ${name},
+        ${email || null},
+        ${phone},
+        ${hashedPassword},
+        ${userRole}::"Role",
+        true,
+        ${adminId},
+        NOW(),
+        NOW()
+      )
+    `;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
       select: {
         id: true,
         name: true,
@@ -132,6 +192,10 @@ export async function POST(request: NextRequest) {
         createdAt: true,
       },
     });
+
+    if (!user) {
+      throw new Error("Failed to create user");
+    }
 
     return NextResponse.json({ user }, { status: 201 });
   } catch (error) {

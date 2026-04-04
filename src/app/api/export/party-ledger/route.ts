@@ -4,20 +4,32 @@ import {
   buildPartyLedger,
   getLedgerAmountsForBalanceDelta,
 } from "@/lib/accounting";
-import { getTenantId } from "@/lib/tenant";
+import {
+  resolveTenantIdFromRequest,
+  TENANT_CONTEXT_MISSING_MESSAGE,
+} from "@/lib/tenant";
 import {
   escapeCsv,
   formatDateForCsv,
   parseIndianDateRange,
 } from "@/lib/journal-reporting";
 
+export const runtime = "nodejs";
+
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
+  const tenantId = resolveTenantIdFromRequest(request);
+
   if (role !== "ADMIN" && role !== "ACCOUNTANT") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
+  }
 
-  const tenantId = await getTenantId();
   const { searchParams } = new URL(request.url);
   const from = searchParams.get("from");
   const to = searchParams.get("to");

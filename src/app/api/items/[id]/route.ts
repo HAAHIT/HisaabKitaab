@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getTenantId } from "@/lib/tenant";
+import {
+  resolveTenantIdFromRequest,
+  TENANT_CONTEXT_MISSING_MESSAGE,
+} from "@/lib/tenant";
+import { resolveVerifiedTenantId } from "@/lib/session-server";
 import {
   normalizeItemNumber,
   normalizeItemUnit,
 } from "@/lib/item-catalog";
+
+export const runtime = "nodejs";
 
 function isAdmin(request: NextRequest) {
   return request.headers.get("x-user-role") === "ADMIN";
@@ -14,12 +20,19 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const tenantId = await resolveVerifiedTenantId(request);
+
   if (!isAdmin(request)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
+  }
 
   try {
-    const tenantId = await getTenantId();
     const { id } = await params;
     const body = await request.json();
     const name =
@@ -96,12 +109,19 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const tenantId = await resolveVerifiedTenantId(request);
+
   if (!isAdmin(request)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
+  }
 
   try {
-    const tenantId = await getTenantId();
     const { id } = await params;
 
     const existingItem = await prisma.itemCatalog.findFirst({

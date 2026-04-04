@@ -1,16 +1,26 @@
 import { prisma } from "@/lib/prisma";
-import { getTenantId } from "@/lib/tenant";
 import { NextRequest, NextResponse } from "next/server";
+import {
+  resolveTenantIdFromRequest,
+  TENANT_CONTEXT_MISSING_MESSAGE,
+} from "@/lib/tenant";
 
 // GET /api/dashboard — Dashboard aggregated data
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
+  const tenantId = resolveTenantIdFromRequest(request);
+
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
+  }
 
   try {
-    const tenantId = await getTenantId();
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -58,7 +68,10 @@ export async function GET(request: NextRequest) {
       }),
       // Recent payments (last 5, completed only)
       prisma.payment.findMany({
-        where: { tenantId, status: "COMPLETED" },
+        where: {
+          tenantId,
+          status: "COMPLETED",
+        },
         orderBy: { date: "desc" },
         take: 5,
         include: { party: { select: { name: true, type: true } } },
@@ -87,32 +100,49 @@ export async function GET(request: NextRequest) {
       }),
     ]);
 
-    // Monthly cash flow (last 6 months)
-    const cashFlow = [];
-    for (let i = 5; i >= 0; i--) {
-      const mStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const mEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+    // Monthly cash flow (last 6 months) - parallelized
+    const monthDetails = Array.from({ length: 6 }, (_, i) => {
+      const monthIdx = 5 - i;
+      const mStart = new Date(now.getFullYear(), now.getMonth() - monthIdx, 1);
+      const mEnd = new Date(now.getFullYear(), now.getMonth() - monthIdx + 1, 0);
+      return { mStart, mEnd };
+    });
 
-      const [received, paid] = await Promise.all([
-        prisma.payment.aggregate({
-          where: { tenantId, direction: "INCOMING", status: "COMPLETED", date: { gte: mStart, lte: mEnd } },
-          _sum: { amount: true },
-        }),
-        prisma.payment.aggregate({
-          where: { tenantId, direction: "OUTGOING", status: "COMPLETED", date: { gte: mStart, lte: mEnd } },
-          _sum: { amount: true },
-        }),
-      ]);
+    const cashFlowResults = await Promise.all(
+      monthDetails.map(async ({ mStart, mEnd }) => {
+        const [received, paid] = await Promise.all([
+          prisma.payment.aggregate({
+            where: {
+              tenantId,
+              direction: "INCOMING",
+              status: "COMPLETED",
+              date: { gte: mStart, lte: mEnd },
+            },
+            _sum: { amount: true },
+          }),
+          prisma.payment.aggregate({
+            where: {
+              tenantId,
+              direction: "OUTGOING",
+              status: "COMPLETED",
+              date: { gte: mStart, lte: mEnd },
+            },
+            _sum: { amount: true },
+          }),
+        ]);
 
-      cashFlow.push({
-        month: mStart.toLocaleDateString("en-IN", {
-          month: "short",
-          year: "2-digit",
-        }),
-        received: received._sum.amount || 0,
-        paid: paid._sum.amount || 0,
-      });
-    }
+        return {
+          month: mStart.toLocaleDateString("en-IN", {
+            month: "short",
+            year: "2-digit",
+          }),
+          received: received._sum.amount || 0,
+          paid: paid._sum.amount || 0,
+        };
+      })
+    );
+
+    const cashFlow = cashFlowResults;
 
     const receivable = Math.abs(receivableParties._sum.currentBalance || 0);
     const payable = Math.abs(payableParties._sum.currentBalance || 0);

@@ -16,6 +16,7 @@ import BottomSheet from "./BottomSheet";
 import { QuickBillSheet } from "@/components/bills/QuickBillSheet";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { TranslationKey } from "@/lib/i18n/translations";
+import { FEATURE_FLAGS, type FeatureFlagKey } from "@/lib/feature-flags";
 
 interface UserSession {
   userId: string;
@@ -30,6 +31,7 @@ interface NavItem {
   translationKey: TranslationKey;
   href: string;
   roles: string[];
+  featureFlag?: FeatureFlagKey;
 }
 
 const MAIN_NAV: NavItem[] = [
@@ -100,6 +102,7 @@ const MORE_ITEMS: NavItem[] = [
     translationKey: "nav.measures",
     href: "/measurements",
     roles: ["ADMIN", "STAFF"],
+    featureFlag: "measurementsUi",
   },
 ];
 
@@ -113,6 +116,7 @@ const CUSTOMER_NAV: NavItem[] = [
     translationKey: "nav.upload",
     href: "/measurements/upload",
     roles: ["CUSTOMER"],
+    featureFlag: "measurementsUi",
   },
   {
     icon: (
@@ -123,6 +127,7 @@ const CUSTOMER_NAV: NavItem[] = [
     translationKey: "nav.myuploads",
     href: "/measurements/my-uploads",
     roles: ["CUSTOMER"],
+    featureFlag: "measurementsUi",
   },
 ];
 
@@ -146,34 +151,28 @@ export default function AppShell({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [moreSheetOpen, setMoreSheetOpen] = useState(false);
   const [quickBillOpen, setQuickBillOpen] = useState(false);
+  const [fabOpenPath, setFabOpenPath] = useState<string | null>(null);
+
+  const showFab = (user.role !== "CUSTOMER") && (!pathname.includes("/bills/new") && !pathname.includes("/login"));
 
   const navItems = useMemo(
     () =>
-      (user.role === "CUSTOMER" ? CUSTOMER_NAV : [...MAIN_NAV, ...MORE_ITEMS]).filter((item) =>
-        item.roles.includes(user.role)
+      (user.role === "CUSTOMER" ? CUSTOMER_NAV : [...MAIN_NAV, ...MORE_ITEMS]).filter(
+        (item) =>
+          item.roles.includes(user.role) &&
+          (!item.featureFlag || FEATURE_FLAGS[item.featureFlag as keyof typeof FEATURE_FLAGS])
       ),
     [user.role]
   );
   
-  const mainNavItems = useMemo(
-    () =>
-      (user.role === "CUSTOMER" ? CUSTOMER_NAV : MAIN_NAV).filter((item) =>
-        item.roles.includes(user.role)
-      ),
-    [user.role]
-  );
+  const canQuickBill = user.role !== "CUSTOMER";
+  const hasMoreSheet = user.role !== "CUSTOMER";
+  const roleLabel = t(`roles.${user.role.toLowerCase()}` as any);
 
   const moreItems = useMemo(
     () => MORE_ITEMS.filter((item) => item.roles.includes(user.role)),
     [user.role]
   );
-
-  const roleLabelKey = ROLE_TRANSLATION_KEYS[user.role];
-  const roleLabel = roleLabelKey ? t(roleLabelKey) : user.role;
-  const mobileNavLabel = (item: NavItem) =>
-    item.href === "/parties" ? t("nav.khata") : t(item.translationKey);
-  const hasMoreSheet = user.role !== "CUSTOMER" || moreItems.length === 0;
-  const canQuickBill = user.role !== "CUSTOMER";
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -207,7 +206,7 @@ export default function AppShell({
           </div>
           {!sidebarCollapsed && (
             <span className="text-lg font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent truncate">
-              DoorCraft Pro
+              HisaabKitaab
             </span>
           )}
         </div>
@@ -470,7 +469,7 @@ export default function AppShell({
               </svg>
             </div>
             <span className="font-bold text-lg bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-              DoorCraft
+              HisaabKitaab
             </span>
           </div>
           {hasMoreSheet ? (
@@ -505,49 +504,73 @@ export default function AppShell({
         </div>
 
         {/* ── Mobile Bottom Nav ────────────────────────── */}
-        <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 print:hidden text-foreground">
-          <div className="bottom-nav-glass border-t border-divider pb-safe-bottom">
-            <div className="flex items-center justify-around h-16">
-              {/* Main nav tabs */}
-              {mainNavItems.map((item) => (
+        <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-white/60 p-2 pb-safe backdrop-blur-xl dark:bg-black/60 lg:hidden">
+          <div className="mx-auto flex max-w-md items-center justify-around gap-1">
+            {navItems.slice(0, 4).map((item) => {
+              const isActive = pathname === item.href;
+              return (
                 <button
                   key={item.href}
                   onClick={() => router.push(item.href)}
-                  className={`flex flex-col items-center gap-0.5 px-4 py-2 transition-all ${
-                    isActive(item.href)
-                      ? "text-primary scale-105"
-                      : "text-default-400 active:scale-95"
+                  className={`flex flex-col items-center gap-1.5 rounded-2xl px-4 py-2 transition-all ${
+                    isActive
+                      ? "bg-primary/15 text-primary shadow-[0_4px_12px_rgba(59,130,246,0.1)]"
+                      : "text-default-500 hover:bg-default-100/50"
                   }`}
                 >
-                  <span className={isActive(item.href) ? "text-primary" : "text-default-400"}>
+                  <div
+                    className={`transition-transform duration-300 ${isActive ? "scale-110" : ""}`}
+                  >
                     {item.icon}
-                  </span>
-                  <span className="text-[10px] font-medium leading-tight">
-                    {mobileNavLabel(item)}
+                  </div>
+                  <span className="text-[10px] font-bold uppercase tracking-widest">
+                    {t(item.translationKey as never)}
                   </span>
                 </button>
-              ))}
+              );
+            })}
 
-              {/* More tab */}
-              {hasMoreSheet && (
+            {user.role !== "CUSTOMER" && (
+              <div className="relative -mt-12">
                 <button
-                  onClick={() => setMoreSheetOpen(true)}
-                  className={`flex flex-col items-center gap-0.5 px-4 py-2 transition-all ${
-                    moreSheetOpen ? "text-primary scale-105" : "text-default-400 active:scale-95"
-                  }`}
+                  onClick={() => setQuickBillOpen(true)}
+                  className="group relative flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 shadow-[0_8px_20px_-6px_rgba(59,130,246,0.5)] transition-all hover:scale-110 active:scale-95"
                 >
-                  <span className={moreSheetOpen ? "text-primary" : "text-default-400"}>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                        d="M4 6h16M4 12h16M4 18h16" />
-                    </svg>
-                  </span>
-                  <span className="text-[10px] font-medium leading-tight">
-                    {t("nav.more")}
-                  </span>
+                  <svg
+                    className="h-7 w-7 text-white transition-transform duration-500 group-hover:rotate-90"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      d="M12 4v16m8-8H4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2.5}
+                    />
+                  </svg>
                 </button>
-              )}
-            </div>
+              </div>
+            )}
+
+            <button
+              onClick={() => setMoreSheetOpen(true)}
+              className="flex flex-col items-center gap-1.5 rounded-2xl px-4 py-2 transition-all text-default-500 hover:bg-default-100/50"
+            >
+              <div className="transition-transform duration-300">
+                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    d="M4 6h16M4 12h16m-7 6h7"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                  />
+                </svg>
+              </div>
+              <span className="text-[10px] font-bold uppercase tracking-widest">
+                {t("nav.more")}
+              </span>
+            </button>
           </div>
         </nav>
       </main>

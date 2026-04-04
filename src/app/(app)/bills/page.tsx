@@ -147,6 +147,7 @@ export default function BillsListPage() {
 
       <div className="mb-6 flex flex-col gap-3 sm:flex-row">
         <Input
+          aria-label={t("bills.searchPlaceholder")}
           placeholder={t("bills.searchPlaceholder")}
           value={search}
           onValueChange={setSearch}
@@ -164,7 +165,9 @@ export default function BillsListPage() {
           }
         />
         <Select
-          selectedKeys={[statusFilter]}
+          aria-label={t("bills.filter.all")}
+          placeholder={t("bills.filter.all")}
+          selectedKeys={new Set([statusFilter])}
           onSelectionChange={(keys) => {
             const value = Array.from(keys)[0] as string;
             if (value) {
@@ -182,7 +185,7 @@ export default function BillsListPage() {
       </div>
 
       {loading ? (
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3, 4].map((item) => (
             <Skeleton key={item} className="h-16 w-full rounded-xl" />
           ))}
@@ -225,7 +228,7 @@ export default function BillsListPage() {
         </Card>
       ) : (
         <>
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {bills.map((bill) => (
               <Card
                 key={bill.id}

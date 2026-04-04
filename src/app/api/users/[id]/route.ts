@@ -2,6 +2,13 @@ import { Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
+import {
+  resolveTenantIdFromRequest,
+  TENANT_CONTEXT_MISSING_MESSAGE,
+} from "@/lib/tenant";
+import { resolveVerifiedTenantId } from "@/lib/session-server";
+
+export const runtime = "nodejs";
 
 const VALID_ROLES = new Set(Object.values(Role));
 
@@ -28,15 +35,26 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
+  const tenantId = await resolveVerifiedTenantId(request);
+
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
   }
 
   try {
     const { id } = await params;
     const body = (await request.json()) as Record<string, unknown>;
-    const existingUser = await prisma.user.findUnique({
-      where: { id },
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        id,
+        tenantId,
+      },
       select: { id: true },
     });
 
@@ -69,7 +87,8 @@ export async function PATCH(
       if (email) {
         const existingEmail = await prisma.user.findFirst({
           where: {
-            email,
+            tenantId,
+            email: { equals: email, mode: "insensitive" },
             NOT: { id },
           },
           select: { id: true },
@@ -97,6 +116,7 @@ export async function PATCH(
 
       const existingPhone = await prisma.user.findFirst({
         where: {
+          tenantId,
           phone,
           NOT: { id },
         },
@@ -179,12 +199,31 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
+  const tenantId = await resolveVerifiedTenantId(request);
+
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
   }
 
   try {
     const { id } = await params;
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        id,
+        tenantId,
+      },
+      select: { id: true },
+    });
+    if (!existingUser) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
     await prisma.user.update({
       where: { id },
       data: { isActive: false },

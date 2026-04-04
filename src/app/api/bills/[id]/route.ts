@@ -7,8 +7,12 @@ import {
   journalForCancelledSalesBill,
   journalForSalesBill,
 } from "@/lib/journal";
-import { getTenantId } from "@/lib/tenant";
 import { NextRequest, NextResponse } from "next/server";
+import {
+  resolveTenantIdFromRequest,
+  TENANT_CONTEXT_MISSING_MESSAGE,
+} from "@/lib/tenant";
+import { resolveVerifiedTenantId } from "@/lib/session-server";
 
 const ALLOWED_BILL_PATCH_KEYS = new Set([
   "templateId",
@@ -84,11 +88,18 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
+  const tenantId = resolveTenantIdFromRequest(request);
+
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
+  }
 
-  const tenantId = await getTenantId();
   const { id } = await params;
   const bill = await findVisibleBill(id, tenantId);
 
@@ -106,12 +117,19 @@ export async function PATCH(
 ) {
   const role = request.headers.get("x-user-role");
   const userId = request.headers.get("x-user-id");
+  const tenantId = await resolveVerifiedTenantId(request);
+
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
+  }
 
   try {
-    const tenantId = await getTenantId();
     const { id } = await params;
     const body = (await request.json()) as Record<string, unknown>;
     const unexpectedKeys = Object.keys(body).filter(
@@ -133,20 +151,20 @@ export async function PATCH(
       },
       select: {
         id: true,
-      status: true,
-      billNumber: true,
-      subtotal: true,
-      taxAmount: true,
-      grandTotal: true,
-      templateId: true,
-      partyId: true,
-      customerName: true,
-      customerPhone: true,
-      customerAddress: true,
-      gstin: true,
-      createdBy: true,
-    },
-  });
+        status: true,
+        billNumber: true,
+        subtotal: true,
+        taxAmount: true,
+        grandTotal: true,
+        templateId: true,
+        partyId: true,
+        customerName: true,
+        customerPhone: true,
+        customerAddress: true,
+        gstin: true,
+        createdBy: true,
+      },
+    });
 
     if (!existing) {
       return NextResponse.json({ error: "Bill not found" }, { status: 404 });
@@ -172,6 +190,7 @@ export async function PATCH(
       const template = await prisma.billTemplate.findFirst({
         where: {
           id: body.templateId.trim(),
+          tenantId,
           isDeleted: false,
         },
         select: { id: true },
@@ -296,6 +315,7 @@ export async function PATCH(
           phone: true,
           address: true,
           gstin: true,
+          type: true,
         },
       });
 
@@ -304,10 +324,10 @@ export async function PATCH(
       }
 
       const snapshot = buildBillSnapshotFromParty(party, {
-        customerName,
-        customerPhone,
-        customerAddress,
-        gstin,
+        customerName: customerName as string | null | undefined,
+        customerPhone: customerPhone as string | null | undefined,
+        customerAddress: customerAddress as string | null | undefined,
+        gstin: gstin as string | null | undefined,
       });
 
       updateData.partyId = party.id;
@@ -370,7 +390,7 @@ export async function PATCH(
     const bill = await prisma.$transaction(async (tx) => {
       const updatedBill = await tx.bill.update({
         where: { id },
-        data: updateData,
+        data: updateData as any,
       });
 
       if (!finalPartyId) {
@@ -446,12 +466,19 @@ export async function DELETE(
 ) {
   const role = request.headers.get("x-user-role");
   const userId = request.headers.get("x-user-id");
+  const tenantId = await resolveVerifiedTenantId(request);
+
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
+  }
 
   try {
-    const tenantId = await getTenantId();
     const { id } = await params;
     const existing = await prisma.bill.findFirst({
       where: {

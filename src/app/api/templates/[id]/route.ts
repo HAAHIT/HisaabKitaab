@@ -1,5 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import {
+  resolveTenantIdFromRequest,
+  TENANT_CONTEXT_MISSING_MESSAGE,
+} from "@/lib/tenant";
+import { resolveVerifiedTenantId } from "@/lib/session-server";
+
+export const runtime = "nodejs";
 
 // GET /api/templates/[id] — Get a single template
 export async function GET(
@@ -7,12 +14,26 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
+  const tenantId = resolveTenantIdFromRequest(request);
+
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
+  }
 
   const { id } = await params;
-  const template = await prisma.billTemplate.findUnique({ where: { id } });
+  const template = await prisma.billTemplate.findFirst({
+    where: {
+      id,
+      tenantId,
+      isDeleted: false,
+    },
+  });
   if (!template) {
     return NextResponse.json({ error: "Template not found" }, { status: 404 });
   }
@@ -26,12 +47,32 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
+  const tenantId = await resolveVerifiedTenantId(request);
+
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
   }
 
   try {
     const { id } = await params;
+    const existingTemplate = await prisma.billTemplate.findFirst({
+      where: {
+        id,
+        tenantId,
+        isDeleted: false,
+      },
+      select: { id: true },
+    });
+    if (!existingTemplate) {
+      return NextResponse.json({ error: "Template not found" }, { status: 404 });
+    }
+
     const body = await request.json();
     const { name, columns } = body;
 
@@ -60,15 +101,28 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
+  const tenantId = await resolveVerifiedTenantId(request);
+
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
   }
 
   try {
     const { id } = await params;
-    
+
     // Check if template has bills
-    const billCount = await prisma.bill.count({ where: { templateId: id } });
+    const billCount = await prisma.bill.count({
+      where: {
+        templateId: id,
+        tenantId,
+      },
+    });
     if (billCount > 0) {
       return NextResponse.json(
         { error: `Cannot delete: ${billCount} bill(s) use this template` },
@@ -76,7 +130,22 @@ export async function DELETE(
       );
     }
 
-    await prisma.billTemplate.delete({ where: { id } });
+    const existingTemplate = await prisma.billTemplate.findFirst({
+      where: {
+        id,
+        tenantId,
+        isDeleted: false,
+      },
+      select: { id: true },
+    });
+    if (!existingTemplate) {
+      return NextResponse.json({ error: "Template not found" }, { status: 404 });
+    }
+
+    await prisma.billTemplate.update({
+      where: { id: existingTemplate.id },
+      data: { isDeleted: true },
+    });
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Delete template error:", error);

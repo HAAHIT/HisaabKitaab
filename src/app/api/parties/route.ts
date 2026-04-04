@@ -1,8 +1,17 @@
 import { prisma } from "@/lib/prisma";
-import { getTenantId } from "@/lib/tenant";
 import { NextRequest, NextResponse } from "next/server";
+import type { PartyType } from "@prisma/client";
+import {
+  resolveTenantIdFromRequest,
+  TENANT_CONTEXT_MISSING_MESSAGE,
+} from "@/lib/tenant";
+import { resolveVerifiedTenantId } from "@/lib/session-server";
 
-const VALID_PARTY_TYPES = new Set(["CUSTOMER", "VENDOR"]);
+const VALID_PARTY_TYPES = new Set<PartyType>(["CUSTOMER", "VENDOR"]);
+
+function isPartyType(value: string | undefined): value is PartyType {
+  return Boolean(value && VALID_PARTY_TYPES.has(value as PartyType));
+}
 
 function normalizeOptionalString(value: unknown) {
   if (typeof value !== "string") return null;
@@ -25,17 +34,24 @@ function parseOpeningBalance(value: unknown) {
 // GET /api/parties — List all parties with balance info
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
+  const tenantId = resolveTenantIdFromRequest(request);
+  
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
+  }
 
-  const tenantId = await getTenantId();
   const { searchParams } = new URL(request.url);
   const search = searchParams.get("search") || "";
   const type = searchParams.get("type") || "";
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = { tenantId, isActive: true, isDeleted: false };
+  const where: any = { isActive: true, isDeleted: false, tenantId };
 
   if (search) {
     where.OR = [
@@ -63,13 +79,22 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const role = request.headers.get("x-user-role");
   const userId = request.headers.get("x-user-id");
+  const tenantId = await resolveVerifiedTenantId(request);
 
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (!userId) {
+    return NextResponse.json({ error: "Missing user context" }, { status: 401 });
+  }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
+  }
 
   try {
-    const tenantId = await getTenantId();
     const body = await request.json();
     const { name, phone, email, address, gstin, type, openingBalance } = body;
     const normalizedName = normalizeOptionalString(name);
@@ -84,7 +109,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!VALID_PARTY_TYPES.has(normalizedType)) {
+    if (!isPartyType(normalizedType)) {
       return NextResponse.json(
         { error: "Invalid party type" },
         { status: 400 }
@@ -98,20 +123,51 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const party = await prisma.party.create({
-      data: {
-        tenantId,
-        name: normalizedName,
-        phone: normalizeOptionalString(phone),
-        email: normalizeOptionalString(email),
-        address: normalizeOptionalString(address),
-        gstin: normalizeOptionalString(gstin),
-        type: normalizedType as any,
-        openingBalance: normalizedOpeningBalance,
-        currentBalance: normalizedOpeningBalance,
-        createdBy: userId!,
-      },
+    const partyId = crypto.randomUUID();
+    await prisma.$executeRaw`
+      INSERT INTO "Party" (
+        "id",
+        "tenantId",
+        "name",
+        "type",
+        "phone",
+        "email",
+        "address",
+        "gstin",
+        "openingBalance",
+        "currentBalance",
+        "isActive",
+        "isDeleted",
+        "createdBy",
+        "createdAt",
+        "updatedAt"
+      )
+      VALUES (
+        ${partyId},
+        ${tenantId},
+        ${normalizedName},
+        ${normalizedType}::"PartyType",
+        ${normalizeOptionalString(phone)},
+        ${normalizeOptionalString(email)},
+        ${normalizeOptionalString(address)},
+        ${normalizeOptionalString(gstin)},
+        ${normalizedOpeningBalance},
+        ${normalizedOpeningBalance},
+        true,
+        false,
+        ${userId},
+        NOW(),
+        NOW()
+      )
+    `;
+
+    const party = await prisma.party.findUnique({
+      where: { id: partyId },
     });
+
+    if (!party) {
+      throw new Error("Failed to create party");
+    }
 
     return NextResponse.json({ party }, { status: 201 });
   } catch (error) {

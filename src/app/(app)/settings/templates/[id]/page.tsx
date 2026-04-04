@@ -235,6 +235,7 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
         <Button
           isIconOnly
           variant="light"
+          aria-label="Back to templates"
           onPress={() => router.push("/settings/templates")}
         >
           <svg
@@ -263,7 +264,7 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
         <CardBody className="p-6">
           <Input
             label="Template Name"
-            placeholder="e.g. Door Order Invoice"
+            placeholder="e.g. Order Invoice"
             value={name}
             onValueChange={setName}
             variant="bordered"
@@ -281,7 +282,7 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
             {columns.map((col, index) => (
               <div
                 key={index}
-                className="flex flex-col gap-4 p-5 rounded-2xl bg-white dark:bg-default-50 border shadow-sm border-default-200 transition-all hover:border-primary/30"
+                className="flex flex-col gap-4 p-5 rounded-2xl bg-default-50 border shadow-sm border-default-200 transition-all hover:border-primary/30"
               >
                 <div className="flex items-start md:items-center gap-4">
                   <div className="flex flex-col gap-1 items-center bg-default-100 dark:bg-default-200/50 rounded-lg p-1">
@@ -321,7 +322,8 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
                     />
                     <Select
                       label="Type"
-                      selectedKeys={[col.type]}
+                      placeholder="Type"
+                      selectedKeys={new Set([col.type])}
                       onSelectionChange={(keys) => {
                         const val = Array.from(keys)[0] as string;
                         if (val) updateColumn(index, "type", val);
@@ -339,6 +341,7 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
                     isIconOnly
                     variant="flat"
                     color="danger"
+                    aria-label={`Remove column ${index + 1}`}
                     onPress={() => removeColumn(index)}
                     isDisabled={columns.length === 1}
                     className="mt-1 md:mt-0"
@@ -356,6 +359,7 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
                       Build Formula
                     </p>
                     <Input
+                      aria-label="Formula expression"
                       placeholder="e.g. {Qty} * {Rate}"
                       value={col.formula || ""}
                       onValueChange={(v) => updateColumn(index, "formula", v)}
@@ -395,7 +399,8 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
                       Dropdown Options
                     </p>
                     <Input
-                      placeholder="e.g. Main Door, Internal, Sliding"
+                      aria-label="Dropdown options"
+                      placeholder="e.g. Main, Internal, Sliding"
                       value={(col.options || []).join(",")}
                       onValueChange={(v) => {
                         const newCols = [...columns];

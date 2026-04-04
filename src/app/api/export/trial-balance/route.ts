@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getTenantId } from "@/lib/tenant";
+import {
+  resolveTenantIdFromRequest,
+  TENANT_CONTEXT_MISSING_MESSAGE,
+} from "@/lib/tenant";
 import { CHART_OF_ACCOUNTS } from "@/lib/chart-of-accounts";
 import {
   escapeCsv,
@@ -8,13 +11,22 @@ import {
   roundTo2,
 } from "@/lib/journal-reporting";
 
+export const runtime = "nodejs";
+
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
+  const tenantId = resolveTenantIdFromRequest(request);
+
   if (role !== "ADMIN" && role !== "ACCOUNTANT") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
+  }
 
-  const tenantId = await getTenantId();
   const { searchParams } = new URL(request.url);
   const from = searchParams.get("from");
   const to = searchParams.get("to");
@@ -53,34 +65,54 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const aggregates = await prisma.journalLine.groupBy({
-    by: ["accountCode", "accountName", "tallyGroup"],
+  const matchingJournals = await prisma.journalEntry.findMany({
     where: {
-      journal: {
-        tenantId,
-        entryDate: {
-          gte: fromDate,
-          lte: toDate,
-        },
+      tenantId,
+      entryDate: {
+        gte: fromDate,
+        lte: toDate,
       },
     },
-    _sum: {
-      debit: true,
-      credit: true,
-    },
-    orderBy: {
-      accountCode: "asc",
+    select: { id: true },
+  });
+
+  const journalIds = matchingJournals.map(j => j.id);
+
+  const lines = await prisma.journalLine.findMany({
+    where: {
+      journalId: { in: journalIds },
     },
   });
 
+  const aggregateMap: Record<string, { 
+    accountCode: string; 
+    accountName: string; 
+    tallyGroup: string; 
+    debit: number; 
+    credit: number; 
+  }> = {};
+
+  for (const line of lines) {
+    if (!aggregateMap[line.accountCode]) {
+      aggregateMap[line.accountCode] = {
+        accountCode: line.accountCode,
+        accountName: line.accountName,
+        tallyGroup: line.tallyGroup,
+        debit: 0,
+        credit: 0,
+      };
+    }
+    aggregateMap[line.accountCode].debit += line.debit;
+    aggregateMap[line.accountCode].credit += line.credit;
+  }
+
+  const aggregates = Object.values(aggregateMap).sort((a, b) => a.accountCode.localeCompare(b.accountCode));
+
   const rows = aggregates.map((aggregate) => {
-    const totalDebit = roundTo2(aggregate._sum.debit || 0);
-    const totalCredit = roundTo2(aggregate._sum.credit || 0);
+    const totalDebit = roundTo2(aggregate.debit || 0);
+    const totalCredit = roundTo2(aggregate.credit || 0);
     const netBalance = roundTo2(totalDebit - totalCredit);
-    const account =
-      CHART_OF_ACCOUNTS[
-        aggregate.accountCode as keyof typeof CHART_OF_ACCOUNTS
-      ];
+    const account = CHART_OF_ACCOUNTS[aggregate.accountCode as keyof typeof CHART_OF_ACCOUNTS];
 
     return {
       accountCode: aggregate.accountCode,

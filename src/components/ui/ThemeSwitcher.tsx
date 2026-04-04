@@ -1,38 +1,52 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { Button } from "@heroui/react";
 
+type Theme = "light" | "dark";
+
+function getInitialTheme(): Theme {
+  if (typeof window === "undefined") {
+    return "light";
+  }
+
+  const stored = localStorage.getItem("theme");
+  if (stored === "light" || stored === "dark") {
+    return stored;
+  }
+
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+}
+
+function subscribeNoop() {
+  return () => undefined;
+}
+
 export function ThemeSwitcher() {
-  const [mounted, setMounted] = useState(false);
-  const [theme, setTheme] = useState("light");
+  const [theme, setTheme] = useState<Theme>(getInitialTheme);
+  const hydrated = useSyncExternalStore(
+    subscribeNoop,
+    () => true,
+    () => false
+  );
 
   useEffect(() => {
-    setMounted(true);
-    const stored = localStorage.getItem("theme");
-    const sysDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const currentTheme = stored || (sysDark ? "dark" : "light");
-    
-    setTheme(currentTheme);
-    if (currentTheme === "dark") {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
+    if (!hydrated) {
+      return;
     }
-  }, []);
 
-  if (!mounted) return <div className="w-10 h-10" />; // placeholder
+    localStorage.setItem("theme", theme);
+    document.documentElement.classList.toggle("dark", theme === "dark");
+  }, [hydrated, theme]);
+
+  if (!hydrated) {
+    return <div className="w-10 h-10" />;
+  }
 
   function toggleTheme() {
-    const newTheme = theme === "light" ? "dark" : "light";
-    setTheme(newTheme);
-    localStorage.setItem("theme", newTheme);
-    
-    if (newTheme === "dark") {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
+    setTheme((currentTheme) => (currentTheme === "light" ? "dark" : "light"));
   }
 
   return (

@@ -286,6 +286,7 @@ export default function UserManagementPage() {
                           size="sm"
                           variant="flat"
                           isIconOnly
+                          aria-label={`Edit ${user.name}`}
                           onPress={() => openEditPanel(user)}
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -297,6 +298,7 @@ export default function UserManagementPage() {
                           variant="flat"
                           color="danger"
                           isIconOnly
+                          aria-label={`Delete ${user.name}`}
                           onPress={() => handleDelete(user.id)}
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -331,6 +333,7 @@ export default function UserManagementPage() {
                   isIconOnly
                   variant="light"
                   size="sm"
+                  aria-label="Close panel"
                   onPress={() => setShowPanel(false)}
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -398,7 +401,8 @@ export default function UserManagementPage() {
                 </div>
                 <Select
                   label={t("users.role")}
-                  selectedKeys={[formRole]}
+                  placeholder={t("users.role")}
+                  selectedKeys={new Set([formRole])}
                   onSelectionChange={(keys) => {
                     const selected = Array.from(keys)[0] as string;
                     if (selected) setFormRole(selected);

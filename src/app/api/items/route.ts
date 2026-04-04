@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getTenantId } from "@/lib/tenant";
+import {
+  resolveTenantIdFromRequest,
+  TENANT_CONTEXT_MISSING_MESSAGE,
+} from "@/lib/tenant";
+import { resolveVerifiedTenantId } from "@/lib/session-server";
 import {
   normalizeItemNumber,
   normalizeItemUnit,
 } from "@/lib/item-catalog";
+
+export const runtime = "nodejs";
 
 function canViewItems(role: string | null) {
   return Boolean(role) && role !== "CUSTOMER";
@@ -16,11 +22,18 @@ function canManageItems(role: string | null) {
 
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
+  const tenantId = resolveTenantIdFromRequest(request);
+
   if (!canViewItems(role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
+  }
 
-  const tenantId = await getTenantId();
   const items = await prisma.itemCatalog.findMany({
     where: {
       tenantId,
@@ -34,12 +47,19 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const role = request.headers.get("x-user-role");
+  const tenantId = await resolveVerifiedTenantId(request);
+
   if (!canManageItems(role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: TENANT_CONTEXT_MISSING_MESSAGE },
+      { status: 500 }
+    );
+  }
 
   try {
-    const tenantId = await getTenantId();
     const body = await request.json();
     const name = typeof body.name === "string" ? body.name.trim() : "";
     const hsnCode =
@@ -70,16 +90,41 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const item = await prisma.itemCatalog.create({
-      data: {
-        tenantId,
-        name,
-        hsnCode,
-        unit: normalizeItemUnit(body.unit),
-        rate,
-        taxRate,
-      },
+    const itemId = crypto.randomUUID();
+    await prisma.$executeRaw`
+      INSERT INTO "ItemCatalog" (
+        "id",
+        "tenantId",
+        "name",
+        "hsnCode",
+        "unit",
+        "rate",
+        "taxRate",
+        "isActive",
+        "createdAt",
+        "updatedAt"
+      )
+      VALUES (
+        ${itemId},
+        ${tenantId},
+        ${name},
+        ${hsnCode},
+        ${normalizeItemUnit(body.unit)},
+        ${rate},
+        ${taxRate},
+        true,
+        NOW(),
+        NOW()
+      )
+    `;
+
+    const item = await prisma.itemCatalog.findUnique({
+      where: { id: itemId },
     });
+
+    if (!item) {
+      throw new Error("Failed to create item");
+    }
 
     return NextResponse.json({ item }, { status: 201 });
   } catch (error) {

@@ -1,6 +1,6 @@
 TypeError: Cannot read properties of undefined (reading 'findMany')
-    at main (D:\Sadhguru Door\doorcraft-pro\migrate.js:22:43)
-    at Object.<anonymous> (D:\Sadhguru Door\doorcraft-pro\migrate.js:96:1)
+    at main (D:\Sadhguru Door\hisaabkitaab\migrate.js:22:43)
+    at Object.<anonymous> (D:\Sadhguru Door\hisaabkitaab\migrate.js:96:1)
     at Module._compile (node:internal/modules/cjs/loader:1554:14)
     at Object..js (node:internal/modules/cjs/loader:1706:10)
     at Module.load (node:internal/modules/cjs/loader:1289:32)

@@ -339,7 +339,12 @@ export default function EditBillPage({
 
       <div className="animate-fade-in p-4 lg:p-8">
         <div className="mb-6 flex items-center gap-3">
-          <Button isIconOnly variant="light" onPress={() => router.push(`/bills/${id}`)}>
+          <Button
+            isIconOnly
+            variant="light"
+            aria-label="Back to bill details"
+            onPress={() => router.push(`/bills/${id}`)}
+          >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 d="M10 19l-7-7m0 0l7-7m-7 7h18"
@@ -371,7 +376,7 @@ export default function EditBillPage({
             <Select
               label="Party"
               placeholder="Select customer or vendor"
-              selectedKeys={partyId ? [partyId] : []}
+              selectedKeys={partyId ? new Set([partyId]) : new Set([])}
               onSelectionChange={(keys) => {
                 const value = Array.from(keys)[0] as string;
                 if (value) {
@@ -506,6 +511,7 @@ export default function EditBillPage({
                         ) : column.type === "number" ? (
                           <Input
                             type="number"
+                            aria-label={`Row ${rowIndex + 1} ${column.name}`}
                             value={String(row[column.id] || "")}
                             onValueChange={(value) => updateCell(rowIndex, column.id, value)}
                             variant="underlined"
@@ -514,7 +520,9 @@ export default function EditBillPage({
                           />
                         ) : column.type === "dropdown" && column.options ? (
                           <Select
-                            selectedKeys={row[column.id] ? [String(row[column.id])] : []}
+                            aria-label={`Row ${rowIndex + 1} ${column.name}`}
+                            placeholder={column.name}
+                            selectedKeys={row[column.id] ? new Set([String(row[column.id])]) : new Set([])}
                             onSelectionChange={(keys) => {
                               const value = Array.from(keys)[0] as string;
                               if (value) {
@@ -532,6 +540,7 @@ export default function EditBillPage({
                         ) : column.type === "date" ? (
                           <Input
                             type="date"
+                            aria-label={`Row ${rowIndex + 1} ${column.name}`}
                             value={String(row[column.id] || "")}
                             onValueChange={(value) => updateCell(rowIndex, column.id, value)}
                             variant="underlined"
@@ -541,6 +550,7 @@ export default function EditBillPage({
                         ) : (
                           <Input
                             type="text"
+                            aria-label={`Row ${rowIndex + 1} ${column.name}`}
                             value={String(row[column.id] || "")}
                             onValueChange={(value) => updateCell(rowIndex, column.id, value)}
                             variant="underlined"
@@ -556,6 +566,7 @@ export default function EditBillPage({
                         size="sm"
                         variant="light"
                         color="danger"
+                        aria-label={`Remove row ${rowIndex + 1}`}
                         onPress={() => removeRow(rowIndex)}
                         isDisabled={rows.length <= 1}
                       >
@@ -611,6 +622,7 @@ export default function EditBillPage({
                     <span className="text-default-500">Tax</span>
                     <Input
                       type="number"
+                      aria-label="Tax percentage"
                       value={String(taxPercent)}
                       onValueChange={(value) => setTaxPercent(Number.parseFloat(value) || 0)}
                       variant="bordered"
