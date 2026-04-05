@@ -13,7 +13,9 @@ export default async function PartyProfilePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const tenantId = resolveTenantIdFromRequest({ headers: await headers() });
+  const headerStore = await headers();
+  const tenantId = resolveTenantIdFromRequest({ headers: headerStore });
+  const role = headerStore.get("x-user-role");
   if (!tenantId) {
     return notFound();
   }
@@ -73,6 +75,7 @@ export default async function PartyProfilePage({
       ledger={ledger}
       measurements={measurements}
       calculatedCurrent={calculatedCurrent}
+      role={role}
     />
   );
 }

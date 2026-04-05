@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Card, CardBody, Chip } from "@heroui/react";
+import { useState } from "react";
+import { Button, Card, CardBody, Chip } from "@heroui/react";
 import BalanceHeader from "@/components/parties/BalanceHeader";
 import LedgerChat from "@/components/parties/LedgerChat";
 import {
@@ -45,19 +46,61 @@ type MeasurementItem = {
   createdAt: Date;
 };
 
+type ReconcileResult = {
+  total: number;
+  drifted: { partyId: string; name: string; stored: number; computed: number }[];
+};
+
 export default function PartyProfileClient({
   party,
   ledger,
   measurements,
   calculatedCurrent,
   partyId,
+  role,
 }: {
   party: PartyProfile;
   ledger: PartyLedgerEntry[];
   measurements: MeasurementItem[];
   calculatedCurrent: number;
   partyId: string;
+  role: string | null;
 }) {
+  const [reconcileResult, setReconcileResult] = useState<ReconcileResult | null>(null);
+  const [reconcileLoading, setReconcileLoading] = useState<"check" | "fix" | null>(null);
+  const [reconcileError, setReconcileError] = useState<string | null>(null);
+
+  async function handleCheckBalances() {
+    setReconcileLoading("check");
+    setReconcileError(null);
+    setReconcileResult(null);
+    try {
+      const res = await fetch("/api/parties/reconcile");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Check failed");
+      setReconcileResult(data);
+    } catch (err) {
+      setReconcileError(err instanceof Error ? err.message : "Check failed");
+    } finally {
+      setReconcileLoading(null);
+    }
+  }
+
+  async function handleFixBalances() {
+    setReconcileLoading("fix");
+    setReconcileError(null);
+    try {
+      const res = await fetch("/api/parties/reconcile", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Fix failed");
+      setReconcileResult(null);
+      await handleCheckBalances();
+    } catch (err) {
+      setReconcileError(err instanceof Error ? err.message : "Fix failed");
+      setReconcileLoading(null);
+    }
+  }
+
   const openingBalanceLabel = getBalanceStatusLabel(
     party.type,
     party.openingBalance
@@ -169,6 +212,95 @@ export default function PartyProfileClient({
               </div>
             </CardBody>
           </Card>
+
+          {role === "ADMIN" && (
+            <Card shadow="sm">
+              <CardBody className="p-5">
+                <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
+                  <svg
+                    className="h-5 w-5 text-warning"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                    />
+                  </svg>
+                  Balance Health
+                </h2>
+                <p className="mb-4 text-xs text-default-400">
+                  Verify all party balances match their journal history.
+                </p>
+
+                {reconcileError && (
+                  <p className="mb-3 rounded-lg border border-danger/20 bg-danger/10 px-3 py-2 text-xs text-danger">
+                    {reconcileError}
+                  </p>
+                )}
+
+                {reconcileResult && (
+                  <div className="mb-4 space-y-2">
+                    {reconcileResult.drifted.length === 0 ? (
+                      <p className="rounded-lg bg-success/10 px-3 py-2 text-xs font-medium text-success">
+                        All {reconcileResult.total} balances are correct.
+                      </p>
+                    ) : (
+                      <>
+                        <p className="rounded-lg bg-warning/10 px-3 py-2 text-xs font-medium text-warning">
+                          {reconcileResult.drifted.length} of {reconcileResult.total} parties have drift.
+                        </p>
+                        <div className="max-h-36 space-y-1.5 overflow-y-auto">
+                          {reconcileResult.drifted.map((d) => (
+                            <div
+                              key={d.partyId}
+                              className="rounded-lg border border-default-100 p-2 text-xs"
+                            >
+                              <p className="font-medium">{d.name}</p>
+                              <p className="text-default-400">
+                                Stored: {formatSignedCurrency(d.stored)} → Actual:{" "}
+                                {formatSignedCurrency(d.computed)}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="flat"
+                    color="default"
+                    className="flex-1"
+                    isLoading={reconcileLoading === "check"}
+                    isDisabled={reconcileLoading !== null}
+                    onPress={handleCheckBalances}
+                  >
+                    Check
+                  </Button>
+                  {reconcileResult && reconcileResult.drifted.length > 0 && (
+                    <Button
+                      size="sm"
+                      variant="flat"
+                      color="warning"
+                      className="flex-1"
+                      isLoading={reconcileLoading === "fix"}
+                      isDisabled={reconcileLoading !== null}
+                      onPress={handleFixBalances}
+                    >
+                      Fix All
+                    </Button>
+                  )}
+                </div>
+              </CardBody>
+            </Card>
+          )}
 
           {party.type === "CUSTOMER" && (
             <Card shadow="sm">
