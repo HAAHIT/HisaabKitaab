@@ -9,6 +9,11 @@ import {
   Button,
   Chip,
   Divider,
+  Modal,
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
   Skeleton,
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
@@ -107,6 +112,8 @@ export default function BillDetailPage({
     message: string;
     type: "success" | "error";
   } | null>(null);
+  const [confirmAction, setConfirmAction] = useState<"FINAL" | "CANCELLED" | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   function showToast(message: string, type: "success" | "error") {
     setToast({ message, type });
@@ -130,8 +137,8 @@ export default function BillDetailPage({
           const { settings: serverSettings } = await settingsRes.json();
           setSettings(serverSettings);
         }
-      } catch (err) {
-        console.error("Server fetch failed:", err);
+      } catch {
+        // non-critical — loading state handles the empty case
       } finally {
         setLoading(false);
       }
@@ -140,18 +147,10 @@ export default function BillDetailPage({
     loadData();
   }, [id]);
 
-  async function handleStatusChange(status: "FINAL" | "CANCELLED") {
-    if (!bill) {
-      return;
-    }
-
+  async function executeStatusChange(status: "FINAL" | "CANCELLED") {
+    if (!bill) return;
     const currentBill = bill;
-    const msg =
-      status === "FINAL"
-        ? "Finalize this bill? It cannot be edited after."
-        : "Cancel this bill?";
-    if (!confirm(msg)) return;
-
+    setActionLoading(true);
     try {
       const method = status === "CANCELLED" ? "DELETE" : "PATCH";
       const body =
@@ -181,18 +180,14 @@ export default function BillDetailPage({
         throw new Error(data.error);
       }
 
-      showToast(
-        status === "FINAL" ? "Bill finalized!" : "Bill cancelled",
-        "success"
-      );
-      // Refresh
+      showToast(status === "FINAL" ? "Bill finalized!" : "Bill cancelled", "success");
       const updated = await fetch(`/api/bills/${id}`).then((r) => r.json());
       setBill(updated.bill);
     } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : "Action failed",
-        "error"
-      );
+      showToast(err instanceof Error ? err.message : "Action failed", "error");
+    } finally {
+      setActionLoading(false);
+      setConfirmAction(null);
     }
   }
 
@@ -298,11 +293,11 @@ export default function BillDetailPage({
             {bill.status === "DRAFT" && (
               <>
                 <Button variant="bordered" size="sm" onPress={() => router.push(`/bills/${id}/edit`)}>✏️ Edit</Button>
-                <Button color="success" size="sm" variant="flat" onPress={() => handleStatusChange("FINAL")}>✅ Finalize</Button>
+                <Button color="success" size="sm" variant="flat" onPress={() => setConfirmAction("FINAL")}>✅ Finalize</Button>
               </>
             )}
             {bill.status !== "CANCELLED" && (
-              <Button color="danger" size="sm" variant="flat" onPress={() => handleStatusChange("CANCELLED")}>Cancel</Button>
+              <Button color="danger" size="sm" variant="flat" onPress={() => setConfirmAction("CANCELLED")}>Cancel</Button>
             )}
           </div>
         </div>
@@ -339,7 +334,14 @@ export default function BillDetailPage({
         {/* Items Table */}
         <Card shadow="sm" className="mb-6">
           <CardHeader className="px-6 pt-6 pb-0">
-            <h2 className="font-semibold">Line Items ({bill.template.name})</h2>
+            <h2 className="font-semibold">
+              Line Items
+              {bill.template.name !== "__QUICK_BILL__" && (
+                <span className="ml-2 text-sm font-normal text-default-400">
+                  ({bill.template.name})
+                </span>
+              )}
+            </h2>
           </CardHeader>
           <CardBody className="p-6 overflow-x-auto">
             <table className="w-full text-sm">
@@ -396,6 +398,38 @@ export default function BillDetailPage({
         customerPhone: bill.customerPhone,
         partyId: bill.partyId,
       }} onShare={handleShare} />
+
+      {/* Confirm action modal */}
+      <Modal
+        isOpen={confirmAction !== null}
+        onClose={() => setConfirmAction(null)}
+        size="sm"
+      >
+        <ModalContent>
+          <ModalHeader>
+            {confirmAction === "FINAL" ? "Finalize Bill" : "Cancel Bill"}
+          </ModalHeader>
+          <ModalBody>
+            <p className="text-sm text-default-600">
+              {confirmAction === "FINAL"
+                ? "This will lock the bill and record it in your books. It cannot be edited after finalization."
+                : "This will permanently cancel the bill and reverse any balance changes."}
+            </p>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="flat" onPress={() => setConfirmAction(null)}>
+              Go back
+            </Button>
+            <Button
+              color={confirmAction === "FINAL" ? "success" : "danger"}
+              isLoading={actionLoading}
+              onPress={() => confirmAction && executeStatusChange(confirmAction)}
+            >
+              {confirmAction === "FINAL" ? "Yes, Finalize" : "Yes, Cancel Bill"}
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
 
       {/* Print-Only Professional Layout */}
       <div className="hidden print:block p-0 text-black">

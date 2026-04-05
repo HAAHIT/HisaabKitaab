@@ -7,6 +7,7 @@ import {
 } from "@/lib/tenant";
 import { resolveVerifiedTenantId } from "@/lib/session-server";
 import { logError, getRequestId } from "@/lib/observability";
+import { checkRateLimit } from "@/lib/api-rate-limit";
 
 const VALID_PARTY_TYPES = new Set<PartyType>(["CUSTOMER", "VENDOR"]);
 
@@ -78,6 +79,9 @@ export async function GET(request: NextRequest) {
 
 // POST /api/parties — Create a new party
 export async function POST(request: NextRequest) {
+  const rateLimitResponse = await checkRateLimit(request, "parties.create", 20);
+  if (rateLimitResponse) return rateLimitResponse;
+
   const role = request.headers.get("x-user-role");
   const userId = request.headers.get("x-user-id");
   const tenantId = await resolveVerifiedTenantId(request);

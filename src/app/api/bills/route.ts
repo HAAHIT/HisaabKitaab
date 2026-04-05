@@ -386,6 +386,7 @@ export async function POST(request: NextRequest) {
           grandTotal: createdBill.grandTotal,
           createdBy: userId!,
           entryDate: createdBill.createdAt,
+          isInterState: body.isInterState === true,
         });
       }
 

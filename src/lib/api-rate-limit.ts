@@ -61,6 +61,12 @@ export async function checkRateLimit(
       where: { key: storeKey },
       data: { count: { increment: 1 } },
     });
+
+    // Non-blocking prune of expired rows — no await, never blocks the response
+    void prisma.apiRateLimit
+      .deleteMany({ where: { windowStart: { lt: windowCutoff } } })
+      .catch(() => undefined);
+
     return null;
   } catch {
     // If the rate limit check itself fails, allow the request through

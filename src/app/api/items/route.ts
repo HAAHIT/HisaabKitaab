@@ -6,6 +6,7 @@ import {
 } from "@/lib/tenant";
 import { resolveVerifiedTenantId } from "@/lib/session-server";
 import { logError, getRequestId } from "@/lib/observability";
+import { checkRateLimit } from "@/lib/api-rate-limit";
 import {
   normalizeItemNumber,
   normalizeItemUnit,
@@ -47,6 +48,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const rateLimitResponse = await checkRateLimit(request, "items.create", 30);
+  if (rateLimitResponse) return rateLimitResponse;
+
   const role = request.headers.get("x-user-role");
   const tenantId = await resolveVerifiedTenantId(request);
 

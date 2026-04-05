@@ -57,8 +57,8 @@ export function useSync() {
           }
 
           await db.measurementDrafts.delete(draft.id);
-        } catch (error) {
-          console.error("Measurement draft sync error:", error);
+        } catch {
+          // silently skip failed drafts — they remain in the queue for next sync
         }
       }
     } finally {

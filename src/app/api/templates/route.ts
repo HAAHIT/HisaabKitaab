@@ -5,6 +5,7 @@ import {
 } from "@/lib/tenant";
 import { resolveVerifiedTenantId } from "@/lib/session-server";
 import { logError, getRequestId } from "@/lib/observability";
+import { checkRateLimit } from "@/lib/api-rate-limit";
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -45,6 +46,9 @@ export async function GET(request: NextRequest) {
 
 // POST /api/templates — Create a new template (Admin only)
 export async function POST(request: NextRequest) {
+  const rateLimitResponse = await checkRateLimit(request, "templates.create", 10);
+  if (rateLimitResponse) return rateLimitResponse;
+
   const role = request.headers.get("x-user-role");
   const userId = request.headers.get("x-user-id");
   const tenantId = await resolveVerifiedTenantId(request);

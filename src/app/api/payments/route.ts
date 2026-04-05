@@ -15,6 +15,7 @@ import {
 } from "@/lib/tenant";
 import { resolveVerifiedTenantId } from "@/lib/session-server";
 import { logError, getRequestId } from "@/lib/observability";
+import { checkRateLimit } from "@/lib/api-rate-limit";
 
 export const runtime = "nodejs";
 
@@ -132,6 +133,9 @@ export async function GET(request: NextRequest) {
 
 // POST /api/payments - Record a new payment
 export async function POST(request: NextRequest) {
+  const rateLimitResponse = await checkRateLimit(request, "payments.create", 30);
+  if (rateLimitResponse) return rateLimitResponse;
+
   const role = request.headers.get("x-user-role");
   const userId = request.headers.get("x-user-id");
   const tenantId = await resolveVerifiedTenantId(request);

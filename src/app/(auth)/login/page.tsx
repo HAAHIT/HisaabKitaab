@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import Script from "next/script";
 import {
   getTranslation,
   LANGUAGE_COOKIE_NAME,
@@ -80,11 +81,11 @@ export default async function LoginPage({
             <h1 className="text-3xl font-bold tracking-tight text-blue-600">
               HisaabKitaab
             </h1>
-            <p className="text-sm text-default-500">{t("login.subtitle")}</p>
+            <p className="text-sm text-gray-400 dark:text-zinc-400">{t("login.subtitle")}</p>
           </div>
         </div>
 
-        <div className="border-t border-default-100 px-6 pb-8 pt-5 dark:border-zinc-800">
+        <div className="border-t border-gray-100 px-6 pb-8 pt-5 dark:border-zinc-800">
           <div className="mb-5 flex justify-end">
             <a
               href={languageSwitchUrl}
@@ -100,12 +101,12 @@ export default async function LoginPage({
             className="flex flex-col gap-4"
           >
             <label htmlFor="credential-input" className="space-y-1.5">
-              <span className="text-sm font-medium text-default-700">
+              <span className="text-sm font-medium text-gray-600 dark:text-zinc-300">
                 {t("login.credentialLabel")}
               </span>
-              <div className="flex items-center gap-3 rounded-xl border border-default-200 bg-background px-4 py-3 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
+              <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white dark:border-zinc-700 dark:bg-zinc-800 px-4 py-3 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
                 <svg
-                  className="h-5 w-5 shrink-0 text-default-400"
+                  className="h-5 w-5 shrink-0 text-gray-400 dark:text-zinc-500"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -122,19 +123,19 @@ export default async function LoginPage({
                   name="credential"
                   type="text"
                   autoComplete="username"
-                  className="w-full bg-transparent text-base outline-none placeholder:text-default-400"
+                  className="w-full bg-transparent text-base outline-none placeholder:text-gray-400 dark:placeholder:text-zinc-500 [&:-webkit-autofill]:![box-shadow:0_0_0_1000px_white_inset] [&:-webkit-autofill]:![-webkit-text-fill-color:#111827] dark:[&:-webkit-autofill]:![box-shadow:0_0_0_1000px_#3f3f46_inset] dark:[&:-webkit-autofill]:![-webkit-text-fill-color:#f4f4f5]"
                   placeholder={t("login.credentialPlaceholder")}
                 />
               </div>
             </label>
 
             <label htmlFor="password-input" className="space-y-1.5">
-              <span className="text-sm font-medium text-default-700">
+              <span className="text-sm font-medium text-gray-600 dark:text-zinc-300">
                 {t("login.passwordLabel")}
               </span>
-              <div className="flex items-center gap-3 rounded-xl border border-default-200 bg-background px-4 py-3 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
+              <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white dark:border-zinc-700 dark:bg-zinc-800 px-4 py-3 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
                 <svg
-                  className="h-5 w-5 shrink-0 text-default-400"
+                  className="h-5 w-5 shrink-0 text-gray-400 dark:text-zinc-500"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -151,7 +152,7 @@ export default async function LoginPage({
                   name="password"
                   type="password"
                   autoComplete="current-password"
-                  className="w-full bg-transparent text-base outline-none placeholder:text-default-400"
+                  className="w-full bg-transparent text-base outline-none placeholder:text-gray-400 dark:placeholder:text-zinc-500 [&:-webkit-autofill]:![box-shadow:0_0_0_1000px_white_inset] [&:-webkit-autofill]:![-webkit-text-fill-color:#111827] dark:[&:-webkit-autofill]:![box-shadow:0_0_0_1000px_#3f3f46_inset] dark:[&:-webkit-autofill]:![-webkit-text-fill-color:#f4f4f5]"
                   placeholder={t("login.passwordPlaceholder")}
                 />
                 <button
@@ -161,7 +162,7 @@ export default async function LoginPage({
                   aria-pressed="false"
                   data-show-label={t("common.show")}
                   data-hide-label={t("common.hide")}
-                  className="shrink-0 rounded-lg p-1.5 text-default-400 transition hover:bg-default-100 hover:text-default-700"
+                  className="shrink-0 rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
                 >
                   <span className="sr-only">{t("common.show")}</span>
                   <svg
@@ -214,9 +215,13 @@ export default async function LoginPage({
             <button
               id="login-button"
               type="submit"
-              className="mt-2 inline-flex h-12 items-center justify-center rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 text-base font-semibold text-white shadow-lg shadow-blue-500/25 transition hover:opacity-95"
+              className="mt-2 inline-flex h-12 cursor-pointer items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 text-base font-semibold text-white shadow-lg shadow-blue-500/25 transition hover:opacity-95 disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              {t("login.signIn")}
+              <div id="login-spinner" className="relative hidden h-5 w-5 flex-shrink-0" aria-hidden="true">
+                <i className="absolute h-full w-full rounded-full border-2 border-b-current border-l-transparent border-r-transparent border-t-transparent border-solid animate-spinner-ease-spin" />
+                <i className="absolute h-full w-full rounded-full border-2 border-b-current border-l-transparent border-r-transparent border-t-transparent border-dotted opacity-75 animate-spinner-linear-spin" />
+              </div>
+              <span id="login-label">{t("login.signIn")}</span>
             </button>
 
             <button
@@ -241,17 +246,17 @@ export default async function LoginPage({
           margin: 0,
         }}
       >
-        <div className="border-b border-default-100 px-6 py-4 dark:border-zinc-800">
+        <div className="border-b border-gray-100 px-6 py-4 dark:border-zinc-800">
           <h2 className="text-lg font-semibold text-foreground">
             {t("login.forgotPasswordTitle")}
           </h2>
         </div>
         <div className="px-6 py-5">
-          <p className="text-sm leading-6 text-default-600">
+          <p className="text-sm leading-6 text-gray-600 dark:text-zinc-400">
             {t("login.forgotPasswordBody")}
           </p>
         </div>
-        <div className="flex justify-end border-t border-default-100 px-6 py-4 dark:border-zinc-800">
+        <div className="flex justify-end border-t border-gray-100 px-6 py-4 dark:border-zinc-800">
           <button
             id="forgot-password-close"
             type="button"
@@ -262,10 +267,25 @@ export default async function LoginPage({
         </div>
       </dialog>
 
-      <script
+      <Script
+        id="login-interactions"
+        strategy="afterInteractive"
         dangerouslySetInnerHTML={{
           __html: `
             (() => {
+              const form = document.querySelector("form");
+              const loginBtn = document.getElementById("login-button");
+              const loginSpinner = document.getElementById("login-spinner");
+              const loginLabel = document.getElementById("login-label");
+              if (form && loginBtn && loginSpinner && loginLabel) {
+                form.addEventListener("submit", () => {
+                  loginBtn.setAttribute("disabled", "true");
+                  loginSpinner.classList.remove("hidden");
+                  loginSpinner.classList.add("flex");
+                  loginLabel.textContent = "Signing in\u2026";
+                });
+              }
+
               const input = document.getElementById("password-input");
               const toggle = document.getElementById("password-toggle");
               const hiddenIcon = document.getElementById("password-icon-hidden");
@@ -322,4 +342,5 @@ export default async function LoginPage({
       />
     </div>
   );
+
 }

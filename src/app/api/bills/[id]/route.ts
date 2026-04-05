@@ -444,6 +444,7 @@ export async function PATCH(
           grandTotal: nextGrandTotal,
           createdBy: userId || updatedBill.createdBy,
           entryDate: updatedBill.updatedAt,
+          isInterState: body.isInterState === true,
         });
       }
 

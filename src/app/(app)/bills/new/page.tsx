@@ -72,7 +72,7 @@ export default function NewBillPage() {
   const [parties, setParties] = useState<PartyOption[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [savingAs, setSavingAs] = useState<"DRAFT" | "FINAL" | null>(null);
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   const [toast, setToast] = useState<{
     message: string;
@@ -84,6 +84,7 @@ export default function NewBillPage() {
   const [selectedParty, setSelectedParty] = useState<PartyOption | null>(null);
   const [rows, setRows] = useState<Record<string, string | number>[]>([]);
   const [taxPercent, setTaxPercent] = useState(18);
+  const [isInterState, setIsInterState] = useState(false);
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("");
   const [didAutoFocusRow, setDidAutoFocusRow] = useState(false);
@@ -277,7 +278,7 @@ export default function NewBillPage() {
     }
 
     setErrors({});
-    setSaving(true);
+    setSavingAs(status);
 
     try {
       const response = await fetch("/api/bills", {
@@ -295,6 +296,7 @@ export default function NewBillPage() {
           taxPercent,
           taxAmount,
           grandTotal,
+          isInterState,
           notes: notes.trim() || null,
           terms: terms.trim() || null,
           status,
@@ -311,7 +313,7 @@ export default function NewBillPage() {
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Failed to save bill", "error");
     } finally {
-      setSaving(false);
+      setSavingAs(null);
     }
   }
 
@@ -716,7 +718,18 @@ export default function NewBillPage() {
                       </div>
                       <span className="font-medium">{formatCurrency(taxAmount)}</span>
                     </div>
-                    <p className="text-xs text-default-400">{t("bills.autoTaxNote")}</p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-default-400">{t("bills.autoTaxNote")}</p>
+                      <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={isInterState}
+                          onChange={(e) => setIsInterState(e.target.checked)}
+                          className="accent-primary"
+                        />
+                        <span className="text-xs text-default-500">Inter-state (IGST)</span>
+                      </label>
+                    </div>
                     <Divider />
                     <div className="flex justify-between">
                       <span className="text-lg font-bold">Grand Total</span>
@@ -733,14 +746,15 @@ export default function NewBillPage() {
               <Button variant="flat" onPress={() => router.push("/bills")}>
                 Cancel
               </Button>
-              <Button variant="bordered" onPress={() => handleSave("DRAFT")} isLoading={saving}>
+              <Button variant="bordered" onPress={() => handleSave("DRAFT")} isLoading={savingAs === "DRAFT"} isDisabled={savingAs === "FINAL"}>
                 {t("bills.saveDraft")}
               </Button>
               <Button
                 color="primary"
                 className="bg-gradient-to-r from-blue-600 to-indigo-600 font-semibold"
                 onPress={() => handleSave("FINAL")}
-                isLoading={saving}
+                isLoading={savingAs === "FINAL"}
+                isDisabled={savingAs === "DRAFT"}
               >
                 {t("bills.finalize")}
               </Button>
