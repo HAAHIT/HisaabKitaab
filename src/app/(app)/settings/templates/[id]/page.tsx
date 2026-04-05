@@ -332,7 +332,8 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
                       size="sm"
                     >
                       {COLUMN_TYPES.map((t) => (
-                        <SelectItem key={t.key}>{t.label}</SelectItem>
+                        <SelectItem key={t.key} textValue={t.label}>{t.label}</SelectItem>
+
                       ))}
                     </Select>
                   </div>

@@ -4,6 +4,7 @@ import {
   TENANT_CONTEXT_MISSING_MESSAGE,
 } from "@/lib/tenant";
 import { resolveVerifiedTenantId } from "@/lib/session-server";
+import { logError, getRequestId } from "@/lib/observability";
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -106,7 +107,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ template }, { status: 201 });
   } catch (error) {
-    console.error("Create template error:", error);
+    logError("templates.create.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

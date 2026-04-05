@@ -248,8 +248,9 @@ export default function ItemCatalogPage() {
               variant="bordered"
             >
               {unitOptions.map((option) => (
-                <SelectItem key={option.key}>{option.label}</SelectItem>
+                <SelectItem key={option.key} textValue={option.label}>{option.label}</SelectItem>
               ))}
+
             </Select>
             <Input
               label={t("items.rate")}

@@ -288,7 +288,8 @@ export default function ReportsClient({
               variant="bordered"
             >
               {parties.map((party) => (
-                <SelectItem key={party.id}>
+                <SelectItem key={party.id} textValue={`${party.name} (${party.type.toLowerCase()})`}>
+
                   {party.name} ({party.type.toLowerCase()})
                 </SelectItem>
               ))}

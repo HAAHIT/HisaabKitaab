@@ -8,13 +8,14 @@ import {
 } from "@/lib/tenant";
 import { resolveVerifiedTenantId } from "@/lib/session-server";
 import { checkRateLimit } from "@/lib/api-rate-limit";
+import { logError, getRequestId } from "@/lib/observability";
 
 export const runtime = "nodejs";
 
 const VALID_ROLES = new Set(Object.values(Role));
 
 function normalizeOptionalString(value: unknown) {
-  if (value === null) {
+  if (value === null || value === undefined) {
     return null;
   }
 
@@ -103,13 +104,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (email === undefined) {
-      return NextResponse.json(
-        { error: "Email must be a string" },
-        { status: 400 }
-      );
-    }
-
     if (!VALID_ROLES.has(userRole as Role)) {
       return NextResponse.json(
         { error: "Invalid user role" },
@@ -150,38 +144,17 @@ export async function POST(request: NextRequest) {
 
     const hashedPassword = await hashPassword(password);
 
-    const userId = crypto.randomUUID();
-    await prisma.$executeRaw`
-      INSERT INTO "User" (
-        "id",
-        "tenantId",
-        "name",
-        "email",
-        "phone",
-        "password",
-        "role",
-        "isActive",
-        "createdBy",
-        "createdAt",
-        "updatedAt"
-      )
-      VALUES (
-        ${userId},
-        ${tenantId},
-        ${name},
-        ${email || null},
-        ${phone},
-        ${hashedPassword},
-        ${userRole}::"Role",
-        true,
-        ${adminId},
-        NOW(),
-        NOW()
-      )
-    `;
-
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
+    const user = await prisma.user.create({
+      data: {
+        tenantId,
+        name,
+        email: email || null,
+        phone,
+        password: hashedPassword,
+        role: userRole as Role,
+        isActive: true,
+        createdBy: adminId,
+      },
       select: {
         id: true,
         name: true,
@@ -193,13 +166,9 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    if (!user) {
-      throw new Error("Failed to create user");
-    }
-
     return NextResponse.json({ user }, { status: 201 });
   } catch (error) {
-    console.error("Create user error:", error);
+    logError("users.create.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

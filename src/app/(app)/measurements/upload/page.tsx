@@ -421,8 +421,9 @@ export default function UploadMeasurementsPage() {
             variant="bordered"
           >
             {ITEM_TYPES.map((item) => (
-              <SelectItem key={item.key}>{item.label}</SelectItem>
+              <SelectItem key={item.key} textValue={item.label}>{item.label}</SelectItem>
             ))}
+
           </Select>
 
           <Textarea

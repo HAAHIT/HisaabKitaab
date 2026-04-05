@@ -305,7 +305,8 @@ export default function CreateTemplatePage() {
                       size="sm"
                     >
                       {columnTypeOptions.map((option) => (
-                        <SelectItem key={option.key}>{option.label}</SelectItem>
+                        <SelectItem key={option.key} textValue={option.label}>{option.label}</SelectItem>
+
                       ))}
                     </Select>
                   </div>

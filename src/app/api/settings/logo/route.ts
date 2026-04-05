@@ -10,6 +10,7 @@ import {
 } from "@/lib/tenant";
 import { resolveVerifiedTenantId } from "@/lib/session-server";
 import { serializeTenantSettings } from "@/lib/tenant-settings";
+import { logError, getRequestId } from "@/lib/observability";
 
 export const runtime = "nodejs";
 
@@ -92,7 +93,7 @@ export async function POST(request: NextRequest) {
       await deleteMediaAsset(nextAsset).catch(() => undefined);
     }
 
-    console.error("Upload logo error:", error);
+    logError("settings.logo.upload.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Failed to upload logo" },
       { status: 500 }
@@ -140,7 +141,7 @@ export async function DELETE(request: NextRequest) {
       settings: serializeTenantSettings(updatedTenant),
     });
   } catch (error) {
-    console.error("Delete logo error:", error);
+    logError("settings.logo.delete.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Failed to delete logo" },
       { status: 500 }

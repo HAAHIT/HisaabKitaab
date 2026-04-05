@@ -14,6 +14,7 @@ import {
   TENANT_CONTEXT_MISSING_MESSAGE,
 } from "@/lib/tenant";
 import { resolveVerifiedTenantId } from "@/lib/session-server";
+import { logError, getRequestId } from "@/lib/observability";
 
 export const runtime = "nodejs";
 
@@ -324,7 +325,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ payment }, { status: 201 });
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Internal server error";
-    console.error("Create payment error:", error);
+    logError("payments.create.error", { requestId: getRequestId(request), error });
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 }
@@ -418,7 +419,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ payment: result });
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Internal server error";
-    console.error("Mark payment completed error:", error);
+    logError("payments.complete.error", { requestId: getRequestId(request), error });
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 }

@@ -14,6 +14,7 @@ import {
 } from "@/lib/tenant";
 import { resolveVerifiedTenantId } from "@/lib/session-server";
 import { checkRateLimit } from "@/lib/api-rate-limit";
+import { logError, getRequestId } from "@/lib/observability";
 
 export const runtime = "nodejs";
 
@@ -341,7 +342,7 @@ export async function POST(request: NextRequest) {
     const status =
       error instanceof Error && message !== "Internal server error" ? 400 : 500;
 
-    console.error("Create measurement error:", error);
+    logError("measurements.create.error", { requestId: getRequestId(request), error });
     return NextResponse.json({ error: message }, { status });
   }
 }

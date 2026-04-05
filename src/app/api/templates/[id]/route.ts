@@ -5,6 +5,7 @@ import {
   TENANT_CONTEXT_MISSING_MESSAGE,
 } from "@/lib/tenant";
 import { resolveVerifiedTenantId } from "@/lib/session-server";
+import { logError, getRequestId } from "@/lib/observability";
 
 export const runtime = "nodejs";
 
@@ -87,7 +88,7 @@ export async function PATCH(
 
     return NextResponse.json({ template });
   } catch (error) {
-    console.error("Update template error:", error);
+    logError("templates.update.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -148,7 +149,7 @@ export async function DELETE(
     });
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Delete template error:", error);
+    logError("templates.delete.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

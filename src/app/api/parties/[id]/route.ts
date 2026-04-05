@@ -164,7 +164,7 @@ export async function PATCH(
 
     return NextResponse.json({ party });
   } catch (error) {
-    console.error("Update party error:", error);
+    logError("parties.update.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -207,7 +207,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Delete party error:", error);
+    logError("parties.delete.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

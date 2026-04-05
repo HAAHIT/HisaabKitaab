@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { logError, getRequestId } from "@/lib/observability";
 import {
   resolveTenantIdFromRequest,
   TENANT_CONTEXT_MISSING_MESSAGE,
@@ -23,7 +24,7 @@ export async function GET(request: NextRequest) {
   try {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
     // Parallel queries for dashboard data
     const [
@@ -62,7 +63,7 @@ export async function GET(request: NextRequest) {
           tenantId,
           direction: "INCOMING",
           status: "COMPLETED",
-          date: { gte: monthStart, lte: monthEnd },
+          date: { gte: monthStart, lt: monthEnd },
         },
         _sum: { amount: true },
       }),
@@ -104,7 +105,7 @@ export async function GET(request: NextRequest) {
     const monthDetails = Array.from({ length: 6 }, (_, i) => {
       const monthIdx = 5 - i;
       const mStart = new Date(now.getFullYear(), now.getMonth() - monthIdx, 1);
-      const mEnd = new Date(now.getFullYear(), now.getMonth() - monthIdx + 1, 0);
+      const mEnd = new Date(now.getFullYear(), now.getMonth() - monthIdx + 1, 1);
       return { mStart, mEnd };
     });
 
@@ -116,7 +117,7 @@ export async function GET(request: NextRequest) {
               tenantId,
               direction: "INCOMING",
               status: "COMPLETED",
-              date: { gte: mStart, lte: mEnd },
+              date: { gte: mStart, lt: mEnd },
             },
             _sum: { amount: true },
           }),
@@ -125,7 +126,7 @@ export async function GET(request: NextRequest) {
               tenantId,
               direction: "OUTGOING",
               status: "COMPLETED",
-              date: { gte: mStart, lte: mEnd },
+              date: { gte: mStart, lt: mEnd },
             },
             _sum: { amount: true },
           }),
@@ -161,7 +162,7 @@ export async function GET(request: NextRequest) {
       billStats,
     });
   } catch (error) {
-    console.error("Dashboard error:", error);
+    logError("dashboard.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

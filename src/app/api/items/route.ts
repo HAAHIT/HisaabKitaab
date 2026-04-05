@@ -5,6 +5,7 @@ import {
   TENANT_CONTEXT_MISSING_MESSAGE,
 } from "@/lib/tenant";
 import { resolveVerifiedTenantId } from "@/lib/session-server";
+import { logError, getRequestId } from "@/lib/observability";
 import {
   normalizeItemNumber,
   normalizeItemUnit,
@@ -128,7 +129,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ item }, { status: 201 });
   } catch (error) {
-    console.error("Create item error:", error);
+    logError("items.create.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

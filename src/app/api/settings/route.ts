@@ -5,6 +5,7 @@ import {
   TENANT_CONTEXT_MISSING_MESSAGE,
 } from "@/lib/tenant";
 import { resolveVerifiedTenantId } from "@/lib/session-server";
+import { logError, getRequestId } from "@/lib/observability";
 import {
   mergeTenantSettings,
   normalizeBusinessType,
@@ -46,7 +47,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ settings: serializeTenantSettings(tenant) });
   } catch (error) {
-    console.error("Load settings error:", error);
+    logError("settings.load.error", { requestId: getRequestId(request), error });
     return NextResponse.json({ settings: null }, { status: 500 });
   }
 }
@@ -129,7 +130,7 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({ settings: serializeTenantSettings(tenant) });
   } catch (error) {
-    console.error("Update settings error:", error);
+    logError("settings.update.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

@@ -124,8 +124,9 @@ export default function MeasurementsListPage() {
           className="w-48"
         >
           {statusOptions.map((option) => (
-            <SelectItem key={option.key}>{option.label}</SelectItem>
+            <SelectItem key={option.key} textValue={option.label}>{option.label}</SelectItem>
           ))}
+
         </Select>
       </div>
 

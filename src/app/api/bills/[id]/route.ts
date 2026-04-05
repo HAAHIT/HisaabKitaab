@@ -13,6 +13,7 @@ import {
   TENANT_CONTEXT_MISSING_MESSAGE,
 } from "@/lib/tenant";
 import { resolveVerifiedTenantId } from "@/lib/session-server";
+import { logError, getRequestId } from "@/lib/observability";
 
 const ALLOWED_BILL_PATCH_KEYS = new Set([
   "templateId",
@@ -451,7 +452,7 @@ export async function PATCH(
 
     return NextResponse.json({ bill });
   } catch (error) {
-    console.error("Update bill error:", error);
+    logError("bills.update.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -563,7 +564,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Cancel bill error:", error);
+    logError("bills.cancel.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

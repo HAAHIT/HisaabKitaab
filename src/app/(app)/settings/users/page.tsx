@@ -409,9 +409,10 @@ export default function UserManagementPage() {
                   }}
                   variant="bordered"
                 >
-                  <SelectItem key="STAFF">{t("users.staff")}</SelectItem>
-                  <SelectItem key="ACCOUNTANT">{t("users.accountant")}</SelectItem>
-                  <SelectItem key="CUSTOMER">{t("users.customer")}</SelectItem>
+                  <SelectItem key="STAFF" textValue={t("users.staff")}>{t("users.staff")}</SelectItem>
+                  <SelectItem key="ACCOUNTANT" textValue={t("users.accountant")}>{t("users.accountant")}</SelectItem>
+                  <SelectItem key="CUSTOMER" textValue={t("users.customer")}>{t("users.customer")}</SelectItem>
+
                 </Select>
 
                 <div className="flex gap-3 pt-4">

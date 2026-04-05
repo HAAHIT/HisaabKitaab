@@ -616,7 +616,8 @@ export default function NewBillPage() {
                                 className="min-w-[120px]"
                               >
                                 {column.options.map((option) => (
-                                  <SelectItem key={option}>{option}</SelectItem>
+                                  <SelectItem key={option} textValue={option}>{option}</SelectItem>
+
                                 ))}
                               </Select>
                             ) : column.type === "date" ? (

@@ -6,6 +6,7 @@ import {
   TENANT_CONTEXT_MISSING_MESSAGE,
 } from "@/lib/tenant";
 import { resolveVerifiedTenantId } from "@/lib/session-server";
+import { logError, getRequestId } from "@/lib/observability";
 
 const VALID_PARTY_TYPES = new Set<PartyType>(["CUSTOMER", "VENDOR"]);
 
@@ -123,55 +124,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const partyId = crypto.randomUUID();
-    await prisma.$executeRaw`
-      INSERT INTO "Party" (
-        "id",
-        "tenantId",
-        "name",
-        "type",
-        "phone",
-        "email",
-        "address",
-        "gstin",
-        "openingBalance",
-        "currentBalance",
-        "isActive",
-        "isDeleted",
-        "createdBy",
-        "createdAt",
-        "updatedAt"
-      )
-      VALUES (
-        ${partyId},
-        ${tenantId},
-        ${normalizedName},
-        ${normalizedType}::"PartyType",
-        ${normalizeOptionalString(phone)},
-        ${normalizeOptionalString(email)},
-        ${normalizeOptionalString(address)},
-        ${normalizeOptionalString(gstin)},
-        ${normalizedOpeningBalance},
-        ${normalizedOpeningBalance},
-        true,
-        false,
-        ${userId},
-        NOW(),
-        NOW()
-      )
-    `;
-
-    const party = await prisma.party.findUnique({
-      where: { id: partyId },
+    const party = await prisma.party.create({
+      data: {
+        tenantId,
+        name: normalizedName,
+        type: normalizedType,
+        phone: normalizeOptionalString(phone),
+        email: normalizeOptionalString(email),
+        address: normalizeOptionalString(address),
+        gstin: normalizeOptionalString(gstin),
+        openingBalance: normalizedOpeningBalance,
+        currentBalance: normalizedOpeningBalance,
+        isActive: true,
+        isDeleted: false,
+        createdBy: userId,
+      },
     });
-
-    if (!party) {
-      throw new Error("Failed to create party");
-    }
 
     return NextResponse.json({ party }, { status: 201 });
   } catch (error) {
-    console.error("Create party error:", error);
+    logError("parties.create.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

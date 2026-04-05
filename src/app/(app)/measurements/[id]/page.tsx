@@ -320,8 +320,9 @@ export default function MeasurementDetailPage({
                 variant="bordered"
               >
                 {STATUS_OPTIONS.map((option) => (
-                  <SelectItem key={option.key}>{option.label}</SelectItem>
+                  <SelectItem key={option.key} textValue={option.label}>{option.label}</SelectItem>
                 ))}
+
               </Select>
               <Textarea
                 label="Review Notes (Internal)"

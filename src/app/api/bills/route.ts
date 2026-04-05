@@ -16,6 +16,7 @@ import {
 } from "@/lib/tenant";
 import { resolveVerifiedTenantId } from "@/lib/session-server";
 import { checkRateLimit } from "@/lib/api-rate-limit";
+import { logError, getRequestId } from "@/lib/observability";
 
 const BILL_NUMBER_LOCK_KEY = 22032026;
 type SupportedPaymentMode = "CASH" | "UPI" | "BANK_TRANSFER" | "CHEQUE";
@@ -170,7 +171,7 @@ export async function GET(request: NextRequest) {
       totalPages: Math.max(1, Math.ceil(total / limit)),
     });
   } catch (error) {
-    console.error("List bills error:", error);
+    logError("bills.list.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Failed to load bills" },
       { status: 500 }
@@ -487,7 +488,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ bill }, { status: 201 });
   } catch (error) {
-    console.error("Create bill error:", error);
+    logError("bills.create.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
