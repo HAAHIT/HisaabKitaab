@@ -39,6 +39,7 @@ interface SalesBillJournalInput {
   grandTotal: number;
   createdBy: string;
   entryDate: Date;
+  isInterState?: boolean;
 }
 
 interface PaymentJournalInput {
@@ -64,9 +65,23 @@ interface PurchaseBillJournalInput {
   billDate: Date;
 }
 
-function buildSalesTaxLines(taxAmount: number, direction: "DEBIT" | "CREDIT") {
+function buildSalesTaxLines(
+  taxAmount: number,
+  direction: "DEBIT" | "CREDIT",
+  isInterState = false
+) {
   if (taxAmount <= 0) {
     return [];
+  }
+
+  if (isInterState) {
+    return [
+      {
+        accountCode: "IGST_OUTPUT" as const,
+        debit: direction === "DEBIT" ? taxAmount : 0,
+        credit: direction === "CREDIT" ? taxAmount : 0,
+      },
+    ];
   }
 
   const halfTax = roundTo2(taxAmount / 2);
@@ -176,7 +191,7 @@ export async function journalForSalesBill(
         debit: 0,
         credit: bill.subtotal,
       },
-      ...buildSalesTaxLines(bill.taxAmount, "CREDIT"),
+      ...buildSalesTaxLines(bill.taxAmount, "CREDIT", bill.isInterState),
     ],
   });
 }
@@ -206,7 +221,7 @@ export async function journalForCancelledSalesBill(
         debit: bill.subtotal,
         credit: 0,
       },
-      ...buildSalesTaxLines(bill.taxAmount, "DEBIT"),
+      ...buildSalesTaxLines(bill.taxAmount, "DEBIT", bill.isInterState),
     ],
   });
 }

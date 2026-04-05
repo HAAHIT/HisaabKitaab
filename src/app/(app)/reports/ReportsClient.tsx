@@ -61,6 +61,7 @@ export default function ReportsClient({
   const [from, setFrom] = useState(initialFrom);
   const [to, setTo] = useState(initialTo);
   const [selectedPartyId, setSelectedPartyId] = useState<string>("");
+  const [tallyExportType, setTallyExportType] = useState<"all" | "masters" | "vouchers">("all");
   const [preview, setPreview] = useState<TrialBalancePreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
 
@@ -305,6 +306,60 @@ export default function ReportsClient({
           </CardBody>
         </Card>
       </div>
+
+      <Card shadow="sm" className="border border-amber-500/20">
+        <CardBody className="p-6 space-y-4">
+          <div className="flex items-start gap-3">
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold">{t("reports.tallyExport")}</h3>
+              <p className="text-sm text-default-500">{t("reports.tallyExportDesc")}</p>
+            </div>
+            <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+              Tally
+            </span>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-[1fr,auto]">
+            <Select
+              label={t("reports.tallyExportType")}
+              selectedKeys={[tallyExportType]}
+              onSelectionChange={(keys) => {
+                const next = Array.from(keys)[0];
+                if (next === "all" || next === "masters" || next === "vouchers") {
+                  setTallyExportType(next);
+                }
+              }}
+              variant="bordered"
+            >
+              <SelectItem key="all">{t("reports.tallyAll")}</SelectItem>
+              <SelectItem key="masters">{t("reports.tallyMasters")}</SelectItem>
+              <SelectItem key="vouchers">{t("reports.tallyVouchers")}</SelectItem>
+            </Select>
+
+            <div className="flex items-end">
+              <Button
+                color="warning"
+                variant="flat"
+                className="font-semibold"
+                isDisabled={exportBlocked}
+                onPress={() =>
+                  downloadFile(
+                    buildDownloadUrl("/api/export/tally-xml", {
+                      from,
+                      to,
+                      type: tallyExportType,
+                    })
+                  )
+                }
+              >
+                {t("reports.downloadXML")}
+              </Button>
+            </div>
+          </div>
+
+          <p className="text-xs text-default-400">{t("reports.tallyHelp")}</p>
+        </CardBody>
+      </Card>
 
       <Card shadow="sm">
         <CardBody className="space-y-4 p-6">
