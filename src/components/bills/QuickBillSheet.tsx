@@ -7,10 +7,10 @@ import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 const QUICK_BILL_PAYMENT_MODES = [
-  { label: "CASH", value: "CASH" },
+  { label: "Cash", value: "CASH" },
   { label: "UPI", value: "UPI" },
-  { label: "BANK", value: "BANK_TRANSFER" },
-  { label: "CHEQUE", value: "CHEQUE" },
+  { label: "Bank", value: "BANK_TRANSFER" },
+  { label: "Cheque", value: "CHEQUE" },
 ] as const;
 
 type QuickBillPaymentMode = (typeof QUICK_BILL_PAYMENT_MODES)[number]["value"];
@@ -29,7 +29,8 @@ function sanitizeAmountInput(value: string) {
     return parts[0];
   }
 
-  return `${parts[0]}.${parts.slice(1).join("").slice(0, 2)}`;
+  // Only allow one decimal point, max 2 decimal places
+  return `${parts[0]}.${parts.slice(1).join("").replace(/\./g, "").slice(0, 2)}`;
 }
 
 async function readError(response: Response) {
@@ -47,36 +48,54 @@ export function QuickBillSheet({
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [paymentMode, setPaymentMode] = useState<QuickBillPaymentMode>("CASH");
+  const [recordPayment, setRecordPayment] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Auto-fill description from last bill when party is selected
   useEffect(() => {
-    if (!selectedParty) {
+    if (!selectedParty || description) {
       return;
     }
+
+    let isMounted = true;
 
     fetch(`/api/bills?partyId=${selectedParty.id}&limit=1`)
       .then((res) => res.json())
       .then((data) => {
-        if (!data.bills?.[0]) {
+        if (!isMounted || !data.bills?.[0]) {
           return;
         }
 
-        const lastDesc = data.bills[0].rows?.[0]?.description;
-        if (lastDesc && !description) {
+        const lastDesc = data.bills[0].rows?.[0]?.desc || data.bills[0].rows?.[0]?.description;
+        if (lastDesc) {
           setDescription(lastDesc);
         }
       })
-      .catch((fetchError) => {
-        console.error("Could not fetch last bill", fetchError);
+      .catch(() => {
+        // silently fail — this is a non-critical convenience feature
       });
-  }, [description, selectedParty]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedParty]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (isOpen) {
       setError(null);
     }
   }, [isOpen]);
+
+  function handlePartyChange(party: PartyOption | null) {
+    setSelectedParty(party);
+    setError(null);
+  }
+
+  function handleAmountChange(value: string) {
+    setAmount(sanitizeAmountInput(value));
+    setError(null);
+  }
 
   async function handleSubmit() {
     if (!selectedParty) {
@@ -104,13 +123,13 @@ export function QuickBillSheet({
           customerPhone: selectedParty.phone || null,
           customerAddress: selectedParty.address || null,
           gstin: selectedParty.gstin || null,
-          rows: [{ description: description || "Quick Bill", amount: parsedAmount }],
+          rows: [{ desc: description || "Quick Bill", amt: parsedAmount }],
           subtotal: parsedAmount,
           taxPercent: 0,
           taxAmount: 0,
           grandTotal: parsedAmount,
           status: "FINAL",
-          paymentMode,
+          ...(recordPayment ? { paymentMode } : {}),
         }),
       });
 
@@ -120,13 +139,17 @@ export function QuickBillSheet({
 
       const data = await response.json();
 
-      setSelectedParty(null);
-      setAmount("");
-      setDescription("");
-      setPaymentMode("CASH");
-
-      onClose();
       onBillCreated?.({ id: data.bill.id, billNumber: data.bill.billNumber });
+      onClose();
+
+      // Delay state reset to avoid flickering during close animation
+      setTimeout(() => {
+        setSelectedParty(null);
+        setAmount("");
+        setDescription("");
+        setPaymentMode("CASH");
+        setRecordPayment(true);
+      }, 300);
     } catch (submitError) {
       setError(
         submitError instanceof Error
@@ -141,55 +164,77 @@ export function QuickBillSheet({
   const parsedAmount = Number.parseFloat(amount);
   const amountDisplay =
     amount && Number.isFinite(parsedAmount)
-      ? `INR ${parsedAmount.toLocaleString("en-IN")}`
+      ? `₹${parsedAmount.toLocaleString("en-IN")}`
       : "";
 
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose} title={t("bills.quickBill")}>
-      <div className="flex flex-col gap-5 p-4 pb-safe-bottom">
+      <div className="flex flex-col gap-3">
         <PartySearch
           value={selectedParty?.id || null}
-          onChange={setSelectedParty}
+          onChange={handlePartyChange}
           partyType="CUSTOMER"
           placeholder={t("bills.quickSearchParty")}
           autoFocus
         />
 
-        <Input
-          size="lg"
-          type="text"
-          inputMode="decimal"
-          label={t("bills.quickAmount")}
-          placeholder="0.00"
-          value={amount}
-          onValueChange={(value) => setAmount(sanitizeAmountInput(value))}
-          classNames={{
-            input: "text-3xl font-bold",
-          }}
-          isInvalid={Boolean(error) && !amount}
-        />
+        {/* Amount + Description side by side */}
+        <div className="flex gap-2">
+          <Input
+            type="text"
+            inputMode="decimal"
+            label="Amount"
+            placeholder="0.00"
+            value={amount}
+            onValueChange={handleAmountChange}
+            variant="bordered"
+            isRequired
+            pattern="[0-9]*[.]?[0-9]{0,2}"
+            startContent={<span className="text-default-400">₹</span>}
+            isInvalid={Boolean(error) && !amount}
+            className="w-36 shrink-0"
+          />
+          <Input
+            label={t("bills.quickDescription")}
+            placeholder="e.g. Hardware supplies"
+            value={description}
+            onValueChange={setDescription}
+            variant="bordered"
+            className="flex-1"
+          />
+        </div>
 
-        <Input
-          label={t("bills.quickDescription")}
-          placeholder="e.g. Hardware supplies"
-          value={description}
-          onValueChange={setDescription}
-        />
+        {/* Payment mode row */}
+        <div className="flex items-center gap-2">
+          <span className="shrink-0 text-xs font-medium text-default-500">Pay via</span>
 
-        <div className="flex flex-col gap-2">
-          <label className="text-sm font-medium text-default-600">Payment Mode</label>
-          <ButtonGroup fullWidth size="md">
-            {QUICK_BILL_PAYMENT_MODES.map((mode) => (
-              <Button
-                key={mode.value}
-                onPress={() => setPaymentMode(mode.value)}
-                color={paymentMode === mode.value ? "primary" : "default"}
-                variant={paymentMode === mode.value ? "solid" : "flat"}
-              >
-                {mode.label}
-              </Button>
-            ))}
-          </ButtonGroup>
+          {recordPayment ? (
+            <ButtonGroup size="sm" className="flex-1">
+              {QUICK_BILL_PAYMENT_MODES.map((mode) => (
+                <Button
+                  key={mode.value}
+                  onPress={() => setPaymentMode(mode.value)}
+                  color={paymentMode === mode.value ? "primary" : "default"}
+                  variant={paymentMode === mode.value ? "solid" : "flat"}
+                  className="flex-1"
+                >
+                  {mode.label}
+                </Button>
+              ))}
+            </ButtonGroup>
+          ) : (
+            <span className="flex-1 text-xs text-default-400">Record from bill page later</span>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setRecordPayment((prev) => !prev)}
+            className={`shrink-0 text-xs font-medium transition-colors ${
+              recordPayment ? "text-default-400 hover:text-default-600" : "text-primary"
+            }`}
+          >
+            {recordPayment ? "Skip" : "Record"}
+          </button>
         </div>
 
         {error && <p className="text-sm text-danger">{error}</p>}
@@ -200,11 +245,11 @@ export function QuickBillSheet({
           fullWidth
           isLoading={loading}
           onPress={handleSubmit}
-          className="mt-4 font-bold tracking-wide"
+          className="font-bold tracking-wide"
         >
           {loading
             ? "Creating..."
-            : `${t("bills.quickCreate")}${amountDisplay ? ` ${amountDisplay}` : ""}`}
+            : `${t("bills.quickCreate")}${amountDisplay ? ` · ${amountDisplay}` : ""}`}
         </Button>
       </div>
     </BottomSheet>

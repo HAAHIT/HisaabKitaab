@@ -57,8 +57,8 @@ export function PartySearch({
           const data = await response.json();
           setParties(data.parties || []);
         }
-      } catch (fetchError) {
-        console.error("Failed to load parties", fetchError);
+      } catch {
+        // silently fail — parties list will remain empty
       } finally {
         setIsLoading(false);
       }

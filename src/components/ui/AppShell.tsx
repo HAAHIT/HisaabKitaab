@@ -131,12 +131,6 @@ const CUSTOMER_NAV: NavItem[] = [
   },
 ];
 
-const ROLE_TRANSLATION_KEYS: Record<string, TranslationKey> = {
-  ADMIN: "users.admin",
-  STAFF: "users.staff",
-  ACCOUNTANT: "users.accountant",
-  CUSTOMER: "users.customer",
-};
 
 export default function AppShell({
   children,
@@ -151,9 +145,11 @@ export default function AppShell({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [moreSheetOpen, setMoreSheetOpen] = useState(false);
   const [quickBillOpen, setQuickBillOpen] = useState(false);
-  const [fabOpenPath, setFabOpenPath] = useState<string | null>(null);
 
-  const showFab = (user.role !== "CUSTOMER") && (!pathname.includes("/bills/new") && !pathname.includes("/login"));
+  const showFab =
+    user.role !== "CUSTOMER" &&
+    !pathname.includes("/bills/new") &&
+    !pathname.includes("/login");
 
   const navItems = useMemo(
     () =>
@@ -532,7 +528,7 @@ export default function AppShell({
               );
             })}
 
-            {user.role !== "CUSTOMER" && (
+            {showFab && (
               <div className="relative -mt-12">
                 <button
                   onClick={() => setQuickBillOpen(true)}
