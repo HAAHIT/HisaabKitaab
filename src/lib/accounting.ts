@@ -1,6 +1,6 @@
-import type { Prisma, PrismaClient } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
-type PrismaOrTx = PrismaClient | Prisma.TransactionClient;
+type PrismaOrTx = Prisma.TransactionClient;
 
 export type SupportedPartyType = "CUSTOMER" | "VENDOR";
 export type SupportedPayDirection = "INCOMING" | "OUTGOING";
@@ -298,7 +298,7 @@ export async function recomputePartyBalance(
   partyId: string,
   tenantId: string
 ): Promise<number> {
-  const party = await (db as PrismaClient).party.findFirst({
+  const party = await db.party.findFirst({
     where: { id: partyId, tenantId },
     select: { openingBalance: true, type: true },
   });
@@ -306,11 +306,11 @@ export async function recomputePartyBalance(
   if (!party) throw new Error(`Party ${partyId} not found`);
 
   const [bills, payments] = await Promise.all([
-    (db as PrismaClient).bill.findMany({
+    db.bill.findMany({
       where: { partyId, tenantId, status: "FINAL", isDeleted: false },
       select: { grandTotal: true },
     }),
-    (db as PrismaClient).payment.findMany({
+    db.payment.findMany({
       where: { partyId, tenantId, status: "COMPLETED", isDeleted: false },
       select: { amount: true, direction: true },
     }),

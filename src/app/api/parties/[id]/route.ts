@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { resolveTenantIdFromRequest, TENANT_CONTEXT_MISSING_MESSAGE } from "@/lib/tenant";
 import { resolveVerifiedTenantId } from "@/lib/session-server";
+import { logError, getRequestId } from "@/lib/observability";
 import { NextRequest, NextResponse } from "next/server";
 import type { PartyType } from "@prisma/client";
 
