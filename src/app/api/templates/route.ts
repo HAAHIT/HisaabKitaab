@@ -73,37 +73,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const templateId = crypto.randomUUID();
-    await prisma.$executeRaw`
-      INSERT INTO "BillTemplate" (
-        "id",
-        "tenantId",
-        "name",
-        "columns",
-        "createdBy",
-        "createdAt",
-        "updatedAt",
-        "isDeleted"
-      )
-      VALUES (
-        ${templateId},
-        ${tenantId},
-        ${name},
-        ${JSON.stringify(columns)}::jsonb,
-        ${userId},
-        NOW(),
-        NOW(),
-        false
-      )
-    `;
-
-    const template = await prisma.billTemplate.findUnique({
-      where: { id: templateId },
+    const template = await prisma.billTemplate.create({
+      data: {
+        tenantId,
+        name,
+        columns,
+        createdBy: userId,
+        isDeleted: false,
+      },
     });
-
-    if (!template) {
-      throw new Error("Failed to create template");
-    }
 
     return NextResponse.json({ template }, { status: 201 });
   } catch (error) {

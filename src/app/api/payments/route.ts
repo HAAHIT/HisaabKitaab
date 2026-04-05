@@ -234,53 +234,25 @@ export async function POST(request: NextRequest) {
         throw new Error("Party not found");
       }
 
-      const paymentId = crypto.randomUUID();
-      await tx.$executeRaw`
-        INSERT INTO "Payment" (
-          "id",
-          "tenantId",
-          "partyId",
-          "direction",
-          "amount",
-          "date",
-          "mode",
-          "status",
-          "linkedBillId",
-          "notes",
-          "createdBy",
-          "createdAt",
-          "isDeleted",
-          "updatedAt"
-        )
-        VALUES (
-          ${paymentId},
-          ${tenantId},
-          ${party.id},
-          ${type}::"PayDirection",
-          ${normalizedAmount},
-          ${paymentDate},
-          ${normalizedMode}::"PaymentMode",
-          ${paymentStatus}::"PaymentStatus",
-          ${resolvedBillId},
-          ${notes || null},
-          ${userId},
-          NOW(),
-          false,
-          NOW()
-        )
-      `;
-
-      const newPayment = await tx.payment.findUnique({
-        where: { id: paymentId },
+      const newPayment = await tx.payment.create({
+        data: {
+          tenantId,
+          partyId: party.id,
+          direction: type,
+          amount: normalizedAmount,
+          date: paymentDate,
+          mode: normalizedMode,
+          status: paymentStatus,
+          linkedBillId: resolvedBillId,
+          notes: notes || null,
+          createdBy: userId!,
+          isDeleted: false,
+        },
         include: {
           party: { select: { name: true, type: true } },
           linkedBill: { select: { id: true, billNumber: true } },
         },
       });
-
-      if (!newPayment) {
-        throw new Error("Failed to create payment");
-      }
 
       if (paymentStatus === "COMPLETED") {
         const balanceChange = getPaymentBalanceDelta(

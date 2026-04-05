@@ -37,12 +37,6 @@ function normalizePaymentMode(mode: unknown): SupportedPaymentMode | null {
   return VALID_PAYMENT_MODES.has(mode) ? (mode as SupportedPaymentMode) : null;
 }
 
-type TenantBillingSettingsRow = {
-  id: string;
-  settings: unknown;
-  createdAt: Date;
-};
-
 function parseTenantSettings(value: unknown) {
   if (value && typeof value === "object" && !Array.isArray(value)) {
     return value as Record<string, unknown>;
@@ -61,14 +55,12 @@ function parseTenantSettings(value: unknown) {
 }
 
 async function loadBillingSettings(tenantId: string) {
-  const tenantRows = await prisma.$queryRaw<TenantBillingSettingsRow[]>`
-    SELECT "id", "settings", "createdAt"
-    FROM "Tenant"
-    WHERE "id" = ${tenantId}
-    LIMIT 1
-  `;
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { settings: true },
+  });
 
-  const tenantSettings = parseTenantSettings(tenantRows[0]?.settings);
+  const tenantSettings = parseTenantSettings(tenant?.settings);
   const billPrefixCandidate =
     typeof tenantSettings.billPrefix === "string"
       ? tenantSettings.billPrefix.trim()
@@ -181,7 +173,7 @@ export async function GET(request: NextRequest) {
 
 // POST /api/bills — Create a new bill
 export async function POST(request: NextRequest) {
-  const rateLimitResponse = checkRateLimit(request, "bills.create", 30);
+  const rateLimitResponse = await checkRateLimit(request, "bills.create", 30);
   if (rateLimitResponse) return rateLimitResponse;
 
   const role = request.headers.get("x-user-role");
@@ -337,74 +329,36 @@ export async function POST(request: NextRequest) {
     const bill = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${BILL_NUMBER_LOCK_KEY})`;
 
-      const existingCountRows = await tx.$queryRaw<Array<{ count: bigint }>>`
-        SELECT COUNT(*)::bigint AS count
-        FROM "Bill"
-        WHERE
-          "tenantId" = ${tenantId}
-          AND "createdAt" >= ${monthStart}
-          AND "createdAt" < ${nextMonthStart}
-      `;
-      const existingCount = Number(existingCountRows[0]?.count || 0);
+      const existingCount = await tx.bill.count({
+        where: {
+          tenantId,
+          createdAt: { gte: monthStart, lt: nextMonthStart },
+        },
+      });
       const billNumber = `${prefix}-${yearMonth}-${String(existingCount + 1).padStart(3, "0")}`;
 
-      const billId = crypto.randomUUID();
-      await tx.$executeRaw`
-        INSERT INTO "Bill" (
-          "id",
-          "tenantId",
-          "billNumber",
-          "templateId",
-          "partyId",
-          "customerName",
-          "customerPhone",
-          "customerAddress",
-          "gstin",
-          "rows",
-          "notes",
-          "terms",
-          "subtotal",
-          "taxPercent",
-          "taxAmount",
-          "grandTotal",
-          "status",
-          "createdBy",
-          "createdAt",
-          "updatedAt",
-          "isDeleted"
-        )
-        VALUES (
-          ${billId},
-          ${tenantId},
-          ${billNumber},
-          ${template.id},
-          ${party.id},
-          ${snapshot.customerName},
-          ${snapshot.customerPhone},
-          ${snapshot.customerAddress},
-          ${snapshot.gstin},
-          ${JSON.stringify(rows)}::jsonb,
-          ${notes || null},
-          ${terms || null},
-          ${subtotal || 0},
-          ${taxPercent ?? billingSettings.defaultTaxPercent},
-          ${taxAmount || 0},
-          ${resolvedGrandTotal},
-          ${billStatus}::"BillStatus",
-          ${userId},
-          NOW(),
-          NOW(),
-          false
-        )
-      `;
-
-      const createdBill = await tx.bill.findUnique({
-        where: { id: billId },
+      const createdBill = await tx.bill.create({
+        data: {
+          tenantId,
+          billNumber,
+          templateId: template.id,
+          partyId: party.id,
+          customerName: snapshot.customerName,
+          customerPhone: snapshot.customerPhone,
+          customerAddress: snapshot.customerAddress,
+          gstin: snapshot.gstin,
+          rows,
+          notes: notes || null,
+          terms: terms || null,
+          subtotal: subtotal || 0,
+          taxPercent: taxPercent ?? billingSettings.defaultTaxPercent,
+          taxAmount: taxAmount || 0,
+          grandTotal: resolvedGrandTotal,
+          status: billStatus,
+          createdBy: userId!,
+          isDeleted: false,
+        },
       });
-
-      if (!createdBill) {
-        throw new Error("Failed to create bill");
-      }
 
       const balanceChange = getPostedBillBalanceDelta(
         party.type,

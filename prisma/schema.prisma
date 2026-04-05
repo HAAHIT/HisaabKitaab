@@ -8,61 +8,59 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// ─── Multi-Tenant Foundation ─────────────────────────────────────────────────
-
 model Tenant {
-  id        String     @id @default(cuid())
-  name      String
-  slug      String     @unique
-  phone     String?
-  email     String?
-  address   String?
-  gstin     String?
-  logoUrl   String?
-  plan      TenantPlan @default(FREE)
-  settings  Json       @default("{}")
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-
-  users        User[]
-  bills        Bill[]
-  parties      Party[]
-  payments     Payment[]
-  templates    BillTemplate[]
-  items        ItemCatalog[]
+  id             String              @id @default(cuid())
+  name           String
+  slug           String              @unique
+  phone          String?
+  email          String?
+  address        String?
+  gstin          String?
+  logoUrl        String?
+  plan           TenantPlan          @default(FREE)
+  settings       Json                @default("{}")
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  bills          Bill[]
+  templates      BillTemplate[]
+  items          ItemCatalog[]
   journalEntries JournalEntry[]
-  measurements MeasurementUpload[]
+  measurements   MeasurementUpload[]
+  parties        Party[]
+  payments       Payment[]
+  users          User[]
 }
-
-enum TenantPlan {
-  FREE
-  PRO
-}
-
-// ─── Users & Auth ────────────────────────────────────────────────────────────
 
 model User {
-  id            String         @id @default(cuid())
-  tenantId      String
-  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  id            String              @id @default(cuid())
   name          String
   email         String?
   phone         String?
   password      String
-  role          Role           @default(CUSTOMER)
-  isActive      Boolean        @default(true)
+  role          Role                @default(CUSTOMER)
+  isActive      Boolean             @default(true)
   createdBy     String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  tenantId      String
   authThrottles AuthThrottle[]
   billsCreated  Bill[]
   measurements  MeasurementUpload[]
   payments      Payment[]
+  tenant        Tenant              @relation(fields: [tenantId], references: [id])
 
   @@unique([tenantId, email])
   @@unique([tenantId, phone])
   @@index([tenantId])
+}
+
+model ApiRateLimit {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  count       Int      @default(1)
+  windowStart DateTime @default(now())
+
+  @@index([windowStart])
 }
 
 model AuthThrottle {
@@ -83,19 +81,17 @@ model AuthThrottle {
   @@index([userId])
 }
 
-// ─── Billing ─────────────────────────────────────────────────────────────────
-
 model BillTemplate {
   id        String   @id @default(cuid())
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
   name      String
   columns   Json
   createdBy String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   isDeleted Boolean  @default(false)
+  tenantId  String
   bills     Bill[]
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
 }
@@ -103,7 +99,6 @@ model BillTemplate {
 model ItemCatalog {
   id        String   @id @default(cuid())
   tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
   name      String
   hsnCode   String?
   unit      String   @default("pcs")
@@ -112,6 +107,7 @@ model ItemCatalog {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
   @@index([tenantId, name])
@@ -119,8 +115,6 @@ model ItemCatalog {
 
 model Bill {
   id              String       @id @default(cuid())
-  tenantId        String
-  tenant          Tenant       @relation(fields: [tenantId], references: [id])
   billNumber      String
   templateId      String
   customerName    String
@@ -140,10 +134,11 @@ model Bill {
   updatedAt       DateTime     @updatedAt
   isDeleted       Boolean      @default(false)
   partyId         String?
-  
+  tenantId        String
   creator         User         @relation(fields: [createdBy], references: [id])
   party           Party?       @relation(fields: [partyId], references: [id])
   template        BillTemplate @relation(fields: [templateId], references: [id])
+  tenant          Tenant       @relation(fields: [tenantId], references: [id])
   payments        Payment[]
 
   @@unique([tenantId, billNumber])
@@ -152,12 +147,8 @@ model Bill {
   @@index([tenantId, status])
 }
 
-// ─── Parties (Customers & Vendors) ──────────────────────────────────────────
-
 model Party {
   id             String              @id @default(cuid())
-  tenantId       String
-  tenant         Tenant              @relation(fields: [tenantId], references: [id])
   name           String
   type           PartyType
   phone          String?
@@ -171,20 +162,18 @@ model Party {
   createdBy      String?
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
+  tenantId       String
   bills          Bill[]
   measurements   MeasurementUpload[]
+  tenant         Tenant              @relation(fields: [tenantId], references: [id])
   payments       Payment[]
 
   @@index([tenantId])
   @@index([tenantId, type])
 }
 
-// ─── Payments ────────────────────────────────────────────────────────────────
-
 model Payment {
   id           String        @id @default(cuid())
-  tenantId     String
-  tenant       Tenant        @relation(fields: [tenantId], references: [id])
   partyId      String
   direction    PayDirection
   amount       Float
@@ -199,10 +188,11 @@ model Payment {
   createdAt    DateTime      @default(now())
   isDeleted    Boolean       @default(false)
   updatedAt    DateTime      @updatedAt
-  
+  tenantId     String
   creator      User          @relation(fields: [createdBy], references: [id])
   linkedBill   Bill?         @relation(fields: [linkedBillId], references: [id])
   party        Party         @relation(fields: [partyId], references: [id])
+  tenant       Tenant        @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
   @@index([tenantId, partyId])
@@ -210,21 +200,21 @@ model Payment {
 }
 
 model JournalEntry {
-  id          String       @id @default(cuid())
+  id          String        @id @default(cuid())
   tenantId    String
-  tenant      Tenant       @relation(fields: [tenantId], references: [id])
   entryDate   DateTime
   narration   String
   voucherType VoucherType
   billId      String?
   purchaseId  String?
   paymentId   String?
-  lines       JournalLine[]
-  isBalanced  Boolean      @default(false)
-  totalDebit  Float        @default(0)
-  totalCredit Float        @default(0)
+  isBalanced  Boolean       @default(false)
+  totalDebit  Float         @default(0)
+  totalCredit Float         @default(0)
   createdBy   String
-  createdAt   DateTime     @default(now())
+  createdAt   DateTime      @default(now())
+  tenant      Tenant        @relation(fields: [tenantId], references: [id])
+  lines       JournalLine[]
 
   @@index([tenantId])
   @@index([tenantId, entryDate])
@@ -237,20 +227,18 @@ model JournalEntry {
 model JournalLine {
   id          String       @id @default(cuid())
   journalId   String
-  journal     JournalEntry @relation(fields: [journalId], references: [id], onDelete: Cascade)
   accountCode String
   accountName String
   tallyGroup  String
   partyId     String?
   partyName   String?
   debit       Float        @default(0)
-  credit       Float        @default(0)
+  credit      Float        @default(0)
+  journal     JournalEntry @relation(fields: [journalId], references: [id], onDelete: Cascade)
 
   @@index([journalId])
   @@index([accountCode])
 }
-
-// ─── Media & Measurements ────────────────────────────────────────────────────
 
 model MediaAsset {
   id                String             @id @default(cuid())
@@ -280,12 +268,10 @@ model MeasurementPhoto {
 
 model MeasurementUpload {
   id           String             @id @default(cuid())
-  tenantId     String
-  tenant       Tenant             @relation(fields: [tenantId], references: [id])
   customerId   String
   label        String
   roomName     String?
-  itemType     String?
+  doorType     String?
   notes        String?
   photosLegacy Json               @map("photos")
   status       MeasurementStatus  @default(UPLOADED)
@@ -295,12 +281,18 @@ model MeasurementUpload {
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
   partyId      String?
-  
+  tenantId     String
   photoAssets  MeasurementPhoto[]
   customer     User               @relation(fields: [customerId], references: [id])
   party        Party?             @relation(fields: [partyId], references: [id])
+  tenant       Tenant             @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
+}
+
+enum TenantPlan {
+  FREE
+  PRO
 }
 
 enum Role {

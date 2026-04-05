@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
 
 // POST /api/users — Create a new user (Admin only)
 export async function POST(request: NextRequest) {
-  const rateLimitResponse = checkRateLimit(request, "users.create", 20);
+  const rateLimitResponse = await checkRateLimit(request, "users.create", 20);
   if (rateLimitResponse) return rateLimitResponse;
 
   const role = request.headers.get("x-user-role");

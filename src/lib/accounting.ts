@@ -1,3 +1,7 @@
+import type { Prisma, PrismaClient } from "@prisma/client";
+
+type PrismaOrTx = PrismaClient | Prisma.TransactionClient;
+
 export type SupportedPartyType = "CUSTOMER" | "VENDOR";
 export type SupportedPayDirection = "INCOMING" | "OUTGOING";
 export type SupportedBillStatus = "DRAFT" | "FINAL" | "CANCELLED";
@@ -281,4 +285,51 @@ export function buildPartyLedger({
     ledger,
     calculatedCurrent: runningBalance,
   };
+}
+
+/**
+ * Recomputes a party's balance from the source-of-truth records (bills +
+ * payments). Use this to detect or repair stale `currentBalance` values.
+ *
+ * Safe to call both inside and outside a Prisma transaction.
+ */
+export async function recomputePartyBalance(
+  db: PrismaOrTx,
+  partyId: string,
+  tenantId: string
+): Promise<number> {
+  const party = await (db as PrismaClient).party.findFirst({
+    where: { id: partyId, tenantId },
+    select: { openingBalance: true, type: true },
+  });
+
+  if (!party) throw new Error(`Party ${partyId} not found`);
+
+  const [bills, payments] = await Promise.all([
+    (db as PrismaClient).bill.findMany({
+      where: { partyId, tenantId, status: "FINAL", isDeleted: false },
+      select: { grandTotal: true },
+    }),
+    (db as PrismaClient).payment.findMany({
+      where: { partyId, tenantId, status: "COMPLETED", isDeleted: false },
+      select: { amount: true, direction: true },
+    }),
+  ]);
+
+  const billDelta = bills.reduce(
+    (sum, b) => sum + getBillBalanceDelta(party.type as SupportedPartyType, b.grandTotal),
+    0
+  );
+  const paymentDelta = payments.reduce(
+    (sum, p) =>
+      sum +
+      getPaymentBalanceDelta(
+        party.type as SupportedPartyType,
+        p.direction as SupportedPayDirection,
+        p.amount
+      ),
+    0
+  );
+
+  return party.openingBalance + billDelta + paymentDelta;
 }

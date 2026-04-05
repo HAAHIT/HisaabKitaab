@@ -7,10 +7,11 @@ const COOKIE_NAME = "hisaabkitaab-session";
 /**
  * Resolves the tenant ID by verifying the JWT cookie directly.
  *
- * Use this in write paths (POST/PUT/DELETE) instead of resolveTenantIdFromRequest
- * so that the tenantId used in raw SQL is always sourced from a cryptographically
- * verified token — not from a request header that could be injected if middleware
- * is misconfigured or bypassed.
+ * RULE: Use for ALL write operations (POST / PATCH / PUT / DELETE).
+ * Use resolveTenantIdFromRequest (header-based) only for read-only GETs.
+ *
+ * Rationale: the proxy sets x-tenant-id from the JWT, but re-verifying here
+ * ensures write paths cannot be spoofed by a misconfigured or bypassed middleware.
  */
 export async function resolveVerifiedTenantId(
   request: NextRequest

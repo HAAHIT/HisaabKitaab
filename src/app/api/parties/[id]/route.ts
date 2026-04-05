@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { resolveTenantIdFromRequest, TENANT_CONTEXT_MISSING_MESSAGE } from "@/lib/tenant";
+import { resolveVerifiedTenantId } from "@/lib/session-server";
 import { NextRequest, NextResponse } from "next/server";
 import type { PartyType } from "@prisma/client";
 
@@ -68,7 +69,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
-  const tenantId = resolveTenantIdFromRequest(request);
+  const tenantId = await resolveVerifiedTenantId(request);
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -178,7 +179,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
-  const tenantId = resolveTenantIdFromRequest(request);
+  const tenantId = await resolveVerifiedTenantId(request);
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

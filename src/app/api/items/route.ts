@@ -91,41 +91,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const itemId = crypto.randomUUID();
-    await prisma.$executeRaw`
-      INSERT INTO "ItemCatalog" (
-        "id",
-        "tenantId",
-        "name",
-        "hsnCode",
-        "unit",
-        "rate",
-        "taxRate",
-        "isActive",
-        "createdAt",
-        "updatedAt"
-      )
-      VALUES (
-        ${itemId},
-        ${tenantId},
-        ${name},
-        ${hsnCode},
-        ${normalizeItemUnit(body.unit)},
-        ${rate},
-        ${taxRate},
-        true,
-        NOW(),
-        NOW()
-      )
-    `;
-
-    const item = await prisma.itemCatalog.findUnique({
-      where: { id: itemId },
+    const item = await prisma.itemCatalog.create({
+      data: {
+        tenantId,
+        name,
+        hsnCode,
+        unit: normalizeItemUnit(body.unit),
+        rate,
+        taxRate,
+        isActive: true,
+      },
     });
-
-    if (!item) {
-      throw new Error("Failed to create item");
-    }
 
     return NextResponse.json({ item }, { status: 201 });
   } catch (error) {
