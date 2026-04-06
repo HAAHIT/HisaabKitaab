@@ -121,6 +121,7 @@ Exports are blocked if any `JournalEntry.isBalanced === false` exists for the te
 - Use `cuid()` for all IDs
 - Timestamps always in UTC in the DB; convert to IST only at display layer
 - Run `npx prisma db pull` before adding new models to sync with Supabase, then add the model and run `npx prisma db push`
+- Schema changes (adding columns, new models) are allowed — **never run any command or migration that drops or truncates data** (e.g. no `prisma migrate reset`, no `DROP TABLE`, no `TRUNCATE`, no `deleteMany` without a scoped `where` clause)
 
 ---
 
@@ -133,3 +134,4 @@ Exports are blocked if any `JournalEntry.isBalanced === false` exists for the te
 - Do not create journal entries that are unbalanced — the journal lib will throw
 - Do not use intra-state tax split for inter-state transactions
 - Do not bypass tenant scoping for any reason
+- Do not delete or truncate database data — schema can be modified and pushed, but existing rows must never be destroyed

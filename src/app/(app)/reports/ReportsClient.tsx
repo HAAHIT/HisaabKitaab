@@ -49,6 +49,15 @@ function downloadFile(url: string) {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
+type TallyImportResult = {
+  partiesCreated: number;
+  imported: number;
+  skipped: number;
+  failed: number;
+  parseErrors: string[];
+  importErrors: string[];
+};
+
 export default function ReportsClient({
   initialFrom,
   initialTo,
@@ -62,6 +71,10 @@ export default function ReportsClient({
   const [to, setTo] = useState(initialTo);
   const [selectedPartyId, setSelectedPartyId] = useState<string>("");
   const [tallyExportType, setTallyExportType] = useState<"all" | "masters" | "vouchers">("all");
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<TallyImportResult | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
   const [preview, setPreview] = useState<TrialBalancePreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
 
@@ -152,6 +165,25 @@ export default function ReportsClient({
 
     return () => controller.abort();
   }, [exportBlocked, from, t, to]);
+
+  async function handleImport() {
+    if (!importFile) return;
+    setImporting(true);
+    setImportResult(null);
+    setImportError(null);
+    try {
+      const body = new FormData();
+      body.append("file", importFile);
+      const res = await fetch("/api/import/tally-xml", { method: "POST", body });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Import failed");
+      setImportResult(data as TallyImportResult);
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "Import failed");
+    } finally {
+      setImporting(false);
+    }
+  }
 
   const transactionUrl = buildDownloadUrl("/api/export/transactions", {
     from,
@@ -358,6 +390,85 @@ export default function ReportsClient({
           </div>
 
           <p className="text-xs text-default-400">{t("reports.tallyHelp")}</p>
+        </CardBody>
+      </Card>
+
+      <Card shadow="sm" className="border border-amber-500/20">
+        <CardBody className="p-6 space-y-4">
+          <div className="flex items-start gap-3">
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold">{t("reports.tallyImport")}</h3>
+              <p className="text-sm text-default-500">{t("reports.tallyImportDesc")}</p>
+            </div>
+            <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+              Tally
+            </span>
+          </div>
+
+          <div className="flex items-end gap-3">
+            <div className="flex-1">
+              <input
+                type="file"
+                accept=".xml,text/xml,application/xml"
+                className="w-full cursor-pointer rounded-xl border border-default-200 bg-default-50 px-3 py-2 text-sm file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-primary/10 file:px-3 file:py-1 file:text-sm file:font-medium file:text-primary"
+                onChange={(e) => {
+                  setImportFile(e.target.files?.[0] ?? null);
+                  setImportResult(null);
+                  setImportError(null);
+                }}
+              />
+            </div>
+            <Button
+              color="warning"
+              variant="flat"
+              className="font-semibold shrink-0"
+              isDisabled={!importFile}
+              isLoading={importing}
+              onPress={handleImport}
+            >
+              Import
+            </Button>
+          </div>
+
+          {importError && (
+            <p className="rounded-xl border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger">
+              {importError}
+            </p>
+          )}
+
+          {importResult && (
+            <div className="rounded-xl border border-success/20 bg-success/5 px-4 py-3 text-sm space-y-1">
+              <p className="font-medium text-success">Import complete</p>
+              <p className="text-default-500">
+                {importResult.imported} vouchers imported · {importResult.skipped} skipped (duplicates) · {importResult.partiesCreated} parties created
+                {importResult.failed > 0 && (
+                  <span className="text-danger"> · {importResult.failed} failed</span>
+                )}
+              </p>
+              {importResult.parseErrors.length > 0 && (
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-xs text-default-400">
+                    {importResult.parseErrors.length} parse warning(s)
+                  </summary>
+                  <ul className="mt-1 space-y-0.5 text-xs text-default-500">
+                    {importResult.parseErrors.map((e, i) => <li key={i}>{e}</li>)}
+                  </ul>
+                </details>
+              )}
+              {importResult.importErrors.length > 0 && (
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-xs text-danger">
+                    {importResult.importErrors.length} import error(s)
+                  </summary>
+                  <ul className="mt-1 space-y-0.5 text-xs text-danger/80">
+                    {importResult.importErrors.map((e, i) => <li key={i}>{e}</li>)}
+                  </ul>
+                </details>
+              )}
+            </div>
+          )}
+
+          <p className="text-xs text-default-400">{t("reports.tallyImportHelp")}</p>
         </CardBody>
       </Card>
 

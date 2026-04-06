@@ -462,6 +462,9 @@ export const translations = {
     "reports.tallyVouchers": "Vouchers only",
     "reports.downloadXML": "Download Tally XML",
     "reports.tallyHelp": "Import masters first, then vouchers in Tally",
+    "reports.tallyImport": "Import from Tally",
+    "reports.tallyImportDesc": "Upload a Tally ERP 9 / Tally Prime XML export to import vouchers and parties.",
+    "reports.tallyImportHelp": "Duplicate vouchers are skipped automatically. Unknown parties are created.",
   },
   hi: {
     "nav.home": "होम",
@@ -923,6 +926,9 @@ export const translations = {
     "reports.tallyVouchers": "केवल वाउचर",
     "reports.downloadXML": "टैली XML डाउनलोड करें",
     "reports.tallyHelp": "टैली में पहले मास्टर, फिर वाउचर इम्पोर्ट करें",
+    "reports.tallyImport": "टैली से इम्पोर्ट करें",
+    "reports.tallyImportDesc": "वाउचर और पार्टियां इम्पोर्ट करने के लिए टैली ERP 9 / Prime XML अपलोड करें।",
+    "reports.tallyImportHelp": "डुप्लीकेट वाउचर अपने आप छोड़ दिए जाते हैं। अज्ञात पार्टियां बना दी जाती हैं।",
   },
 } as const;
 
