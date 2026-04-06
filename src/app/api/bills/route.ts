@@ -17,7 +17,6 @@ import {
 import { resolveVerifiedTenantId } from "@/lib/session-server";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { logError, getRequestId } from "@/lib/observability";
-import { writeBillInterStateFlag } from "@/lib/bill-interstate";
 
 const BILL_NUMBER_LOCK_KEY = 22032026;
 type SupportedPaymentMode = "CASH" | "UPI" | "BANK_TRANSFER" | "CHEQUE";
@@ -363,6 +362,7 @@ export async function POST(request: NextRequest) {
           taxAmount: taxAmount || 0,
           grandTotal: resolvedGrandTotal,
           status: billStatus,
+          isInterState,
           createdBy: userId!,
           isDeleted: false,
         },
@@ -448,26 +448,8 @@ export async function POST(request: NextRequest) {
 
       return createdBill;
     });
-    try {
-      await writeBillInterStateFlag(prisma, bill.id, tenantId, isInterState);
-    } catch (error) {
-      logError("bills.create.interstate_persist_error", {
-        requestId: getRequestId(request),
-        billId: bill.id,
-        tenantId,
-        error,
-      });
-    }
 
-    return NextResponse.json(
-      {
-        bill: {
-          ...bill,
-          isInterState,
-        },
-      },
-      { status: 201 }
-    );
+    return NextResponse.json({ bill }, { status: 201 });
   } catch (error) {
     logError("bills.create.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
