@@ -34,6 +34,19 @@ interface NavItem {
   featureFlag?: FeatureFlagKey;
 }
 
+type AppRole = "ADMIN" | "STAFF" | "ACCOUNTANT" | "CUSTOMER";
+
+const ROLE_TRANSLATION_KEYS: Record<AppRole, TranslationKey> = {
+  ADMIN: "users.admin",
+  STAFF: "users.staff",
+  ACCOUNTANT: "users.accountant",
+  CUSTOMER: "users.customer",
+};
+
+function resolveRoleTranslationKey(role: string): TranslationKey {
+  return ROLE_TRANSLATION_KEYS[role as AppRole] ?? "users.staff";
+}
+
 const MAIN_NAV: NavItem[] = [
   {
     icon: (
@@ -163,7 +176,7 @@ export default function AppShell({
   
   const canQuickBill = user.role !== "CUSTOMER";
   const hasMoreSheet = user.role !== "CUSTOMER";
-  const roleLabel = t(`roles.${user.role.toLowerCase()}` as any);
+  const roleLabel = t(resolveRoleTranslationKey(user.role));
 
   const moreItems = useMemo(
     () => MORE_ITEMS.filter((item) => item.roles.includes(user.role)),

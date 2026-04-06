@@ -36,6 +36,7 @@ interface BillResponse {
   id: string;
   templateId: string;
   partyId: string | null;
+  isInterState?: boolean;
   customerName: string;
   customerPhone: string | null;
   customerAddress: string | null;
@@ -149,6 +150,7 @@ export default function EditBillPage({
       setNotes(nextBill.notes || "");
       setTerms(nextBill.terms || "");
       setTaxPercent(nextBill.taxPercent);
+      setIsInterState(nextBill.isInterState === true);
 
       const template = nextTemplates.find((item) => item.id === nextBill.templateId) || null;
       setSelectedTemplate(template);

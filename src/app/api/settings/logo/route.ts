@@ -4,10 +4,7 @@ import {
   deleteMediaAsset,
 } from "@/lib/media";
 import { prisma } from "@/lib/prisma";
-import {
-  resolveTenantIdFromRequest,
-  TENANT_CONTEXT_MISSING_MESSAGE,
-} from "@/lib/tenant";
+import { TENANT_CONTEXT_MISSING_MESSAGE } from "@/lib/tenant";
 import { resolveVerifiedTenantId } from "@/lib/session-server";
 import { serializeTenantSettings } from "@/lib/tenant-settings";
 import { logError, getRequestId } from "@/lib/observability";

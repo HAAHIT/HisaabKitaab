@@ -8,16 +8,26 @@ const prismaMock = vi.hoisted(() => ({
   party: {
     findFirst: vi.fn(),
   },
+  tenant: {
+    findUnique: vi.fn(),
+    update: vi.fn(),
+  },
   user: {
     findFirst: vi.fn(),
     update: vi.fn(),
   },
-  $queryRaw: vi.fn(),
   $transaction: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
   prisma: prismaMock,
+}));
+
+vi.mock("@/lib/session-server", () => ({
+  resolveVerifiedTenantId: vi.fn(async (request: NextRequest) => {
+    const tenantId = request.headers.get("x-tenant-id");
+    return tenantId && tenantId.trim() ? tenantId.trim() : null;
+  }),
 }));
 
 import { POST as postBill } from "./bills/route";
@@ -168,8 +178,8 @@ describe("tenant isolation for critical mutations", () => {
     );
   });
 
-  it("scopes settings patch by tenant in raw lookup", async () => {
-    prismaMock.$queryRaw.mockResolvedValue([]);
+  it("scopes settings patch by tenant lookup", async () => {
+    prismaMock.tenant.findUnique.mockResolvedValue(null);
 
     const request = buildRequest(
       "http://localhost/api/settings",
@@ -194,9 +204,11 @@ describe("tenant isolation for critical mutations", () => {
     expect(response.status).toBe(404);
     const payload = await response.json();
     expect(payload.error).toBe("Tenant not found");
-
-    const firstCall = prismaMock.$queryRaw.mock.calls[0] || [];
-    expect(firstCall[1]).toBe("tenant-a");
+    expect(prismaMock.tenant.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "tenant-a" },
+      })
+    );
   });
 
   it("scopes user update existence check by tenant", async () => {

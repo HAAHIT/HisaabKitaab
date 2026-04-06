@@ -25,6 +25,7 @@ interface BillDetail {
   id: string;
   billNumber: string;
   partyId: string | null;
+  isInterState?: boolean;
   party: {
     id: string;
     name: string;
@@ -169,6 +170,7 @@ export default function BillDetailPage({
               subtotal: currentBill.subtotal,
               taxAmount: currentBill.taxAmount,
               grandTotal: currentBill.grandTotal,
+              isInterState: currentBill.isInterState === true,
               status,
             });
       const headers: Record<string, string> = {};

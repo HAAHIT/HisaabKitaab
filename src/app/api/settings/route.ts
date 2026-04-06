@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import {
   resolveTenantIdFromRequest,
   TENANT_CONTEXT_MISSING_MESSAGE,
@@ -114,7 +115,7 @@ export async function PATCH(request: NextRequest) {
         email: companyEmail,
         address: companyAddress,
         gstin: companyGstin,
-        settings: newSettings as any,
+        settings: newSettings as Prisma.InputJsonValue,
       },
       select: {
         id: true,

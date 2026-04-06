@@ -17,6 +17,7 @@ import {
 import { resolveVerifiedTenantId } from "@/lib/session-server";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { logError, getRequestId } from "@/lib/observability";
+import { writeBillInterStateFlag } from "@/lib/bill-interstate";
 
 const BILL_NUMBER_LOCK_KEY = 22032026;
 type SupportedPaymentMode = "CASH" | "UPI" | "BANK_TRANSFER" | "CHEQUE";
@@ -292,6 +293,13 @@ export async function POST(request: NextRequest) {
         ? grandTotal
         : 0;
     const billStatus = status === "FINAL" ? "FINAL" : "DRAFT";
+    if (body.isInterState !== undefined && typeof body.isInterState !== "boolean") {
+      return NextResponse.json(
+        { error: "isInterState must be a boolean" },
+        { status: 400 }
+      );
+    }
+    const isInterState = body.isInterState === true;
     const normalizedPaymentMode = normalizePaymentMode(body.paymentMode);
     const now = new Date();
     const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -386,7 +394,7 @@ export async function POST(request: NextRequest) {
           grandTotal: createdBill.grandTotal,
           createdBy: userId!,
           entryDate: createdBill.createdAt,
-          isInterState: body.isInterState === true,
+          isInterState,
         });
       }
 
@@ -440,8 +448,26 @@ export async function POST(request: NextRequest) {
 
       return createdBill;
     });
+    try {
+      await writeBillInterStateFlag(prisma, bill.id, tenantId, isInterState);
+    } catch (error) {
+      logError("bills.create.interstate_persist_error", {
+        requestId: getRequestId(request),
+        billId: bill.id,
+        tenantId,
+        error,
+      });
+    }
 
-    return NextResponse.json({ bill }, { status: 201 });
+    return NextResponse.json(
+      {
+        bill: {
+          ...bill,
+          isInterState,
+        },
+      },
+      { status: 201 }
+    );
   } catch (error) {
     logError("bills.create.error", { requestId: getRequestId(request), error });
     return NextResponse.json(

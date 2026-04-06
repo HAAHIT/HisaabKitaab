@@ -15,12 +15,24 @@ import {
 import { resolveVerifiedTenantId } from "@/lib/session-server";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { logError, getRequestId } from "@/lib/observability";
+import type { MeasurementStatus, Prisma } from "@prisma/client";
 
 export const runtime = "nodejs";
 
-type MeasurementPhotoAssetCreateInput =
-  | Awaited<ReturnType<typeof buildMediaAssetCreateInputFromFile>>
-  | Awaited<ReturnType<typeof buildMediaAssetCreateInputFromLegacyUrl>>;
+type MeasurementPhotoAssetCreateInput = Prisma.MediaAssetCreateInput & {
+  id: string;
+};
+const VALID_MEASUREMENT_STATUSES = new Set<MeasurementStatus>([
+  "UPLOADED",
+  "PENDING",
+  "REVIEWED",
+  "IN_PRODUCTION",
+  "COMPLETED",
+]);
+
+function isMeasurementStatus(value: string): value is MeasurementStatus {
+  return VALID_MEASUREMENT_STATUSES.has(value as MeasurementStatus);
+}
 
 function parseOptionalString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
@@ -117,12 +129,12 @@ async function buildPhotoAssetInputs({
 
     for (let index = 0; index < legacyPhotoUrls.length; index += 1) {
       assets.push(
-        (await buildMediaAssetCreateInputFromLegacyUrl({
+        await buildMediaAssetCreateInputFromLegacyUrl({
           url: legacyPhotoUrls[index],
           kind: "MEASUREMENT_PHOTO",
           namespace: "measurement-photos",
           originalName: `measurement-${index + 1}`,
-        })) as any
+        })
       );
     }
 
@@ -169,8 +181,7 @@ export async function GET(request: NextRequest) {
   const search = searchParams.get("search") || "";
   const status = searchParams.get("status") || "ALL";
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = {
+  const where: Prisma.MeasurementUploadWhereInput = {
     isDeleted: false,
     tenantId,
   };
@@ -179,7 +190,7 @@ export async function GET(request: NextRequest) {
     where.customerId = userId;
   }
 
-  if (status !== "ALL") {
+  if (status !== "ALL" && isMeasurementStatus(status)) {
     where.status = status;
   }
 
@@ -271,7 +282,7 @@ export async function POST(request: NextRequest) {
 
     const measurement = await prisma.$transaction(async (tx) => {
       for (const asset of photoAssets) {
-        await tx.mediaAsset.create({ data: asset as any });
+        await tx.mediaAsset.create({ data: asset });
       }
 
       const createdMeasurement = await tx.measurementUpload.create({

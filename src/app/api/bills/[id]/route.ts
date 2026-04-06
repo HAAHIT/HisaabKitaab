@@ -7,6 +7,7 @@ import {
   journalForCancelledSalesBill,
   journalForSalesBill,
 } from "@/lib/journal";
+import type { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import {
   resolveTenantIdFromRequest,
@@ -14,6 +15,10 @@ import {
 } from "@/lib/tenant";
 import { resolveVerifiedTenantId } from "@/lib/session-server";
 import { logError, getRequestId } from "@/lib/observability";
+import {
+  readBillInterStateFlag,
+  writeBillInterStateFlag,
+} from "@/lib/bill-interstate";
 
 const ALLOWED_BILL_PATCH_KEYS = new Set([
   "templateId",
@@ -30,6 +35,7 @@ const ALLOWED_BILL_PATCH_KEYS = new Set([
   "taxAmount",
   "grandTotal",
   "status",
+  "isInterState",
 ]);
 
 const ALLOWED_BILL_PATCH_STATUSES = new Set(["DRAFT", "FINAL"]);
@@ -108,7 +114,14 @@ export async function GET(
     return NextResponse.json({ error: "Bill not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ bill });
+  const isInterState = await readBillInterStateFlag(prisma, id, tenantId);
+
+  return NextResponse.json({
+    bill: {
+      ...bill,
+      isInterState,
+    },
+  });
 }
 
 // PATCH /api/bills/[id] - Update a draft bill
@@ -144,6 +157,14 @@ export async function PATCH(
       );
     }
 
+    const hasIsInterState = hasOwn(body, "isInterState");
+    if (hasIsInterState && typeof body.isInterState !== "boolean") {
+      return NextResponse.json(
+        { error: "isInterState must be a boolean" },
+        { status: 400 }
+      );
+    }
+
     const existing = await prisma.bill.findFirst({
       where: {
         id,
@@ -170,6 +191,11 @@ export async function PATCH(
     if (!existing) {
       return NextResponse.json({ error: "Bill not found" }, { status: 404 });
     }
+
+    const storedInterState = await readBillInterStateFlag(prisma, id, tenantId);
+    const isInterState = hasIsInterState
+      ? body.isInterState === true
+      : storedInterState;
 
     if (existing.status !== "DRAFT") {
       return NextResponse.json(
@@ -391,7 +417,7 @@ export async function PATCH(
     const bill = await prisma.$transaction(async (tx) => {
       const updatedBill = await tx.bill.update({
         where: { id },
-        data: updateData as any,
+        data: updateData as Prisma.BillUncheckedUpdateInput,
       });
 
       if (!finalPartyId) {
@@ -444,14 +470,31 @@ export async function PATCH(
           grandTotal: nextGrandTotal,
           createdBy: userId || updatedBill.createdBy,
           entryDate: updatedBill.updatedAt,
-          isInterState: body.isInterState === true,
+          isInterState,
         });
       }
 
       return updatedBill;
     });
+    if (hasIsInterState) {
+      try {
+        await writeBillInterStateFlag(prisma, bill.id, tenantId, isInterState);
+      } catch (error) {
+        logError("bills.update.interstate_persist_error", {
+          requestId: getRequestId(request),
+          billId: bill.id,
+          tenantId,
+          error,
+        });
+      }
+    }
 
-    return NextResponse.json({ bill });
+    return NextResponse.json({
+      bill: {
+        ...bill,
+        isInterState,
+      },
+    });
   } catch (error) {
     logError("bills.update.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
@@ -503,6 +546,8 @@ export async function DELETE(
     if (!existing) {
       return NextResponse.json({ error: "Bill not found" }, { status: 404 });
     }
+
+    const isInterState = await readBillInterStateFlag(prisma, id, tenantId);
 
     await prisma.$transaction(async (tx) => {
       await tx.bill.update({
@@ -559,6 +604,7 @@ export async function DELETE(
           grandTotal: existing.grandTotal,
           createdBy: userId || existing.createdBy,
           entryDate: new Date(),
+          isInterState,
         });
       }
     });
