@@ -8,11 +8,7 @@ import {
 } from "@/lib/media";
 import { findUniqueCustomerPartyIdForUser } from "@/lib/party-relations";
 import { prisma } from "@/lib/prisma";
-import {
-  resolveTenantIdFromRequest,
-  TENANT_CONTEXT_MISSING_MESSAGE,
-} from "@/lib/tenant";
-import { resolveVerifiedTenantId } from "@/lib/session-server";
+import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { logError, getRequestId } from "@/lib/observability";
 import type { MeasurementStatus, Prisma } from "@prisma/client";
@@ -165,17 +161,15 @@ const measurementInclude = {
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
   const userId = request.headers.get("x-user-id");
-  const tenantId = resolveTenantIdFromRequest(request);
 
   if (!role || !userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (!tenantId) {
-    return NextResponse.json(
-      { error: TENANT_CONTEXT_MISSING_MESSAGE },
-      { status: 500 }
-    );
+  const tenantResolution = resolveReadTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
   }
+  const tenantId = tenantResolution.tenantId;
 
   const { searchParams } = new URL(request.url);
   const search = searchParams.get("search") || "";
@@ -223,17 +217,15 @@ export async function POST(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   const userId = request.headers.get("x-user-id");
-  const tenantId = await resolveVerifiedTenantId(request);
 
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (!tenantId) {
-    return NextResponse.json(
-      { error: TENANT_CONTEXT_MISSING_MESSAGE },
-      { status: 500 }
-    );
+  const tenantResolution = await resolveWriteTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
   }
+  const tenantId = tenantResolution.tenantId;
 
   let photoAssets: MeasurementPhotoAssetCreateInput[] = [];
 

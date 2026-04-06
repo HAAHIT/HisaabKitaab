@@ -7,8 +7,11 @@ export async function findUniqueCustomerPartyIdForUser(
   userId: string,
   tenantId: string
 ) {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
+  const user = await prisma.user.findFirst({
+    where: {
+      id: userId,
+      tenantId,
+    },
     select: { phone: true, email: true },
   });
 

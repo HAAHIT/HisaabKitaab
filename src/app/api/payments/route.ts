@@ -8,11 +8,7 @@ import {
   journalForPaymentMade,
   journalForPaymentReceived,
 } from "@/lib/journal";
-import {
-  resolveTenantIdFromRequest,
-  TENANT_CONTEXT_MISSING_MESSAGE,
-} from "@/lib/tenant";
-import { resolveVerifiedTenantId } from "@/lib/session-server";
+import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 
@@ -63,17 +59,15 @@ function parsePaymentAmount(value: unknown) {
 // GET /api/payments - List payments with filters
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
-  const tenantId = resolveTenantIdFromRequest(request);
 
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!tenantId) {
-    return NextResponse.json(
-      { error: TENANT_CONTEXT_MISSING_MESSAGE },
-      { status: 500 }
-    );
+  const tenantResolution = resolveReadTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
   }
+  const tenantId = tenantResolution.tenantId;
 
   const { searchParams } = new URL(request.url);
   const search = searchParams.get("search") || "";
@@ -137,7 +131,6 @@ export async function POST(request: NextRequest) {
 
   const role = request.headers.get("x-user-role");
   const userId = request.headers.get("x-user-id");
-  const tenantId = await resolveVerifiedTenantId(request);
 
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -145,12 +138,11 @@ export async function POST(request: NextRequest) {
   if (!userId) {
     return NextResponse.json({ error: "Missing user context" }, { status: 401 });
   }
-  if (!tenantId) {
-    return NextResponse.json(
-      { error: TENANT_CONTEXT_MISSING_MESSAGE },
-      { status: 500 }
-    );
+  const tenantResolution = await resolveWriteTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
   }
+  const tenantId = tenantResolution.tenantId;
 
   try {
     const body = await request.json();
@@ -309,17 +301,15 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   const role = request.headers.get("x-user-role");
   const userId = request.headers.get("x-user-id");
-  const tenantId = await resolveVerifiedTenantId(request);
 
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!tenantId) {
-    return NextResponse.json(
-      { error: TENANT_CONTEXT_MISSING_MESSAGE },
-      { status: 500 }
-    );
+  const tenantResolution = await resolveWriteTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
   }
+  const tenantId = tenantResolution.tenantId;
 
   try {
     const body = await request.json();

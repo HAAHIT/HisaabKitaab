@@ -1,10 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
-import {
-  resolveTenantIdFromRequest,
-  TENANT_CONTEXT_MISSING_MESSAGE,
-} from "@/lib/tenant";
-import { resolveVerifiedTenantId } from "@/lib/session-server";
+import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 
 export const runtime = "nodejs";
@@ -15,17 +11,15 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
-  const tenantId = resolveTenantIdFromRequest(request);
 
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!tenantId) {
-    return NextResponse.json(
-      { error: TENANT_CONTEXT_MISSING_MESSAGE },
-      { status: 500 }
-    );
+  const tenantResolution = resolveReadTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
   }
+  const tenantId = tenantResolution.tenantId;
 
   const { id } = await params;
   const template = await prisma.billTemplate.findFirst({
@@ -48,17 +42,15 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
-  const tenantId = await resolveVerifiedTenantId(request);
 
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!tenantId) {
-    return NextResponse.json(
-      { error: TENANT_CONTEXT_MISSING_MESSAGE },
-      { status: 500 }
-    );
+  const tenantResolution = await resolveWriteTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
   }
+  const tenantId = tenantResolution.tenantId;
 
   try {
     const { id } = await params;
@@ -102,17 +94,15 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
-  const tenantId = await resolveVerifiedTenantId(request);
 
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!tenantId) {
-    return NextResponse.json(
-      { error: TENANT_CONTEXT_MISSING_MESSAGE },
-      { status: 500 }
-    );
+  const tenantResolution = await resolveWriteTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
   }
+  const tenantId = tenantResolution.tenantId;
 
   try {
     const { id } = await params;

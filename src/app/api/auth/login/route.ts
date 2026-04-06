@@ -14,10 +14,7 @@ import {
   logInfo,
   logWarn,
 } from "@/lib/observability";
-import {
-  resolveTenantIdFromRequest,
-  TENANT_CONTEXT_MISSING_MESSAGE,
-} from "@/lib/tenant";
+import { resolveReadTenant } from "@/lib/api-tenant";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -96,19 +93,15 @@ export async function POST(request: NextRequest) {
 
   try {
     const { credential, password } = await readLoginRequestBody(request);
-    const tenantId = resolveTenantIdFromRequest(request);
-
-    if (!tenantId) {
+    const tenantResolution = resolveReadTenant(request);
+    if (!tenantResolution.ok) {
       logError("auth.login.tenant_missing", {
         requestId,
         clientIp,
       });
-      return jsonWithRequestId(
-        requestId,
-        { error: TENANT_CONTEXT_MISSING_MESSAGE },
-        500
-      );
+      return attachRequestIdHeader(tenantResolution.response, requestId);
     }
+    const tenantId = tenantResolution.tenantId;
 
     if (!credential || !password) {
       logWarn("auth.login.validation_failed", {

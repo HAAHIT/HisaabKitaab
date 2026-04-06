@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { resolveVerifiedTenantId } from "@/lib/session-server";
-import { TENANT_CONTEXT_MISSING_MESSAGE } from "@/lib/tenant";
+import { resolveWriteTenant } from "@/lib/api-tenant";
 import { logError, logInfo, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { parseTallyXml } from "@/lib/tally-xml-import";
@@ -39,17 +38,15 @@ export async function POST(request: NextRequest) {
 
   const role = request.headers.get("x-user-role");
   const userId = request.headers.get("x-user-id");
-  const tenantId = await resolveVerifiedTenantId(request);
 
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!tenantId) {
-    return NextResponse.json(
-      { error: TENANT_CONTEXT_MISSING_MESSAGE },
-      { status: 500 }
-    );
+  const tenantResolution = await resolveWriteTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
   }
+  const tenantId = tenantResolution.tenantId;
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

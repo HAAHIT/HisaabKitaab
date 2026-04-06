@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { recomputePartyBalance } from "@/lib/accounting";
-import { resolveVerifiedTenantId } from "@/lib/session-server";
-import { TENANT_CONTEXT_MISSING_MESSAGE } from "@/lib/tenant";
+import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
 import { logError, logInfo, getRequestId } from "@/lib/observability";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -10,14 +9,15 @@ export const runtime = "nodejs";
 // GET /api/parties/reconcile — report balance discrepancies (Admin only)
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
-  const tenantId = await resolveVerifiedTenantId(request);
 
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!tenantId) {
-    return NextResponse.json({ error: TENANT_CONTEXT_MISSING_MESSAGE }, { status: 500 });
+  const tenantResolution = resolveReadTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
   }
+  const tenantId = tenantResolution.tenantId;
 
   try {
     const parties = await prisma.party.findMany({
@@ -50,14 +50,15 @@ export async function GET(request: NextRequest) {
 // POST /api/parties/reconcile — fix all drifted balances (Admin only)
 export async function POST(request: NextRequest) {
   const role = request.headers.get("x-user-role");
-  const tenantId = await resolveVerifiedTenantId(request);
 
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!tenantId) {
-    return NextResponse.json({ error: TENANT_CONTEXT_MISSING_MESSAGE }, { status: 500 });
+  const tenantResolution = await resolveWriteTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
   }
+  const tenantId = tenantResolution.tenantId;
 
   try {
     const parties = await prisma.party.findMany({

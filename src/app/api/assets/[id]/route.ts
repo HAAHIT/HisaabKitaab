@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { readStoredObject } from "@/lib/object-storage";
-import {
-  resolveTenantIdFromRequest,
-  TENANT_CONTEXT_MISSING_MESSAGE,
-} from "@/lib/tenant";
+import { resolveReadTenant } from "@/lib/api-tenant";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,17 +18,15 @@ export async function GET(
 ) {
   const userId = request.headers.get("x-user-id");
   const role = request.headers.get("x-user-role");
-  const tenantId = resolveTenantIdFromRequest(request);
 
   if (!userId || !role) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (!tenantId) {
-    return NextResponse.json(
-      { error: TENANT_CONTEXT_MISSING_MESSAGE },
-      { status: 500 }
-    );
+  const tenantResolution = resolveReadTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
   }
+  const tenantId = tenantResolution.tenantId;
 
   const { id } = await params;
 

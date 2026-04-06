@@ -1,25 +1,20 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { logError, getRequestId } from "@/lib/observability";
-import {
-  resolveTenantIdFromRequest,
-  TENANT_CONTEXT_MISSING_MESSAGE,
-} from "@/lib/tenant";
+import { resolveReadTenant } from "@/lib/api-tenant";
 
 // GET /api/dashboard — Dashboard aggregated data
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
-  const tenantId = resolveTenantIdFromRequest(request);
 
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!tenantId) {
-    return NextResponse.json(
-      { error: TENANT_CONTEXT_MISSING_MESSAGE },
-      { status: 500 }
-    );
+  const tenantResolution = resolveReadTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
   }
+  const tenantId = tenantResolution.tenantId;
 
   try {
     const now = new Date();

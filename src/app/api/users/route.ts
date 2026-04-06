@@ -2,11 +2,7 @@ import { Role } from "@prisma/client";
 import { hashPassword } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
-import {
-  resolveTenantIdFromRequest,
-  TENANT_CONTEXT_MISSING_MESSAGE,
-} from "@/lib/tenant";
-import { resolveVerifiedTenantId } from "@/lib/session-server";
+import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { logError, getRequestId } from "@/lib/observability";
 
@@ -30,19 +26,17 @@ function normalizeOptionalString(value: unknown) {
 // GET /api/users — List all users (Admin only)
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
-  const tenantId = resolveTenantIdFromRequest(request);
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!tenantId) {
-    return NextResponse.json(
-      { error: TENANT_CONTEXT_MISSING_MESSAGE },
-      { status: 500 }
-    );
+
+  const tenantResolution = resolveReadTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
   }
 
   const users = await prisma.user.findMany({
-    where: { tenantId },
+    where: { tenantId: tenantResolution.tenantId },
     select: {
       id: true,
       name: true,
@@ -65,7 +59,6 @@ export async function POST(request: NextRequest) {
 
   const role = request.headers.get("x-user-role");
   const adminId = request.headers.get("x-user-id");
-  const tenantId = await resolveVerifiedTenantId(request);
 
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -73,12 +66,12 @@ export async function POST(request: NextRequest) {
   if (!adminId) {
     return NextResponse.json({ error: "Missing user context" }, { status: 401 });
   }
-  if (!tenantId) {
-    return NextResponse.json(
-      { error: TENANT_CONTEXT_MISSING_MESSAGE },
-      { status: 500 }
-    );
+
+  const tenantResolution = await resolveWriteTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
   }
+  const tenantId = tenantResolution.tenantId;
 
   try {
     const body = await request.json();

@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
-import {
-  resolveTenantIdFromRequest,
-  TENANT_CONTEXT_MISSING_MESSAGE,
-} from "@/lib/tenant";
-import { resolveVerifiedTenantId } from "@/lib/session-server";
+import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 import {
   mergeTenantSettings,
@@ -20,16 +16,13 @@ import {
 // GET /api/settings - Get company settings from Tenant record
 export async function GET(request: NextRequest) {
   try {
-    const tenantId = resolveTenantIdFromRequest(request);
-    if (!tenantId) {
-      return NextResponse.json(
-        { error: TENANT_CONTEXT_MISSING_MESSAGE },
-        { status: 500 }
-      );
+    const tenantResolution = resolveReadTenant(request);
+    if (!tenantResolution.ok) {
+      return tenantResolution.response;
     }
 
     const tenant = await prisma.tenant.findUnique({
-      where: { id: tenantId },
+      where: { id: tenantResolution.tenantId },
       select: {
         id: true,
         name: true,
@@ -56,17 +49,16 @@ export async function GET(request: NextRequest) {
 // PATCH /api/settings - Update company settings in Tenant.settings JSON
 export async function PATCH(request: NextRequest) {
   const role = request.headers.get("x-user-role");
-  const tenantId = await resolveVerifiedTenantId(request);
 
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!tenantId) {
-    return NextResponse.json(
-      { error: TENANT_CONTEXT_MISSING_MESSAGE },
-      { status: 500 }
-    );
+
+  const tenantResolution = await resolveWriteTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
   }
+  const tenantId = tenantResolution.tenantId;
 
   try {
     const body = await request.json();

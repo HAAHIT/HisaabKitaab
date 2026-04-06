@@ -4,8 +4,7 @@ import {
   deleteMediaAsset,
 } from "@/lib/media";
 import { prisma } from "@/lib/prisma";
-import { TENANT_CONTEXT_MISSING_MESSAGE } from "@/lib/tenant";
-import { resolveVerifiedTenantId } from "@/lib/session-server";
+import { resolveWriteTenant } from "@/lib/api-tenant";
 import { serializeTenantSettings } from "@/lib/tenant-settings";
 import { logError, getRequestId } from "@/lib/observability";
 
@@ -16,17 +15,14 @@ function isAdmin(request: Request) {
 }
 
 export async function POST(request: NextRequest) {
-  const tenantId = await resolveVerifiedTenantId(request);
-
   if (!isAdmin(request)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!tenantId) {
-    return NextResponse.json(
-      { error: TENANT_CONTEXT_MISSING_MESSAGE },
-      { status: 500 }
-    );
+  const tenantResolution = await resolveWriteTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
   }
+  const tenantId = tenantResolution.tenantId;
 
   let nextAsset:
     | Awaited<ReturnType<typeof buildMediaAssetCreateInputFromFile>>
@@ -99,17 +95,14 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const tenantId = await resolveVerifiedTenantId(request);
-
   if (!isAdmin(request)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!tenantId) {
-    return NextResponse.json(
-      { error: TENANT_CONTEXT_MISSING_MESSAGE },
-      { status: 500 }
-    );
+  const tenantResolution = await resolveWriteTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
   }
+  const tenantId = tenantResolution.tenantId;
 
   try {
     const previousTenant = await prisma.tenant.findUnique({

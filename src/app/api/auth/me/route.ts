@@ -1,16 +1,31 @@
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { resolveReadTenant } from "@/lib/api-tenant";
+import { logError, getRequestId } from "@/lib/observability";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const session = await getSession();
     if (!session) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: session.userId, isActive: true },
+    const tenantResolution = resolveReadTenant(request);
+    if (!tenantResolution.ok) {
+      return tenantResolution.response;
+    }
+
+    if (tenantResolution.tenantId !== session.tenantId) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+
+    const user = await prisma.user.findFirst({
+      where: {
+        id: session.userId,
+        tenantId: tenantResolution.tenantId,
+        isActive: true,
+      },
       select: {
         id: true,
         tenantId: true,
@@ -27,7 +42,8 @@ export async function GET() {
     }
 
     return NextResponse.json({ user });
-  } catch {
+  } catch (error) {
+    logError("auth.me.error", { requestId: getRequestId(request), error });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
