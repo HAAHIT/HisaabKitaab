@@ -34,6 +34,15 @@ function normalizeValue(value: unknown): unknown {
   return value;
 }
 
+/**
+ * Emit a structured log entry to the console using the provided severity, event name, and contextual fields.
+ *
+ * The log payload includes `severity`, `event`, `service` (set to `"hisaabkitaab"`), `timestamp` (ISO string), and the normalized `context` entries, serialized as JSON. The entry is written to `console.error` for `"ERROR"`, `console.warn` for `"WARNING"`, and `console.log` for other severities.
+ *
+ * @param severity - Log severity level (`"INFO" | "WARNING" | "ERROR"`)
+ * @param event - A short identifier or description of the event being logged
+ * @param context - Additional structured fields to include in the log payload
+ */
 function writeLog(severity: LogSeverity, event: string, context: LogContext = {}) {
   const payload = {
     severity,

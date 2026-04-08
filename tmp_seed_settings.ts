@@ -1,6 +1,11 @@
 import { PrismaClient } from '@prisma/client'
 const prisma = new PrismaClient()
 
+/**
+ * Ensures a default company settings record exists in the database, creating it if missing.
+ *
+ * If no settings record with id `'default'` is found, creates one with `companyName` set to `'HisaabKitaab'` and `defaultTaxPercent` set to `18`; otherwise logs the existing company name.
+ */
 async function main() {
   const settings = await prisma.companySettings.findUnique({ where: { id: 'default' } })
   if (!settings) {

@@ -5,7 +5,12 @@ import { logError, getRequestId } from "@/lib/observability";
 
 export const runtime = "nodejs";
 
-// GET /api/templates/[id] — Get a single template
+/**
+ * Retrieve a non-deleted bill template by id for the resolved read tenant.
+ *
+ * @param params - An object (promise) that resolves to route parameters; expects `id` as the template identifier
+ * @returns A JSON NextResponse with `{ template }` and status 200 if found; `403` with `{ error: "Forbidden" }` when the caller lacks permission; `404` with `{ error: "Template not found" }` when no matching template exists; or the tenant resolution response when tenant resolution fails.
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -36,7 +41,12 @@ export async function GET(
   return NextResponse.json({ template });
 }
 
-// PATCH /api/templates/[id] — Update template (Admin only)
+/**
+ * Update a bill template's `name` and/or `columns` for the resolved write tenant (admin only).
+ *
+ * @param params - Promise that resolves to route parameters; expects `{ id: string }` identifying the template
+ * @returns A NextResponse whose JSON body contains `{ template }` with the updated template on success; otherwise an `{ error }` object with an appropriate HTTP status (`403` for forbidden, `404` if the template is not found, `500` on internal error).
+ */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -88,7 +98,16 @@ export async function PATCH(
   }
 }
 
-// DELETE /api/templates/[id] — Delete template (Admin only)
+/**
+ * Soft-deletes a bill template for the resolved write tenant if no bills reference it (admin only).
+ *
+ * @param params - A promise resolving to route parameters containing the template `id`.
+ * @returns On success, an object `{ success: true }`. On failure, JSON error responses with appropriate HTTP status codes:
+ * - `403` when the caller is not an admin
+ * - `404` when the template does not exist or is already deleted
+ * - `409` when one or more bills reference the template (`{ error: "Cannot delete: N bill(s) use this template" }`)
+ * - `500` for internal server errors
+ */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

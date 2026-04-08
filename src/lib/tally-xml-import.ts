@@ -98,7 +98,12 @@ export type TallyParseResult = {
   parseErrors: string[];
 };
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+/**
+ * Parses a Tally-style date string in `YYYYMMDD` format and returns a UTC Date.
+ *
+ * @param raw - Value containing the date string (commonly a string or number)
+ * @returns A `Date` representing the parsed UTC date, or `null` if the input is missing, not exactly 8 characters, or invalid
+ */
 
 function parseTallyDate(raw: unknown): Date | null {
   const s = String(raw ?? "").trim();
@@ -110,12 +115,24 @@ function parseTallyDate(raw: unknown): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
+/**
+ * Converts various raw representations of a numeric amount into a safe number.
+ *
+ * @param raw - A value that may be a number, numeric string, empty string, `null`, or `undefined`
+ * @returns The numeric value represented by `raw`, or `0` if `raw` is empty, invalid, or not a number
+ */
 function parseAmount(raw: unknown): number {
   if (raw === undefined || raw === null || raw === "") return 0;
   const n = typeof raw === "number" ? raw : parseFloat(String(raw));
   return isNaN(n) ? 0 : n;
 }
 
+/**
+ * Extracts the party name from the first bill allocation within a ledger entry.
+ *
+ * @param entry - Ledger record that may contain a `BILLALLOCATIONS.LIST` node
+ * @returns The trimmed `NAME` from the first item of `BILLALLOCATIONS.LIST`, or `null` if no valid name is found
+ */
 function extractBillAllocPartyName(entry: Record<string, unknown>): string | null {
   const alloc = entry["BILLALLOCATIONS.LIST"];
   if (!alloc) return null;
@@ -125,12 +142,27 @@ function extractBillAllocPartyName(entry: Record<string, unknown>): string | nul
   return typeof name === "string" ? name.trim() || null : null;
 }
 
+/**
+ * Normalize a possibly absent or singular value into an array.
+ *
+ * @param value - A single element, an array of elements, or `null`/`undefined`
+ * @returns The original array if `value` is an array, a single-element array containing `value` if it is a single element, or an empty array when `value` is `null` or `undefined`
+ */
 function asArray<T>(value: T | T[] | undefined | null): T[] {
   if (!value) return [];
   return Array.isArray(value) ? value : [value];
 }
 
-// ── Main parser ───────────────────────────────────────────────────────────────
+/**
+ * Parses a Tally ERP / Tally Prime XML export into in-memory voucher and party-master records while collecting parse errors.
+ *
+ * The parser tolerates multiple ENVELOPE documents, extracts LEDGER entries as party masters (only Sundry Debtors/Creditors),
+ * and converts VOUCHER entries into ParsedVoucher objects with resolved account codes, ledger lines, and totals.
+ * Malformed or unsupported messages are skipped and described in the returned `parseErrors` array.
+ *
+ * @param xmlText - The raw Tally XML export text to parse
+ * @returns An object containing `vouchers`, `partyMasters`, and `parseErrors` describing any issues encountered during parsing
+ */
 
 export function parseTallyXml(xmlText: string): TallyParseResult {
   const parseErrors: string[] = [];

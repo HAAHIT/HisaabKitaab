@@ -4,6 +4,18 @@ import { useCallback, useEffect, useState } from "react";
 import { db } from "@/lib/db";
 import { buildMeasurementUploadFormData } from "@/lib/measurement-upload-form";
 
+/**
+ * Tracks network connectivity and synchronizes queued measurement drafts to the server.
+ *
+ * Registers `online`/`offline` listeners and, while online, attempts an immediate sync and then retries every 30 seconds.
+ * The `syncAll` function uploads drafts in creation order, leaves failed uploads in the local queue for later attempts,
+ * and sets `isSyncing` while a sync is active.
+ *
+ * @returns An object with:
+ * - `isOnline` — `true` when the client is currently online, `false` otherwise.
+ * - `isSyncing` — `true` while a sync operation is in progress, `false` otherwise.
+ * - `syncAll` — a function that uploads queued measurement drafts to `"/api/measurements"` and removes drafts that successfully upload.
+ */
 export function useSync() {
   const [isOnline, setIsOnline] = useState(
     typeof navigator !== "undefined" ? navigator.onLine : true

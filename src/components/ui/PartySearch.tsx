@@ -25,6 +25,12 @@ interface PartySearchProps {
   isInvalid?: boolean;
 }
 
+/**
+ * Format a numeric balance as a signed INR string for display.
+ *
+ * @param value - The balance amount in rupees; may be positive, negative, or zero
+ * @returns `INR {abs}` when `value` is 0, `+INR {abs}` when `value` is greater than 0, or `-INR {abs}` when `value` is less than 0 (uses `en-IN` locale grouping)
+ */
 function formatSignedBalance(value: number) {
   const absolute = Math.abs(value).toLocaleString("en-IN");
   if (value === 0) {
@@ -34,6 +40,21 @@ function formatSignedBalance(value: number) {
   return `${value > 0 ? "+" : "-"}INR ${absolute}`;
 }
 
+/**
+ * Renders an autocomplete input for selecting a party and managing the selected party state.
+ *
+ * Fetches available parties (optionally filtered by `partyType`) and displays each option with name,
+ * optional phone, and a signed INR balance with status when applicable. Provides an empty-state action
+ * to navigate to the "Add New Party" page.
+ *
+ * @param value - Currently selected party id or `null`
+ * @param onChange - Callback invoked with the selected `PartyOption` or `null` when selection changes
+ * @param partyType - Optional filter for party type (`"CUSTOMER"` | `"VENDOR"` | `null`)
+ * @param placeholder - Optional label for the autocomplete input; falls back to the localized placeholder
+ * @param autoFocus - If true, focuses the input on mount
+ * @param isInvalid - Marks the input as invalid for form validation state
+ * @returns The PartySearch React element
+ */
 export function PartySearch({
   value,
   onChange,

@@ -28,6 +28,11 @@ const DETAILED_TEMPLATE_COLUMNS = [
   },
 ] as const;
 
+/**
+ * Extracts an error message from an HTTP Response's JSON payload.
+ *
+ * @returns The value of the `error` field from the parsed JSON if present; otherwise `"Request failed"`.
+ */
 async function readError(response: Response) {
   const payload = await response.json().catch(() => null);
   return payload?.error || "Request failed";
@@ -37,6 +42,19 @@ interface SetupWizardProps {
   onComplete: () => void;
 }
 
+/**
+ * Render a four-step onboarding wizard that collects optional business info,
+ * lets the user choose a template preset, optionally creates a default customer,
+ * and completes the initial setup flow.
+ *
+ * The component persists an onboarding-dismissed flag to localStorage when the
+ * user skips or completes the wizard, and it performs API requests to save
+ * provided settings, create the selected template, and optionally create a
+ * customer when finishing setup.
+ *
+ * @param onComplete - Callback invoked when the wizard is dismissed or finished
+ * @returns The onboarding wizard React element
+ */
 export function SetupWizard({ onComplete }: SetupWizardProps) {
   const router = useRouter();
   const { t } = useLanguage();

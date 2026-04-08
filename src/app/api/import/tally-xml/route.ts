@@ -17,16 +17,23 @@ const RATE_LIMIT_COUNT = 5;
 const MAX_BYTES = 5 * 1024 * 1024;
 
 /**
- * POST /api/import/tally-xml
+ * Import Tally ERP XML from a multipart/form-data upload and create corresponding
+ * Party and JournalEntry records for the resolved tenant.
  *
- * Body: multipart/form-data with field `file` (XML text)
+ * Expects a multipart/form-data request with a `file` field containing Tally XML.
+ * Only requests from users with role `ADMIN` are accepted. The handler enforces
+ * per-tenant rate limits and a maximum upload size (5 MB). It parses party
+ * masters and vouchers from the XML, upserts missing parties, and imports
+ * vouchers as journal entries. Duplicate vouchers are skipped using the tuple
+ * (voucherType, entryDate, narration, totalDebit).
  *
- * Parses a Tally ERP 9 / Tally Prime XML export and commits:
- *   - Party masters → upserted as Party records
- *   - Vouchers     → JournalEntry + JournalLine records
- *
- * Duplicate detection: (voucherType, entryDate, narration, totalDebit)
- * Access: ADMIN only
+ * @returns An object containing:
+ *  - `partiesCreated`: number of Party records created
+ *  - `imported`: number of vouchers successfully imported
+ *  - `skipped`: number of vouchers skipped as duplicates
+ *  - `failed`: number of vouchers that failed to import
+ *  - `parseErrors`: array of parsing error messages from XML processing
+ *  - `importErrors`: array of per-voucher error messages for failed imports
  */
 export async function POST(request: NextRequest) {
   const rateLimitResponse = await checkRateLimit(
@@ -115,6 +122,18 @@ export async function POST(request: NextRequest) {
   // Build party name → id cache to avoid repeated DB lookups
   const partyCache = new Map<string, string>();
 
+  /**
+   * Resolve a party name to its party ID, creating and caching a new Party if none exists.
+   *
+   * Looks up a non-deleted Party by exact `name` for the current tenant and returns its `id`.
+   * If not found, creates a new Party with `type` set to `"CUSTOMER"` when `accountCode` is
+   * `"SUNDRY_DEBTORS"` and `"VENDOR"` otherwise (opening and current balances set to 0),
+   * increments `partiesCreated`, caches the name→id mapping, and returns the new `id`.
+   *
+   * @param name - The exact party name to resolve or create
+   * @param accountCode - Account code used to determine the party `type` when creating
+   * @returns The resolved or newly created party `id`
+   */
   async function resolvePartyId(
     name: string,
     accountCode: AccountCode

@@ -22,6 +22,12 @@ const COLUMN_TYPES = [
   { key: "dropdown", label: "Dropdown" },
 ];
 
+/**
+ * Edit template page that lets users modify a template's name, columns, and formulas.
+ *
+ * @param params - A promise that resolves to route parameters containing `id`, the template identifier to load.
+ * @returns The page's UI: a form for editing the template name, managing columns (add, remove, reorder, types, options), building formula expressions, and saving or canceling changes.
+ */
 export default function EditTemplatePage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const { id } = use(params);

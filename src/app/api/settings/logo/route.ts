@@ -10,10 +10,24 @@ import { logError, getRequestId } from "@/lib/observability";
 
 export const runtime = "nodejs";
 
+/**
+ * Determines whether the incoming request is from an admin user.
+ *
+ * @param request - The HTTP request whose `x-user-role` header will be checked
+ * @returns `true` if the `x-user-role` header equals `"ADMIN"`, `false` otherwise.
+ */
 function isAdmin(request: Request) {
   return request.headers.get("x-user-role") === "ADMIN";
 }
 
+/**
+ * Handles tenant logo upload: validates the uploaded file, creates a media asset, updates the tenant's `logoUrl`, and performs best-effort cleanup of any previous asset.
+ *
+ * Validates that the requester is an admin and that the target tenant can be resolved. Expects multipart form data with a `file` field that is an image no larger than 2 MB. On success returns the updated tenant settings serialized for the response; on failure returns an error JSON and, when possible, attempts to remove any newly created asset.
+ *
+ * @param request - The incoming NextRequest containing multipart form data with a `file` field
+ * @returns A NextResponse with `{ settings: ... }` on success, or `{ error: string }` with an appropriate HTTP status on failure
+ */
 export async function POST(request: NextRequest) {
   if (!isAdmin(request)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -94,6 +108,12 @@ export async function POST(request: NextRequest) {
   }
 }
 
+/**
+ * Deletes the current tenant logo, clears the tenant's `logoUrl`, and removes the underlying media asset if it was stored under `/api/assets/{id}`.
+ *
+ * @param request - The incoming NextRequest used for authorization and tenant resolution.
+ * @returns A NextResponse containing JSON. On success: `{ settings: /* serialized tenant settings */ }`. On error: `{ error: string }` with an appropriate HTTP status (`403` for forbidden, `500` for server errors, or a tenant-resolution response).
+ */
 export async function DELETE(request: NextRequest) {
   if (!isAdmin(request)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

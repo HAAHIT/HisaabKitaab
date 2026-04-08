@@ -7,6 +7,12 @@ export const TENANT_CONTEXT_MISSING_MESSAGE =
 const DEFAULT_TENANT_ID = process.env.DEFAULT_TENANT_ID || "";
 type TenantHeaderSource = Headers | { headers: Headers };
 
+/**
+ * Normalize a tenant identifier by trimming surrounding whitespace and treating empty or missing values as `null`.
+ *
+ * @param value - The tenant identifier to normalize; may be `string`, `null`, or `undefined`
+ * @returns The trimmed tenant identifier, or `null` if `value` is falsy or contains only whitespace
+ */
 function normalizeTenantId(value: string | null | undefined) {
   if (!value) {
     return null;
@@ -15,6 +21,12 @@ function normalizeTenantId(value: string | null | undefined) {
   return trimmed || null;
 }
 
+/**
+ * Resolves a tenant id from a request-like object’s headers or falls back to the configured default.
+ *
+ * @param request - An object with a `headers: Headers` property, or `null`/`undefined`; the `x-tenant-id` header is read when present.
+ * @returns The resolved tenant id string; if the header is missing or empty, returns the configured default tenant id.
+ */
 export function resolveTenantIdFromRequest(
   request: { headers: Headers } | null | undefined
 ) {
@@ -25,16 +37,22 @@ export function resolveTenantIdFromRequest(
   return normalizeTenantId(process.env.DEFAULT_TENANT_ID) || DEFAULT_TENANT_ID;
 }
 
+/**
+ * Selects the tenant identifier from the provided headers, falling back to the default tenant id.
+ *
+ * @param headerSource - Optional Headers object to read the `x-tenant-id` header from
+ * @returns The trimmed `x-tenant-id` value if present and non-empty, otherwise `DEFAULT_TENANT_ID`
+ */
 function resolveTenantId(headerSource?: Headers | null) {
   const tenantId = headerSource?.get(TENANT_HEADER)?.trim();
   return tenantId || DEFAULT_TENANT_ID;
 }
 
 /**
- * Reads tenantId from request headers (set by middleware).
- * Falls back to DEFAULT_TENANT_ID during the single-tenant phase.
+ * Resolve the active tenant ID from an explicit header source or from the current request headers, falling back to the default tenant.
  *
- * Use in API routes: const tenantId = await getTenantId();
+ * @param source - Optional `Headers` or an object with a `headers: Headers` property to read the `x-tenant-id` header from. If omitted, the function attempts to read Next.js request headers.
+ * @returns The tenant ID string from the `x-tenant-id` header if present and non-empty, otherwise `DEFAULT_TENANT_ID`.
  */
 export async function getTenantId(
   source?: TenantHeaderSource | null
@@ -54,16 +72,18 @@ export async function getTenantId(
 }
 
 /**
- * Returns a Prisma `where` clause fragment for tenant scoping.
- * Usage: prisma.bill.findMany({ where: { ...await tenantScope(), status: "FINAL" } })
+ * Provide a Prisma `where` clause fragment that scopes queries to the current tenant.
+ *
+ * @returns An object with `tenantId` set to the resolved tenant identifier
  */
 export async function tenantScope() {
   return { tenantId: await getTenantId() };
 }
 
 /**
- * Returns data fields for creating records with tenant context.
- * Usage: prisma.bill.create({ data: { ...await tenantData(), billNumber: "..." } })
+ * Provide record data containing the current tenant's identifier for inclusion in create/update payloads.
+ *
+ * @returns An object with `tenantId` set to the resolved tenant identifier
  */
 export async function tenantData() {
   return { tenantId: await getTenantId() };

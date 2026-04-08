@@ -2,7 +2,12 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-const WINDOW_MS = 60_000; // 1 minute sliding window
+const WINDOW_MS = 60_000; /**
+ * Extracts the client's IP address from the request headers.
+ *
+ * @param request - The incoming request whose headers are inspected; the function prefers the first value of `x-forwarded-for`, then `x-real-ip`.
+ * @returns The client IP string extracted from headers, or `"unknown"` if no suitable header is present.
+ */
 
 function getClientIp(request: NextRequest): string {
   return (
@@ -13,15 +18,14 @@ function getClientIp(request: NextRequest): string {
 }
 
 /**
- * Check the rate limit for a given (endpoint key, client IP) pair.
- * Backed by the database — works correctly across multiple server instances.
+ * Enforces a per-endpoint, per-IP rate limit persisted in the database.
  *
- * Returns a 429 NextResponse if the limit is exceeded, or null if allowed.
- * Call this at the top of any mutation handler.
+ * If the requester has exceeded `limit` within the current 60-second window, returns a `NextResponse` with HTTP 429 and a `Retry-After` header set to the remaining seconds; otherwise initializes or increments the stored counter and returns `null`. If the rate-limit check fails (e.g., database error), the function returns `null` to allow the request.
  *
- * @param request  Incoming request (used to extract client IP)
- * @param key      Short identifier for the endpoint, e.g. "measurements.upload"
- * @param limit    Max requests per minute from a single IP
+ * @param request - Incoming request used to extract the client IP
+ * @param key - Short identifier for the endpoint (for example, "measurements.upload")
+ * @param limit - Maximum requests allowed per minute from a single IP
+ * @returns A `NextResponse` with status 429 and a `Retry-After` header when the limit is exceeded, `null` otherwise
  */
 export async function checkRateLimit(
   request: NextRequest,

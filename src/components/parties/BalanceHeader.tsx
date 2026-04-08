@@ -11,6 +11,12 @@ interface BalanceHeaderProps {
   partyPhone: string | null;
 }
 
+/**
+ * Formats a number as an Indian-rupee currency string and prefixes a sign for non-zero values.
+ *
+ * @param value - The amount in rupees; the sign of `value` determines the returned prefix.
+ * @returns The amount formatted as INR with no fractional digits. For zero, returns the formatted amount without a sign; for positive values, prefixes `+`; for negative values, prefixes `-`.
+ */
 function formatSignedCurrency(value: number) {
   const absolute = Math.abs(value);
   const formatted = new Intl.NumberFormat("en-IN", {
@@ -26,6 +32,14 @@ function formatSignedCurrency(value: number) {
   return `${value > 0 ? "+" : "-"}${formatted}`;
 }
 
+/**
+ * Selects the localized balance label for a party based on the current balance and party type.
+ *
+ * @param partyType - Party role; when `balance < 0`, `CUSTOMER` maps to "toReceive" and other types map to "toPay"
+ * @param balance - Current numeric balance used to determine settled (`0`), advance (`> 0`), or owed (`< 0`)
+ * @param t - Translation function for `khata.settled`, `khata.advance`, `khata.toReceive`, and `khata.toPay`
+ * @returns The localized label: `settled` when `balance === 0`, `advance` when `balance > 0`, `toReceive` for `CUSTOMER` when `balance < 0`, or `toPay` for other party types when `balance < 0`
+ */
 function getBalanceLabel(
   partyType: SupportedPartyType,
   balance: number,
@@ -42,6 +56,15 @@ function getBalanceLabel(
   return partyType === "CUSTOMER" ? t("khata.toReceive") : t("khata.toPay");
 }
 
+/**
+ * Render a sticky balance header showing the party's name, type chip, localized subtitle, and the current balance with label and optional call button.
+ *
+ * @param partyName - The display name of the party
+ * @param partyType - The party type (e.g., `"CUSTOMER"`) used for the chip label and color
+ * @param currentBalance - The numeric balance to format and display; positive, negative, and zero states affect styling and label
+ * @param partyPhone - Optional phone number; when provided, a "call" button linking to `tel:+91{partyPhone}` is shown
+ * @returns The header React element containing party information, formatted signed currency, balance label, and an optional call action
+ */
 export default function BalanceHeader({
   partyName,
   partyType,

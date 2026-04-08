@@ -45,6 +45,12 @@ const STATUS_OPTIONS = [
   { key: "COMPLETED", label: "Completed" },
 ];
 
+/**
+ * Page component that displays a measurement's details and lets users view photos, inspect customer and party info, and update workflow status and internal review notes.
+ *
+ * @param params - A promise that resolves to an object containing the route `id` of the measurement to load.
+ * @returns The measurement detail page UI for the given `id`.
+ */
 export default function MeasurementDetailPage({
   params,
 }: {

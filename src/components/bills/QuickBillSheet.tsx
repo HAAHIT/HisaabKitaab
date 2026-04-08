@@ -21,6 +21,12 @@ interface QuickBillSheetProps {
   onBillCreated?: (bill: { id: string; billNumber: string }) => void;
 }
 
+/**
+ * Sanitize a user-entered amount string for safe decimal input.
+ *
+ * @param value - Raw input string potentially containing non-numeric characters
+ * @returns A string containing only digits and at most one decimal point, with the fractional part limited to two digits
+ */
 function sanitizeAmountInput(value: string) {
   const normalized = value.replace(/[^\d.]/g, "");
   const parts = normalized.split(".");
@@ -33,11 +39,24 @@ function sanitizeAmountInput(value: string) {
   return `${parts[0]}.${parts.slice(1).join("").replace(/\./g, "").slice(0, 2)}`;
 }
 
+/**
+ * Extracts an error message from a Response's JSON body.
+ *
+ * @returns The `error` property from the response JSON if present, `"Failed to create quick bill"` otherwise.
+ */
 async function readError(response: Response) {
   const data = await response.json().catch(() => null);
   return data?.error || "Failed to create quick bill";
 }
 
+/**
+ * Render a bottom-sheet UI for creating a quick bill with party selection, amount/description entry, optional payment recording, and submission.
+ *
+ * @param isOpen - Whether the sheet is visible.
+ * @param onClose - Callback invoked to close the sheet; called after a successful bill creation and passed through to the underlying BottomSheet.
+ * @param onBillCreated - Optional callback invoked after a successful creation with `{ id, billNumber }`.
+ * @returns The BottomSheet React element containing the quick-bill form.
+ */
 export function QuickBillSheet({
   isOpen,
   onClose,

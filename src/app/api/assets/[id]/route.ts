@@ -6,12 +6,30 @@ import { resolveReadTenant } from "@/lib/api-tenant";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/**
+ * Determines whether a storage provider string denotes a directly readable provider.
+ *
+ * @returns `true` if `provider` is `"local"` or `"gcs"`, `false` otherwise.
+ */
 function isDirectReadableStorageProvider(
   provider: string
 ): provider is "local" | "gcs" {
   return provider === "local" || provider === "gcs";
 }
 
+/**
+ * Serve a media asset identified by route `id`, enforcing tenant and role-based access controls and returning the file bytes or a redirect.
+ *
+ * @param request - Incoming request; requires `x-user-id` and `x-user-role` headers and is used to resolve tenant context.
+ * @param params - Promise resolving to route parameters containing `id` of the requested asset.
+ * @returns A `NextResponse` that is one of:
+ * - 200 with the asset bytes, `Content-Type` set to the asset MIME type, and `Cache-Control: private, max-age=3600` when the file is readable.
+ * - 302 redirect to the asset URL when the storage provider is `proxy`.
+ * - 401 when authentication headers are missing.
+ * - 403 when the resolved tenant or role is not authorized to access the asset.
+ * - 404 when the asset record or the stored file is not found.
+ * - 500 when the storage provider is unsupported.
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

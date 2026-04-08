@@ -43,6 +43,12 @@ const ROLE_TRANSLATION_KEYS: Record<AppRole, TranslationKey> = {
   CUSTOMER: "users.customer",
 };
 
+/**
+ * Resolve the i18n translation key for a given application role.
+ *
+ * @param role - The app role string (e.g., "ADMIN", "STAFF", "ACCOUNTANT", "CUSTOMER")
+ * @returns The translation key associated with `role`, or `"users.staff"` when the role is unrecognized
+ */
 function resolveRoleTranslationKey(role: string): TranslationKey {
   return ROLE_TRANSLATION_KEYS[role as AppRole] ?? "users.staff";
 }
@@ -145,6 +151,17 @@ const CUSTOMER_NAV: NavItem[] = [
 ];
 
 
+/**
+ * Render the application shell layout including navigation, header, and responsive controls.
+ *
+ * Renders the full client-side layout for the app: a desktop sidebar (collapsible) with navigation and admin settings,
+ * a mobile header and bottom navigation with a "More" sheet, user profile menu, language/theme controls, and the Quick Bill sheet.
+ * Navigation entries, available actions, and certain UI elements adapt to the provided user's role and enabled feature flags.
+ *
+ * @param children - The main content to render inside the shell.
+ * @param user - The current user session; the user's `role` controls which navigation items and actions are shown.
+ * @returns The React element for the application shell containing layout chrome and the rendered children.
+ */
 export default function AppShell({
   children,
   user,

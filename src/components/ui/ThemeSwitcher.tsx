@@ -5,6 +5,11 @@ import { Button } from "@heroui/react";
 
 type Theme = "light" | "dark";
 
+/**
+ * Selects the initial theme for the application.
+ *
+ * @returns The chosen theme: `light` when executed outside the browser, the stored `"light"` or `"dark"` value from `localStorage` when present, otherwise `dark` if the system prefers a dark color scheme and `light` otherwise.
+ */
 function getInitialTheme(): Theme {
   if (typeof window === "undefined") {
     return "light";
@@ -20,10 +25,23 @@ function getInitialTheme(): Theme {
     : "light";
 }
 
+/**
+ * Produce a no-op unsubscribe function.
+ *
+ * @returns A function that performs no action and returns `undefined`.
+ */
 function subscribeNoop() {
   return () => undefined;
 }
 
+/**
+ * Renders a theme toggle button that switches between "light" and "dark".
+ *
+ * After hydration completes, persists the selected theme to localStorage and toggles the "dark" class on document.documentElement.
+ * While hydration has not completed, renders a small placeholder to avoid layout shift.
+ *
+ * @returns The ThemeSwitcher component's JSX element (a button that toggles the current theme).
+ */
 export function ThemeSwitcher() {
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
   const hydrated = useSyncExternalStore(

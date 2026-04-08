@@ -40,6 +40,13 @@ async function readError(response: Response) {
   return data?.error || "Request failed";
 }
 
+/**
+ * Render the payments list page with search, type/status filters, month-based grouping, pagination, and actions to mark expected payments completed.
+ *
+ * The component fetches and displays payments grouped by month, shows aggregated incoming/outgoing totals per month, supports collapsing month sections, and provides UI for creating a new payment and marking `EXPECTED` payments as `COMPLETED`.
+ *
+ * @returns The rendered JSX element for the payments list page.
+ */
 export default function PaymentsListPage() {
   const router = useRouter();
   const { t } = useLanguage();

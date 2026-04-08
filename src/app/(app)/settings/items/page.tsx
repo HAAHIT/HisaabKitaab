@@ -38,6 +38,12 @@ const INITIAL_FORM: FormState = {
   taxRate: "",
 };
 
+/**
+ * Format a numeric value as an Indian Rupee currency string.
+ *
+ * @param value - The numeric amount to format
+ * @returns The formatted string in Indian Rupees (INR) using the "en-IN" locale with up to 2 decimal places
+ */
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
@@ -46,11 +52,24 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
+/**
+ * Extracts an error message from an HTTP Response's JSON body, falling back to a default message.
+ *
+ * @returns The `error` property from the parsed JSON if present, otherwise `"Request failed"`.
+ */
 async function readError(response: Response) {
   const payload = await response.json().catch(() => null);
   return payload?.error || "Request failed";
 }
 
+/**
+ * Page component for viewing and managing the item catalog (list, create, update, delete).
+ *
+ * Renders a form for adding or editing items, a list of existing items with edit/delete actions,
+ * and transient toast notifications for success/error feedback.
+ *
+ * @returns The rendered Item Catalog page as a JSX element.
+ */
 export default function ItemCatalogPage() {
   const { t } = useLanguage();
   const [items, setItems] = useState<ItemRecord[]>([]);

@@ -10,14 +10,31 @@ import {
 
 export const runtime = "nodejs";
 
+/**
+ * Check if a user role is permitted to view item catalog entries.
+ *
+ * @param role - The user's role value (may be `null` when absent)
+ * @returns `true` if `role` is present and not equal to `"CUSTOMER"`, `false` otherwise
+ */
 function canViewItems(role: string | null) {
   return Boolean(role) && role !== "CUSTOMER";
 }
 
+/**
+ * Determine whether the given role has permission to create or modify items.
+ *
+ * @param role - The user's role identifier or `null` if unauthenticated
+ * @returns `true` if the role is "ADMIN", `false` otherwise
+ */
 function canManageItems(role: string | null) {
   return role === "ADMIN";
 }
 
+/**
+ * Fetches active item catalog records for the resolved tenant and returns them ordered by name.
+ *
+ * @returns A NextResponse containing `{ items }` where `items` is an array of active item catalog entries for the resolved tenant. May instead be a 403 response when the caller is not authorized or the tenant resolution's error response when tenant resolution fails.
+ */
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
 
@@ -41,6 +58,15 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ items });
 }
 
+/**
+ * Create a new item in the tenant's item catalog.
+ *
+ * Enforces a per-request rate limit and requires the caller to have the `ADMIN` role.
+ * Resolves the write tenant, validates and normalizes the request body, creates the item, and returns the created record.
+ *
+ * @param request - Incoming Next.js request. The JSON body may include `name`, `hsnCode`, `rate`, `taxRate`, and `unit`. The caller's role is read from the `x-user-role` header.
+ * @returns `201` with `{ item }` when creation succeeds; `400` with `{ error: "..."} ` for validation failures (missing `name`, invalid `rate`, or invalid `taxRate` when provided); `403` with `{ error: "Forbidden" }` when the caller lacks permission; the rate limiter's response if the request is rate limited (e.g., `429`); `500` with `{ error: "Internal server error" }` for unexpected errors.
+ */
 export async function POST(request: NextRequest) {
   const rateLimitResponse = await checkRateLimit(request, "items.create", 30);
   if (rateLimitResponse) return rateLimitResponse;

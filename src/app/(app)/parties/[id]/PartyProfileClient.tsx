@@ -51,6 +51,17 @@ type ReconcileResult = {
   drifted: { partyId: string; name: string; stored: number; computed: number }[];
 };
 
+/**
+ * Render the party profile page with ledger chat, party details, customer measurements, and an admin-only balance reconciliation panel.
+ *
+ * @param party - Party identity and metadata (name, type, contacts, address, gstin, openingBalance, createdAt)
+ * @param ledger - Chronological ledger entries for the party
+ * @param measurements - List of measurement records for the party
+ * @param calculatedCurrent - Current balance computed from ledger data
+ * @param partyId - Unique identifier for the party (used by ledger/chat components)
+ * @param role - Current user role; when `"ADMIN"`, renders Balance Health controls for checking and fixing balances
+ * @returns A React element that renders the party profile UI
+ */
 export default function PartyProfileClient({
   party,
   ledger,

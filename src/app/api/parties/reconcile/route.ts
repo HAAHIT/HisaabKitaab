@@ -6,7 +6,23 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-// GET /api/parties/reconcile — report balance discrepancies (Admin only)
+/**
+ * Produce a reconciliation report for the resolved tenant, listing parties whose stored balance differs from the recomputed balance by 0.01 or more.
+ *
+ * @param request - The incoming NextRequest. Requires an `x-user-role` header; only requests with role `ADMIN` are allowed.
+ * @returns A JSON object with:
+ *  - `total`: the number of parties examined
+ *  - `drifted`: an array of parties whose stored balance differs from the computed balance. Each item contains:
+ *      - `partyId`: the party's id
+ *      - `name`: the party's name
+ *      - `stored`: the stored `currentBalance`
+ *      - `computed`: the recomputed balance
+ *      - `ok`: `true` if the absolute difference (`|computed - stored|`) is less than 0.01, `false` otherwise
+ *
+ * Observable responses:
+ *  - Returns 403 with `{ error: "Forbidden" }` when the requester is not an admin.
+ *  - Returns 500 with `{ error: "Internal server error" }` on unexpected failures.
+ */
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
 
@@ -47,7 +63,11 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/parties/reconcile — fix all drifted balances (Admin only)
+/**
+ * Recomputes stored balances for all non-deleted parties in the resolved tenant and updates any party whose stored balance differs from the recomputed balance by at least 0.01.
+ *
+ * @returns A NextResponse whose JSON body is `{ fixed: number }` with the count of updated parties on success; `{ error: "Forbidden" }` with status 403 if the requester is not an admin; or `{ error: "Internal server error" }` with status 500 if an unexpected error occurs.
+ */
 export async function POST(request: NextRequest) {
   const role = request.headers.get("x-user-role");
 

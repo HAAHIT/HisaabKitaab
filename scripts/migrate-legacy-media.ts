@@ -5,6 +5,13 @@ import {
   extractLegacyPhotoUrl,
 } from "../src/lib/media";
 
+/**
+ * Migrates tenant logo URLs from legacy external locations into `mediaAsset` records and updates tenants to reference the new `/api/assets/{assetId}` endpoint.
+ *
+ * Skips tenants with no `logoUrl` or whose `logoUrl` already starts with `/api/assets/`. For each eligible tenant it creates a `COMPANY_LOGO` media asset and updates the tenant's `logoUrl` and `updatedAt` inside a transaction. If the transaction fails, it attempts to delete the created asset and rethrows the original error.
+ *
+ * @returns The number of tenants successfully migrated
+ */
 async function migrateCompanyLogo() {
   const tenants = await prisma.tenant.findMany({
     select: {
@@ -49,6 +56,20 @@ async function migrateCompanyLogo() {
   return migratedCount;
 }
 
+/**
+ * Migrates legacy measurement photos into media assets and links them to measurement uploads.
+ *
+ * For each measurementUpload without existing photoAssets, this function:
+ * - extracts valid legacy photo URLs from `photosLegacy`,
+ * - creates corresponding `mediaAsset` records,
+ * - clears `photosLegacy`,
+ * - and creates `photoAssets` entries referencing the new assets with `sortOrder` matching the original order.
+ * Measurements that already have `photoAssets` or have no valid legacy URLs are skipped.
+ * If a transaction fails, the function attempts to delete any created media assets (swallowing deletion errors) and re-throws the original error.
+ *
+ * @returns The number of measurementUpload records migrated successfully.
+ * @throws The original error from a failed migration transaction after cleanup attempts.
+ */
 async function migrateMeasurementPhotos() {
   const measurements = await prisma.measurementUpload.findMany({
     select: {

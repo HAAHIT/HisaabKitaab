@@ -65,6 +65,14 @@ interface PurchaseBillJournalInput {
   billDate: Date;
 }
 
+/**
+ * Builds tax journal lines for a sales transaction.
+ *
+ * @param taxAmount - Total tax amount to allocate across tax accounts
+ * @param direction - Whether the tax amount should be recorded as a `DEBIT` or `CREDIT`
+ * @param isInterState - When `true`, produce a single `IGST_OUTPUT` line; when `false`, split the amount between `CGST_OUTPUT` and `SGST_OUTPUT` (rounded to 2 decimals)
+ * @returns An array of journal line objects each containing `accountCode`, `debit`, and `credit`. Returns an empty array when `taxAmount` is less than or equal to 0.
+ */
 function buildSalesTaxLines(
   taxAmount: number,
   direction: "DEBIT" | "CREDIT",
@@ -101,6 +109,15 @@ function buildSalesTaxLines(
   ];
 }
 
+/**
+ * Create and persist a balanced journal entry with its lines.
+ *
+ * @param params - Header and line data for the journal entry
+ * @returns The newly created journal entry including its lines
+ * @throws Error - If total debits and credits differ by more than 0.01 (entry unbalanced)
+ * @throws Error - If any line has both debit and credit greater than 0
+ * @throws Error - If any line has both debit and credit equal to 0 after rounding
+ */
 export async function createJournalEntry(
   tx: PrismaTx,
   params: JournalEntryParams
@@ -166,6 +183,13 @@ export async function createJournalEntry(
   });
 }
 
+/**
+ * Create a sales voucher journal entry for the given sales bill.
+ *
+ * @param tenantId - Identifier of the tenant for whom the entry is created
+ * @param bill - Sales bill data used to construct journal lines (party info, totals, tax, and entry date)
+ * @returns The created journal entry record including its journal lines
+ */
 export async function journalForSalesBill(
   tx: PrismaTx,
   tenantId: string,
@@ -196,6 +220,14 @@ export async function journalForSalesBill(
   });
 }
 
+/**
+ * Create a reversing journal entry for a cancelled sales bill.
+ *
+ * @param tx - Prisma transaction client used to persist the journal entry
+ * @param tenantId - Tenant identifier for the journal entry
+ * @param bill - Sales bill data used to construct reversal lines (includes id, billNumber, party info, subtotal, taxAmount, grandTotal, isInterState, createdBy, and entryDate)
+ * @returns The created journal entry record including its lines
+ */
 export async function journalForCancelledSalesBill(
   tx: PrismaTx,
   tenantId: string,
@@ -226,6 +258,12 @@ export async function journalForCancelledSalesBill(
   });
 }
 
+/**
+ * Create a receipt journal entry for a received payment.
+ *
+ * @param payment - Payment details used to build the journal entry. Must include `id`, `date`, `amount`, `mode`, `partyId`/`partyName` (optional), and `createdBy`.
+ * @returns The created journal entry record including its persisted lines
+ */
 export async function journalForPaymentReceived(
   tx: PrismaTx,
   tenantId: string,
@@ -255,6 +293,12 @@ export async function journalForPaymentReceived(
   });
 }
 
+/**
+ * Create and persist a payment voucher journal entry for an outgoing payment within the given transaction.
+ *
+ * @param payment - Payment data used to build the entry (must include `id`, `date`, `amount`, `mode`, `partyId`/`partyName`, and `createdBy`)
+ * @returns The created journal entry record including its persisted journal lines
+ */
 export async function journalForPaymentMade(
   tx: PrismaTx,
   tenantId: string,
@@ -284,6 +328,17 @@ export async function journalForPaymentMade(
   });
 }
 
+/**
+ * Create a purchase voucher journal entry for the given purchase bill.
+ *
+ * Builds journal lines for the purchase (subtotal), the creditor (grand total with party info),
+ * and any applicable purchase tax input lines (CGST/SGST/IGST), then persists the entry.
+ *
+ * @param tx - Prisma transaction client used to persist the journal entry
+ * @param tenantId - Tenant identifier for the journal entry
+ * @param purchase - Purchase bill data used to construct lines, narration, and metadata
+ * @returns The created journal entry record including its lines
+ */
 export async function journalForPurchaseBill(
   tx: PrismaTx,
   tenantId: string,

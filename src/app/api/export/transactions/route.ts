@@ -9,6 +9,20 @@ import {
 
 export const runtime = "nodejs";
 
+/**
+ * Handle GET requests to export a tenant's journal transactions in CSV (default) or JSON format.
+ *
+ * Authorizes the request using the `x-user-role` header (allowed: `ADMIN`, `ACCOUNTANT`), resolves the tenant,
+ * requires `from` and `to` query parameters (parsed as an Indian date range), and blocks export if any journal
+ * entries are unbalanced. For `format=json` returns a JSON object with `entries` and `totalEntries`. For CSV returns
+ * an attachment where each CSV row corresponds to a journal line (filename derived from the `from` and `to` params).
+ * The handler returns JSON error responses for failure conditions.
+ *
+ * @returns A `NextResponse` containing either:
+ * - a CSV file attachment with transaction rows and `Content-Type: text/csv; charset=utf-8`, or
+ * - a JSON body `{ entries, totalEntries }` when `format=json`, or
+ * - a JSON error object with status `403` (forbidden), `400` (missing/invalid date range), or `409` (export blocked due to unbalanced entries).
+ */
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
 

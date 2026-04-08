@@ -20,6 +20,16 @@ export const metadata: Metadata = {
   icons: { icon: "/favicon.ico" },
 };
 
+/**
+ * Root layout component that establishes the document HTML and app-level providers.
+ *
+ * Reads the user's language preference from cookies (falling back via `normalizeLanguage`),
+ * applies the Inter font and language to the `<html>` element, injects PWA/meta links into `<head>`,
+ * and wraps page content with application providers.
+ *
+ * @param children - The page content to render inside the app providers.
+ * @returns The root HTML structure for the application containing `<head>`, `<body>`, and wrapped children.
+ */
 export default async function RootLayout({
   children,
 }: Readonly<{

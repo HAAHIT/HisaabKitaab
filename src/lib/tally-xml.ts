@@ -61,11 +61,22 @@ const VOUCHER_TYPE_MAP: Record<string, TallyVoucherType> = {
   JOURNAL: "Journal",
 };
 
+/**
+ * Map a database voucher type identifier to the corresponding Tally voucher type.
+ *
+ * @param voucherType - Database voucher type key (lookup is case-sensitive; expected keys like `SALES`, `PURCHASE`, `RECEIPT`, etc.)
+ * @returns The matching `TallyVoucherType`. Returns `"Journal"` when the input has no mapped value.
+ */
 export function dbVoucherTypeToTally(voucherType: string): TallyVoucherType {
   return VOUCHER_TYPE_MAP[voucherType] ?? "Journal";
 }
 
-// ── Date formatting ───────────────────────────────────────────────────────────
+/**
+ * Format a Date into Tally's YYYYMMDD string using the Asia/Kolkata timezone.
+ *
+ * @param date - The date to format (interpreted in the Asia/Kolkata timezone)
+ * @returns The formatted date string in `YYYYMMDD` (year, two-digit month, two-digit day)
+ */
 
 function formatTallyDate(date: Date): string {
   return new Intl.DateTimeFormat("en-CA", {
@@ -78,7 +89,12 @@ function formatTallyDate(date: Date): string {
     .replace(/-/g, ""); // YYYY-MM-DD → YYYYMMDD
 }
 
-// ── XML escaping ──────────────────────────────────────────────────────────────
+/**
+ * Escape XML special characters in a value and return the result as a string.
+ *
+ * @param value - The value to escape; `null` or `undefined` produces an empty string
+ * @returns The input converted to a string with `&`, `<`, `>`, `"` and `'` replaced by their XML entities; `""` if `value` is `null` or `undefined`
+ */
 
 function escapeXml(value: string | number | null | undefined): string {
   if (value === null || value === undefined) return "";
@@ -90,6 +106,11 @@ function escapeXml(value: string | number | null | undefined): string {
     .replace(/'/g, "&apos;");
 }
 
+/**
+ * Format a numeric amount as a two-decimal string using its absolute value.
+ *
+ * @returns A string containing the absolute value of `amount` formatted with two decimal places (e.g., `"123.45"`).
+ */
 function formatAmount(amount: number): string {
   return Math.abs(amount).toFixed(2);
 }
@@ -97,9 +118,10 @@ function formatAmount(amount: number): string {
 // ── JournalLine → TallyLedgerEntry conversion ────────────────────────────────
 
 /**
- * Converts a journal line (separate debit/credit columns) to Tally's
- * sign-based single-amount convention.
- * Debit = positive amount, Credit = negative amount.
+ * Convert a journal row with separate debit and credit amounts into a Tally ledger entry using Tally's signed-amount convention.
+ *
+ * @param line - Object with `accountName`, `debit`, `credit`, and optional `partyName`
+ * @returns A `TallyLedgerEntry` whose `ledgerName` is `accountName`, whose `amount` is positive for a debit or negative for a credit, and whose `partyName` is forwarded from the input when present
  */
 export function journalLineToTallyEntry(line: {
   accountName: string;
@@ -115,7 +137,12 @@ export function journalLineToTallyEntry(line: {
   };
 }
 
-// ── XML builders ─────────────────────────────────────────────────────────────
+/**
+ * Builds the XML block for a single Tally ledger entry.
+ *
+ * @param entry - Ledger entry where `ledgerName` is the ledger label, `amount` uses Tally sign convention (positive = debit, negative = credit), and optional `partyName` will be included as a bill allocation when present.
+ * @returns A string containing an `<ALLLEDGERENTRIES.LIST>` XML block representing the ledger entry (including an optional `<BILLALLOCATIONS.LIST>` when `partyName` is provided).
+ */
 
 function buildLedgerEntryXml(entry: TallyLedgerEntry): string {
   const billAllocations =
@@ -136,6 +163,12 @@ function buildLedgerEntryXml(entry: TallyLedgerEntry): string {
       </ALLLEDGERENTRIES.LIST>`;
 }
 
+/**
+ * Builds a Tally-compatible XML `<TALLYMESSAGE>` block for a voucher.
+ *
+ * @param voucher - Voucher data including date, voucherType, reference, narration, and ledgerEntries
+ * @returns A string containing a `<TALLYMESSAGE>` wrapper with a `<VOUCHER>` element and its ledger entries
+ */
 function buildVoucherXml(voucher: TallyVoucher): string {
   const ledgerLines = voucher.ledgerEntries.map(buildLedgerEntryXml).join("");
 
@@ -150,6 +183,17 @@ function buildVoucherXml(voucher: TallyVoucher): string {
     </TALLYMESSAGE>`;
 }
 
+/**
+ * Builds a Tally-compatible XML `<TALLYMESSAGE>` containing a `<LEDGER>` definition for the supplied party.
+ *
+ * The returned XML includes the ledger name, parent group, and conditionally includes:
+ * - an `<OPENINGBALANCE>` element when `party.openingBalance !== 0` (negative values are emitted with a leading `-` and amounts are formatted to two decimals),
+ * - GST fields (`<GSTREGISTRATIONTYPE>Regular</GSTREGISTRATIONTYPE>` and `<PARTYGSTIN>`) when `party.gstin` is truthy,
+ * - an `<ADDRESS.LIST>` block when `party.address` is truthy.
+ *
+ * @param party - The party/ledger master data. `name` and `group` are required; `openingBalance`, `gstin`, and `address` control optional XML elements as described.
+ * @returns A string containing the `<TALLYMESSAGE>` XML for creating the ledger in Tally.
+ */
 function buildPartyMasterXml(party: TallyPartyMaster): string {
   const openingBalanceFormatted =
     party.openingBalance !== 0
@@ -180,7 +224,11 @@ function buildPartyMasterXml(party: TallyPartyMaster): string {
 // ── Public: full envelope builders ───────────────────────────────────────────
 
 /**
- * Wraps voucher and/or ledger TALLYMESSAGE blocks in a full Tally envelope.
+ * Produce a complete Tally ENVELOPE XML containing the provided `<TALLYMESSAGE>` blocks.
+ *
+ * @param messages - Array of serialized `<TALLYMESSAGE>` XML blocks to include inside `<REQUESTDATA>`
+ * @param companyName - Company name to place in `<SVCURRENTCOMPANY>`; the value will be XML-escaped
+ * @returns A string containing the full Tally `<ENVELOPE>` XML with the messages inserted into `<REQUESTDATA>`
  */
 function buildEnvelope(messages: string[], companyName: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -204,7 +252,11 @@ function buildEnvelope(messages: string[], companyName: string): string {
 }
 
 /**
- * Serializes a list of journal vouchers to a Tally-importable XML string.
+ * Builds a complete Tally XML envelope containing the provided vouchers for import.
+ *
+ * @param vouchers - The vouchers to serialize into the envelope
+ * @param companyName - The company name used in the envelope's <SVCURRENTCOMPANY> element
+ * @returns A string containing a complete Tally XML envelope ready for import, with one <TALLYMESSAGE> block per voucher
  */
 export function buildTallyVoucherXml(
   vouchers: TallyVoucher[],
@@ -215,8 +267,11 @@ export function buildTallyVoucherXml(
 }
 
 /**
- * Serializes party masters (ledger definitions) to a Tally-importable XML string.
- * Import this before importing vouchers so ledger names resolve correctly.
+ * Generate a Tally-importable XML document containing one or more party (ledger) master definitions.
+ *
+ * @param parties - Array of party master objects to serialize into `<TALLYMESSAGE>` ledger blocks
+ * @param companyName - Company name to place into the Tally envelope's `<SVCURRENTCOMPANY>` tag
+ * @returns The complete Tally `<ENVELOPE>` XML string containing the serialized party master messages
  */
 export function buildTallyPartyMasterXml(
   parties: TallyPartyMaster[],

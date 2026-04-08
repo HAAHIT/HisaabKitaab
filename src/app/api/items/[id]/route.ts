@@ -9,10 +9,29 @@ import {
 
 export const runtime = "nodejs";
 
+/**
+ * Checks whether the request is from an admin by inspecting the `x-user-role` header.
+ *
+ * @param request - The incoming Next.js request
+ * @returns `true` if the `x-user-role` header equals `"ADMIN"`, `false` otherwise.
+ */
 function isAdmin(request: NextRequest) {
   return request.headers.get("x-user-role") === "ADMIN";
 }
 
+/**
+ * Updates fields of an existing item in the tenant-scoped item catalog.
+ *
+ * The request must be from an admin (header `x-user-role: ADMIN`). The handler resolves the write tenant and uses its `tenantId` to verify the item exists; if found, it updates only the fields provided in the request body. Validation rules:
+ * - If `name` is provided it must be a non-empty string.
+ * - `rate` must be a valid number when provided.
+ * - `taxRate` must be a valid number when explicitly provided (non-empty).
+ * - `hsnCode` is normalized: omitted => unchanged, empty/invalid string => `null`, trimmed non-empty string => used.
+ *
+ * @param request - The NextRequest for the PATCH operation; must include admin role header.
+ * @param params - A promise resolving to route parameters containing `id` (the item id).
+ * @returns A JSON NextResponse containing the updated `item` on success; on error returns a JSON error message with an appropriate HTTP status (403, 400, 404, or 500).
+ */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -99,6 +118,11 @@ export async function PATCH(
   }
 }
 
+/**
+ * Soft-deletes the specified item by setting its `isActive` flag to `false` within the resolved write tenant.
+ *
+ * @returns `{ success: true }` on successful soft-delete; otherwise a JSON error object with an `error` message and an appropriate HTTP status code (`403` for forbidden, `404` if the item was not found, `500` for internal errors).
+ */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

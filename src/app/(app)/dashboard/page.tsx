@@ -66,6 +66,15 @@ function CashFlowBar({ data }: { data: DashboardData["cashFlow"] }) {
   );
 }
 
+/**
+ * Render the client-side dashboard page, including summary metrics, cash-flow and payment lists,
+ * onboarding/setup flow, and an optional install banner.
+ *
+ * The component fetches dashboard data, decides whether to show a setup wizard, displays
+ * summary cards, charts, recent payments, overdue alerts, and bill statistics.
+ *
+ * @returns The rendered dashboard page React element
+ */
 export default function DashboardPage() {
   const router = useRouter();
   const { t } = useLanguage();

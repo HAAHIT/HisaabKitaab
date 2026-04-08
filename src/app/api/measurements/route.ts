@@ -26,14 +26,40 @@ const VALID_MEASUREMENT_STATUSES = new Set<MeasurementStatus>([
   "COMPLETED",
 ]);
 
+/**
+ * Determines whether a string is one of the allowed measurement status values.
+ *
+ * Acts as a type guard for `MeasurementStatus`.
+ *
+ * @returns `true` if `value` is one of the allowed measurement status strings, `false` otherwise.
+ */
 function isMeasurementStatus(value: string): value is MeasurementStatus {
   return VALID_MEASUREMENT_STATUSES.has(value as MeasurementStatus);
 }
 
+/**
+ * Produce a trimmed string when the input is a non-empty string.
+ *
+ * @param value - The value to normalize into a trimmed string
+ * @returns The trimmed string if `value` is a non-empty string, `null` otherwise
+ */
 function parseOptionalString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+/**
+ * Parses the incoming request and extracts measurement metadata and photo inputs.
+ *
+ * @param request - The HTTP request whose body may be multipart/form-data or JSON
+ * @returns An object with the extracted fields:
+ *  - `label`: trimmed string or `null` if not provided or empty
+ *  - `roomName`: trimmed string or `null`
+ *  - `itemType`: trimmed string from `itemType` or fallback `doorType`, or `null`
+ *  - `notes`: trimmed string or `null`
+ *  - `partyId`: trimmed string or `null`
+ *  - `files`: array of uploaded `File` objects (only entries that are `File` instances with size > 0)
+ *  - `legacyPhotoUrls`: array of legacy photo URL strings (populated when JSON `photos` are provided)
+ */
 async function readMeasurementPayload(request: NextRequest) {
   const contentType = request.headers.get("content-type") || "";
 
@@ -68,7 +94,12 @@ async function readMeasurementPayload(request: NextRequest) {
   };
 }
 
-// Validate file contents by magic bytes
+/**
+ * Checks whether a File's initial bytes match supported image format signatures.
+ *
+ * @param file - The file to inspect for image "magic bytes"; supported formats: JPEG, PNG, GIF, WebP.
+ * @returns `true` if the file matches one of the supported image formats, `false` otherwise.
+ */
 async function isValidImageFile(file: File): Promise<boolean> {
   const buffer = await file.slice(0, 12).arrayBuffer();
   const b = new Uint8Array(buffer);
@@ -91,6 +122,19 @@ async function isValidImageFile(file: File): Promise<boolean> {
   return isJpeg || isPng || isGif || isWebp;
 }
 
+/**
+ * Builds media-asset create inputs for measurement photos from either uploaded files or legacy URLs.
+ *
+ * Validates that each uploaded file is a supported image and no larger than 8 MB. If `files` is non-empty,
+ * an input is created for each file; otherwise inputs are created from `legacyPhotoUrls`. If an error
+ * occurs after some inputs have been created, those partial assets are deleted before the error is re-thrown.
+ *
+ * @param files - Uploaded File objects (preferred source of photo assets)
+ * @param legacyPhotoUrls - Fallback photo URLs used when `files` is empty
+ * @returns An array of `MeasurementPhotoAssetCreateInput` ready for persistence
+ * @throws Error with message "All uploaded files must be valid images" when a file is not a supported image
+ * @throws Error with message "Each photo must be smaller than 8MB" when a file exceeds the size limit
+ */
 async function buildPhotoAssetInputs({
   files,
   legacyPhotoUrls,
@@ -157,7 +201,11 @@ const measurementInclude = {
   },
 };
 
-// GET /api/measurements - List measurements with filters
+/**
+ * List measurement uploads for the resolved tenant and requesting user, applying optional search and status filters.
+ *
+ * @returns An object with `measurements`: an array of serialized measurement uploads matching the query
+ */
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
   const userId = request.headers.get("x-user-id");
@@ -211,7 +259,13 @@ export async function GET(request: NextRequest) {
   });
 }
 
-// POST /api/measurements - Upload a measurement with photo assets
+/**
+ * Create a measurement upload with associated photo media assets for the current tenant.
+ *
+ * Validates the request payload and uploaded images, enforces rate limits and write-tenant permissions, creates media assets and the measurement record in a transaction, and attempts cleanup of any created media assets if an error occurs.
+ *
+ * @returns A NextResponse containing the created measurement (status 201) on success, or a JSON error object with an appropriate HTTP status code on failure.
+ */
 export async function POST(request: NextRequest) {
   const rateLimitResponse = await checkRateLimit(request, "measurements.upload", 20);
   if (rateLimitResponse) return rateLimitResponse;

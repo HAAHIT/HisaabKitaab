@@ -14,6 +14,11 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+/**
+ * Seed a default tenant from legacy CompanySettings, backfill missing `tenantId` values, and drop the legacy table.
+ *
+ * Creates or retrieves the default tenant using values from the legacy `CompanySettings` row (with sensible defaults), updates existing rows in multiple tables to set `tenantId` where it is null, drops the `CompanySettings` table, and prints the created tenant ID and next-step instructions.
+ */
 async function main() {
   console.log("🌱 Starting tenant seed...\n");
 

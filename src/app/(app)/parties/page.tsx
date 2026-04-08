@@ -49,6 +49,13 @@ async function readError(response: Response) {
   return data?.error || "Request failed";
 }
 
+/**
+ * Renders the Parties management page UI for listing, searching, filtering, creating, editing, and deleting parties.
+ *
+ * The component manages local form and list state, displays toast notifications, and performs API requests to load, create, update, and delete parties.
+ *
+ * @returns A React element containing the parties management interface.
+ */
 export default function PartiesPage() {
   const router = useRouter();
   const { t } = useLanguage();

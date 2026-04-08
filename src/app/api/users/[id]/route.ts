@@ -26,7 +26,15 @@ function normalizeOptionalString(value: unknown) {
   return trimmed ? trimmed : null;
 }
 
-// PATCH /api/users/[id] - Update a user (Admin only)
+/**
+ * Update an existing user for the resolved tenant; only accessible to admins.
+ *
+ * Validates and applies any of: name, email (nullable, unique per tenant, case-insensitive), phone (required, unique per tenant), userRole (must be a valid Role), isActive, and password (hashed). Rejects requests when the requester is not an admin, the tenant cannot be resolved, the target user does not exist, or validation/uniqueness checks fail.
+ *
+ * @param request - Incoming Next.js request object containing headers and JSON body
+ * @param params - Route parameters promise resolving to an object with `id` (the user id to update)
+ * @returns The HTTP JSON response: on success `{ user }` with the updated user fields; on error an `{ error }` message with an appropriate status code (403, 404, 400, 409, or 500)
+ */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -189,7 +197,17 @@ export async function PATCH(
   }
 }
 
-// DELETE /api/users/[id] - Soft delete (Admin only)
+/**
+ * Soft-deletes a user by setting `isActive` to `false` for an admin-scoped request within the resolved tenant.
+ *
+ * @param request - Incoming Next.js request; must include `x-user-role: ADMIN` header.
+ * @param params - Route parameters object containing `id`, the user identifier to soft-delete.
+ * @returns A JSON response:
+ * - `200` with `{ success: true }` when the user was soft-deleted.
+ * - `403` with `{ error: "Forbidden" }` when the requester is not an admin.
+ * - `404` with `{ error: "User not found" }` when no user with the given `id` exists in the resolved tenant.
+ * - `500` with `{ error: "Internal server error" }` on unexpected failures.
+ */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

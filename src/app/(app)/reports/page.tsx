@@ -7,6 +7,17 @@ import ReportsClient from "./ReportsClient";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Server-side page component that prepares report data and renders the ReportsClient.
+ *
+ * Performs authentication and authorization checks: redirects to `/login` if no session
+ * is present and to `/dashboard` if the user's role is not `ADMIN` or `ACCOUNTANT`.
+ * Fetches the tenant ID, computes the current financial year range, counts total and
+ * unbalanced journal entries for the tenant, and retrieves active, non-deleted parties.
+ *
+ * @returns A React element rendering `ReportsClient` initialized with `initialFrom` and
+ * `initialTo` (current financial year range), `totalEntries`, `unbalancedCount`, and `parties`.
+ */
 export default async function ReportsPage() {
   const session = await getSession();
 

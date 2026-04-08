@@ -60,6 +60,14 @@ async function readError(response: Response) {
   return data?.error || "Request failed";
 }
 
+/**
+ * Render the "Record Payment" page including UI and state management for creating or saving payments.
+ *
+ * The component loads parties and bills, validates user input, shows transient toast notifications,
+ * and submits payment data to the server; on successful save it navigates back to the payments list.
+ *
+ * @returns A React element representing the Record Payment page UI.
+ */
 export default function RecordPaymentPage() {
   const router = useRouter();
   const [parties, setParties] = useState<Party[]>([]);

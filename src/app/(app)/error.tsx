@@ -2,6 +2,15 @@
 
 import { useEffect } from "react";
 
+/**
+ * Renders a client-side error UI that displays an error message and a retry button.
+ *
+ * Logs the provided `error` to the console whenever it changes.
+ *
+ * @param error - The error to display; may include an optional `digest` property. If `error.message` is empty, a generic fallback message is shown.
+ * @param reset - Callback invoked when the user requests a retry (clicked "Try again").
+ * @returns A JSX element containing the error heading, message, and retry button.
+ */
 export default function AppError({
   error,
   reset,

@@ -10,6 +10,17 @@ import {
 
 export const runtime = "nodejs";
 
+/**
+ * Handles trial-balance export for a tenant over an Indian date range, returning either JSON or a CSV attachment.
+ *
+ * @returns A NextResponse representing one of:
+ * - 403 Forbidden JSON `{ error: "Forbidden" }` when the caller's role is not `ADMIN` or `ACCOUNTANT`.
+ * - 400 JSON `{ error: "Date range (from, to) is required" }` when `from` or `to` query parameters are missing.
+ * - 400 JSON with the parser error message when the `from`/`to` date range is invalid.
+ * - 409 JSON `{ error: "Export blocked: <n> unbalanced journal entries found. Contact support.", unbalancedCount: <n> }` when unbalanced journal entries exist.
+ * - 200 JSON `{ rows, totalDebit, totalCredit, isBalanced }` when `format=json`.
+ * - 200 CSV attachment `trial_balance_<from>_to_<to>.csv` with appropriate `Content-Type` and `Content-Disposition` headers otherwise.
+ */
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
 

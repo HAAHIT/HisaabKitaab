@@ -19,11 +19,25 @@ import {
   TAX_REGISTRATION_TYPES,
 } from "@/lib/tenant-settings";
 
+/**
+ * Extracts an error message from an HTTP Response's JSON body.
+ *
+ * Attempts to read `response.json()` and return its `error` property; if parsing fails or no `error` is present, returns `"Request failed"`.
+ *
+ * @returns The `error` string from the response JSON if available, otherwise `"Request failed"`.
+ */
 async function readError(response: Response) {
   const data = await response.json().catch(() => null);
   return data?.error || "Request failed";
 }
 
+/**
+ * Renders the company settings page that lets users view and edit business details, billing configuration, logo upload/removal, and reset local offline data.
+ *
+ * The component loads settings from the API on mount, provides controls for updating fields (company contact, GSTIN, address, UPI, tax defaults, business and tax registration types), handles logo preview/upload/delete, saves changes to the server, and exposes a danger zone control to clear local storage tables.
+ *
+ * @returns The React element for the company settings UI.
+ */
 export default function CompanySettingsPage() {
   const router = useRouter();
   const { t } = useLanguage();

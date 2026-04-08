@@ -19,6 +19,12 @@ interface LedgerChatProps {
   ledger: PartyLedgerEntry[];
 }
 
+/**
+ * Format a numeric amount as an INR currency string.
+ *
+ * @param value - The numeric amount to format; the returned string represents the absolute value (magnitude) of this amount.
+ * @returns The formatted INR currency string with no fractional digits (e.g., `₹1,234`)
+ */
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
@@ -27,6 +33,13 @@ function formatCurrency(value: number) {
   }).format(Math.abs(value));
 }
 
+/**
+ * Create a display string for a monetary balance that includes a balance indicator.
+ *
+ * @param value - Balance amount in currency units (positive for credit, negative for debit)
+ * @param partyType - Party classification used to determine the balance indicator
+ * @returns The absolute INR-formatted amount followed by the indicator in parentheses (e.g. `INR 1,000 (You owe)`), or `INR 0` when no indicator is available
+ */
 function formatBalance(value: number, partyType: SupportedPartyType) {
   const indicator = getBalanceIndicator(partyType, value);
   if (!indicator) {
@@ -36,6 +49,12 @@ function formatBalance(value: number, partyType: SupportedPartyType) {
   return `${formatCurrency(value)} (${indicator})`;
 }
 
+/**
+ * Determine visual tone for a ledger entry.
+ *
+ * @param entry - The ledger entry to evaluate
+ * @returns `'default'` for entries of type `"OPENING"`, `'danger'` if `entry.debit` is greater than zero, `'success'` otherwise.
+ */
 function getEntryTone(entry: PartyLedgerEntry) {
   if (entry.type === "OPENING") {
     return "default";
@@ -44,6 +63,17 @@ function getEntryTone(entry: PartyLedgerEntry) {
   return entry.debit > 0 ? "danger" : "success";
 }
 
+/**
+ * Renders a scrollable ledger UI for a party, showing current balance, ledger entries, and quick actions to create a bill or record a payment.
+ *
+ * @param partyId - The party's unique identifier used for navigation when creating bills or payments
+ * @param partyName - The display name of the party shown in the header when phone is not available
+ * @param partyType - The party category used to determine balance formatting and indicators
+ * @param partyPhone - Optional phone number; when present it is shown in the header prefixed with +91
+ * @param currentBalance - The party's current numeric balance used to render the balance chip
+ * @param ledger - Array of ledger entries to display; each entry is rendered with date, type, description/link, balance after, and amount
+ * @returns A React element that displays the party ledger, entries list, empty-state when appropriate, and sticky action buttons for new bill and record payment
+ */
 export default function LedgerChat({
   partyId,
   partyName,

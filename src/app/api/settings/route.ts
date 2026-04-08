@@ -13,7 +13,14 @@ import {
   serializeTenantSettings,
 } from "@/lib/tenant-settings";
 
-// GET /api/settings - Get company settings from Tenant record
+/**
+ * Fetches the current tenant and returns its serialized settings.
+ *
+ * Resolves the tenant for read access from the provided `request`; if tenant resolution fails the resolver's response is returned. If the tenant does not exist, returns `{ settings: null }`. On unexpected errors logs `settings.load.error` and returns `{ settings: null }` with HTTP 500.
+ *
+ * @param request - Incoming Next.js request used to resolve the tenant context
+ * @returns The response body `{ settings: SerializedTenantSettings | null }` (serialized settings when a tenant is found, otherwise `null`)
+ */
 export async function GET(request: NextRequest) {
   try {
     const tenantResolution = resolveReadTenant(request);
@@ -46,7 +53,16 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// PATCH /api/settings - Update company settings in Tenant.settings JSON
+/**
+ * Update the current tenant's company settings (persisted in Tenant.settings) when the caller is an `ADMIN`.
+ *
+ * Merges normalized incoming fields into the existing tenant settings, updates top-level tenant fields used for search/indexing, and returns the serialized settings.
+ *
+ * @returns On success, an object `{ settings: ... }` containing the updated serialized tenant settings. On failure, one of:
+ * - `{ error: "Forbidden" }` with HTTP 403 when the caller's role is not `ADMIN`.
+ * - `{ error: "Tenant not found" }` with HTTP 404 when the resolved tenant does not exist.
+ * - `{ error: "Internal server error" }` with HTTP 500 for unexpected errors.
+ */
 export async function PATCH(request: NextRequest) {
   const role = request.headers.get("x-user-role");
 

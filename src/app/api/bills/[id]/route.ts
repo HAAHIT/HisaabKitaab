@@ -49,6 +49,12 @@ function normalizeOptionalString(value: unknown) {
   return trimmed ? trimmed : null;
 }
 
+/**
+ * Parses the input and returns it only if it is a finite number.
+ *
+ * @param value - The value to validate as a finite number
+ * @returns The input as a number if it is finite, `undefined` otherwise
+ */
 function parseOptionalNumber(value: unknown) {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return undefined;
@@ -57,6 +63,13 @@ function parseOptionalNumber(value: unknown) {
   return value;
 }
 
+/**
+ * Fetches a non-deleted bill for the given tenant and includes related template, selected party fields, and the creator's name.
+ *
+ * @param id - The bill's unique identifier
+ * @param tenantId - The tenant identifier used to scope visibility
+ * @returns The matching bill record with `template`, `party` (id, name, type, phone, address, gstin), and `creator.name`, or `null` if not found
+ */
 async function findVisibleBill(id: string, tenantId: string) {
   return prisma.bill.findFirst({
     where: {
@@ -81,7 +94,13 @@ async function findVisibleBill(id: string, tenantId: string) {
   });
 }
 
-// GET /api/bills/[id] - Get a single bill with template
+/**
+ * Handles GET /api/bills/[id] and returns the requested non-deleted bill visible to the requesting tenant.
+ *
+ * Resolves the read tenant, enforces that the caller is not a `CUSTOMER`, and looks up the bill scoped to the tenant.
+ *
+ * @returns A NextResponse JSON payload: on success `{ bill }`; `403` with `{ error: "Forbidden" }` when unauthorized; `404` with `{ error: "Bill not found" }` when no visible bill exists.
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -107,7 +126,20 @@ export async function GET(
   return NextResponse.json({ bill });
 }
 
-// PATCH /api/bills/[id] - Update a draft bill
+/**
+ * Update a draft bill for the resolved tenant, applying validated changes to bill fields,
+ * customer snapshot, and party linkage; adjust the linked party's balance and create journal
+ * entries when the bill transitions to FINAL.
+ *
+ * The endpoint enforces allowed fields and shapes, requires the requester role to be present
+ * and not CUSTOMER, resolves a write-scoped tenant, and only permits editing bills in DRAFT.
+ * When linking to a party, a snapshot is built from the party (with optional overrides).
+ * If the bill's effective status becomes FINAL, the function validates totals, updates party
+ * balances according to the status/amount transition, and creates a sales journal entry.
+ *
+ * @returns A JSON HTTP response. On success returns `{ bill }` containing the updated bill;
+ *          on error returns `{ error }` with an appropriate status code.
+ */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -472,7 +504,13 @@ export async function PATCH(
   }
 }
 
-// DELETE /api/bills/[id] - Cancel a bill (Admin only)
+/**
+ * Cancels the specified bill (admin only), updates related party balance, and journals cancellations for previously FINAL bills.
+ *
+ * Marks the bill's status as `CANCELLED`. If the bill is linked to a party, adjusts that party's current balance according to the transition and, when the prior status was `FINAL`, creates a cancellation journal entry. Requires an ADMIN role and tenant write resolution.
+ *
+ * @returns A NextResponse JSON: on success `{ success: true }` (status 200); on failure returns an error JSON with an appropriate HTTP status (e.g., 403 for forbidden, 404 for not found, 500 for internal server error).
+ */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

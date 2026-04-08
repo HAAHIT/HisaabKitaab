@@ -29,6 +29,15 @@ function persistLanguagePreference(language: Language) {
   document.cookie = `${LANGUAGE_COOKIE_NAME}=${language}; path=/; max-age=31536000; samesite=lax`;
 }
 
+/**
+ * Provides language selection context to descendants and manages language state, persistence, and navigation when the language changes.
+ *
+ * Persists the selected language, updates the translator used by consumers, and navigates to the language preference endpoint including a `returnTo` parameter derived from the current location (falls back to `/dashboard` if missing).
+ *
+ * @param children - React nodes to render within the provider
+ * @param initialLanguage - Language to initialize the provider with
+ * @returns A React context provider that supplies `{ language, setLanguage, t }` to its children
+ */
 export function LanguageProvider({
   children,
   initialLanguage,

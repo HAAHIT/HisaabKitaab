@@ -6,10 +6,22 @@ import type { PartyType } from "@prisma/client";
 
 const VALID_PARTY_TYPES = new Set<PartyType>(["CUSTOMER", "VENDOR"]);
 
+/**
+ * Determines whether a string value is a valid party type.
+ *
+ * @param value - Candidate party type string to validate
+ * @returns `true` if `value` is one of the recognized `PartyType` values (narrows `value` to `PartyType`), `false` otherwise.
+ */
 function isPartyType(value: string | undefined): value is PartyType {
   return Boolean(value && VALID_PARTY_TYPES.has(value as PartyType));
 }
 
+/**
+ * Normalize an optional string by trimming whitespace and converting non-strings or empty strings to `null`.
+ *
+ * @param value - The value to normalize; may be any type
+ * @returns The trimmed string if `value` is a non-empty string after trimming, `null` otherwise
+ */
 function normalizeOptionalString(value: unknown) {
   if (typeof value !== "string") {
     return null;
@@ -19,6 +31,13 @@ function normalizeOptionalString(value: unknown) {
   return trimmed ? trimmed : null;
 }
 
+/**
+ * Retrieves a non-deleted party for a tenant, including its most recent non-deleted payments.
+ *
+ * @param id - The party's UUID
+ * @param tenantId - The tenant's UUID to scope the lookup
+ * @returns The party record with up to 20 non-deleted `payments` ordered by `date` descending, or `null` if not found
+ */
 async function findVisibleParty(id: string, tenantId: string) {
   return prisma.party.findFirst({
     where: {
@@ -36,7 +55,14 @@ async function findVisibleParty(id: string, tenantId: string) {
   });
 }
 
-// GET /api/parties/[id] - Get single party with payment history
+/**
+ * Handle GET /api/parties/[id]: fetch a visible party along with its recent payment history for the resolved tenant.
+ *
+ * The request must include an `x-user-role` header and will be rejected with 403 if the header is missing or equals `"CUSTOMER"`.
+ *
+ * @param request - Incoming request; must include `x-user-role` to authorize access.
+ * @param params - Object whose awaited `id` property identifies the party to fetch.
+ * @returns A NextResponse containing `{ party }` on success; returns a 403 response for access denial, the tenant-resolution response if tenant validation fails, or a 404 response if the party is not found.
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -62,7 +88,22 @@ export async function GET(
   return NextResponse.json({ party });
 }
 
-// PATCH /api/parties/[id] - Update party
+/**
+ * Handles PATCH requests to update an existing party identified by ID.
+ *
+ * Validates caller role and tenant, enforces allowed update fields, requires a non-empty `name`,
+ * validates `type`, prevents changing `type` if the party has related bills, payments, or measurements,
+ * applies normalized optional fields, and returns the updated party on success.
+ *
+ * Possible responses:
+ * - 200: `{ party: ... }` — the updated party object
+ * - 400: `{ error: string }` — validation errors (unexpected field, missing name, invalid type, or disallowed type change)
+ * - 403: `{ error: "Forbidden" }` — missing or insufficient user role
+ * - 404: `{ error: "Party not found" }` — no visible party for given id and tenant
+ * - 500: `{ error: "Internal server error" }` — unexpected server error
+ *
+ * @returns `{ party: object }` on success; otherwise `{ error: string }` describing the failure
+ */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -171,7 +212,14 @@ export async function PATCH(
   }
 }
 
-// DELETE /api/parties/[id] - Soft delete
+/**
+ * Soft-deletes the party identified by the `id` route parameter for the resolved tenant.
+ *
+ * Requires the request to have an `x-user-role` header equal to `"ADMIN"`. Resolves the write tenant before proceeding and returns appropriate HTTP error responses when authorization fails, the party does not exist, or an internal error occurs.
+ *
+ * @param params - Route parameters; must include `id`, the ID of the party to delete.
+ * @returns A JSON response: `{ success: true }` on successful soft delete; otherwise an `{ error: string }` with status `403` (forbidden), `404` (not found), or `500` (internal server error).
+ */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

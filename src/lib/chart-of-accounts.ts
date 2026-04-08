@@ -131,6 +131,12 @@ export const CHART_OF_ACCOUNTS: Record<AccountCode, AccountDefinition> = {
   },
 };
 
+/**
+ * Map a payment mode string to the corresponding account code.
+ *
+ * @param mode - Payment mode identifier (e.g., `"CASH"`, `"UPI"`, `"BANK"`, `"BANK_TRANSFER"`, `"CHEQUE"`)
+ * @returns The `AccountCode` for the given mode: `"CASH"` for `"CASH"` and unknown modes, `"UPI"` for `"UPI"`, and `"BANK"` for `"BANK"`, `"BANK_TRANSFER"`, or `"CHEQUE"`.
+ */
 export function paymentModeToAccount(mode: string): AccountCode {
   switch (mode) {
     case "CASH":

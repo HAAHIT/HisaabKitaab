@@ -2,6 +2,13 @@
 
 import { useEffect } from "react";
 
+/**
+ * Renders a full-screen error fallback UI and logs the provided error to the console.
+ *
+ * @param error - The error to display; may include an optional `digest` string for tracking.
+ * @param reset - Callback invoked when the user clicks "Try again" to attempt recovery.
+ * @returns The JSX element rendering a centered error message with a retry button.
+ */
 export default function RootError({
   error,
   reset,

@@ -1,6 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
+/**
+ * Fetches a finalized, non-deleted bill by id and returns it as JSON.
+ *
+ * @param _request - The incoming NextRequest (unused).
+ * @param params - An object containing the route `id` to look up.
+ * @returns `NextResponse` containing `{ bill }` when a matching bill is found; otherwise a 404 response with `{ error: "Bill not found" }`.
+ */
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

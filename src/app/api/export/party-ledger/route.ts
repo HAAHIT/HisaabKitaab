@@ -13,6 +13,25 @@ import {
 
 export const runtime = "nodejs";
 
+/**
+ * Handles GET requests to export a party's ledger as JSON or CSV.
+ *
+ * Validates caller role (`ADMIN` or `ACCOUNTANT`), resolves tenant context, requires
+ * `from`, `to`, and `partyId` query parameters, and parses the provided date range.
+ * Blocks export if there are unbalanced journal entries. Loads the party and its
+ * transactions up to `to`, constructs the ledger, computes the opening balance as
+ * of `from`, and returns an "Opening Balance" row followed by ledger rows within
+ * the inclusive date range. When `format=json` returns a JSON payload with party
+ * identity and rows; otherwise returns a CSV attachment.
+ *
+ * @returns A NextResponse with:
+ * - 200 JSON containing `{ party: { id, name, type }, rows }` when `format=json`.
+ * - 200 CSV attachment (`text/csv; charset=utf-8`) with columns `Date, Description, Debit, Credit, Balance` otherwise.
+ * - 400 when required query parameters are missing or the date range is invalid.
+ * - 403 when caller role is not authorized.
+ * - 404 when the specified party is not found.
+ * - 409 when unbalanced journal entries prevent export (response includes `unbalancedCount`).
+ */
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
 

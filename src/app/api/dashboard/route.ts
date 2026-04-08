@@ -3,7 +3,28 @@ import { NextRequest, NextResponse } from "next/server";
 import { logError, getRequestId } from "@/lib/observability";
 import { resolveReadTenant } from "@/lib/api-tenant";
 
-// GET /api/dashboard — Dashboard aggregated data
+/**
+ * Handle GET /api/dashboard and return aggregated dashboard metrics for the resolved tenant.
+ *
+ * Resolves tenant from the incoming request and requires a non-`"CUSTOMER"` `x-user-role` header.
+ * Returns 403 if the role is missing or `"CUSTOMER"`, or forwards tenant-resolution responses when resolution fails.
+ *
+ * @param request - The incoming NextRequest used for tenant resolution and authorization headers
+ * @returns A JSON response containing:
+ *   - `summary`: aggregated numeric metrics:
+ *     - `receivable`: total outstanding receivables (absolute value)
+ *     - `payable`: total outstanding payables (absolute value)
+ *     - `collectedThisMonth`: sum of completed incoming payments for the current month
+ *     - `netBalance`: `receivable - payable`
+ *     - `overdueCount`: count of parties with outstanding balances and no payment in the last 30 days
+ *   - `cashFlow`: array of six monthly objects `{ month, received, paid }` for the last 6 months
+ *   - `recentPayments`: up to 5 most recent completed payments including each payment's party `name` and `type`
+ *   - `billStats`: bills grouped by `status` with counts and summed `grandTotal`
+ *
+ * Possible responses:
+ *   - `403` with `{ error: "Forbidden" }` when authorization fails
+ *   - `500` with `{ error: "Internal server error" }` on unexpected failures
+ */
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
 

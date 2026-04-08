@@ -12,10 +12,27 @@ type LoginSearchParams = {
   error?: string | string[] | undefined;
 };
 
+/**
+ * Return the first element when given an array, otherwise return the value unchanged.
+ *
+ * @param value - A string, an array of strings, or `undefined`
+ * @returns The first string if `value` is an array, the original string if `value` is a string, or `undefined`
+ */
 function firstValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+/**
+ * Map a login error code to a localized, human-readable error message.
+ *
+ * @param language - The target language to use for the returned message.
+ * @param errorCode - Optional error code identifying the login failure. Recognized codes:
+ *   - `missing_credentials`
+ *   - `invalid_credentials`
+ *   - `throttled`
+ *   - `server_error`
+ * @returns The localized error message for the given `errorCode`, or an empty string if `errorCode` is missing or unrecognized.
+ */
 function getErrorMessage(language: Language, errorCode: string | undefined) {
   const errorMessages: Record<string, TranslationKey> = {
     missing_credentials: "login.emailPasswordRequired",
@@ -28,6 +45,12 @@ function getErrorMessage(language: Language, errorCode: string | undefined) {
   return key ? getTranslation(language, key) : "";
 }
 
+/**
+ * Ensures a pathname is a safe in-app return path.
+ *
+ * @param pathname - The requested path to validate.
+ * @returns The original `pathname` if it begins with `/` and does not begin with `//`; otherwise `"/login"`.
+ */
 function getSafeReturnPath(pathname: string) {
   if (!pathname.startsWith("/") || pathname.startsWith("//")) {
     return "/login";
@@ -36,6 +59,13 @@ function getSafeReturnPath(pathname: string) {
   return pathname;
 }
 
+/**
+ * Render the login page server component that determines the current language from cookies
+ * and displays an optional localized error message based on the route search parameters.
+ *
+ * @param searchParams - Promise resolving to the route's search parameters; may include an `error` query value used to compute a localized error message
+ * @returns A JSX element representing the rendered login page
+ */
 export default async function LoginPage({
   searchParams,
 }: {

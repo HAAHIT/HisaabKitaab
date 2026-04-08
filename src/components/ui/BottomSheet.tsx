@@ -11,6 +11,18 @@ interface BottomSheetProps {
   children: React.ReactNode;
 }
 
+/**
+ * Renders a dialog-based bottom sheet that syncs its open state with `isOpen` and closes on backdrop click or Escape.
+ *
+ * The sheet is implemented with a native `<dialog>` element, constrains its height according to `size`, optionally displays a `title`, and renders `children` inside a scrollable content area.
+ *
+ * @param isOpen - Whether the bottom sheet should be open
+ * @param onClose - Callback invoked when the sheet requests to close (backdrop click or Escape)
+ * @param title - Optional header text displayed at the top of the sheet
+ * @param size - Height cap for the sheet; `"auto"` (default), `"half"`, or `"full"`
+ * @param children - Content rendered inside the sheet's scrollable area
+ * @returns A JSX element that mounts a bottom-sheet dialog
+ */
 export default function BottomSheet({
   isOpen,
   onClose,

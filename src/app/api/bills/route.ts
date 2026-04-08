@@ -23,6 +23,12 @@ const VALID_PAYMENT_MODES = new Set([
   "CHEQUE",
 ]);
 
+/**
+ * Normalize an arbitrary payment-mode input to a supported payment mode identifier.
+ *
+ * @param mode - The input value to normalize (commonly a string or alias)
+ * @returns `SupportedPaymentMode` if `mode` corresponds to a supported payment mode, `null` otherwise.
+ */
 function normalizePaymentMode(mode: unknown): SupportedPaymentMode | null {
   if (mode === "BANK") {
     return "BANK_TRANSFER";
@@ -33,6 +39,12 @@ function normalizePaymentMode(mode: unknown): SupportedPaymentMode | null {
   return VALID_PAYMENT_MODES.has(mode) ? (mode as SupportedPaymentMode) : null;
 }
 
+/**
+ * Parse tenant settings provided as either an object or a JSON string and return a settings record.
+ *
+ * @param value - The tenant settings, either an object or a JSON string containing an object. Other values are treated as absent.
+ * @returns A `Record<string, unknown>` representing the parsed settings, or an empty object when the input is invalid or cannot be parsed.
+ */
 function parseTenantSettings(value: unknown) {
   if (value && typeof value === "object" && !Array.isArray(value)) {
     return value as Record<string, unknown>;
@@ -50,6 +62,14 @@ function parseTenantSettings(value: unknown) {
   return {};
 }
 
+/**
+ * Resolves billing defaults for the given tenant.
+ *
+ * @param tenantId - The tenant's id whose settings are used to derive billing defaults
+ * @returns An object containing:
+ *  - `billPrefix` — prefix to use for generated bill numbers (defaults to `"BILL"`).
+ *  - `defaultTaxPercent` — tax percentage to apply when not provided (defaults to `0`).
+ */
 async function loadBillingSettings(tenantId: string) {
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
@@ -77,7 +97,20 @@ async function loadBillingSettings(tenantId: string) {
   };
 }
 
-// GET /api/bills — List bills with filtering
+/**
+ * List bills for the resolved tenant with optional filtering and pagination.
+ *
+ * Supports the following query parameters: `search` (matches bill number, customer name, or party name), `status` (use `"ALL"` to disable), `partyId`, `from` and `to` (ISO date bounds for `createdAt`), `page`, and `limit`.
+ *
+ * Requires an `x-user-role` header that is not `"CUSTOMER"`; the request's tenant is resolved via the read-tenant resolver. Returns `403` when the role is missing or is `"CUSTOMER"`. Returns `500` on internal errors.
+ *
+ * @param request - The incoming NextRequest; must include headers and URL query parameters described above.
+ * @returns An object with:
+ *  - `bills`: an array of bill summaries (each includes `id`, `billNumber`, `partyId`, `party: { id, name, type }`, `customerName`, `grandTotal`, `status`, `createdAt`),
+ *  - `total`: total number of matching bills,
+ *  - `page`: current page number,
+ *  - `totalPages`: number of pages (at least 1).
+ */
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
   if (!role || role === "CUSTOMER") {
@@ -165,7 +198,14 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/bills — Create a new bill
+/**
+ * Create a new bill for the resolved tenant, optionally recording a Quick Bill payment and producing accounting journals and balance updates.
+ *
+ * Processes the JSON request body to create a bill (DRAFT or FINAL) scoped to the tenant resolved from the request. When `templateId` is `"__QUICK_BILL__"`, the handler ensures a quick-bill template exists, validates required fields, and — if a valid payment mode is provided for a FINAL quick bill — records a payment and creates corresponding payment journals. The operation runs transactionally so bill creation, party balance updates, payments, and journal entries are applied atomically.
+ *
+ * @param request - The incoming NextRequest. Must include `x-user-role` and `x-user-id` headers and a JSON body containing bill fields (e.g., `templateId`, `partyId`, `rows`, `grandTotal`, `status`, optional `paymentMode`, and other billing fields).
+ * @returns A JSON NextResponse containing `{ bill }` with status `201` on success, or a JSON error object with an appropriate HTTP status on failure.
+ */
 export async function POST(request: NextRequest) {
   const rateLimitResponse = await checkRateLimit(request, "bills.create", 30);
   if (rateLimitResponse) return rateLimitResponse;

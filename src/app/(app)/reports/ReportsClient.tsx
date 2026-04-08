@@ -40,11 +40,23 @@ interface TrialBalancePreview {
 
 type DatePreset = "currentFy" | "currentQuarter" | "custom";
 
+/**
+ * Build a download URL by appending serialized query parameters to a path.
+ *
+ * @param path - The base path or endpoint (e.g., `/api/export/transactions`)
+ * @param params - Key-value pairs to serialize into the query string; keys and values are URL-encoded
+ * @returns The composed URL string: `path` followed by `?` and the URL-encoded query string. If `params` is empty the result ends with `?`
+ */
 function buildDownloadUrl(path: string, params: Record<string, string>) {
   const query = new URLSearchParams(params);
   return `${path}?${query.toString()}`;
 }
 
+/**
+ * Opens the given URL in a new browser tab or window using a secure noopener/noreferrer opener.
+ *
+ * @param url - The absolute or relative URL to open
+ */
 function downloadFile(url: string) {
   window.open(url, "_blank", "noopener,noreferrer");
 }
@@ -58,6 +70,21 @@ type TallyImportResult = {
   importErrors: string[];
 };
 
+/**
+ * Render the reports dashboard for exporting/importing financial reports and previewing the trial balance.
+ *
+ * Disables export actions when there are unbalanced entries; lets the user choose a date range via presets
+ * (current financial year, current quarter, or custom) or custom dates; provides CSV exports (transactions,
+ * trial balance, optional party ledger), Tally XML export, and Tally XML import with import result details;
+ * and fetches a trial balance preview for the selected period when exports are allowed.
+ *
+ * @param initialFrom - Initial start date (ISO yyyy-mm-dd) for the reporting period
+ * @param initialTo - Initial end date (ISO yyyy-mm-dd) for the reporting period
+ * @param totalEntries - Total number of ledger entries in the system (display only)
+ * @param unbalancedCount - Number of unbalanced entries; when greater than zero, export actions are disabled
+ * @param parties - List of selectable parties for party-ledger export; each item should have `id`, `name`, and `type`
+ * @returns The rendered reports dashboard React element
+ */
 export default function ReportsClient({
   initialFrom,
   initialTo,

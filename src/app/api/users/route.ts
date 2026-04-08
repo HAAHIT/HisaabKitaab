@@ -10,6 +10,12 @@ export const runtime = "nodejs";
 
 const VALID_ROLES = new Set(Object.values(Role));
 
+/**
+ * Normalizes an optional input into a trimmed string, `null`, or `undefined`.
+ *
+ * @param value - The value to normalize; may be any type.
+ * @returns The trimmed string if `value` is a non-empty string, `null` if `value` is `null`, `undefined`, or an empty/whitespace-only string, or `undefined` if `value` is not a string.
+ */
 function normalizeOptionalString(value: unknown) {
   if (value === null || value === undefined) {
     return null;
@@ -23,7 +29,12 @@ function normalizeOptionalString(value: unknown) {
   return trimmed ? trimmed : null;
 }
 
-// GET /api/users — List all users (Admin only)
+/**
+ * List users for the resolved tenant; accessible only to admin users.
+ *
+ * @param request - The incoming request (must include `x-user-role` header and tenant context)
+ * @returns A JSON response with a `users` array where each user has `id`, `name`, `email`, `phone`, `role`, `isActive`, and `createdAt`
+ */
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
   if (role !== "ADMIN") {
@@ -52,7 +63,15 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ users });
 }
 
-// POST /api/users — Create a new user (Admin only)
+/**
+ * Create a new user in the resolved tenant; requires an ADMIN request header and a valid admin user id.
+ *
+ * Attempts to validate input, enforce role and duplicate constraints scoped to the tenant, hash the password,
+ * and persist the new user. Returns client errors for validation, authorization, rate limiting, or duplicates,
+ * and logs and returns a generic error for unexpected failures.
+ *
+ * @returns On success, JSON `{ user }` containing the created user's `id`, `name`, `email`, `phone`, `role`, `isActive`, and `createdAt` with HTTP 201. On failure, JSON `{ error }` with an appropriate HTTP status: 400 for validation errors, 401 if missing user context, 403 for forbidden, 409 for duplicate email/phone, or 500 for internal server error.
+ */
 export async function POST(request: NextRequest) {
   const rateLimitResponse = await checkRateLimit(request, "users.create", 20);
   if (rateLimitResponse) return rateLimitResponse;

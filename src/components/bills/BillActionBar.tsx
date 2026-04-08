@@ -17,6 +17,18 @@ interface BillActionBarProps {
   onShare?: () => void | Promise<void>;
 }
 
+/**
+ * Render a fixed bottom action bar for a bill with Share, Print, and Record Payment buttons.
+ *
+ * The bar conditionally shows:
+ * - the Share button when `bill.status !== "DRAFT"`,
+ * - the Record Payment button when `bill.status !== "CANCELLED"`,
+ * and always shows the Print button.
+ *
+ * @param bill - The bill to act on; `id` is used when navigating to create a payment and `partyId` is optionally appended to the payment URL. `status` controls which buttons are shown.
+ * @param onShare - Optional callback invoked when the Share button is pressed.
+ * @returns A React element rendering the action bar with configured buttons and handlers.
+ */
 export function BillActionBar({ bill, onShare }: BillActionBarProps) {
   const { t } = useLanguage();
   const router = useRouter();

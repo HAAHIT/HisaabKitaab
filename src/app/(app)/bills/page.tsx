@@ -48,6 +48,17 @@ async function readError(response: Response) {
   return data?.error || "Request failed";
 }
 
+/**
+ * Render the bills list page with search, status filtering, pagination, toast notifications,
+ * and bills grouped by month with per-month expand/collapse.
+ *
+ * Presents a header with create action, search input, status filter, and a paginated list of
+ * bills grouped into month sections. Each month shows a summary total and a collapsible grid
+ * of bill cards that navigate to individual bill details. Displays skeletons while loading,
+ * an empty state when no results match the current filters, and transient success/error toasts.
+ *
+ * @returns The React element for the bills list page.
+ */
 export default function BillsListPage() {
   const router = useRouter();
   const { t } = useLanguage();

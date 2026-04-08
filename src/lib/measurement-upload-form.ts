@@ -18,6 +18,24 @@ function dataUrlToFile(dataUrl: string, fileName: string) {
   return new File([bytes], fileName, { type: mimeType });
 }
 
+/**
+ * Build a FormData payload for uploading a measurement with metadata and photos.
+ *
+ * Optional string fields are trimmed and omitted if empty after trimming. Each entry in `photos`
+ * is converted to a File and appended under the "photos" key using the filename pattern
+ * `measurement-<index>.jpg` (starting at 1).
+ *
+ * @param label - Measurement label; required and trimmed before set
+ * @param roomName - Optional room name; trimmed and included only if non-empty
+ * @param itemType - Optional item type; trimmed and included only if non-empty
+ * @param notes - Optional notes; trimmed and included only if non-empty
+ * @param photos - Array of data URLs representing images to include as files in the form
+ * @param partyId - Optional party identifier; trimmed and included only if non-empty
+ * @returns A FormData containing the fields:
+ *  - `"label"` (always),
+ *  - optionally `"roomName"`, `"itemType"`, `"notes"`, and `"partyId"`,
+ *  - one or more `"photos"` entries (File objects)
+ */
 export function buildMeasurementUploadFormData({
   label,
   roomName,

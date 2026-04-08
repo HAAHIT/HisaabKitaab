@@ -24,6 +24,15 @@ type LoginRequestBody = {
   password: string;
 };
 
+/**
+ * Create a JSON NextResponse with the provided body and status, attach the request ID header, and apply any extra headers.
+ *
+ * @param requestId - Request identifier to attach via the request ID header
+ * @param body - Value to serialize as JSON in the response body
+ * @param status - HTTP status code for the response
+ * @param extraHeaders - Optional additional headers to set on the response
+ * @returns A NextResponse containing the JSON-serialized `body`, the given `status`, any `extraHeaders`, and the attached request ID header
+ */
 function jsonWithRequestId(
   requestId: string,
   body: unknown,
@@ -41,16 +50,38 @@ function jsonWithRequestId(
   return attachRequestIdHeader(response, requestId);
 }
 
+/**
+ * Creates an HTTP redirect response to the specified URL and attaches the request ID header.
+ *
+ * @param requestId - Request identifier to include in the response headers
+ * @param url - Destination URL for the redirect
+ * @param status - HTTP status code for the redirect (defaults to 303)
+ * @returns A NextResponse that redirects to `url` with the request ID header attached
+ */
 function redirectWithRequestId(requestId: string, url: URL, status = 303) {
   return attachRequestIdHeader(NextResponse.redirect(url, { status }), requestId);
 }
 
+/**
+ * Builds a /login URL (relative to the incoming request) and attaches an error query parameter.
+ *
+ * @param request - The incoming request used to derive the base origin and path
+ * @param errorCode - The value to set for the `error` query parameter
+ * @returns A `URL` object pointing to `/login` with the `error` query parameter set to `errorCode`
+ */
 function getLoginErrorUrl(request: NextRequest, errorCode: string) {
   const url = new URL("/login", request.url);
   url.searchParams.set("error", errorCode);
   return url;
 }
 
+/**
+ * Selects the role-appropriate post-login destination URL.
+ *
+ * @param request - The incoming request used as the base for the returned URL.
+ * @param role - The user's role; when equal to `"CUSTOMER"` the destination is `/measurements/upload`, otherwise `/dashboard`.
+ * @returns A URL pointing to the chosen post-login path relative to `request.url`.
+ */
 function getPostLoginUrl(request: NextRequest, role: string) {
   return new URL(
     role === "CUSTOMER" ? "/measurements/upload" : "/dashboard",
@@ -58,6 +89,12 @@ function getPostLoginUrl(request: NextRequest, role: string) {
   );
 }
 
+/**
+ * Determines whether the incoming request contains form data (URL-encoded or multipart).
+ *
+ * @param request - The NextRequest whose Content-Type header will be inspected
+ * @returns `true` if the request's Content-Type includes `application/x-www-form-urlencoded` or `multipart/form-data`, `false` otherwise
+ */
 function isFormSubmission(request: NextRequest) {
   const contentType = request.headers.get("content-type") || "";
   return (
@@ -66,6 +103,13 @@ function isFormSubmission(request: NextRequest) {
   );
 }
 
+/**
+ * Parses a login request and extracts the credential and password.
+ *
+ * When the request is a form submission, reads form fields; otherwise parses JSON body.
+ *
+ * @returns An object with `credential` (the credential string trimmed, or `""` if missing/invalid) and `password` (the password string, or `""` if missing/invalid)
+ */
 async function readLoginRequestBody(
   request: NextRequest
 ): Promise<LoginRequestBody> {
@@ -86,6 +130,17 @@ async function readLoginRequestBody(
   };
 }
 
+/**
+ * Handle POST /login requests: authenticate credentials, create a session, and respond or redirect.
+ *
+ * Processes form or JSON submissions to authenticate a user within a resolved tenant, enforces rate
+ * limits, records or clears login failures, and creates a session on success. For form submissions
+ * the function returns redirects to appropriate pages with an attached request ID header; for
+ * non-form (JSON) submissions it returns JSON success or error responses with the request ID header.
+ *
+ * @param request - The incoming NextRequest containing either form data or a JSON body with `credential` and `password`, and request headers used to resolve tenant and client IP.
+ * @returns A NextResponse: on success either a redirect (form) or a JSON object with the authenticated `user`; on failure either a redirect (form) or a JSON error object. Responses include a request ID header and may include status-specific headers (e.g., `Retry-After`).
+ */
 export async function POST(request: NextRequest) {
   const requestId = getRequestId(request);
   const clientIp = getClientIp(request);

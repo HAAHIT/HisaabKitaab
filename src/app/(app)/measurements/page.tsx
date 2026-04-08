@@ -38,6 +38,16 @@ const statusColorMap: Record<
   COMPLETED: "success",
 };
 
+/**
+ * Client-side page that fetches and displays a searchable, filterable grid of measurements.
+ *
+ * Renders a header, a search input and status filter, and a responsive grid of measurement cards.
+ * While fetching, shows skeleton placeholders; when no results are found, shows an empty state.
+ * Each card shows a photo (or placeholder), label, status chip, optional room/item tags, customer/party info,
+ * and navigates to the measurement details page when pressed.
+ *
+ * @returns The page's React element tree for the measurements list UI.
+ */
 export default function MeasurementsListPage() {
   const router = useRouter();
   const { t } = useLanguage();

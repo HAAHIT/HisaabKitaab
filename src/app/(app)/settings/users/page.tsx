@@ -29,6 +29,14 @@ interface User {
   createdAt: string;
 }
 
+/**
+ * Render the user management page with a users table, a slide-over create/edit panel, and toast notifications.
+ *
+ * Renders a table of users fetched from /api/users, provides controls to create, edit, and deactivate users,
+ * and exposes inline form state and mutation handling for saving and deleting users.
+ *
+ * @returns The React element for the user management UI including data fetching, form slide-over, and toasts.
+ */
 export default function UserManagementPage() {
   const { t } = useLanguage();
   const [users, setUsers] = useState<User[]>([]);

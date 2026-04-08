@@ -3,6 +3,14 @@ import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
+/**
+ * Retrieve a seed password from an environment variable or fall back to a provided default.
+ *
+ * @param envKey - The name of the environment variable to read for the password
+ * @param fallback - The fallback password to use when the environment variable is not set or empty (used only outside production)
+ * @returns The environment variable value if set and non-empty, otherwise the provided `fallback`
+ * @throws Error if the environment variable is unset or empty while `NODE_ENV` is "production"
+ */
 function getSeedPassword(envKey: string, fallback: string) {
   const value = process.env[envKey]?.trim();
   if (value) {
@@ -16,6 +24,11 @@ function getSeedPassword(envKey: string, fallback: string) {
   return fallback;
 }
 
+/**
+ * Resolve the tenant ID to use for seeding operations.
+ *
+ * @returns The tenant ID string taken from `SEED_TENANT_ID` if set, otherwise from `DEFAULT_TENANT_ID` if set, otherwise the literal `"default"`.
+ */
 function resolveSeedTenantId() {
   const fromSeed = process.env.SEED_TENANT_ID?.trim();
   if (fromSeed) {
@@ -28,6 +41,11 @@ function resolveSeedTenantId() {
   return "default";
 }
 
+/**
+ * Determine the tenant slug to use when seeding data.
+ *
+ * @returns The trimmed value of `SEED_TENANT_SLUG` if set and non-empty, otherwise the string `"hisaabkitaab"`.
+ */
 function resolveSeedTenantSlug() {
   const fromSeed = process.env.SEED_TENANT_SLUG?.trim();
   if (fromSeed) {
@@ -36,6 +54,11 @@ function resolveSeedTenantSlug() {
   return "hisaabkitaab";
 }
 
+/**
+ * Ensures a seed tenant exists for the seeding process, creating one with default seed data when necessary.
+ *
+ * @returns The existing or newly created tenant record
+ */
 async function ensureSeedTenant() {
   const explicitTenantId = resolveSeedTenantId();
   const existingById = await prisma.tenant.findUnique({
@@ -80,6 +103,13 @@ async function ensureSeedTenant() {
   });
 }
 
+/**
+ * Seeds the database with a tenant, users, and a sample bill template.
+ *
+ * Ensures a seed tenant exists, upserts an admin, staff, and customer user for that tenant,
+ * and creates a tenant-scoped "Order Invoice" bill template if one does not already exist.
+ * Seed passwords are read via `getSeedPassword(...)` and hashed before storing. Progress is logged to the console.
+ */
 async function main() {
   console.log("🌱 Seeding database...");
   const tenant = await ensureSeedTenant();

@@ -28,6 +28,16 @@ type MathToken =
   | { type: "operator"; value: "+" | "-" | "*" | "/" | "%" }
   | { type: "paren"; value: "(" | ")" };
 
+/**
+ * Tokenizes a mathematical expression into number, operator, and parenthesis tokens.
+ *
+ * Supports digits and decimal points for numbers, the operators `+`, `-`, `*`, `/`, `%`,
+ * and parentheses `(` and `)`. Whitespace is ignored.
+ *
+ * @param expression - The input math expression to tokenize
+ * @returns An array of `MathToken` on success, or `null` if the input contains unexpected characters
+ *          or an invalid number format (e.g., multiple decimal points or a non-finite number)
+ */
 function tokenizeMathExpression(expression: string): MathToken[] | null {
   const tokens: MathToken[] = [];
   let index = 0;
@@ -79,6 +89,14 @@ function tokenizeMathExpression(expression: string): MathToken[] | null {
   return tokens;
 }
 
+/**
+ * Evaluates a numeric arithmetic expression and returns its computed value.
+ *
+ * Supports decimal numbers, binary operators `+`, `-`, `*`, `/`, `%`, unary `+`/`-`, and parentheses for grouping.
+ *
+ * @param expression - The math expression to evaluate
+ * @returns The computed numeric result, or `null` if the expression is invalid, contains division or modulo by zero, fails to parse, or yields a non-finite result
+ */
 function evaluateMathExpression(expression: string): number | null {
   const parsedTokens = tokenizeMathExpression(expression);
   if (!parsedTokens || parsedTokens.length === 0) {

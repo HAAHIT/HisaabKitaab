@@ -5,6 +5,15 @@ import {
   journalForSalesBill,
 } from "../src/lib/journal";
 
+/**
+ * Backfills journal entries for existing sales bills and payments and logs a summary.
+ *
+ * Scans finalized, non-deleted bills and completed incoming/outgoing payments and creates missing
+ * journal entries: `SALES` for bills with an associated party, `RECEIPT` for incoming payments,
+ * and `PAYMENT` for outgoing payments. Tracks counts of created entries and bills skipped due to
+ * missing party information, then prints a JSON summary containing `billCreated`, `receiptCreated`,
+ * `paymentCreated`, and `skipped`.
+ */
 async function main() {
   const [bills, incomingPayments, outgoingPayments] = await Promise.all([
     prisma.bill.findMany({

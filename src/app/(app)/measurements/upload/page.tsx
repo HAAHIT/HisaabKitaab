@@ -73,6 +73,13 @@ async function compressImage(
   });
 }
 
+/**
+ * Client-side page component that lets users capture or select photos, review and compress them, enter measurement details, and submit or save a draft.
+ *
+ * The component manages image compression and a review flow, validates required fields, uploads data when online, and queues a local draft in IndexedDB when offline or on certain upload failures. It also displays transient toast messages and sync/offline status.
+ *
+ * @returns The React element rendering the upload UI and managing local state for photos, pending reviews, form fields, submission, and draft queuing.
+ */
 export default function UploadMeasurementsPage() {
   const router = useRouter();
   const { t } = useLanguage();

@@ -7,6 +7,14 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
+/**
+ * Captures the browser's deferred PWA install prompt, tracks whether the app is installed, and provides a trigger to show the prompt.
+ *
+ * @returns An object with:
+ * - `canInstall` — `true` when a deferred install prompt is available and the app is not marked installed.
+ * - `isInstalled` — `true` when the app is detected or recorded as installed.
+ * - `promptInstall` — a function that triggers the stored install prompt and returns `true` if the user accepted the installation, `false` otherwise.
+ */
 export function useInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);

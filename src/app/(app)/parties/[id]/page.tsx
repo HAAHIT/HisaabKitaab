@@ -7,6 +7,14 @@ import { resolveTenantIdFromRequest } from "@/lib/tenant";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Render the party profile page for the party identified by `params.id`, scoped to the request's tenant.
+ *
+ * If the tenant cannot be resolved from the request or the party does not exist, this returns a 404 response.
+ *
+ * @param params - A promise that resolves to an object containing the route parameter `id` for the party
+ * @returns A React element that renders the party profile client populated with party data, ledger, measurements, calculated current balance, and the requesting user's role; or a 404 response when tenant or party is missing.
+ */
 export default async function PartyProfilePage({
   params,
 }: {

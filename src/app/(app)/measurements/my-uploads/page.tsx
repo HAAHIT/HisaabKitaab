@@ -39,6 +39,13 @@ function formatDate(value: string | number) {
   });
 }
 
+/**
+ * Render the "My Uploads" page with local drafts and server-side measurement uploads, including sync and navigation controls.
+ *
+ * The component fetches local drafts and remote uploads, displays loading/empty states, shows sync/offline indicators, and provides UI for creating new uploads and syncing drafts.
+ *
+ * @returns A React element representing the My Uploads page UI.
+ */
 export default function MyUploadsPage() {
   const router = useRouter();
   const { t } = useLanguage();

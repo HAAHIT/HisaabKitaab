@@ -12,6 +12,15 @@ const PUBLIC_PATHS = [
   "/api/bills/*/public",
 ];
 
+/**
+ * Determines whether a request pathname matches any configured public route pattern.
+ *
+ * Patterns in `PUBLIC_PATHS` without `*` are treated as prefixes; patterns containing `*`
+ * match a single path segment for each `*` (e.g., `/api/bills/*/public`).
+ *
+ * @param pathname - The request URL pathname to check (including leading `/`)
+ * @returns `true` if `pathname` matches any entry in `PUBLIC_PATHS`, `false` otherwise.
+ */
 function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.some((pattern) => {
     if (pattern.includes("*")) {
@@ -23,6 +32,12 @@ function isPublicPath(pathname: string) {
   });
 }
 
+/**
+ * Middleware proxy that enforces authentication for protected routes, injects user and tenant headers from a verified JWT, and applies role-based redirects.
+ *
+ * @param request - The incoming Next.js request to evaluate and proxy
+ * @returns A NextResponse that either continues the request with injected headers, redirects (typically to `/login`, `/measurements/upload`, or `/dashboard`), or returns a 500 JSON error when auth is misconfigured. When redirecting due to an invalid session the session cookie (`hisaabkitaab-session`) is deleted.
+ */
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const requestId =

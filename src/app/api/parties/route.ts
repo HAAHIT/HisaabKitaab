@@ -7,16 +7,36 @@ import { checkRateLimit } from "@/lib/api-rate-limit";
 
 const VALID_PARTY_TYPES = new Set<PartyType>(["CUSTOMER", "VENDOR"]);
 
+/**
+ * Type guard that verifies whether a string corresponds to an allowed PartyType.
+ *
+ * @param value - The input value to check; may be `undefined`.
+ * @returns `true` if `value` is one of the allowed party types (`"CUSTOMER"` or `"VENDOR"`), `false` otherwise.
+ */
 function isPartyType(value: string | undefined): value is PartyType {
   return Boolean(value && VALID_PARTY_TYPES.has(value as PartyType));
 }
 
+/**
+ * Normalizes an optional string by trimming whitespace and treating empty or non-string inputs as `null`.
+ *
+ * @param value - The value to normalize; non-string values are treated as absent.
+ * @returns `null` if `value` is not a string or is empty after trimming; otherwise the trimmed string.
+ */
 function normalizeOptionalString(value: unknown) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
 }
 
+/**
+ * Parse an input into an opening balance rounded to two decimal places.
+ *
+ * Accepts numbers, numeric strings, empty string, `null`, or `undefined`. Treats `""`, `null`, and `undefined` as `0`. Returns `null` for non-numeric or non-finite inputs.
+ *
+ * @param value - The raw value to parse into an opening balance.
+ * @returns The parsed balance rounded to two decimal places, `0` for empty/null/undefined inputs, or `null` if the input is not a finite number.
+ */
 function parseOpeningBalance(value: unknown) {
   if (value === undefined || value === null || value === "") return 0;
   const numericValue =
@@ -29,7 +49,11 @@ function parseOpeningBalance(value: unknown) {
   return Math.round(numericValue * 100) / 100;
 }
 
-// GET /api/parties — List all parties with balance info
+/**
+ * Return the list of active, non-deleted parties for the resolved tenant, optionally filtered by search text and party type.
+ *
+ * @returns `{ parties: Party[] }` — an object with a `parties` array of party records for the tenant. Each party includes its stored fields and an `_count` object with `payments` indicating the number of payments; parties are ordered by name ascending.
+ */
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
 
@@ -71,7 +95,13 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ parties });
 }
 
-// POST /api/parties — Create a new party
+/**
+ * Create a new party scoped to the resolved write tenant after enforcing rate limits and authorization and validating input.
+ *
+ * Validates required fields (`name`, `type`, and a numeric `openingBalance`), normalizes optional string fields, ensures the caller is authorized, and persists the party with initial balances and metadata.
+ *
+ * @returns A JSON HTTP response: on success returns `{ party }` with status `201`; on validation or authorization failures returns an error object with an appropriate `4xx` status; on rate-limit or tenant-resolution failures returns the corresponding response; on unexpected errors returns `{ error: "Internal server error" }` with status `500`.
+ */
 export async function POST(request: NextRequest) {
   const rateLimitResponse = await checkRateLimit(request, "parties.create", 20);
   if (rateLimitResponse) return rateLimitResponse;

@@ -85,6 +85,12 @@ function buildEmptyRow(template: Template) {
   }, {});
 }
 
+/**
+ * Page component for editing an existing bill: loads bill, templates, and parties; lets the user edit party snapshot, line items, tax/summary, notes/terms, and save changes as DRAFT or FINAL.
+ *
+ * @param params - A promise that resolves to an object containing the route `id` of the bill to edit.
+ * @returns The page's JSX content.
+ */
 export default function EditBillPage({
   params,
 }: {

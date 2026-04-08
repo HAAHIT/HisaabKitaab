@@ -26,6 +26,12 @@ interface Template {
 
 
 
+/**
+ * Format a number as Indian Rupee currency using the "en-IN" locale.
+ *
+ * @param value - The numeric amount to format
+ * @returns The formatted currency string in INR with up to two decimal places
+ */
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
@@ -64,6 +70,13 @@ function buildEmptyRow(template: Template) {
   }, {});
 }
 
+/**
+ * Render the New Bill page that lets users build an invoice from a template, select a party, enter line items, and save the bill.
+ *
+ * The component loads templates, parties, and settings; manages rows, tax, notes, and terms; computes subtotal/tax/grand total; provides auto-focus for the first editable cell; shows transient toasts; and submits the bill as `DRAFT` or `FINAL`.
+ *
+ * @returns The React element for the New Bill creation UI.
+ */
 export default function NewBillPage() {
   const router = useRouter();
   const { t } = useLanguage();

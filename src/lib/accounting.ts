@@ -196,6 +196,16 @@ function getPaymentLedgerDescription(
     : `Payment Paid (${mode})`;
 }
 
+/**
+ * Builds a chronological ledger for a party including an opening entry, bills, and payments.
+ *
+ * @param partyType - The party type, either `"CUSTOMER"` or `"VENDOR"`, used to determine debit/credit semantics
+ * @param openingBalance - Starting balance for the ledger
+ * @param createdAt - Timestamp used for the opening entry
+ * @param bills - Array of bills to include in the ledger; each bill contributes a bill entry
+ * @param payments - Array of payments to include in the ledger; each payment contributes a payment entry
+ * @returns An object with `ledger`, the ordered array of ledger entries, and `calculatedCurrent`, the final running balance after applying all transactions
+ */
 export function buildPartyLedger({
   partyType,
   openingBalance,
@@ -288,10 +298,12 @@ export function buildPartyLedger({
 }
 
 /**
- * Recomputes a party's balance from the source-of-truth records (bills +
- * payments). Use this to detect or repair stale `currentBalance` values.
+ * Recomputes a party's balance from source records (FINAL bills and COMPLETED payments).
  *
- * Safe to call both inside and outside a Prisma transaction.
+ * Useful to detect or repair stale `currentBalance` values. Safe to call both inside and outside a Prisma transaction.
+ *
+ * @returns The recomputed numeric balance: opening balance plus signed deltas from bills and payments.
+ * @throws Error if the party with the given `partyId` and `tenantId` is not found.
  */
 export async function recomputePartyBalance(
   db: PrismaOrTx,

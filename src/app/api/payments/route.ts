@@ -21,14 +21,32 @@ type SupportedPaymentDirection = "INCOMING" | "OUTGOING";
 type SupportedPaymentMode = "CASH" | "UPI" | "BANK_TRANSFER" | "CHEQUE";
 type SupportedPaymentStatus = "EXPECTED" | "COMPLETED";
 
+/**
+ * Checks whether a string is a supported payment direction.
+ *
+ * @param value - The string to test
+ * @returns `true` if `value` is `"INCOMING"` or `"OUTGOING"`, `false` otherwise
+ */
 function isPaymentDirection(value: string): value is SupportedPaymentDirection {
   return VALID_DIRECTIONS.has(value);
 }
 
+/**
+ * Checks whether a string is one of the supported payment statuses.
+ *
+ * @param value - The value to validate as a payment status
+ * @returns `true` if `value` is a supported payment status (`EXPECTED` or `COMPLETED`), `false` otherwise
+ */
 function isPaymentStatus(value: string): value is SupportedPaymentStatus {
   return VALID_STATUSES.has(value);
 }
 
+/**
+ * Normalize an arbitrary value into a supported payment mode.
+ *
+ * @param value - The input to normalize; typically a string (e.g., `"BANK"`, `"CASH"`)
+ * @returns The normalized payment mode (`CASH`, `UPI`, `BANK_TRANSFER`, or `CHEQUE`) or `null` if the input is not a recognized mode
+ */
 function normalizePaymentMode(value: unknown): SupportedPaymentMode | null {
   if (value === "BANK") {
     return "BANK_TRANSFER";
@@ -41,6 +59,15 @@ function normalizePaymentMode(value: unknown): SupportedPaymentMode | null {
   return VALID_MODES.has(value) ? (value as SupportedPaymentMode) : null;
 }
 
+/**
+ * Parse and validate an input as a payment amount.
+ *
+ * Accepts a number or numeric string, ensures the value is finite and greater than zero,
+ * and returns the value rounded to two decimal places.
+ *
+ * @param value - The input value to parse (number or numeric string)
+ * @returns The parsed amount rounded to two decimals, or `null` if the input is not a positive finite number
+ */
 function parsePaymentAmount(value: unknown) {
   const numericValue =
     typeof value === "number"
@@ -56,7 +83,15 @@ function parsePaymentAmount(value: unknown) {
   return Math.round(numericValue * 100) / 100;
 }
 
-// GET /api/payments - List payments with filters
+/**
+ * List payments for the resolved tenant, applying optional filters and pagination.
+ *
+ * Supports the following query parameters: `search` (party name or notes, case-insensitive), `type` (payment direction), `status` (payment status), `from`/`to` (ISO dates to filter `date`), `page`, and `limit`.
+ *
+ * Returns a JSON object with the page of payments and pagination metadata.
+ *
+ * @returns An object containing `payments` (array of payment records with `party` and `linkedBill` relations), `total` (total matching records), `page` (current page number), and `totalPages` (total pages, at least 1).
+ */
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
 
@@ -124,7 +159,13 @@ export async function GET(request: NextRequest) {
   });
 }
 
-// POST /api/payments - Record a new payment
+/**
+ * Record a new payment and, when completed, update the party balance and create corresponding journal entries.
+ *
+ * Validates request tenant and user, normalizes and validates input (amount, mode, date, direction), optionally associates a linked final bill, and creates the payment within a transaction. If the payment is created with status `COMPLETED`, the party's balance is updated and a journal entry is recorded for the payment direction.
+ *
+ * @returns A JSON HTTP response containing the created `payment` with HTTP 201 on success, or a JSON error object with an appropriate HTTP status (400, 401, or 403) on failure.
+ */
 export async function POST(request: NextRequest) {
   const rateLimitResponse = await checkRateLimit(request, "payments.create", 30);
   if (rateLimitResponse) return rateLimitResponse;
@@ -297,7 +338,14 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PATCH /api/payments - Mark an expected payment as completed
+/**
+ * Mark an expected payment as completed, update the party's balance, and record the corresponding journal entry.
+ *
+ * Expects a JSON body with `paymentId`. Requires a non-customer user role (header `x-user-role`) and write tenant context.
+ *
+ * @param request - The incoming NextRequest; must include headers `x-user-role` and optionally `x-user-id`, and a JSON body `{ paymentId }`
+ * @returns On success, a JSON object with the updated payment under `payment`. On failure, a JSON object with an `error` message and an appropriate HTTP status (403 for forbidden, 400 for bad requests or processing errors).
+ */
 export async function PATCH(request: NextRequest) {
   const role = request.headers.get("x-user-role");
   const userId = request.headers.get("x-user-id");

@@ -15,18 +15,13 @@ import {
 export const runtime = "nodejs";
 
 /**
- * GET /api/export/tally-xml
+ * Generate a Tally-importable XML export for an authenticated tenant for a given date range.
  *
- * Query params:
- *   from        YYYY-MM-DD  start of date range (IST)
- *   to          YYYY-MM-DD  end of date range (IST)
- *   type        "vouchers" | "masters" | "all"  (default: "all")
+ * Validates the `from` and `to` query parameters and an optional `type` (`vouchers`, `masters`, `all`).
+ * Only users with `x-user-role` of `ADMIN` or `ACCOUNTANT` are permitted. The export is blocked if the tenant has unbalanced journal entries.
  *
- * Returns a single Tally-importable XML file.
- * Import party masters first, then vouchers — or use type=all to get both
- * in one file (masters first, then vouchers).
- *
- * Access: ADMIN and ACCOUNTANT only.
+ * @param request - Incoming request carrying `from`, `to`, and optional `type` query parameters and the `x-user-role` header
+ * @returns A NextResponse containing the generated Tally XML as an attachment; the filename reflects the requested date range and requested `type`
  */
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
@@ -185,6 +180,13 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/**
+ * Create a NextResponse that serves the given XML as a downloadable attachment.
+ *
+ * @param xml - The XML payload to send in the response body
+ * @param filename - The attachment filename used in the `Content-Disposition` header
+ * @returns A NextResponse containing `xml` and headers `Content-Type: application/xml; charset=utf-8` and `Content-Disposition: attachment; filename="..."` 
+ */
 function xmlResponse(xml: string, filename: string) {
   return new NextResponse(xml, {
     headers: {
@@ -195,8 +197,11 @@ function xmlResponse(xml: string, filename: string) {
 }
 
 /**
- * Builds a single XML envelope containing both party masters and vouchers.
- * Masters come first so Tally creates ledgers before processing vouchers.
+ * Produce a concatenated XML payload containing party masters followed by vouchers.
+ *
+ * The output contains two separate XML documents (masters first, then vouchers) separated by comment headers so they can be imported to Tally in that order.
+ *
+ * @returns A single string with the party-masters XML followed by the vouchers XML and comment headers; masters appear before vouchers.
  */
 function buildCombinedXml(
   entries: Array<{

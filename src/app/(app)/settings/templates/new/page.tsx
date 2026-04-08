@@ -14,6 +14,13 @@ import { useRouter } from "next/navigation";
 import { validateFormula, translateFormulaToIds, type ColumnDef } from "@/lib/formula";
 import { useLanguage } from "@/contexts/LanguageContext";
 
+/**
+ * Render the Create Template page that lets users add, reorder, edit, and remove columns, define formulas and dropdown options, validate input, and save a template.
+ *
+ * The component manages local state for the template name, column definitions, validation errors, and transient toast messages. It provides UI for building formulas (including inserting references to prior columns), translating formulas to persistent IDs before saving, and posting the template to the API.
+ *
+ * @returns The rendered JSX element for the Create Template page.
+ */
 export default function CreateTemplatePage() {
   const router = useRouter();
   const { t } = useLanguage();

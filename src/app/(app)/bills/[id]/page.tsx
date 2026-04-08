@@ -99,6 +99,14 @@ function formatColumnValue(colName: string, value: number): string {
 }
 
 
+/**
+ * Client-side Next.js page that displays a single bill's details, a printable invoice layout, and actions to finalize, cancel, or share the bill.
+ *
+ * The component fetches bill data and company settings, shows line items, notes, and totals, and exposes UI for printing, editing (when draft), finalizing, cancelling, and sharing (when finalized). It also shows confirmation modal and toast feedback for status changes and share actions.
+ *
+ * @param params - Route parameters promise containing `{ id: string }`; the `id` identifies the bill to load.
+ * @returns The rendered bill detail page JSX including screen UI, print-only layout, action bar, confirmation modal, and toast notifications.
+ */
 export default function BillDetailPage({
   params,
 }: {

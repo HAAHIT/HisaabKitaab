@@ -5,13 +5,11 @@ import type { NextRequest } from "next/server";
 const COOKIE_NAME = "hisaabkitaab-session";
 
 /**
- * Resolves the tenant ID by verifying the JWT cookie directly.
+ * Obtains the tenant ID from the verified session JWT cookie.
  *
- * RULE: Use for ALL write operations (POST / PATCH / PUT / DELETE).
- * Use resolveTenantIdFromRequest (header-based) only for read-only GETs.
+ * Falls back to the trimmed `DEFAULT_TENANT_ID` environment value when the cookie is missing or does not contain a valid tenant ID; JWT verification errors are ignored.
  *
- * Rationale: the proxy sets x-tenant-id from the JWT, but re-verifying here
- * ensures write paths cannot be spoofed by a misconfigured or bypassed middleware.
+ * @returns The tenant ID extracted from the verified session JWT if present and valid, otherwise the trimmed `DEFAULT_TENANT_ID` value or `null`.
  */
 export async function resolveVerifiedTenantId(
   request: NextRequest
