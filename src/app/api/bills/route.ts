@@ -14,7 +14,16 @@ import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { logError, getRequestId } from "@/lib/observability";
 
-const BILL_NUMBER_LOCK_KEY = 22032026;
+function generateLockKey(tenantId: string): number {
+  let hash = 0;
+  for (let i = 0; i < tenantId.length; i++) {
+    const char = tenantId.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash |= 0; // Convert to 32bit integer
+  }
+  return hash;
+}
+
 type SupportedPaymentMode = "CASH" | "UPI" | "BANK_TRANSFER" | "CHEQUE";
 const VALID_PAYMENT_MODES = new Set([
   "CASH",
@@ -186,7 +195,21 @@ export async function POST(request: NextRequest) {
   const tenantId = tenantResolution.tenantId;
 
   try {
-    const body = await request.json();
+    const bodyText = await request.text();
+    let parsedBody;
+    try {
+      parsedBody = JSON.parse(bodyText);
+    } catch {
+      parsedBody = {};
+    }
+
+    if (!parsedBody || typeof parsedBody !== "object" || Object.keys(parsedBody).length === 0) {
+      return NextResponse.json(
+        { error: "Template, party, and at least one row are required" },
+        { status: 400 }
+      );
+    }
+
     const {
       templateId,
       partyId,
@@ -202,10 +225,23 @@ export async function POST(request: NextRequest) {
       taxAmount,
       grandTotal,
       status,
-    } = body;
+    } = parsedBody;
 
     let finalTemplateId = templateId;
     const isQuickBill = templateId === "__QUICK_BILL__";
+
+    if (!finalTemplateId || !partyId || !Array.isArray(rows) || rows.length === 0) {
+      return NextResponse.json(
+        { error: "Template, party, and at least one row are required" },
+        { status: 400 }
+      );
+    }
+
+    if (!isQuickBill) {
+      if (typeof customerName !== "string" || !customerName.trim()) {
+        return NextResponse.json({ error: "Customer name is required" }, { status: 400 });
+      }
+    }
 
     if (isQuickBill) {
       if (!partyId) {
@@ -284,14 +320,23 @@ export async function POST(request: NextRequest) {
         ? grandTotal
         : 0;
     const billStatus = status === "FINAL" ? "FINAL" : "DRAFT";
-    if (body.isInterState !== undefined && typeof body.isInterState !== "boolean") {
-      return NextResponse.json(
-        { error: "isInterState must be a boolean" },
-        { status: 400 }
-      );
+    if (!isQuickBill) {
+      if (typeof parsedBody.isInterState !== "boolean") {
+        return NextResponse.json(
+          { error: "isInterState must be a boolean" },
+          { status: 400 }
+        );
+      }
+    } else {
+      if (parsedBody.isInterState !== undefined && typeof parsedBody.isInterState !== "boolean") {
+        return NextResponse.json(
+          { error: "isInterState must be a boolean" },
+          { status: 400 }
+        );
+      }
     }
-    const isInterState = body.isInterState === true;
-    const normalizedPaymentMode = normalizePaymentMode(body.paymentMode);
+    const isInterState = parsedBody.isInterState === true;
+    const normalizedPaymentMode = normalizePaymentMode(parsedBody.paymentMode);
     const now = new Date();
     const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -304,7 +349,7 @@ export async function POST(request: NextRequest) {
       gstin,
     });
 
-    if (body.paymentMode && !normalizedPaymentMode) {
+    if (parsedBody.paymentMode && !normalizedPaymentMode) {
       return NextResponse.json(
         { error: "Invalid payment mode for Quick Bill" },
         { status: 400 }
@@ -326,7 +371,8 @@ export async function POST(request: NextRequest) {
     }
 
     const bill = await prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${BILL_NUMBER_LOCK_KEY})`;
+      const lockKey = generateLockKey(tenantId);
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
 
       const existingCount = await tx.bill.count({
         where: {

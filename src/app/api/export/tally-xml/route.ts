@@ -245,18 +245,86 @@ function buildCombinedXml(
     ledgerEntries: entry.lines.map(journalLineToTallyEntry),
   }));
 
-  // Combine: masters XML + vouchers XML as one comment-separated file
-  // We return two separate XML documents joined — the user imports them
-  // sequentially, or we return them as a zip (future enhancement).
-  // For now, return masters followed by vouchers as separate XML declarations.
-  const mastersXml = buildTallyPartyMasterXml(partyMasters, companyName);
-  const vouchersXml = buildTallyVoucherXml(vouchers, companyName);
+  const messages = [
+    ...partyMasters.map(p => `
+    <TALLYMESSAGE xmlns:UDF="TallyUDF">
+      <LEDGER NAME="${escapeXmlForCombine(p.name)}" ACTION="Create">
+        <NAME>${escapeXmlForCombine(p.name)}</NAME>
+        <PARENT>${escapeXmlForCombine(p.group)}</PARENT>
+        ${p.openingBalance !== 0 ? `<OPENINGBALANCE>${p.openingBalance < 0 ? "-" : ""}${Math.abs(p.openingBalance).toFixed(2)}</OPENINGBALANCE>` : ""}
+        ${p.gstin ? `<GSTREGISTRATIONTYPE>Regular</GSTREGISTRATIONTYPE><PARTYGSTIN>${escapeXmlForCombine(p.gstin)}</PARTYGSTIN>` : ""}
+        ${p.address ? `<ADDRESS.LIST TYPE="String"><ADDRESS>${escapeXmlForCombine(p.address)}</ADDRESS></ADDRESS.LIST>` : ""}
+      </LEDGER>
+    </TALLYMESSAGE>`),
+    ...vouchers.map(v => {
+      const ledgerLines = v.ledgerEntries.map(entry => {
+        const billAllocations = entry.partyName
+          ? `
+        <BILLALLOCATIONS.LIST>
+          <NAME>${escapeXmlForCombine(entry.partyName)}</NAME>
+          <BILLTYPE>On Account</BILLTYPE>
+          <AMOUNT>${entry.amount >= 0 ? "" : "-"}${Math.abs(entry.amount).toFixed(2)}</AMOUNT>
+        </BILLALLOCATIONS.LIST>`
+          : "";
 
-  return (
-    `<!-- HisaabKitaab Tally Export: ${from} to ${to} -->\n` +
-    `<!-- Step 1: Import party masters (ledger definitions) -->\n` +
-    mastersXml +
-    `\n\n<!-- Step 2: Import vouchers -->\n` +
-    vouchersXml
-  );
+        return `
+      <ALLLEDGERENTRIES.LIST>
+        <LEDGERNAME>${escapeXmlForCombine(entry.ledgerName)}</LEDGERNAME>
+        <ISDEEMEDPOSITIVE>${entry.amount >= 0 ? "Yes" : "No"}</ISDEEMEDPOSITIVE>
+        <AMOUNT>${entry.amount >= 0 ? "" : "-"}${Math.abs(entry.amount).toFixed(2)}</AMOUNT>${billAllocations}
+      </ALLLEDGERENTRIES.LIST>`;
+      }).join("");
+
+      return `
+    <TALLYMESSAGE xmlns:UDF="TallyUDF">
+      <VOUCHER VCHTYPE="${escapeXmlForCombine(v.voucherType)}" ACTION="Create" OBJVIEW="Accounting Voucher View">
+        <DATE>${formatTallyDateForCombine(v.date)}</DATE>
+        <VOUCHERTYPENAME>${escapeXmlForCombine(v.voucherType)}</VOUCHERTYPENAME>
+        <VOUCHERNUMBER>${escapeXmlForCombine(v.reference)}</VOUCHERNUMBER>
+        <NARRATION>${escapeXmlForCombine(v.narration)}</NARRATION>${ledgerLines}
+      </VOUCHER>
+    </TALLYMESSAGE>`;
+    })
+  ];
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!-- HisaabKitaab Tally Export: ${from} to ${to} -->
+<ENVELOPE>
+  <HEADER>
+    <TALLYREQUEST>Import Data</TALLYREQUEST>
+  </HEADER>
+  <BODY>
+    <IMPORTDATA>
+      <REQUESTDESC>
+        <REPORTNAME>All Masters</REPORTNAME>
+        <STATICVARIABLES>
+          <SVCURRENTCOMPANY>${escapeXmlForCombine(companyName)}</SVCURRENTCOMPANY>
+        </STATICVARIABLES>
+      </REQUESTDESC>
+      <REQUESTDATA>${messages.join("")}
+      </REQUESTDATA>
+    </IMPORTDATA>
+  </BODY>
+</ENVELOPE>`;
+}
+
+function escapeXmlForCombine(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return "";
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function formatTallyDateForCombine(date: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  })
+    .format(date)
+    .replace(/-/g, ""); // YYYY-MM-DD → YYYYMMDD
 }
