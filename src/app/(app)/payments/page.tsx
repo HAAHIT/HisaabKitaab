@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Button,
   Card,
@@ -50,11 +50,59 @@ export default function PaymentsListPage() {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [collapsedMonths, setCollapsedMonths] = useState<
+    Record<string, boolean>
+  >({});
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error";
   } | null>(null);
+
+  const monthlyPaymentGroups = useMemo(() => {
+    const monthFormatter = new Intl.DateTimeFormat("en-IN", {
+      month: "long",
+      year: "numeric",
+    });
+    const groups = new Map<
+      string,
+      {
+        label: string;
+        payments: Payment[];
+        incomingTotal: number;
+        outgoingTotal: number;
+      }
+    >();
+
+    for (const payment of payments) {
+      const paymentDate = new Date(payment.date);
+      const groupKey = `${paymentDate.getFullYear()}-${paymentDate.getMonth()}`;
+      const existing = groups.get(groupKey);
+      const isIncoming = payment.direction === "INCOMING";
+
+      if (existing) {
+        existing.payments.push(payment);
+        if (isIncoming) {
+          existing.incomingTotal += payment.amount;
+        } else {
+          existing.outgoingTotal += payment.amount;
+        }
+        continue;
+      }
+
+      groups.set(groupKey, {
+        label: monthFormatter.format(paymentDate),
+        payments: [payment],
+        incomingTotal: isIncoming ? payment.amount : 0,
+        outgoingTotal: isIncoming ? 0 : payment.amount,
+      });
+    }
+
+    return Array.from(groups.entries()).map(([key, group]) => ({
+      key,
+      ...group,
+    }));
+  }, [payments]);
 
   const fetchPayments = useCallback(async () => {
     setLoading(true);
@@ -110,6 +158,13 @@ export default function PaymentsListPage() {
   function showToast(message: string, type: "success" | "error") {
     setToast({ message, type });
     window.setTimeout(() => setToast(null), 3000);
+  }
+
+  function toggleMonth(key: string) {
+    setCollapsedMonths((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
   }
 
   async function markAsCompleted(paymentId: string) {
@@ -177,6 +232,7 @@ export default function PaymentsListPage() {
 
       <div className="mb-6 flex flex-col gap-3 sm:flex-row">
         <Input
+          aria-label={t("payments.searchPlaceholder")}
           placeholder={t("payments.searchPlaceholder")}
           value={search}
           onValueChange={setSearch}
@@ -194,7 +250,9 @@ export default function PaymentsListPage() {
           }
         />
         <Select
-          selectedKeys={[typeFilter]}
+          aria-label={t("payments.filter.allTypes")}
+          placeholder={t("payments.filter.allTypes")}
+          selectedKeys={new Set([typeFilter])}
           onSelectionChange={(keys) => {
             const value = Array.from(keys)[0] as string;
             if (value) {
@@ -210,7 +268,9 @@ export default function PaymentsListPage() {
           ))}
         </Select>
         <Select
-          selectedKeys={[statusFilter]}
+          aria-label={t("payments.filter.allStatus")}
+          placeholder={t("payments.filter.allStatus")}
+          selectedKeys={new Set([statusFilter])}
           onSelectionChange={(keys) => {
             const value = Array.from(keys)[0] as string;
             if (value) {
@@ -264,87 +324,135 @@ export default function PaymentsListPage() {
         </Card>
       ) : (
         <>
-          <div className="space-y-3">
-            {payments.map((payment) => (
-              <Card
-                key={payment.id}
-                shadow="sm"
-                className={`transition hover:shadow-md ${
-                  payment.status === "EXPECTED" ? "border-l-4 border-l-warning" : ""
-                }`}
-              >
-                <CardBody className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex flex-col gap-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-semibold">{payment.party.name}</span>
-                        <Chip
-                          size="sm"
-                          variant="flat"
-                          color={
-                            payment.status === "EXPECTED"
-                              ? "warning"
-                              : payment.direction === "INCOMING"
-                                ? "success"
-                                : "warning"
-                          }
-                        >
-                          {payment.status === "EXPECTED"
-                            ? payment.direction === "INCOMING"
-                              ? t("payments.toReceive")
-                              : t("payments.toPay")
-                            : payment.direction === "INCOMING"
-                              ? t("payments.filter.received")
-                              : t("payments.filter.paid")}
-                        </Chip>
-                        <Chip size="sm" variant="flat" color="default" className="capitalize">
-                          {payment.mode.toLowerCase().replace("_", " ")}
+          <div className="space-y-6">
+            {monthlyPaymentGroups.map((group) => {
+              const isCollapsed = collapsedMonths[group.key] === true;
+              return (
+                <section key={group.key} className="space-y-3">
+                  <button
+                    type="button"
+                    aria-expanded={!isCollapsed}
+                    aria-controls={`payment-month-${group.key}`}
+                    className="w-full rounded-xl border border-default-200 bg-content2/40 px-4 py-2 text-left transition hover:bg-content2/60"
+                    onClick={() => toggleMonth(group.key)}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-default-700">{group.label}</p>
+                        <Chip size="sm" variant="flat" color="default">
+                          {group.payments.length} payments
                         </Chip>
                       </div>
-                      <div className="flex gap-3 text-xs text-default-400">
-                        <span>
-                          {new Date(payment.date).toLocaleDateString("en-IN", {
-                            day: "numeric",
-                            month: "short",
-                            year: "numeric",
-                          })}
-                        </span>
-                        {payment.notes && (
-                          <span className="max-w-[200px] truncate">{payment.notes}</span>
-                        )}
-                        {payment.linkedBill && (
-                          <span className="max-w-[200px] truncate">
-                            {t("payments.billPrefix")}: {payment.linkedBill.billNumber}
-                          </span>
-                        )}
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 text-sm font-semibold">
+                          <span className="text-success">+{formatCurrency(group.incomingTotal)}</span>
+                          <span className="text-warning">-{formatCurrency(group.outgoingTotal)}</span>
+                        </div>
+                        <svg
+                          className={`h-4 w-4 text-default-500 transition-transform ${
+                            isCollapsed ? "" : "rotate-180"
+                          }`}
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            d="m19 9-7 7-7-7"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={1.8}
+                          />
+                        </svg>
                       </div>
                     </div>
+                  </button>
+                  {!isCollapsed && (
+                    <div id={`payment-month-${group.key}`} className="space-y-3">
+                      {group.payments.map((payment) => (
+                        <Card
+                          key={payment.id}
+                          shadow="sm"
+                          className={`transition hover:shadow-md ${
+                            payment.status === "EXPECTED" ? "border-l-4 border-l-warning" : ""
+                          }`}
+                        >
+                          <CardBody className="p-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex flex-col gap-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="font-semibold">{payment.party.name}</span>
+                                  <Chip
+                                    size="sm"
+                                    variant="flat"
+                                    color={
+                                      payment.status === "EXPECTED"
+                                        ? "warning"
+                                        : payment.direction === "INCOMING"
+                                          ? "success"
+                                          : "warning"
+                                    }
+                                  >
+                                    {payment.status === "EXPECTED"
+                                      ? payment.direction === "INCOMING"
+                                        ? t("payments.toReceive")
+                                        : t("payments.toPay")
+                                      : payment.direction === "INCOMING"
+                                        ? t("payments.filter.received")
+                                        : t("payments.filter.paid")}
+                                  </Chip>
+                                  <Chip size="sm" variant="flat" color="default" className="capitalize">
+                                    {payment.mode.toLowerCase().replace("_", " ")}
+                                  </Chip>
+                                </div>
+                                <div className="flex gap-3 text-xs text-default-400">
+                                  <span>
+                                    {new Date(payment.date).toLocaleDateString("en-IN", {
+                                      day: "numeric",
+                                      month: "short",
+                                      year: "numeric",
+                                    })}
+                                  </span>
+                                  {payment.notes && (
+                                    <span className="max-w-[200px] truncate">{payment.notes}</span>
+                                  )}
+                                  {payment.linkedBill && (
+                                    <span className="max-w-[200px] truncate">
+                                      {t("payments.billPrefix")}: {payment.linkedBill.billNumber}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
 
-                    <div className="flex items-center gap-3">
-                      <p
-                        className={`text-lg font-bold ${
-                          payment.direction === "INCOMING" ? "text-success" : "text-warning"
-                        }`}
-                      >
-                        {payment.direction === "INCOMING" ? "+" : "-"}
-                        {formatCurrency(payment.amount)}
-                      </p>
-                      {payment.status === "EXPECTED" && (
-                        <Button
-                          size="sm"
-                          color="success"
-                          variant="flat"
-                          isLoading={markingId === payment.id}
-                          onPress={() => markAsCompleted(payment.id)}
-                        >
-                          {t("payments.markCompleted")}
-                        </Button>
-                      )}
+                              <div className="flex items-center gap-3">
+                                <p
+                                  className={`text-lg font-bold ${
+                                    payment.direction === "INCOMING" ? "text-success" : "text-warning"
+                                  }`}
+                                >
+                                  {payment.direction === "INCOMING" ? "+" : "-"}
+                                  {formatCurrency(payment.amount)}
+                                </p>
+                                {payment.status === "EXPECTED" && (
+                                  <Button
+                                    size="sm"
+                                    color="success"
+                                    variant="flat"
+                                    isLoading={markingId === payment.id}
+                                    onPress={() => markAsCompleted(payment.id)}
+                                  >
+                                    {t("payments.markCompleted")}
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          </CardBody>
+                        </Card>
+                      ))}
                     </div>
-                  </div>
-                </CardBody>
-              </Card>
-            ))}
+                  )}
+                </section>
+              );
+            })}
           </div>
 
           {totalPages > 1 && (

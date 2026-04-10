@@ -46,7 +46,7 @@ export function useSync() {
             body: buildMeasurementUploadFormData({
               label: draft.label,
               roomName: draft.roomName,
-              doorType: draft.doorType,
+              itemType: draft.itemType,
               notes: draft.notes,
               photos: draft.photos,
             }),
@@ -57,8 +57,8 @@ export function useSync() {
           }
 
           await db.measurementDrafts.delete(draft.id);
-        } catch (error) {
-          console.error("Measurement draft sync error:", error);
+        } catch {
+          // silently skip failed drafts — they remain in the queue for next sync
         }
       }
     } finally {

@@ -2,10 +2,80 @@ import { prisma } from "@/lib/prisma";
 import {
   buildBillSnapshotFromParty,
   getPostedBillBalanceDelta,
+  getPaymentBalanceDelta,
 } from "@/lib/accounting";
+import {
+  journalForPaymentMade,
+  journalForPaymentReceived,
+  journalForSalesBill,
+} from "@/lib/journal";
 import { NextRequest, NextResponse } from "next/server";
+import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
+import { checkRateLimit } from "@/lib/api-rate-limit";
+import { logError, getRequestId } from "@/lib/observability";
 
 const BILL_NUMBER_LOCK_KEY = 22032026;
+type SupportedPaymentMode = "CASH" | "UPI" | "BANK_TRANSFER" | "CHEQUE";
+const VALID_PAYMENT_MODES = new Set([
+  "CASH",
+  "UPI",
+  "BANK_TRANSFER",
+  "CHEQUE",
+]);
+
+function normalizePaymentMode(mode: unknown): SupportedPaymentMode | null {
+  if (mode === "BANK") {
+    return "BANK_TRANSFER";
+  }
+  if (typeof mode !== "string") {
+    return null;
+  }
+  return VALID_PAYMENT_MODES.has(mode) ? (mode as SupportedPaymentMode) : null;
+}
+
+function parseTenantSettings(value: unknown) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+async function loadBillingSettings(tenantId: string) {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { settings: true },
+  });
+
+  const tenantSettings = parseTenantSettings(tenant?.settings);
+  const billPrefixCandidate =
+    typeof tenantSettings.billPrefix === "string"
+      ? tenantSettings.billPrefix.trim()
+      : "";
+  const defaultTaxPercentRaw = tenantSettings.defaultTaxPercent;
+  const defaultTaxPercent =
+    typeof defaultTaxPercentRaw === "number"
+      ? defaultTaxPercentRaw
+      : typeof defaultTaxPercentRaw === "string"
+        ? Number.parseFloat(defaultTaxPercentRaw)
+        : Number.NaN;
+
+  return {
+    billPrefix: billPrefixCandidate || "BILL",
+    defaultTaxPercent: Number.isFinite(defaultTaxPercent)
+      ? defaultTaxPercent
+      : 0,
+  };
+}
 
 // GET /api/bills — List bills with filtering
 export async function GET(request: NextRequest) {
@@ -13,6 +83,11 @@ export async function GET(request: NextRequest) {
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  const tenantResolution = resolveReadTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
+  }
+  const tenantId = tenantResolution.tenantId;
 
   try {
     const { searchParams } = new URL(request.url);
@@ -25,7 +100,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "20");
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const where: any = { isDeleted: false };
+    const where: any = { isDeleted: false, tenantId };
 
     if (search) {
       where.OR = [
@@ -82,7 +157,7 @@ export async function GET(request: NextRequest) {
       totalPages: Math.max(1, Math.ceil(total / limit)),
     });
   } catch (error) {
-    console.error("List bills error:", error);
+    logError("bills.list.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Failed to load bills" },
       { status: 500 }
@@ -92,12 +167,23 @@ export async function GET(request: NextRequest) {
 
 // POST /api/bills — Create a new bill
 export async function POST(request: NextRequest) {
+  const rateLimitResponse = await checkRateLimit(request, "bills.create", 30);
+  if (rateLimitResponse) return rateLimitResponse;
+
   const role = request.headers.get("x-user-role");
   const userId = request.headers.get("x-user-id");
 
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (!userId) {
+    return NextResponse.json({ error: "Missing user context" }, { status: 401 });
+  }
+  const tenantResolution = await resolveWriteTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
+  }
+  const tenantId = tenantResolution.tenantId;
 
   try {
     const body = await request.json();
@@ -118,16 +204,61 @@ export async function POST(request: NextRequest) {
       status,
     } = body;
 
-    if (!templateId || !partyId || !Array.isArray(rows) || rows.length === 0) {
+    let finalTemplateId = templateId;
+    const isQuickBill = templateId === "__QUICK_BILL__";
+
+    if (isQuickBill) {
+      if (!partyId) {
+        return NextResponse.json({ error: "Party is required for Quick Bill" }, { status: 400 });
+      }
+      if (!grandTotal || grandTotal <= 0) {
+        return NextResponse.json({ error: "Amount must be greater than zero" }, { status: 400 });
+      }
+
+      let quickTemplate = await prisma.billTemplate.findFirst({
+        where: { name: "__QUICK_BILL__", tenantId },
+      });
+
+      if (!quickTemplate) {
+        quickTemplate = await prisma.billTemplate.create({
+          data: {
+            tenantId,
+            name: "__QUICK_BILL__",
+            columns: [
+              { id: "desc", name: "Description", type: "text", position: 0 },
+              { id: "amt", name: "Amount", type: "number", position: 1 },
+            ],
+            createdBy: userId!,
+          },
+        });
+      }
+      finalTemplateId = quickTemplate.id;
+    }
+
+    if (!finalTemplateId || !partyId || !Array.isArray(rows) || rows.length === 0) {
       return NextResponse.json(
         { error: "Template, party, and at least one row are required" },
         { status: 400 }
       );
     }
 
+    const template = await prisma.billTemplate.findFirst({
+      where: {
+        id: finalTemplateId,
+        tenantId,
+        isDeleted: false,
+      },
+      select: { id: true },
+    });
+
+    if (!template) {
+      return NextResponse.json({ error: "Template not found" }, { status: 404 });
+    }
+
     const party = await prisma.party.findFirst({
       where: {
         id: partyId,
+        tenantId,
         isDeleted: false,
         isActive: true,
       },
@@ -145,19 +276,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Party not found" }, { status: 404 });
     }
 
-    const settings = await prisma.companySettings.findUnique({
-      where: { id: "default" },
-    });
-    const prefix = settings?.billPrefix || "BILL";
+    const billingSettings = await loadBillingSettings(tenantId);
+    const prefix = billingSettings.billPrefix;
+    
     const resolvedGrandTotal =
       typeof grandTotal === "number" && Number.isFinite(grandTotal)
         ? grandTotal
         : 0;
     const billStatus = status === "FINAL" ? "FINAL" : "DRAFT";
+    if (body.isInterState !== undefined && typeof body.isInterState !== "boolean") {
+      return NextResponse.json(
+        { error: "isInterState must be a boolean" },
+        { status: 400 }
+      );
+    }
+    const isInterState = body.isInterState === true;
+    const normalizedPaymentMode = normalizePaymentMode(body.paymentMode);
     const now = new Date();
     const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    
     const snapshot = buildBillSnapshotFromParty(party, {
       customerName,
       customerPhone,
@@ -165,34 +304,59 @@ export async function POST(request: NextRequest) {
       gstin,
     });
 
+    if (body.paymentMode && !normalizedPaymentMode) {
+      return NextResponse.json(
+        { error: "Invalid payment mode for Quick Bill" },
+        { status: 400 }
+      );
+    }
+
+    if (billStatus === "FINAL" && resolvedGrandTotal <= 0) {
+      return NextResponse.json(
+        { error: "Final bills must have a positive total" },
+        { status: 400 }
+      );
+    }
+
+    if (normalizedPaymentMode && billStatus !== "FINAL") {
+      return NextResponse.json(
+        { error: "Quick Bill payments can only be recorded on final bills" },
+        { status: 400 }
+      );
+    }
+
     const bill = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${BILL_NUMBER_LOCK_KEY})`;
 
       const existingCount = await tx.bill.count({
         where: {
-          createdAt: {
-            gte: monthStart,
-            lt: nextMonthStart,
-          },
+          tenantId,
+          createdAt: { gte: monthStart, lt: nextMonthStart },
         },
       });
       const billNumber = `${prefix}-${yearMonth}-${String(existingCount + 1).padStart(3, "0")}`;
 
       const createdBill = await tx.bill.create({
         data: {
+          tenantId,
           billNumber,
-          templateId,
+          templateId: template.id,
           partyId: party.id,
-          ...snapshot,
+          customerName: snapshot.customerName,
+          customerPhone: snapshot.customerPhone,
+          customerAddress: snapshot.customerAddress,
+          gstin: snapshot.gstin,
           rows,
           notes: notes || null,
           terms: terms || null,
           subtotal: subtotal || 0,
-          taxPercent: taxPercent ?? (settings?.defaultTaxPercent || 0),
+          taxPercent: taxPercent ?? billingSettings.defaultTaxPercent,
           taxAmount: taxAmount || 0,
           grandTotal: resolvedGrandTotal,
           status: billStatus,
+          isInterState,
           createdBy: userId!,
+          isDeleted: false,
         },
       });
 
@@ -211,12 +375,75 @@ export async function POST(request: NextRequest) {
         });
       }
 
+      if (billStatus === "FINAL") {
+        await journalForSalesBill(tx, tenantId, {
+          id: createdBill.id,
+          billNumber,
+          partyId: party.id,
+          partyName: party.name,
+          subtotal: createdBill.subtotal,
+          taxAmount: createdBill.taxAmount,
+          grandTotal: createdBill.grandTotal,
+          createdBy: userId!,
+          entryDate: createdBill.createdAt,
+          isInterState,
+        });
+      }
+
+      if (isQuickBill && normalizedPaymentMode) {
+        const createdPayment = await tx.payment.create({
+          data: {
+            tenantId,
+            partyId: party.id,
+            direction: party.type === "CUSTOMER" ? "INCOMING" : "OUTGOING",
+            amount: resolvedGrandTotal,
+            date: now,
+            mode: normalizedPaymentMode,
+            status: "COMPLETED",
+            linkedBillId: createdBill.id,
+            createdBy: userId!,
+          },
+        });
+
+        const paymentDelta = getPaymentBalanceDelta(
+          party.type as "CUSTOMER" | "VENDOR",
+          party.type === "CUSTOMER" ? "INCOMING" : "OUTGOING",
+          resolvedGrandTotal
+        );
+        await tx.party.update({
+          where: { id: party.id },
+          data: { currentBalance: { increment: paymentDelta } },
+        });
+
+        if (party.type === "CUSTOMER") {
+          await journalForPaymentReceived(tx, tenantId, {
+            id: createdPayment.id,
+            partyId: party.id,
+            partyName: party.name,
+            amount: createdPayment.amount,
+            mode: createdPayment.mode,
+            date: createdPayment.date,
+            createdBy: userId!,
+          });
+        } else {
+          await journalForPaymentMade(tx, tenantId, {
+            id: createdPayment.id,
+            partyId: party.id,
+            partyName: party.name,
+            amount: createdPayment.amount,
+            mode: createdPayment.mode,
+            date: createdPayment.date,
+            createdBy: userId!,
+          });
+        }
+      }
+
       return createdBill;
     });
 
     return NextResponse.json({ bill }, { status: 201 });
   } catch (error) {
-    console.error("Create bill error:", error);
+    logError("bills.create.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

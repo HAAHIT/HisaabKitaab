@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { POST, GET } from "./route";
 import { NextRequest } from "next/server";
 
@@ -26,7 +26,11 @@ describe("Bills API Endpoint Protection", () => {
   it("POST rejects missing payload completely", async () => {
     const req = new NextRequest("http://localhost/api/bills", {
       method: "POST",
-      headers: { "x-user-role": "ADMIN", "x-user-id": "test-user" },
+      headers: {
+        "x-user-role": "ADMIN",
+        "x-user-id": "test-user",
+        "x-tenant-id": "test-tenant",
+      },
       body: JSON.stringify({}),
     });
     const res = await POST(req);
@@ -38,7 +42,11 @@ describe("Bills API Endpoint Protection", () => {
   it("POST rejects missing customer name", async () => {
     const req = new NextRequest("http://localhost/api/bills", {
       method: "POST",
-      headers: { "x-user-role": "STAFF", "x-user-id": "test-user" },
+      headers: {
+        "x-user-role": "STAFF",
+        "x-user-id": "test-user",
+        "x-tenant-id": "test-tenant",
+      },
       body: JSON.stringify({
         templateId: "tmpl_123",
         rows: [],

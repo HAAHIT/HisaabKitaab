@@ -25,12 +25,12 @@ import { useSync } from "@/hooks/useSync";
 import { buildMeasurementUploadFormData } from "@/lib/measurement-upload-form";
 import { useLanguage } from "@/contexts/LanguageContext";
 
-const DOOR_TYPES = [
-  { key: "wooden", label: "Wooden Door" },
-  { key: "flush", label: "Flush Door" },
-  { key: "glass", label: "Glass Door" },
-  { key: "metal", label: "Metal Door" },
-  { key: "pvc", label: "PVC Door" },
+const ITEM_TYPES = [
+  { key: "wooden", label: "Wooden" },
+  { key: "flush", label: "Flush" },
+  { key: "glass", label: "Glass" },
+  { key: "metal", label: "Metal" },
+  { key: "pvc", label: "PVC" },
   { key: "custom", label: "Custom" },
 ];
 
@@ -84,7 +84,7 @@ export default function UploadMeasurementsPage() {
   const [processing, setProcessing] = useState(false);
   const [label, setLabel] = useState("");
   const [roomName, setRoomName] = useState("");
-  const [doorType, setDoorType] = useState("");
+  const [itemType, setItemType] = useState("");
   const [notes, setNotes] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
   const [pendingPhotos, setPendingPhotos] = useState<string[]>([]);
@@ -108,7 +108,7 @@ export default function UploadMeasurementsPage() {
       id: crypto.randomUUID(),
       label: label.trim(),
       roomName: roomName.trim() || null,
-      doorType: doorType || null,
+      itemType: itemType || null,
       notes: notes.trim() || null,
       photos,
       createdAt: Date.now(),
@@ -185,7 +185,7 @@ export default function UploadMeasurementsPage() {
         body: buildMeasurementUploadFormData({
           label: label.trim(),
           roomName: roomName.trim() || null,
-          doorType: doorType || null,
+          itemType: itemType || null,
           notes: notes.trim() || null,
           photos,
         }),
@@ -239,6 +239,7 @@ export default function UploadMeasurementsPage() {
           <Button
             isIconOnly
             variant="light"
+            aria-label="Back to my uploads"
             onPress={() => router.push("/measurements/my-uploads")}
           >
             <svg
@@ -410,18 +411,19 @@ export default function UploadMeasurementsPage() {
           />
 
           <Select
-            label={t("measurements.doorType")}
-            placeholder={t("measurements.doorTypePlaceholder")}
-            selectedKeys={doorType ? [doorType] : []}
+            label={t("measurements.itemType")}
+            placeholder={t("measurements.itemTypePlaceholder")}
+            selectedKeys={itemType ? new Set([itemType]) : new Set([])}
             onSelectionChange={(keys) => {
               const value = Array.from(keys)[0] as string;
-              setDoorType(value || "");
+              setItemType(value || "");
             }}
             variant="bordered"
           >
-            {DOOR_TYPES.map((door) => (
-              <SelectItem key={door.key}>{door.label}</SelectItem>
+            {ITEM_TYPES.map((item) => (
+              <SelectItem key={item.key} textValue={item.label}>{item.label}</SelectItem>
             ))}
+
           </Select>
 
           <Textarea

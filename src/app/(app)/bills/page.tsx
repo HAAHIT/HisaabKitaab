@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Button,
   Card,
@@ -57,10 +57,51 @@ export default function BillsListPage() {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [collapsedMonths, setCollapsedMonths] = useState<
+    Record<string, boolean>
+  >({});
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error";
   } | null>(null);
+
+  const monthlyBillGroups = useMemo(() => {
+    const monthFormatter = new Intl.DateTimeFormat("en-IN", {
+      month: "long",
+      year: "numeric",
+    });
+    const groups = new Map<
+      string,
+      {
+        label: string;
+        bills: Bill[];
+        total: number;
+      }
+    >();
+
+    for (const bill of bills) {
+      const createdDate = new Date(bill.createdAt);
+      const groupKey = `${createdDate.getFullYear()}-${createdDate.getMonth()}`;
+      const existing = groups.get(groupKey);
+
+      if (existing) {
+        existing.bills.push(bill);
+        existing.total += bill.grandTotal;
+        continue;
+      }
+
+      groups.set(groupKey, {
+        label: monthFormatter.format(createdDate),
+        bills: [bill],
+        total: bill.grandTotal,
+      });
+    }
+
+    return Array.from(groups.entries()).map(([key, group]) => ({
+      key,
+      ...group,
+    }));
+  }, [bills]);
 
   const fetchBills = useCallback(async () => {
     setLoading(true);
@@ -107,6 +148,13 @@ export default function BillsListPage() {
     window.setTimeout(() => setToast(null), 3000);
   }
 
+  function toggleMonth(key: string) {
+    setCollapsedMonths((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  }
+
   return (
     <div className="animate-fade-in p-4 lg:p-8">
       {toast && (
@@ -147,6 +195,7 @@ export default function BillsListPage() {
 
       <div className="mb-6 flex flex-col gap-3 sm:flex-row">
         <Input
+          aria-label={t("bills.searchPlaceholder")}
           placeholder={t("bills.searchPlaceholder")}
           value={search}
           onValueChange={setSearch}
@@ -164,7 +213,9 @@ export default function BillsListPage() {
           }
         />
         <Select
-          selectedKeys={[statusFilter]}
+          aria-label={t("bills.filter.all")}
+          placeholder={t("bills.filter.all")}
+          selectedKeys={new Set([statusFilter])}
           onSelectionChange={(keys) => {
             const value = Array.from(keys)[0] as string;
             if (value) {
@@ -176,13 +227,14 @@ export default function BillsListPage() {
           className="w-40"
         >
           {statusOptions.map((option) => (
-            <SelectItem key={option.key}>{option.label}</SelectItem>
+            <SelectItem key={option.key} textValue={option.label}>{option.label}</SelectItem>
           ))}
+
         </Select>
       </div>
 
       {loading ? (
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3, 4].map((item) => (
             <Skeleton key={item} className="h-16 w-full rounded-xl" />
           ))}
@@ -225,50 +277,100 @@ export default function BillsListPage() {
         </Card>
       ) : (
         <>
-          <div className="space-y-3">
-            {bills.map((bill) => (
-              <Card
-                key={bill.id}
-                isPressable
-                shadow="sm"
-                className="transition hover:shadow-md"
-                onPress={() => router.push(`/bills/${bill.id}`)}
-              >
-                <CardBody className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex flex-col gap-1">
+          <div className="space-y-6">
+            {monthlyBillGroups.map((group) => {
+              const isCollapsed = collapsedMonths[group.key] === true;
+              return (
+                <section key={group.key} className="space-y-3">
+                  <button
+                    type="button"
+                    aria-expanded={!isCollapsed}
+                    aria-controls={`bill-month-${group.key}`}
+                    className="w-full rounded-xl border border-default-200 bg-content2/40 px-4 py-2 text-left transition hover:bg-content2/60"
+                    onClick={() => toggleMonth(group.key)}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-sm font-semibold">{bill.billNumber}</span>
-                        <Chip
-                          size="sm"
-                          variant="flat"
-                          color={statusColorMap[bill.status] || "default"}
-                          className="capitalize"
-                        >
-                          {bill.status.toLowerCase()}
+                        <p className="text-sm font-semibold text-default-700">{group.label}</p>
+                        <Chip size="sm" variant="flat" color="default">
+                          {group.bills.length} bills
                         </Chip>
                       </div>
-                      <p className="text-default-600">{bill.customerName}</p>
-                      {bill.party && (
-                        <p className="text-xs text-default-400">
-                          {t("bills.partyPrefix")}: {bill.party.name}
+                      <div className="flex items-center gap-3">
+                        <p className="text-sm font-semibold text-default-700">
+                          {formatCurrency(group.total)}
                         </p>
-                      )}
-                      <p className="text-xs text-default-400">
-                        {new Date(bill.createdAt).toLocaleDateString("en-IN", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        })}
-                      </p>
+                        <svg
+                          className={`h-4 w-4 text-default-500 transition-transform ${
+                            isCollapsed ? "" : "rotate-180"
+                          }`}
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            d="m19 9-7 7-7-7"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={1.8}
+                          />
+                        </svg>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-lg font-bold">{formatCurrency(bill.grandTotal)}</p>
+                  </button>
+                  {!isCollapsed && (
+                    <div
+                      id={`bill-month-${group.key}`}
+                      className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+                    >
+                      {group.bills.map((bill) => (
+                        <Card
+                          key={bill.id}
+                          isPressable
+                          shadow="sm"
+                          className="transition hover:shadow-md"
+                          onPress={() => router.push(`/bills/${bill.id}`)}
+                        >
+                          <CardBody className="p-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono text-sm font-semibold">{bill.billNumber}</span>
+                                  <Chip
+                                    size="sm"
+                                    variant="flat"
+                                    color={statusColorMap[bill.status] || "default"}
+                                    className="capitalize"
+                                  >
+                                    {bill.status.toLowerCase()}
+                                  </Chip>
+                                </div>
+                                <p className="text-default-600">{bill.customerName}</p>
+                                {bill.party && (
+                                  <p className="text-xs text-default-400">
+                                    {t("bills.partyPrefix")}: {bill.party.name}
+                                  </p>
+                                )}
+                                <p className="text-xs text-default-400">
+                                  {new Date(bill.createdAt).toLocaleDateString("en-IN", {
+                                    day: "numeric",
+                                    month: "short",
+                                    year: "numeric",
+                                  })}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-lg font-bold">{formatCurrency(bill.grandTotal)}</p>
+                              </div>
+                            </div>
+                          </CardBody>
+                        </Card>
+                      ))}
                     </div>
-                  </div>
-                </CardBody>
-              </Card>
-            ))}
+                  )}
+                </section>
+              );
+            })}
           </div>
 
           {totalPages > 1 && (

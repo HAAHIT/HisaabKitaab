@@ -12,7 +12,7 @@ interface MeasurementUpload {
   id: string;
   label: string;
   roomName: string | null;
-  doorType: string | null;
+  itemType: string | null;
   notes: string | null;
   photos: { url: string; thumbnailUrl?: string }[];
   status: string;
@@ -194,9 +194,9 @@ export default function MyUploadsPage() {
                                   {draft.roomName}
                                 </span>
                               )}
-                              {draft.doorType && (
+                              {draft.itemType && (
                                 <span className="rounded-full bg-default-100 px-2 py-0.5 text-xs text-default-400">
-                                  {draft.doorType}
+                                  {draft.itemType}
                                 </span>
                               )}
                               <span className="text-xs text-default-400">
@@ -266,9 +266,9 @@ export default function MyUploadsPage() {
                                     {upload.roomName}
                                   </span>
                                 )}
-                                {upload.doorType && (
+                                {upload.itemType && (
                                   <span className="rounded-full bg-default-100 px-2 py-0.5 text-xs text-default-400">
-                                    {upload.doorType}
+                                    {upload.itemType}
                                   </span>
                                 )}
                                 <span className="text-xs text-default-400">

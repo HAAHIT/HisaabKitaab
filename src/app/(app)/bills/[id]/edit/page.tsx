@@ -36,6 +36,7 @@ interface BillResponse {
   id: string;
   templateId: string;
   partyId: string | null;
+  isInterState?: boolean;
   customerName: string;
   customerPhone: string | null;
   customerAddress: string | null;
@@ -97,7 +98,7 @@ export default function EditBillPage({
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [bill, setBill] = useState<BillResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [savingAs, setSavingAs] = useState<"DRAFT" | "FINAL" | null>(null);
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   const [toast, setToast] = useState<{
     message: string;
@@ -111,6 +112,7 @@ export default function EditBillPage({
   const [gstin, setGstin] = useState("");
   const [rows, setRows] = useState<Record<string, string | number>[]>([]);
   const [taxPercent, setTaxPercent] = useState(18);
+  const [isInterState, setIsInterState] = useState(false);
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("");
 
@@ -148,6 +150,7 @@ export default function EditBillPage({
       setNotes(nextBill.notes || "");
       setTerms(nextBill.terms || "");
       setTaxPercent(nextBill.taxPercent);
+      setIsInterState(nextBill.isInterState === true);
 
       const template = nextTemplates.find((item) => item.id === nextBill.templateId) || null;
       setSelectedTemplate(template);
@@ -278,7 +281,7 @@ export default function EditBillPage({
     }
 
     setErrors({});
-    setSaving(true);
+    setSavingAs(status);
 
     try {
       const response = await fetch(`/api/bills/${id}`, {
@@ -297,6 +300,7 @@ export default function EditBillPage({
           subtotal,
           taxAmount,
           grandTotal,
+          isInterState,
           status,
         }),
       });
@@ -313,7 +317,7 @@ export default function EditBillPage({
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Failed to update bill", "error");
     } finally {
-      setSaving(false);
+      setSavingAs(null);
     }
   }
 
@@ -339,7 +343,12 @@ export default function EditBillPage({
 
       <div className="animate-fade-in p-4 lg:p-8">
         <div className="mb-6 flex items-center gap-3">
-          <Button isIconOnly variant="light" onPress={() => router.push(`/bills/${id}`)}>
+          <Button
+            isIconOnly
+            variant="light"
+            aria-label="Back to bill details"
+            onPress={() => router.push(`/bills/${id}`)}
+          >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 d="M10 19l-7-7m0 0l7-7m-7 7h18"
@@ -371,7 +380,7 @@ export default function EditBillPage({
             <Select
               label="Party"
               placeholder="Select customer or vendor"
-              selectedKeys={partyId ? [partyId] : []}
+              selectedKeys={partyId ? new Set([partyId]) : new Set([])}
               onSelectionChange={(keys) => {
                 const value = Array.from(keys)[0] as string;
                 if (value) {
@@ -506,6 +515,7 @@ export default function EditBillPage({
                         ) : column.type === "number" ? (
                           <Input
                             type="number"
+                            aria-label={`Row ${rowIndex + 1} ${column.name}`}
                             value={String(row[column.id] || "")}
                             onValueChange={(value) => updateCell(rowIndex, column.id, value)}
                             variant="underlined"
@@ -514,7 +524,9 @@ export default function EditBillPage({
                           />
                         ) : column.type === "dropdown" && column.options ? (
                           <Select
-                            selectedKeys={row[column.id] ? [String(row[column.id])] : []}
+                            aria-label={`Row ${rowIndex + 1} ${column.name}`}
+                            placeholder={column.name}
+                            selectedKeys={row[column.id] ? new Set([String(row[column.id])]) : new Set([])}
                             onSelectionChange={(keys) => {
                               const value = Array.from(keys)[0] as string;
                               if (value) {
@@ -532,6 +544,7 @@ export default function EditBillPage({
                         ) : column.type === "date" ? (
                           <Input
                             type="date"
+                            aria-label={`Row ${rowIndex + 1} ${column.name}`}
                             value={String(row[column.id] || "")}
                             onValueChange={(value) => updateCell(rowIndex, column.id, value)}
                             variant="underlined"
@@ -541,6 +554,7 @@ export default function EditBillPage({
                         ) : (
                           <Input
                             type="text"
+                            aria-label={`Row ${rowIndex + 1} ${column.name}`}
                             value={String(row[column.id] || "")}
                             onValueChange={(value) => updateCell(rowIndex, column.id, value)}
                             variant="underlined"
@@ -556,6 +570,7 @@ export default function EditBillPage({
                         size="sm"
                         variant="light"
                         color="danger"
+                        aria-label={`Remove row ${rowIndex + 1}`}
                         onPress={() => removeRow(rowIndex)}
                         isDisabled={rows.length <= 1}
                       >
@@ -611,6 +626,7 @@ export default function EditBillPage({
                     <span className="text-default-500">Tax</span>
                     <Input
                       type="number"
+                      aria-label="Tax percentage"
                       value={String(taxPercent)}
                       onValueChange={(value) => setTaxPercent(Number.parseFloat(value) || 0)}
                       variant="bordered"
@@ -620,6 +636,18 @@ export default function EditBillPage({
                     />
                   </div>
                   <span className="font-medium">{formatCurrency(taxAmount)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-default-400">{t("bills.autoTaxNote")}</p>
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={isInterState}
+                      onChange={(e) => setIsInterState(e.target.checked)}
+                      className="accent-primary"
+                    />
+                    <span className="text-xs text-default-500">Inter-state (IGST)</span>
+                  </label>
                 </div>
                 <Divider />
                 <div className="flex justify-between">
@@ -637,14 +665,15 @@ export default function EditBillPage({
           <Button variant="flat" onPress={() => router.push(`/bills/${id}`)}>
             Cancel
           </Button>
-          <Button variant="bordered" onPress={() => handleSave("DRAFT")} isLoading={saving}>
+          <Button variant="bordered" onPress={() => handleSave("DRAFT")} isLoading={savingAs === "DRAFT"} isDisabled={savingAs === "FINAL"}>
             {t("bills.saveDraft")}
           </Button>
           <Button
             color="primary"
             className="bg-gradient-to-r from-blue-600 to-indigo-600 font-semibold"
             onPress={() => handleSave("FINAL")}
-            isLoading={saving}
+            isLoading={savingAs === "FINAL"}
+            isDisabled={savingAs === "DRAFT"}
           >
             Finalize Update
           </Button>

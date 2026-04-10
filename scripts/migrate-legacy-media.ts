@@ -6,43 +6,47 @@ import {
 } from "../src/lib/media";
 
 async function migrateCompanyLogo() {
-  const settings = await prisma.companySettings.findUnique({
-    where: { id: "default" },
-    include: {
-      companyLogoAsset: {
-        select: { id: true },
-      },
+  const tenants = await prisma.tenant.findMany({
+    select: {
+      id: true,
+      logoUrl: true,
     },
   });
 
-  if (!settings?.companyLogoLegacy || settings.companyLogoAssetId) {
-    return 0;
-  }
+  let migratedCount = 0;
 
-  const asset = await buildMediaAssetCreateInputFromLegacyUrl({
-    url: settings.companyLogoLegacy,
-    kind: "COMPANY_LOGO",
-    namespace: "company-logos",
-    originalName: "company-logo",
-  });
+  for (const tenant of tenants) {
+    if (!tenant.logoUrl || tenant.logoUrl.startsWith("/api/assets/")) {
+      continue;
+    }
 
-  try {
-    await prisma.$transaction(async (tx) => {
-      await tx.mediaAsset.create({ data: asset });
-      await tx.companySettings.update({
-        where: { id: "default" },
-        data: {
-          companyLogoAssetId: asset.id,
-          companyLogoLegacy: null,
-        },
-      });
+    const asset = await buildMediaAssetCreateInputFromLegacyUrl({
+      url: tenant.logoUrl,
+      kind: "COMPANY_LOGO",
+      namespace: "company-logos",
+      originalName: `company-logo-${tenant.id}`,
     });
 
-    return 1;
-  } catch (error) {
-    await deleteMediaAsset(asset).catch(() => undefined);
-    throw error;
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.mediaAsset.create({ data: asset });
+        await tx.tenant.update({
+          where: { id: tenant.id },
+          data: {
+            logoUrl: `/api/assets/${asset.id}`,
+            updatedAt: new Date(),
+          },
+        });
+      });
+
+      migratedCount += 1;
+    } catch (error) {
+      await deleteMediaAsset(asset).catch(() => undefined);
+      throw error;
+    }
   }
+
+  return migratedCount;
 }
 
 async function migrateMeasurementPhotos() {

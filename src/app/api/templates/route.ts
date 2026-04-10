@@ -1,14 +1,29 @@
 import { prisma } from "@/lib/prisma";
+import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
+import { logError, getRequestId } from "@/lib/observability";
+import { checkRateLimit } from "@/lib/api-rate-limit";
 import { NextRequest, NextResponse } from "next/server";
+
+export const runtime = "nodejs";
 
 // GET /api/templates — List all templates
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
+
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  const tenantResolution = resolveReadTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
+  }
+  const tenantId = tenantResolution.tenantId;
 
   const templates = await prisma.billTemplate.findMany({
+    where: {
+      tenantId,
+      isDeleted: false,
+    },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -25,12 +40,23 @@ export async function GET(request: NextRequest) {
 
 // POST /api/templates — Create a new template (Admin only)
 export async function POST(request: NextRequest) {
+  const rateLimitResponse = await checkRateLimit(request, "templates.create", 10);
+  if (rateLimitResponse) return rateLimitResponse;
+
   const role = request.headers.get("x-user-role");
   const userId = request.headers.get("x-user-id");
 
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (!userId) {
+    return NextResponse.json({ error: "Missing user context" }, { status: 401 });
+  }
+  const tenantResolution = await resolveWriteTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
+  }
+  const tenantId = tenantResolution.tenantId;
 
   try {
     const body = await request.json();
@@ -45,15 +71,17 @@ export async function POST(request: NextRequest) {
 
     const template = await prisma.billTemplate.create({
       data: {
+        tenantId,
         name,
         columns,
-        createdBy: userId!,
+        createdBy: userId,
+        isDeleted: false,
       },
     });
 
     return NextResponse.json({ template }, { status: 201 });
   } catch (error) {
-    console.error("Create template error:", error);
+    logError("templates.create.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

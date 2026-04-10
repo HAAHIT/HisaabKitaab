@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { serializeMeasurementUpload } from "@/lib/media";
 import { prisma } from "@/lib/prisma";
+import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
+import { logError, getRequestId } from "@/lib/observability";
+
+export const runtime = "nodejs";
 
 const measurementInclude = {
   customer: { select: { name: true, phone: true, email: true } },
@@ -16,10 +20,11 @@ const measurementInclude = {
   },
 };
 
-async function findVisibleMeasurement(id: string) {
+async function findVisibleMeasurement(id: string, tenantId: string) {
   return prisma.measurementUpload.findFirst({
     where: {
       id,
+      tenantId,
       isDeleted: false,
     },
     include: measurementInclude,
@@ -37,9 +42,14 @@ export async function GET(
   if (!role || !userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const tenantResolution = resolveReadTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
+  }
+  const tenantId = tenantResolution.tenantId;
 
   const { id } = await params;
-  const measurement = await findVisibleMeasurement(id);
+  const measurement = await findVisibleMeasurement(id, tenantId);
 
   if (!measurement) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -65,12 +75,17 @@ export async function PATCH(
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  const tenantResolution = await resolveWriteTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
+  }
+  const tenantId = tenantResolution.tenantId;
 
   try {
     const { id } = await params;
     const body = await request.json();
     const { status, reviewNotes, partyId } = body;
-    const existingMeasurement = await findVisibleMeasurement(id);
+    const existingMeasurement = await findVisibleMeasurement(id, tenantId);
 
     if (!existingMeasurement) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -98,6 +113,7 @@ export async function PATCH(
         const party = await prisma.party.findFirst({
           where: {
             id: partyId,
+            tenantId,
             type: "CUSTOMER",
             isDeleted: false,
             isActive: true,
@@ -123,7 +139,7 @@ export async function PATCH(
       measurement: serializeMeasurementUpload(measurement),
     });
   } catch (error) {
-    console.error("Update measurement error:", error);
+    logError("measurements.update.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -141,12 +157,18 @@ export async function DELETE(
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  const tenantResolution = await resolveWriteTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
+  }
+  const tenantId = tenantResolution.tenantId;
 
   try {
     const { id } = await params;
     const measurement = await prisma.measurementUpload.findFirst({
       where: {
         id,
+        tenantId,
         isDeleted: false,
       },
     });
@@ -163,7 +185,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Delete measurement error:", error);
+    logError("measurements.delete.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

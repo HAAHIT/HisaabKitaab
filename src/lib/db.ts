@@ -4,7 +4,7 @@ export interface MeasurementDraft {
   id: string;
   label: string;
   roomName: string | null;
-  doorType: string | null;
+  itemType: string | null;
   notes: string | null;
   photos: string[];
   createdAt: number;
@@ -19,7 +19,7 @@ interface LegacyMeasurementRecord {
   id?: string;
   label?: string;
   roomName?: string | null;
-  doorType?: string | null;
+  itemType?: string | null;
   notes?: string | null;
   photos?: Array<string | LegacyMeasurementPhoto> | null;
   createdAt?: number;
@@ -28,7 +28,7 @@ interface LegacyMeasurementRecord {
   isDeleted?: boolean;
 }
 
-export class DoorCraftDB extends Dexie {
+export class HisaabKitaabDB extends Dexie {
   measurements!: Table<LegacyMeasurementRecord, string | number>;
   parties!: Table<Record<string, unknown>, string>;
   bills!: Table<Record<string, unknown>, string>;
@@ -37,7 +37,7 @@ export class DoorCraftDB extends Dexie {
   measurementDrafts!: Table<MeasurementDraft, string>;
 
   constructor() {
-    super("DoorCraftDB");
+    super("HisaabKitaabDB");
 
     // Retain legacy tables only long enough to migrate old offline measurements into draft records.
     this.version(2).stores({
@@ -73,7 +73,7 @@ export class DoorCraftDB extends Dexie {
             id: measurement.id ?? crypto.randomUUID(),
             label: measurement.label!.trim(),
             roomName: measurement.roomName ?? null,
-            doorType: measurement.doorType ?? null,
+            itemType: measurement.itemType ?? null,
             notes: measurement.notes ?? null,
             photos: Array.isArray(measurement.photos)
               ? measurement.photos
@@ -92,4 +92,4 @@ export class DoorCraftDB extends Dexie {
   }
 }
 
-export const db = new DoorCraftDB();
+export const db = new HisaabKitaabDB();

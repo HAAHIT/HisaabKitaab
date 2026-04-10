@@ -9,15 +9,23 @@ import {
   Button,
   Chip,
   Divider,
+  Modal,
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
   Skeleton,
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
+import { BillActionBar } from "@/components/bills/BillActionBar";
 import type { ColumnDef } from "@/lib/formula";
+import { shareBill } from "@/lib/share";
 
 interface BillDetail {
   id: string;
   billNumber: string;
   partyId: string | null;
+  isInterState?: boolean;
   party: {
     id: string;
     name: string;
@@ -53,6 +61,7 @@ interface CompanySettings {
   companyEmail: string | null;
   companyGstin: string | null;
   companyLogo: string | null;
+  upiId?: string | null;
 }
 
 const statusColorMap: Record<
@@ -104,6 +113,8 @@ export default function BillDetailPage({
     message: string;
     type: "success" | "error";
   } | null>(null);
+  const [confirmAction, setConfirmAction] = useState<"FINAL" | "CANCELLED" | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   function showToast(message: string, type: "success" | "error") {
     setToast({ message, type });
@@ -127,8 +138,8 @@ export default function BillDetailPage({
           const { settings: serverSettings } = await settingsRes.json();
           setSettings(serverSettings);
         }
-      } catch (err) {
-        console.error("Server fetch failed:", err);
+      } catch {
+        // non-critical — loading state handles the empty case
       } finally {
         setLoading(false);
       }
@@ -137,16 +148,31 @@ export default function BillDetailPage({
     loadData();
   }, [id]);
 
-  async function handleStatusChange(status: "FINAL" | "CANCELLED") {
-    const msg =
-      status === "FINAL"
-        ? "Finalize this bill? It cannot be edited after."
-        : "Cancel this bill?";
-    if (!confirm(msg)) return;
-
+  async function executeStatusChange(status: "FINAL" | "CANCELLED") {
+    if (!bill) return;
+    const currentBill = bill;
+    setActionLoading(true);
     try {
       const method = status === "CANCELLED" ? "DELETE" : "PATCH";
-      const body = status === "CANCELLED" ? undefined : JSON.stringify({ status });
+      const body =
+        status === "CANCELLED"
+          ? undefined
+          : JSON.stringify({
+              partyId: currentBill.partyId,
+              customerName: currentBill.customerName,
+              customerPhone: currentBill.customerPhone,
+              customerAddress: currentBill.customerAddress,
+              gstin: currentBill.gstin,
+              rows: currentBill.rows,
+              notes: currentBill.notes,
+              terms: currentBill.terms,
+              taxPercent: currentBill.taxPercent,
+              subtotal: currentBill.subtotal,
+              taxAmount: currentBill.taxAmount,
+              grandTotal: currentBill.grandTotal,
+              isInterState: currentBill.isInterState === true,
+              status,
+            });
       const headers: Record<string, string> = {};
       if (body) headers["Content-Type"] = "application/json";
 
@@ -156,18 +182,34 @@ export default function BillDetailPage({
         throw new Error(data.error);
       }
 
-      showToast(
-        status === "FINAL" ? "Bill finalized!" : "Bill cancelled",
-        "success"
-      );
-      // Refresh
+      showToast(status === "FINAL" ? "Bill finalized!" : "Bill cancelled", "success");
       const updated = await fetch(`/api/bills/${id}`).then((r) => r.json());
       setBill(updated.bill);
     } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : "Action failed",
-        "error"
-      );
+      showToast(err instanceof Error ? err.message : "Action failed", "error");
+    } finally {
+      setActionLoading(false);
+      setConfirmAction(null);
+    }
+  }
+
+  async function handleShare() {
+    if (!bill || bill.status !== "FINAL") {
+      return;
+    }
+
+    const didShare = await shareBill({
+      billNumber: bill.billNumber,
+      customerName: bill.customerName,
+      grandTotal: bill.grandTotal,
+      customerPhone: bill.customerPhone,
+      companyName: settings?.companyName || "My Business",
+      companyUpiId: settings?.upiId || null,
+      billUrl: `${window.location.origin}/api/bills/${bill.id}/public`,
+    });
+
+    if (didShare) {
+      showToast("Share flow opened", "success");
     }
   }
 
@@ -232,6 +274,7 @@ export default function BillDetailPage({
             <Button
               isIconOnly
               variant="light"
+              aria-label="Back to bills"
               onPress={() => router.push("/bills")}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
@@ -252,11 +295,11 @@ export default function BillDetailPage({
             {bill.status === "DRAFT" && (
               <>
                 <Button variant="bordered" size="sm" onPress={() => router.push(`/bills/${id}/edit`)}>✏️ Edit</Button>
-                <Button color="success" size="sm" variant="flat" onPress={() => handleStatusChange("FINAL")}>✅ Finalize</Button>
+                <Button color="success" size="sm" variant="flat" onPress={() => setConfirmAction("FINAL")}>✅ Finalize</Button>
               </>
             )}
             {bill.status !== "CANCELLED" && (
-              <Button color="danger" size="sm" variant="flat" onPress={() => handleStatusChange("CANCELLED")}>Cancel</Button>
+              <Button color="danger" size="sm" variant="flat" onPress={() => setConfirmAction("CANCELLED")}>Cancel</Button>
             )}
           </div>
         </div>
@@ -293,7 +336,14 @@ export default function BillDetailPage({
         {/* Items Table */}
         <Card shadow="sm" className="mb-6">
           <CardHeader className="px-6 pt-6 pb-0">
-            <h2 className="font-semibold">Line Items ({bill.template.name})</h2>
+            <h2 className="font-semibold">
+              Line Items
+              {bill.template.name !== "__QUICK_BILL__" && (
+                <span className="ml-2 text-sm font-normal text-default-400">
+                  ({bill.template.name})
+                </span>
+              )}
+            </h2>
           </CardHeader>
           <CardBody className="p-6 overflow-x-auto">
             <table className="w-full text-sm">
@@ -340,6 +390,48 @@ export default function BillDetailPage({
           </Card>
         </div>
       </div>
+
+      <BillActionBar bill={{
+        id: bill.id,
+        billNumber: bill.billNumber,
+        customerName: bill.customerName,
+        grandTotal: bill.grandTotal,
+        status: bill.status,
+        customerPhone: bill.customerPhone,
+        partyId: bill.partyId,
+      }} onShare={handleShare} />
+
+      {/* Confirm action modal */}
+      <Modal
+        isOpen={confirmAction !== null}
+        onClose={() => setConfirmAction(null)}
+        size="sm"
+      >
+        <ModalContent>
+          <ModalHeader>
+            {confirmAction === "FINAL" ? "Finalize Bill" : "Cancel Bill"}
+          </ModalHeader>
+          <ModalBody>
+            <p className="text-sm text-default-600">
+              {confirmAction === "FINAL"
+                ? "This will lock the bill and record it in your books. It cannot be edited after finalization."
+                : "This will permanently cancel the bill and reverse any balance changes."}
+            </p>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="flat" onPress={() => setConfirmAction(null)}>
+              Go back
+            </Button>
+            <Button
+              color={confirmAction === "FINAL" ? "success" : "danger"}
+              isLoading={actionLoading}
+              onPress={() => confirmAction && executeStatusChange(confirmAction)}
+            >
+              {confirmAction === "FINAL" ? "Yes, Finalize" : "Yes, Cancel Bill"}
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
 
       {/* Print-Only Professional Layout */}
       <div className="hidden print:block p-0 text-black">
@@ -464,7 +556,7 @@ export default function BillDetailPage({
 
         {/* Print Footer */}
         <div className="fixed bottom-0 left-0 right-0 border-t border-gray-100 pt-4 flex justify-between items-center text-[8px] text-gray-400 uppercase tracking-widest font-mono">
-          <div>Generated by DoorCraft Pro CMS</div>
+          <div>Generated by HisaabKitaab CMS</div>
           <div>Page 1 of 1</div>
         </div>
       </div>

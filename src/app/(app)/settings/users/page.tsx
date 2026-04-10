@@ -286,6 +286,7 @@ export default function UserManagementPage() {
                           size="sm"
                           variant="flat"
                           isIconOnly
+                          aria-label={`Edit ${user.name}`}
                           onPress={() => openEditPanel(user)}
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -297,6 +298,7 @@ export default function UserManagementPage() {
                           variant="flat"
                           color="danger"
                           isIconOnly
+                          aria-label={`Delete ${user.name}`}
                           onPress={() => handleDelete(user.id)}
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -331,6 +333,7 @@ export default function UserManagementPage() {
                   isIconOnly
                   variant="light"
                   size="sm"
+                  aria-label="Close panel"
                   onPress={() => setShowPanel(false)}
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -398,16 +401,18 @@ export default function UserManagementPage() {
                 </div>
                 <Select
                   label={t("users.role")}
-                  selectedKeys={[formRole]}
+                  placeholder={t("users.role")}
+                  selectedKeys={new Set([formRole])}
                   onSelectionChange={(keys) => {
                     const selected = Array.from(keys)[0] as string;
                     if (selected) setFormRole(selected);
                   }}
                   variant="bordered"
                 >
-                  <SelectItem key="STAFF">{t("users.staff")}</SelectItem>
-                  <SelectItem key="ACCOUNTANT">{t("users.accountant")}</SelectItem>
-                  <SelectItem key="CUSTOMER">{t("users.customer")}</SelectItem>
+                  <SelectItem key="STAFF" textValue={t("users.staff")}>{t("users.staff")}</SelectItem>
+                  <SelectItem key="ACCOUNTANT" textValue={t("users.accountant")}>{t("users.accountant")}</SelectItem>
+                  <SelectItem key="CUSTOMER" textValue={t("users.customer")}>{t("users.customer")}</SelectItem>
+
                 </Select>
 
                 <div className="flex gap-3 pt-4">

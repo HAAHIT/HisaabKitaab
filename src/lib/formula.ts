@@ -80,10 +80,11 @@ function tokenizeMathExpression(expression: string): MathToken[] | null {
 }
 
 function evaluateMathExpression(expression: string): number | null {
-  const tokens = tokenizeMathExpression(expression);
-  if (!tokens || tokens.length === 0) {
+  const parsedTokens = tokenizeMathExpression(expression);
+  if (!parsedTokens || parsedTokens.length === 0) {
     return null;
   }
+  const tokens = parsedTokens;
 
   let index = 0;
 
@@ -95,10 +96,10 @@ function evaluateMathExpression(expression: string): number | null {
 
     while (
       index < tokens.length &&
-      tokens[index].type === "operator" &&
-      (tokens[index].value === "+" || tokens[index].value === "-")
+      tokens[index]?.type === "operator" &&
+      (tokens[index]?.value === "+" || tokens[index]?.value === "-")
     ) {
-      const operator = tokens[index].value;
+      const operator = tokens[index]!.value;
       index += 1;
       const right = parseTerm();
       if (right === null) {
@@ -119,10 +120,10 @@ function evaluateMathExpression(expression: string): number | null {
 
     while (
       index < tokens.length &&
-      tokens[index].type === "operator" &&
-      (tokens[index].value === "*" || tokens[index].value === "/" || tokens[index].value === "%")
+      tokens[index]?.type === "operator" &&
+      (tokens[index]?.value === "*" || tokens[index]?.value === "/" || tokens[index]?.value === "%")
     ) {
-      const operator = tokens[index].value;
+      const operator = tokens[index]!.value;
       index += 1;
       const right = parseUnary();
       if (right === null) {
@@ -150,10 +151,10 @@ function evaluateMathExpression(expression: string): number | null {
   function parseUnary(): number | null {
     if (
       index < tokens.length &&
-      tokens[index].type === "operator" &&
-      (tokens[index].value === "+" || tokens[index].value === "-")
+      tokens[index]?.type === "operator" &&
+      (tokens[index]?.value === "+" || tokens[index]?.value === "-")
     ) {
-      const operator = tokens[index].value;
+      const operator = tokens[index]!.value;
       index += 1;
       const value = parseUnary();
       if (value === null) {
@@ -183,8 +184,8 @@ function evaluateMathExpression(expression: string): number | null {
       if (
         value === null ||
         index >= tokens.length ||
-        tokens[index].type !== "paren" ||
-        tokens[index].value !== ")"
+        tokens[index]?.type !== "paren" ||
+        tokens[index]?.value !== ")"
       ) {
         return null;
       }

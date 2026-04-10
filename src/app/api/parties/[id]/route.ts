@@ -1,7 +1,14 @@
 import { prisma } from "@/lib/prisma";
+import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
+import { logError, getRequestId } from "@/lib/observability";
 import { NextRequest, NextResponse } from "next/server";
+import type { PartyType } from "@prisma/client";
 
-const VALID_PARTY_TYPES = new Set(["CUSTOMER", "VENDOR"]);
+const VALID_PARTY_TYPES = new Set<PartyType>(["CUSTOMER", "VENDOR"]);
+
+function isPartyType(value: string | undefined): value is PartyType {
+  return Boolean(value && VALID_PARTY_TYPES.has(value as PartyType));
+}
 
 function normalizeOptionalString(value: unknown) {
   if (typeof value !== "string") {
@@ -12,10 +19,11 @@ function normalizeOptionalString(value: unknown) {
   return trimmed ? trimmed : null;
 }
 
-async function findVisibleParty(id: string) {
+async function findVisibleParty(id: string, tenantId: string) {
   return prisma.party.findFirst({
     where: {
       id,
+      tenantId,
       isDeleted: false,
     },
     include: {
@@ -34,12 +42,18 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
+
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  const tenantResolution = resolveReadTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
+  }
+  const tenantId = tenantResolution.tenantId;
 
   const { id } = await params;
-  const party = await findVisibleParty(id);
+  const party = await findVisibleParty(id, tenantId);
 
   if (!party) {
     return NextResponse.json({ error: "Party not found" }, { status: 404 });
@@ -54,14 +68,20 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
+
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  const tenantResolution = await resolveWriteTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
+  }
+  const tenantId = tenantResolution.tenantId;
 
   try {
     const { id } = await params;
     const body = await request.json();
-    const existingParty = await findVisibleParty(id);
+    const existingParty = await findVisibleParty(id, tenantId);
 
     if (!existingParty) {
       return NextResponse.json({ error: "Party not found" }, { status: 404 });
@@ -92,13 +112,16 @@ export async function PATCH(
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
 
-    if (!nextType || !VALID_PARTY_TYPES.has(nextType)) {
+    if (!isPartyType(nextType)) {
       return NextResponse.json({ error: "Invalid party type" }, { status: 400 });
     }
 
     if (nextType !== existingParty.type) {
-      const relationCounts = await prisma.party.findUnique({
-        where: { id },
+      const relationCounts = await prisma.party.findFirst({
+        where: {
+          id,
+          tenantId,
+        },
         select: {
           _count: {
             select: {
@@ -140,7 +163,7 @@ export async function PATCH(
 
     return NextResponse.json({ party });
   } catch (error) {
-    console.error("Update party error:", error);
+    logError("parties.update.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -154,13 +177,19 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
+
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  const tenantResolution = await resolveWriteTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
+  }
+  const tenantId = tenantResolution.tenantId;
 
   try {
     const { id } = await params;
-    const existingParty = await findVisibleParty(id);
+    const existingParty = await findVisibleParty(id, tenantId);
 
     if (!existingParty) {
       return NextResponse.json({ error: "Party not found" }, { status: 404 });
@@ -176,7 +205,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Delete party error:", error);
+    logError("parties.delete.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

@@ -1,5 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
+import { logError, getRequestId } from "@/lib/observability";
+
+export const runtime = "nodejs";
 
 // GET /api/templates/[id] — Get a single template
 export async function GET(
@@ -7,12 +11,24 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
+
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  const tenantResolution = resolveReadTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
+  }
+  const tenantId = tenantResolution.tenantId;
 
   const { id } = await params;
-  const template = await prisma.billTemplate.findUnique({ where: { id } });
+  const template = await prisma.billTemplate.findFirst({
+    where: {
+      id,
+      tenantId,
+      isDeleted: false,
+    },
+  });
   if (!template) {
     return NextResponse.json({ error: "Template not found" }, { status: 404 });
   }
@@ -26,12 +42,30 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
+
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  const tenantResolution = await resolveWriteTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
+  }
+  const tenantId = tenantResolution.tenantId;
 
   try {
     const { id } = await params;
+    const existingTemplate = await prisma.billTemplate.findFirst({
+      where: {
+        id,
+        tenantId,
+        isDeleted: false,
+      },
+      select: { id: true },
+    });
+    if (!existingTemplate) {
+      return NextResponse.json({ error: "Template not found" }, { status: 404 });
+    }
+
     const body = await request.json();
     const { name, columns } = body;
 
@@ -46,7 +80,7 @@ export async function PATCH(
 
     return NextResponse.json({ template });
   } catch (error) {
-    console.error("Update template error:", error);
+    logError("templates.update.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -60,15 +94,26 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
+
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  const tenantResolution = await resolveWriteTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
+  }
+  const tenantId = tenantResolution.tenantId;
 
   try {
     const { id } = await params;
-    
+
     // Check if template has bills
-    const billCount = await prisma.bill.count({ where: { templateId: id } });
+    const billCount = await prisma.bill.count({
+      where: {
+        templateId: id,
+        tenantId,
+      },
+    });
     if (billCount > 0) {
       return NextResponse.json(
         { error: `Cannot delete: ${billCount} bill(s) use this template` },
@@ -76,10 +121,25 @@ export async function DELETE(
       );
     }
 
-    await prisma.billTemplate.delete({ where: { id } });
+    const existingTemplate = await prisma.billTemplate.findFirst({
+      where: {
+        id,
+        tenantId,
+        isDeleted: false,
+      },
+      select: { id: true },
+    });
+    if (!existingTemplate) {
+      return NextResponse.json({ error: "Template not found" }, { status: 404 });
+    }
+
+    await prisma.billTemplate.update({
+      where: { id: existingTemplate.id },
+      data: { isDeleted: true },
+    });
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Delete template error:", error);
+    logError("templates.delete.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

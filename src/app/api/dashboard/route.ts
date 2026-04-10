@@ -1,17 +1,25 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { logError, getRequestId } from "@/lib/observability";
+import { resolveReadTenant } from "@/lib/api-tenant";
 
 // GET /api/dashboard — Dashboard aggregated data
 export async function GET(request: NextRequest) {
   const role = request.headers.get("x-user-role");
+
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  const tenantResolution = resolveReadTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
+  }
+  const tenantId = tenantResolution.tenantId;
 
   try {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
     // Parallel queries for dashboard data
     const [
@@ -25,6 +33,7 @@ export async function GET(request: NextRequest) {
       // Total receivable (customers who still owe us, negative balance)
       prisma.party.aggregate({
         where: {
+          tenantId,
           type: "CUSTOMER",
           currentBalance: { lt: 0 },
           isActive: true,
@@ -35,6 +44,7 @@ export async function GET(request: NextRequest) {
       // Total payable (vendors we still owe, negative balance)
       prisma.party.aggregate({
         where: {
+          tenantId,
           type: "VENDOR",
           currentBalance: { lt: 0 },
           isActive: true,
@@ -45,15 +55,19 @@ export async function GET(request: NextRequest) {
       // Payments this month (only completed)
       prisma.payment.aggregate({
         where: {
+          tenantId,
           direction: "INCOMING",
           status: "COMPLETED",
-          date: { gte: monthStart, lte: monthEnd },
+          date: { gte: monthStart, lt: monthEnd },
         },
         _sum: { amount: true },
       }),
       // Recent payments (last 5, completed only)
       prisma.payment.findMany({
-        where: { status: "COMPLETED" },
+        where: {
+          tenantId,
+          status: "COMPLETED",
+        },
         orderBy: { date: "desc" },
         take: 5,
         include: { party: { select: { name: true, type: true } } },
@@ -61,6 +75,7 @@ export async function GET(request: NextRequest) {
       // Overdue count (parties with outstanding balance and no payment in 30 days)
       prisma.party.count({
         where: {
+          tenantId,
           currentBalance: { lt: 0 },
           isActive: true,
           isDeleted: false,
@@ -75,37 +90,55 @@ export async function GET(request: NextRequest) {
       // Bill stats
       prisma.bill.groupBy({
         by: ["status"],
+        where: { tenantId, isDeleted: false },
         _count: true,
         _sum: { grandTotal: true },
       }),
     ]);
 
-    // Monthly cash flow (last 6 months)
-    const cashFlow = [];
-    for (let i = 5; i >= 0; i--) {
-      const mStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const mEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+    // Monthly cash flow (last 6 months) - parallelized
+    const monthDetails = Array.from({ length: 6 }, (_, i) => {
+      const monthIdx = 5 - i;
+      const mStart = new Date(now.getFullYear(), now.getMonth() - monthIdx, 1);
+      const mEnd = new Date(now.getFullYear(), now.getMonth() - monthIdx + 1, 1);
+      return { mStart, mEnd };
+    });
 
-      const [received, paid] = await Promise.all([
-        prisma.payment.aggregate({
-          where: { direction: "INCOMING", status: "COMPLETED", date: { gte: mStart, lte: mEnd } },
-          _sum: { amount: true },
-        }),
-        prisma.payment.aggregate({
-          where: { direction: "OUTGOING", status: "COMPLETED", date: { gte: mStart, lte: mEnd } },
-          _sum: { amount: true },
-        }),
-      ]);
+    const cashFlowResults = await Promise.all(
+      monthDetails.map(async ({ mStart, mEnd }) => {
+        const [received, paid] = await Promise.all([
+          prisma.payment.aggregate({
+            where: {
+              tenantId,
+              direction: "INCOMING",
+              status: "COMPLETED",
+              date: { gte: mStart, lt: mEnd },
+            },
+            _sum: { amount: true },
+          }),
+          prisma.payment.aggregate({
+            where: {
+              tenantId,
+              direction: "OUTGOING",
+              status: "COMPLETED",
+              date: { gte: mStart, lt: mEnd },
+            },
+            _sum: { amount: true },
+          }),
+        ]);
 
-      cashFlow.push({
-        month: mStart.toLocaleDateString("en-IN", {
-          month: "short",
-          year: "2-digit",
-        }),
-        received: received._sum.amount || 0,
-        paid: paid._sum.amount || 0,
-      });
-    }
+        return {
+          month: mStart.toLocaleDateString("en-IN", {
+            month: "short",
+            year: "2-digit",
+          }),
+          received: received._sum.amount || 0,
+          paid: paid._sum.amount || 0,
+        };
+      })
+    );
+
+    const cashFlow = cashFlowResults;
 
     const receivable = Math.abs(receivableParties._sum.currentBalance || 0);
     const payable = Math.abs(payableParties._sum.currentBalance || 0);
@@ -124,7 +157,7 @@ export async function GET(request: NextRequest) {
       billStats,
     });
   } catch (error) {
-    console.error("Dashboard error:", error);
+    logError("dashboard.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

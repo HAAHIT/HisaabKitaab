@@ -13,7 +13,8 @@ import {
   SelectItem,
   Textarea,
 } from "@heroui/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { evaluateRow, type ColumnDef } from "@/lib/formula";
 
@@ -23,14 +24,7 @@ interface Template {
   columns: ColumnDef[];
 }
 
-interface PartyOption {
-  id: string;
-  name: string;
-  type: "CUSTOMER" | "VENDOR";
-  phone: string | null;
-  address: string | null;
-  gstin: string | null;
-}
+
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-IN", {
@@ -78,22 +72,22 @@ export default function NewBillPage() {
   const [parties, setParties] = useState<PartyOption[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [savingAs, setSavingAs] = useState<"DRAFT" | "FINAL" | null>(null);
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error";
   } | null>(null);
 
-  const [partyId, setPartyId] = useState("");
-  const [customerName, setCustomerName] = useState("");
-  const [customerPhone, setCustomerPhone] = useState("");
-  const [customerAddress, setCustomerAddress] = useState("");
-  const [gstin, setGstin] = useState("");
+  const searchParams = useSearchParams();
+  const preselectedPartyId = searchParams.get("partyId");
+  const [selectedParty, setSelectedParty] = useState<PartyOption | null>(null);
   const [rows, setRows] = useState<Record<string, string | number>[]>([]);
   const [taxPercent, setTaxPercent] = useState(18);
+  const [isInterState, setIsInterState] = useState(false);
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("");
+  const [didAutoFocusRow, setDidAutoFocusRow] = useState(false);
 
   const fetchFormData = useCallback(async () => {
     setLoading(true);
@@ -128,30 +122,19 @@ export default function NewBillPage() {
     fetchFormData();
   }, [fetchFormData]);
 
+  useEffect(() => {
+    if (preselectedPartyId && parties.length > 0 && !selectedParty) {
+      const party = parties.find((p) => p.id === preselectedPartyId);
+      if (party) setSelectedParty(party);
+    }
+  }, [preselectedPartyId, parties, selectedParty]);
+
   function showToast(message: string, type: "success" | "error") {
     setToast({ message, type });
     window.setTimeout(() => setToast(null), 3000);
   }
 
-  function applyPartySnapshot(nextPartyId: string) {
-    setPartyId(nextPartyId);
-    const party = parties.find((item) => item.id === nextPartyId);
-    if (!party) {
-      return;
-    }
-
-    setCustomerName(party.name);
-    setCustomerPhone(party.phone || "");
-    setCustomerAddress(party.address || "");
-    setGstin(party.gstin || "");
-    setErrors((currentErrors) => ({
-      ...currentErrors,
-      partyId: false,
-      customerName: false,
-    }));
-  }
-
-  function selectTemplate(templateId: string) {
+  const selectTemplate = useCallback((templateId: string) => {
     const template = templates.find((item) => item.id === templateId);
     if (!template) {
       return;
@@ -159,7 +142,13 @@ export default function NewBillPage() {
 
     setSelectedTemplate(template);
     setRows([buildEmptyRow(template)]);
-  }
+  }, [templates]);
+
+  useEffect(() => {
+    if (templates.length === 1 && !selectedTemplate) {
+      selectTemplate(templates[0].id);
+    }
+  }, [selectTemplate, selectedTemplate, templates]);
 
   function addRow() {
     if (!selectedTemplate) {
@@ -227,6 +216,39 @@ export default function NewBillPage() {
     };
   }, [rows, selectedTemplate, taxPercent]);
 
+  const firstEditableColumnId = useMemo(() => {
+    if (!selectedTemplate) {
+      return null;
+    }
+
+    return (
+      selectedTemplate.columns.find((column) => column.type !== "formula")?.id ?? null
+    );
+  }, [selectedTemplate]);
+
+  useEffect(() => {
+    setDidAutoFocusRow(false);
+  }, [selectedParty?.id, selectedTemplate?.id]);
+
+  useEffect(() => {
+    if (!selectedParty || !selectedTemplate || rows.length === 0 || didAutoFocusRow) {
+      return;
+    }
+
+    const focusTimer = window.setTimeout(() => {
+      const target = document.querySelector<
+        HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement
+      >(
+        '[data-bill-focus-target="true"] input, [data-bill-focus-target="true"] textarea, [data-bill-focus-target="true"] button'
+      );
+
+      target?.focus();
+      setDidAutoFocusRow(true);
+    }, 0);
+
+    return () => window.clearTimeout(focusTimer);
+  }, [didAutoFocusRow, rows.length, selectedParty, selectedTemplate]);
+
   async function handleSave(status: "DRAFT" | "FINAL") {
     const mainScroll = document.querySelector("main");
 
@@ -237,11 +259,8 @@ export default function NewBillPage() {
     }
 
     const formErrors: Record<string, boolean> = {};
-    if (!partyId) {
+    if (!selectedParty) {
       formErrors.partyId = true;
-    }
-    if (!customerName.trim()) {
-      formErrors.customerName = true;
     }
 
     if (Object.keys(formErrors).length > 0) {
@@ -252,8 +271,14 @@ export default function NewBillPage() {
       return;
     }
 
+    const currentParty = selectedParty;
+    if (!currentParty) {
+      showToast("Please select a party", "error");
+      return;
+    }
+
     setErrors({});
-    setSaving(true);
+    setSavingAs(status);
 
     try {
       const response = await fetch("/api/bills", {
@@ -261,16 +286,17 @@ export default function NewBillPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           templateId: selectedTemplate.id,
-          partyId,
-          customerName: customerName.trim(),
-          customerPhone: customerPhone.trim() || null,
-          customerAddress: customerAddress.trim() || null,
-          gstin: gstin.trim() || null,
+          partyId: currentParty.id,
+          customerName: currentParty.name,
+          customerPhone: currentParty.phone || null,
+          customerAddress: currentParty.address || null,
+          gstin: currentParty.gstin || null,
           rows,
           subtotal,
           taxPercent,
           taxAmount,
           grandTotal,
+          isInterState,
           notes: notes.trim() || null,
           terms: terms.trim() || null,
           status,
@@ -287,7 +313,7 @@ export default function NewBillPage() {
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Failed to save bill", "error");
     } finally {
-      setSaving(false);
+      setSavingAs(null);
     }
   }
 
@@ -305,7 +331,12 @@ export default function NewBillPage() {
 
       <div className="animate-fade-in p-4 lg:p-8">
         <div className="mb-6 flex items-center gap-3">
-          <Button isIconOnly variant="light" onPress={() => router.push("/bills")}>
+          <Button
+            isIconOnly
+            variant="light"
+            aria-label="Back to bills"
+            onPress={() => router.push("/bills")}
+          >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 d="M10 19l-7-7m0 0l7-7m-7 7h18"
@@ -349,10 +380,35 @@ export default function NewBillPage() {
                       key={template.id}
                       type="button"
                       onClick={() => selectTemplate(template.id)}
-                      className="rounded-xl border-2 border-default-200 p-4 text-left transition hover:border-primary hover:bg-primary/5"
+                      className="group relative w-full rounded-2xl border border-default-200 bg-content1 p-4 text-left transition-all duration-300 hover:-translate-y-0.5 hover:border-primary-300/60 hover:bg-primary-500/[0.04] hover:shadow-[0_12px_28px_-20px_rgba(59,130,246,0.9)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                     >
-                      <p className="font-semibold">{template.name}</p>
-                      <div className="mt-2 flex flex-wrap gap-1">
+                      <div className="flex items-start gap-3">
+                        <div className="rounded-xl bg-primary-100 p-3 text-primary transition-colors group-hover:bg-primary group-hover:text-white group-hover:shadow-lg group-hover:shadow-primary/30 dark:bg-primary/15 dark:text-primary-300">
+                          <svg
+                            aria-hidden="true"
+                            className="h-5 w-5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M9 12h6m-6 4h6M8 4h8a2 2 0 012 2v12a2 2 0 01-2 2H8a2 2 0 01-2-2V6a2 2 0 012-2z"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={1.8}
+                            />
+                          </svg>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-base font-semibold text-default-900 dark:text-default-100">
+                            {template.name}
+                          </p>
+                          <p className="mt-1 text-xs text-default-500">
+                            {template.columns.length} column{template.columns.length === 1 ? "" : "s"}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-1">
                         {template.columns.map((column) => (
                           <Chip
                             key={column.id}
@@ -398,90 +454,81 @@ export default function NewBillPage() {
 
             <Card shadow="sm" className="mb-6">
               <CardHeader className="px-6 pt-6 pb-0">
-                <h2 className="text-lg font-semibold">Bill To</h2>
+                <h2 className="text-lg font-semibold">{t("bills.billTo")}</h2>
               </CardHeader>
-              <CardBody className="space-y-4 p-6">
-                <Select
-                  label="Party"
-                  placeholder="Select customer or vendor"
-                  selectedKeys={partyId ? [partyId] : []}
-                  onSelectionChange={(keys) => {
-                    const value = Array.from(keys)[0] as string;
-                    if (value) {
-                      applyPartySnapshot(value);
+              <CardBody className="p-6">
+                <PartySearch
+                  value={selectedParty?.id || null}
+                  onChange={(party) => {
+                    setSelectedParty(party);
+                    if (party) {
+                      setErrors((prev) => ({ ...prev, partyId: false }));
                     }
                   }}
-                  variant="bordered"
-                  isLoading={loading}
+                  partyType="CUSTOMER"
+                  placeholder={t("bills.selectCustomer")}
+                  autoFocus={!selectedParty}
                   isInvalid={Boolean(errors.partyId)}
-                  errorMessage={errors.partyId ? "Party is required" : undefined}
-                >
-                  {parties.map((party) => (
-                    <SelectItem key={party.id} textValue={party.name}>
-                      <div className="flex w-full items-center justify-between">
-                        <span>{party.name}</span>
-                        <span className="text-xs capitalize text-default-400">
-                          {party.type.toLowerCase()}
-                        </span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </Select>
+                />
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Input
-                    label={t("bills.customer")}
-                    placeholder="Invoice display name"
-                    value={customerName}
-                    onValueChange={(value) => {
-                      setCustomerName(value);
-                      if (value.trim()) {
-                        setErrors((currentErrors) => ({
-                          ...currentErrors,
-                          customerName: false,
-                        }));
-                      }
-                    }}
-                    variant="bordered"
-                    isRequired
-                    isInvalid={Boolean(errors.customerName)}
-                    errorMessage={errors.customerName ? "Customer name is required" : undefined}
-                    classNames={{
-                      inputWrapper: errors.customerName
-                        ? "animate-pulse border-danger bg-danger/10"
-                        : "",
-                    }}
-                    description="This snapshot is stored on the bill even if the party record changes later."
-                  />
-                  <Input
-                    label="Phone"
-                    placeholder="Phone number"
-                    value={customerPhone}
-                    onValueChange={setCustomerPhone}
-                    variant="bordered"
-                    type="tel"
-                  />
-                  <Input
-                    label="Address"
-                    placeholder="Billing address"
-                    value={customerAddress}
-                    onValueChange={setCustomerAddress}
-                    variant="bordered"
-                  />
-                  <Input
-                    label="GSTIN"
-                    placeholder="GST Number (optional)"
-                    value={gstin}
-                    onValueChange={setGstin}
-                    variant="bordered"
-                  />
-                </div>
+                {selectedParty && (
+                  <div className="mt-4 rounded-xl bg-default-50 dark:bg-default-100/5 p-4 border border-default-200 animate-slide-up">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="font-semibold text-lg">{selectedParty.name}</h3>
+                      <Button
+                        size="sm"
+                        variant="light"
+                        onPress={() => setSelectedParty(null)}
+                      >
+                        {t("common.change")}
+                      </Button>
+                    </div>
+                    
+                    <div className="space-y-1 text-sm text-default-500">
+                      {selectedParty.phone && (
+                        <p className="flex items-center gap-2">
+                          <span>📱</span> {selectedParty.phone}
+                        </p>
+                      )}
+                      {selectedParty.address && (
+                        <p className="flex items-center gap-2">
+                          <span>📍</span> {selectedParty.address}
+                        </p>
+                      )}
+                      {selectedParty.gstin && (
+                        <p className="flex items-center gap-2">
+                          <span className="text-xs font-mono font-bold tracking-widest text-default-400">GST</span> {selectedParty.gstin}
+                        </p>
+                      )}
+                    </div>
+                    
+                    {selectedParty.currentBalance !== 0 && (
+                      <div className={`mt-3 pt-3 border-t border-default-200 text-sm font-medium flex items-center gap-2 ${
+                        selectedParty.currentBalance < 0 ? "text-success" : "text-danger"
+                      }`}>
+                        <div className={`w-2 h-2 rounded-full ${selectedParty.currentBalance < 0 ? "bg-success" : "bg-danger"}`} />
+                        {selectedParty.currentBalance < 0
+                          ? `To Get: ₹${Math.abs(selectedParty.currentBalance).toLocaleString("en-IN")}`
+                          : `To Pay: ₹${selectedParty.currentBalance.toLocaleString("en-IN")}`
+                        }
+                      </div>
+                    )}
+                  </div>
+                )}
               </CardBody>
             </Card>
 
             <Card shadow="sm" className="mb-6">
               <CardHeader className="flex items-center justify-between px-6 pt-6 pb-0">
-                <h2 className="text-lg font-semibold">Line Items</h2>
+                <div className="flex flex-wrap items-center gap-3">
+                  <h2 className="text-lg font-semibold">Line Items</h2>
+                  <Chip size="sm" variant="flat" color="default">
+                    Subtotal {formatCurrency(subtotal)}
+                  </Chip>
+                  <Chip size="sm" variant="flat" color="primary">
+                    Total {formatCurrency(grandTotal)}
+                  </Chip>
+                </div>
                 <Button
                   size="sm"
                   variant="flat"
@@ -530,7 +577,15 @@ export default function NewBillPage() {
                       >
                         <td className="px-2 py-2 text-default-400">{rowIndex + 1}</td>
                         {selectedTemplate.columns.map((column) => (
-                          <td key={column.id} className="px-2 py-2">
+                          <td
+                            key={column.id}
+                            className="px-2 py-2"
+                            data-bill-focus-target={
+                              rowIndex === 0 && column.id === firstEditableColumnId
+                                ? "true"
+                                : undefined
+                            }
+                          >
                             {column.type === "formula" ? (
                               <span className="font-mono font-medium text-success">
                                 {typeof row[column.id] === "number"
@@ -540,6 +595,7 @@ export default function NewBillPage() {
                             ) : column.type === "number" ? (
                               <Input
                                 type="number"
+                                aria-label={`Row ${rowIndex + 1} ${column.name}`}
                                 value={String(row[column.id] || "")}
                                 onValueChange={(value) => updateCell(rowIndex, column.id, value)}
                                 variant="underlined"
@@ -548,7 +604,9 @@ export default function NewBillPage() {
                               />
                             ) : column.type === "dropdown" && column.options ? (
                               <Select
-                                selectedKeys={row[column.id] ? [String(row[column.id])] : []}
+                                aria-label={`Row ${rowIndex + 1} ${column.name}`}
+                                placeholder={column.name}
+                                selectedKeys={row[column.id] ? new Set([String(row[column.id])]) : new Set([])}
                                 onSelectionChange={(keys) => {
                                   const value = Array.from(keys)[0] as string;
                                   if (value) {
@@ -560,12 +618,14 @@ export default function NewBillPage() {
                                 className="min-w-[120px]"
                               >
                                 {column.options.map((option) => (
-                                  <SelectItem key={option}>{option}</SelectItem>
+                                  <SelectItem key={option} textValue={option}>{option}</SelectItem>
+
                                 ))}
                               </Select>
                             ) : column.type === "date" ? (
                               <Input
                                 type="date"
+                                aria-label={`Row ${rowIndex + 1} ${column.name}`}
                                 value={String(row[column.id] || "")}
                                 onValueChange={(value) => updateCell(rowIndex, column.id, value)}
                                 variant="underlined"
@@ -575,6 +635,7 @@ export default function NewBillPage() {
                             ) : (
                               <Input
                                 type="text"
+                                aria-label={`Row ${rowIndex + 1} ${column.name}`}
                                 value={String(row[column.id] || "")}
                                 onValueChange={(value) => updateCell(rowIndex, column.id, value)}
                                 variant="underlined"
@@ -590,6 +651,7 @@ export default function NewBillPage() {
                             size="sm"
                             variant="light"
                             color="danger"
+                            aria-label={`Remove row ${rowIndex + 1}`}
                             onPress={() => removeRow(rowIndex)}
                             isDisabled={rows.length <= 1}
                           >
@@ -645,6 +707,7 @@ export default function NewBillPage() {
                         <span className="text-default-500">Tax</span>
                         <Input
                           type="number"
+                          aria-label="Tax percentage"
                           value={String(taxPercent)}
                           onValueChange={(value) => setTaxPercent(Number.parseFloat(value) || 0)}
                           variant="bordered"
@@ -654,6 +717,18 @@ export default function NewBillPage() {
                         />
                       </div>
                       <span className="font-medium">{formatCurrency(taxAmount)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-default-400">{t("bills.autoTaxNote")}</p>
+                      <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={isInterState}
+                          onChange={(e) => setIsInterState(e.target.checked)}
+                          className="accent-primary"
+                        />
+                        <span className="text-xs text-default-500">Inter-state (IGST)</span>
+                      </label>
                     </div>
                     <Divider />
                     <div className="flex justify-between">
@@ -671,14 +746,15 @@ export default function NewBillPage() {
               <Button variant="flat" onPress={() => router.push("/bills")}>
                 Cancel
               </Button>
-              <Button variant="bordered" onPress={() => handleSave("DRAFT")} isLoading={saving}>
+              <Button variant="bordered" onPress={() => handleSave("DRAFT")} isLoading={savingAs === "DRAFT"} isDisabled={savingAs === "FINAL"}>
                 {t("bills.saveDraft")}
               </Button>
               <Button
                 color="primary"
                 className="bg-gradient-to-r from-blue-600 to-indigo-600 font-semibold"
                 onPress={() => handleSave("FINAL")}
-                isLoading={saving}
+                isLoading={savingAs === "FINAL"}
+                isDisabled={savingAs === "DRAFT"}
               >
                 {t("bills.finalize")}
               </Button>

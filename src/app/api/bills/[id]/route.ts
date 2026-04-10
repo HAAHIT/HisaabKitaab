@@ -3,7 +3,14 @@ import {
   buildBillSnapshotFromParty,
   getBillBalanceDeltaForTransition,
 } from "@/lib/accounting";
+import {
+  journalForCancelledSalesBill,
+  journalForSalesBill,
+} from "@/lib/journal";
+import type { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
+import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
+import { logError, getRequestId } from "@/lib/observability";
 
 const ALLOWED_BILL_PATCH_KEYS = new Set([
   "templateId",
@@ -20,6 +27,7 @@ const ALLOWED_BILL_PATCH_KEYS = new Set([
   "taxAmount",
   "grandTotal",
   "status",
+  "isInterState",
 ]);
 
 const ALLOWED_BILL_PATCH_STATUSES = new Set(["DRAFT", "FINAL"]);
@@ -49,10 +57,11 @@ function parseOptionalNumber(value: unknown) {
   return value;
 }
 
-async function findVisibleBill(id: string) {
+async function findVisibleBill(id: string, tenantId: string) {
   return prisma.bill.findFirst({
     where: {
       id,
+      tenantId,
       isDeleted: false,
     },
     include: {
@@ -78,12 +87,18 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
+
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  const tenantResolution = resolveReadTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
+  }
+  const tenantId = tenantResolution.tenantId;
 
   const { id } = await params;
-  const bill = await findVisibleBill(id);
+  const bill = await findVisibleBill(id, tenantId);
 
   if (!bill) {
     return NextResponse.json({ error: "Bill not found" }, { status: 404 });
@@ -98,9 +113,16 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
+  const userId = request.headers.get("x-user-id");
+
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  const tenantResolution = await resolveWriteTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
+  }
+  const tenantId = tenantResolution.tenantId;
 
   try {
     const { id } = await params;
@@ -116,27 +138,45 @@ export async function PATCH(
       );
     }
 
+    const hasIsInterState = hasOwn(body, "isInterState");
+    if (hasIsInterState && typeof body.isInterState !== "boolean") {
+      return NextResponse.json(
+        { error: "isInterState must be a boolean" },
+        { status: 400 }
+      );
+    }
+
     const existing = await prisma.bill.findFirst({
       where: {
         id,
+        tenantId,
         isDeleted: false,
       },
       select: {
         id: true,
         status: true,
+        billNumber: true,
+        subtotal: true,
+        taxAmount: true,
         grandTotal: true,
+        isInterState: true,
         templateId: true,
         partyId: true,
         customerName: true,
         customerPhone: true,
         customerAddress: true,
         gstin: true,
+        createdBy: true,
       },
     });
 
     if (!existing) {
       return NextResponse.json({ error: "Bill not found" }, { status: 404 });
     }
+
+    const isInterState = hasIsInterState
+      ? body.isInterState === true
+      : existing.isInterState;
 
     if (existing.status !== "DRAFT") {
       return NextResponse.json(
@@ -158,6 +198,7 @@ export async function PATCH(
       const template = await prisma.billTemplate.findFirst({
         where: {
           id: body.templateId.trim(),
+          tenantId,
           isDeleted: false,
         },
         select: { id: true },
@@ -230,6 +271,10 @@ export async function PATCH(
       updateData.status = body.status;
     }
 
+    if (hasIsInterState) {
+      updateData.isInterState = isInterState;
+    }
+
     let nextPartyId = existing.partyId;
     if (hasOwn(body, "partyId")) {
       if (body.partyId === "" || body.partyId === null) {
@@ -272,6 +317,7 @@ export async function PATCH(
       const party = await prisma.party.findFirst({
         where: {
           id: nextPartyId,
+          tenantId,
           isDeleted: false,
           isActive: true,
         },
@@ -281,6 +327,7 @@ export async function PATCH(
           phone: true,
           address: true,
           gstin: true,
+          type: true,
         },
       });
 
@@ -289,10 +336,10 @@ export async function PATCH(
       }
 
       const snapshot = buildBillSnapshotFromParty(party, {
-        customerName,
-        customerPhone,
-        customerAddress,
-        gstin,
+        customerName: customerName as string | null | undefined,
+        customerPhone: customerPhone as string | null | undefined,
+        customerAddress: customerAddress as string | null | undefined,
+        gstin: gstin as string | null | undefined,
       });
 
       updateData.partyId = party.id;
@@ -340,11 +387,22 @@ export async function PATCH(
 
     const nextGrandTotal =
       (updateData.grandTotal as number | undefined) ?? existing.grandTotal;
+    const nextSubtotal =
+      (updateData.subtotal as number | undefined) ?? existing.subtotal;
+    const nextTaxAmount =
+      (updateData.taxAmount as number | undefined) ?? existing.taxAmount;
+
+    if (finalStatus === "FINAL" && nextGrandTotal <= 0) {
+      return NextResponse.json(
+        { error: "Final bills must have a positive total" },
+        { status: 400 }
+      );
+    }
 
     const bill = await prisma.$transaction(async (tx) => {
       const updatedBill = await tx.bill.update({
         where: { id },
-        data: updateData,
+        data: updateData as Prisma.BillUncheckedUpdateInput,
       });
 
       if (!finalPartyId) {
@@ -354,11 +412,13 @@ export async function PATCH(
       const party = await tx.party.findFirst({
         where: {
           id: finalPartyId,
+          tenantId,
           isDeleted: false,
           isActive: true,
         },
         select: {
           id: true,
+          name: true,
           type: true,
         },
       });
@@ -384,12 +444,27 @@ export async function PATCH(
         });
       }
 
+      if (existing.status !== "FINAL" && finalStatus === "FINAL") {
+        await journalForSalesBill(tx, tenantId, {
+          id: updatedBill.id,
+          billNumber: updatedBill.billNumber,
+          partyId: party.id,
+          partyName: party.name,
+          subtotal: nextSubtotal,
+          taxAmount: nextTaxAmount,
+          grandTotal: nextGrandTotal,
+          createdBy: userId || updatedBill.createdBy,
+          entryDate: updatedBill.updatedAt,
+          isInterState,
+        });
+      }
+
       return updatedBill;
     });
 
     return NextResponse.json({ bill });
   } catch (error) {
-    console.error("Update bill error:", error);
+    logError("bills.update.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -403,22 +478,35 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const role = request.headers.get("x-user-role");
+  const userId = request.headers.get("x-user-id");
+
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  const tenantResolution = await resolveWriteTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
+  }
+  const tenantId = tenantResolution.tenantId;
 
   try {
     const { id } = await params;
     const existing = await prisma.bill.findFirst({
       where: {
         id,
+        tenantId,
         isDeleted: false,
       },
       select: {
         id: true,
         status: true,
+        billNumber: true,
+        subtotal: true,
+        taxAmount: true,
         grandTotal: true,
+        isInterState: true,
         partyId: true,
+        createdBy: true,
       },
     });
 
@@ -439,10 +527,12 @@ export async function DELETE(
       const party = await tx.party.findFirst({
         where: {
           id: existing.partyId,
+          tenantId,
           isDeleted: false,
         },
         select: {
           id: true,
+          name: true,
           type: true,
         },
       });
@@ -467,11 +557,26 @@ export async function DELETE(
           },
         });
       }
+
+      if (existing.status === "FINAL") {
+        await journalForCancelledSalesBill(tx, tenantId, {
+          id: existing.id,
+          billNumber: existing.billNumber,
+          partyId: party.id,
+          partyName: party.name,
+          subtotal: existing.subtotal,
+          taxAmount: existing.taxAmount,
+          grandTotal: existing.grandTotal,
+          createdBy: userId || existing.createdBy,
+          entryDate: new Date(),
+          isInterState: existing.isInterState,
+        });
+      }
     });
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Cancel bill error:", error);
+    logError("bills.cancel.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

@@ -8,41 +8,131 @@ function getSeedPassword(envKey: string, fallback: string) {
   if (value) {
     return value;
   }
-
   if (process.env.NODE_ENV === "production") {
     throw new Error(
       `${envKey} must be provided when seeding in production. Refusing to use demo passwords.`
     );
   }
-
   return fallback;
+}
+
+function resolveSeedTenantId() {
+  const fromSeed = process.env.SEED_TENANT_ID?.trim();
+  if (fromSeed) {
+    return fromSeed;
+  }
+  const fromDefault = process.env.DEFAULT_TENANT_ID?.trim();
+  if (fromDefault) {
+    return fromDefault;
+  }
+  return "default";
+}
+
+function resolveSeedTenantSlug() {
+  const fromSeed = process.env.SEED_TENANT_SLUG?.trim();
+  if (fromSeed) {
+    return fromSeed;
+  }
+  return "hisaabkitaab";
+}
+
+async function ensureSeedTenant() {
+  const explicitTenantId = resolveSeedTenantId();
+  const existingById = await prisma.tenant.findUnique({
+    where: { id: explicitTenantId },
+  });
+  if (existingById) {
+    return existingById;
+  }
+
+  const slug = resolveSeedTenantSlug();
+  const existingBySlug = await prisma.tenant.findUnique({
+    where: { slug },
+  });
+  if (existingBySlug) {
+    return existingBySlug;
+  }
+
+  const now = new Date();
+  return prisma.tenant.create({
+    data: {
+      id: explicitTenantId,
+      name: "HisaabKitaab",
+      slug,
+      phone: "9999999999",
+      email: "info@hisaabkitaab.com",
+      address: "Industrial Area, India",
+      gstin: null,
+      settings: {
+        billPrefix: "BILL",
+        defaultTaxPercent: 18,
+        defaultTerms: "1. Delivery within 2-3 weeks from order confirmation.\n2. 50% advance payment required.\n3. Warranty: 1 year on manufacturing defects.",
+        companyName: "HisaabKitaab",
+        companyPhone: "9999999999",
+        companyEmail: "info@hisaabkitaab.com",
+        companyAddress: "Industrial Area, India",
+        companyGstin: "",
+      },
+      plan: "FREE",
+      createdAt: now,
+      updatedAt: now,
+    },
+  });
 }
 
 async function main() {
   console.log("🌱 Seeding database...");
+  const tenant = await ensureSeedTenant();
+  console.log(`✅ Tenant ready: ${tenant.id} (${tenant.name})`);
+
+  const tenantId = tenant.id;
 
   // ── Admin User ──────────────────────────────────────
   const adminPassword = await bcrypt.hash(
     getSeedPassword("SEED_ADMIN_PASSWORD", "admin123"),
     12
   );
+  
+  const adminEmail = "admin@hisaabkitaab.com";
   const admin = await prisma.user.upsert({
-    where: { email: "admin@doorcraft.com" },
-    update: {},
-    create: {
+    where: {
+      tenantId_email: {
+        tenantId,
+        email: adminEmail,
+      },
+    },
+    update: {
       name: "Suraj Admin",
-      email: "admin@doorcraft.com",
+      phone: "9999999999",
+      password: adminPassword,
+      role: "ADMIN",
+      isActive: true,
+    },
+    create: {
+      tenantId,
+      name: "Suraj Admin",
+      email: adminEmail,
       phone: "9999999999",
       password: adminPassword,
       role: "ADMIN",
     },
   });
-  console.log(`✅ Admin user created: ${admin.email}`);
+  console.log(`✅ Admin user ready: ${admin.email}`);
 
   // ── Sample Bill Template ────────────────────────────
-  const template = await prisma.billTemplate.create({
+  const existingTemplate = await prisma.billTemplate.findFirst({
+    where: {
+      tenantId,
+      name: "Order Invoice",
+      isDeleted: false,
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const template = existingTemplate || await prisma.billTemplate.create({
     data: {
-      name: "Door Order Invoice",
+      tenantId,
+      name: "Order Invoice",
       createdBy: admin.id,
       columns: [
         { id: "desc-col-001", name: "Description", type: "text", position: 0 },
@@ -66,63 +156,73 @@ async function main() {
       ],
     },
   });
-  console.log(`✅ Template created: ${template.name}`);
-
-  // ── Company Settings ────────────────────────────────
-  await prisma.companySettings.upsert({
-    where: { id: "default" },
-    update: {},
-    create: {
-      id: "default",
-      companyName: "Sadhguru Door",
-      companyAddress: "Industrial Area, India",
-      companyPhone: "9999999999",
-      companyEmail: "info@sadhgurudoor.com",
-      defaultTaxPercent: 18,
-      defaultTerms:
-        "1. Delivery within 2-3 weeks from order confirmation.\n2. 50% advance payment required.\n3. Warranty: 1 year on manufacturing defects.",
-      billPrefix: "BILL",
-    },
-  });
-  console.log("✅ Company settings created");
+  console.log(`✅ Template ready: ${template.name}`);
 
   // ── Sample Staff user ───────────────────────────────
+  const staffEmail = "staff@hisaabkitaab.com";
   const staffPassword = await bcrypt.hash(
     getSeedPassword("SEED_STAFF_PASSWORD", "staff123"),
     12
   );
   await prisma.user.upsert({
-    where: { email: "staff@doorcraft.com" },
-    update: {},
-    create: {
+    where: {
+      tenantId_email: {
+        tenantId,
+        email: staffEmail,
+      },
+    },
+    update: {
       name: "Ravi Staff",
-      email: "staff@doorcraft.com",
+      phone: "8888888888",
+      password: staffPassword,
+      role: "STAFF",
+      createdBy: admin.id,
+      isActive: true,
+    },
+    create: {
+      tenantId,
+      name: "Ravi Staff",
+      email: staffEmail,
       phone: "8888888888",
       password: staffPassword,
       role: "STAFF",
       createdBy: admin.id,
     },
   });
-  console.log("✅ Staff user created: staff@doorcraft.com");
+  console.log(`✅ Staff user ready: ${staffEmail}`);
 
   // ── Sample Customer user ────────────────────────────
+  const custEmail = "rajesh@example.com";
   const custPassword = await bcrypt.hash(
     getSeedPassword("SEED_CUSTOMER_PASSWORD", "customer123"),
     12
   );
   await prisma.user.upsert({
-    where: { email: "rajesh@example.com" },
-    update: {},
-    create: {
+    where: {
+      tenantId_email: {
+        tenantId,
+        email: custEmail,
+      },
+    },
+    update: {
       name: "Rajesh Sharma",
-      email: "rajesh@example.com",
+      phone: "7777777777",
+      password: custPassword,
+      role: "CUSTOMER",
+      createdBy: admin.id,
+      isActive: true,
+    },
+    create: {
+      tenantId,
+      name: "Rajesh Sharma",
+      email: custEmail,
       phone: "7777777777",
       password: custPassword,
       role: "CUSTOMER",
       createdBy: admin.id,
     },
   });
-  console.log("✅ Customer user created: rajesh@example.com");
+  console.log(`✅ Customer user ready: ${custEmail}`);
 
   console.log("\n🎉 Seeding completed!");
 }

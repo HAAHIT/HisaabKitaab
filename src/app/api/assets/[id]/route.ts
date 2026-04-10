@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { readStoredObject } from "@/lib/object-storage";
+import { resolveReadTenant } from "@/lib/api-tenant";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+function isDirectReadableStorageProvider(
+  provider: string
+): provider is "local" | "gcs" {
+  return provider === "local" || provider === "gcs";
+}
 
 export async function GET(
   request: NextRequest,
@@ -15,6 +22,11 @@ export async function GET(
   if (!userId || !role) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const tenantResolution = resolveReadTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
+  }
+  const tenantId = tenantResolution.tenantId;
 
   const { id } = await params;
 
@@ -30,6 +42,7 @@ export async function GET(
           measurement: {
             select: {
               customerId: true,
+              tenantId: true,
             },
           },
         },
@@ -40,6 +53,28 @@ export async function GET(
 
   if (!asset) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  if (
+    asset.kind === "MEASUREMENT_PHOTO" &&
+    !asset.measurementPhotos.some(
+      (photo) => photo.measurement.tenantId === tenantId
+    )
+  ) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  if (asset.kind === "COMPANY_LOGO") {
+    const tenantLogoMatch = await prisma.tenant.findFirst({
+      where: {
+        id: tenantId,
+        logoUrl: `/api/assets/${id}`,
+      },
+      select: { id: true },
+    });
+    if (!tenantLogoMatch) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
   if (
@@ -56,12 +91,16 @@ export async function GET(
     return NextResponse.redirect(asset.storageKey);
   }
 
+  if (!isDirectReadableStorageProvider(asset.storageProvider)) {
+    return NextResponse.json({ error: "Unsupported storage provider" }, { status: 500 });
+  }
+
   try {
     const fileBuffer = await readStoredObject(
-      asset.storageProvider,
+      asset.storageProvider as "local" | "gcs",
       asset.storageKey
     );
-    return new NextResponse(fileBuffer, {
+    return new NextResponse(new Uint8Array(fileBuffer), {
       headers: {
         "Content-Type": asset.mimeType,
         "Cache-Control": "private, max-age=3600",
@@ -71,4 +110,3 @@ export async function GET(
     return NextResponse.json({ error: "File missing" }, { status: 404 });
   }
 }
-

@@ -1,10 +1,12 @@
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 import {
   buildMediaAssetCreateInputFromFile,
   deleteMediaAsset,
-  serializeCompanySettings,
 } from "@/lib/media";
 import { prisma } from "@/lib/prisma";
+import { resolveWriteTenant } from "@/lib/api-tenant";
+import { serializeTenantSettings } from "@/lib/tenant-settings";
+import { logError, getRequestId } from "@/lib/observability";
 
 export const runtime = "nodejs";
 
@@ -12,10 +14,15 @@ function isAdmin(request: Request) {
   return request.headers.get("x-user-role") === "ADMIN";
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   if (!isAdmin(request)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  const tenantResolution = await resolveWriteTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
+  }
+  const tenantId = tenantResolution.tenantId;
 
   let nextAsset:
     | Awaited<ReturnType<typeof buildMediaAssetCreateInputFromFile>>
@@ -46,48 +53,40 @@ export async function POST(request: Request) {
       namespace: "company-logos",
     });
 
-    const currentSettings = await prisma.companySettings.findUnique({
-      where: { id: "default" },
-      include: {
-        companyLogoAsset: true,
+    const previousTenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { logoUrl: true },
+    });
+
+    const asset = await prisma.mediaAsset.create({ data: nextAsset! });
+
+    // Update the logo URL on the tenant
+    const updatedTenant = await prisma.tenant.update({
+      where: { id: tenantId },
+      data: {
+        logoUrl: `/api/assets/${asset.id}`,
       },
     });
 
-    const settings = await prisma.$transaction(async (tx) => {
-      await tx.mediaAsset.create({ data: nextAsset! });
-
-      return tx.companySettings.upsert({
-        where: { id: "default" },
-        update: {
-          companyLogoAssetId: nextAsset!.id,
-          companyLogoLegacy: null,
-        },
-        create: {
-          id: "default",
-          companyLogoAssetId: nextAsset!.id,
-        },
-        include: {
-          companyLogoAsset: {
-            select: { id: true },
-          },
-        },
-      });
-    });
-
-    if (currentSettings?.companyLogoAsset) {
-      await prisma.mediaAsset.delete({
-        where: { id: currentSettings.companyLogoAsset.id },
-      });
-      await deleteMediaAsset(currentSettings.companyLogoAsset);
+    // Best effort cleanup of previous logo if it was a media asset
+    if (previousTenant?.logoUrl && previousTenant.logoUrl.startsWith("/api/assets/")) {
+      const oldId = previousTenant.logoUrl.replace("/api/assets/", "");
+      const oldAsset = await prisma.mediaAsset.findUnique({ where: { id: oldId } });
+      if (oldAsset) {
+        await prisma.mediaAsset.delete({ where: { id: oldId } });
+        await deleteMediaAsset(oldAsset);
+      }
     }
 
-    return NextResponse.json({ settings: serializeCompanySettings(settings) });
+    return NextResponse.json({
+      settings: serializeTenantSettings(updatedTenant),
+    });
   } catch (error) {
     if (nextAsset) {
       await deleteMediaAsset(nextAsset).catch(() => undefined);
     }
 
-    console.error("Upload logo error:", error);
+    logError("settings.logo.upload.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Failed to upload logo" },
       { status: 500 }
@@ -95,45 +94,44 @@ export async function POST(request: Request) {
   }
 }
 
-export async function DELETE(request: Request) {
+export async function DELETE(request: NextRequest) {
   if (!isAdmin(request)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  const tenantResolution = await resolveWriteTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
+  }
+  const tenantId = tenantResolution.tenantId;
 
   try {
-    const currentSettings = await prisma.companySettings.findUnique({
-      where: { id: "default" },
-      include: {
-        companyLogoAsset: true,
+    const previousTenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { logoUrl: true },
+    });
+
+    const updatedTenant = await prisma.tenant.update({
+      where: { id: tenantId },
+      data: {
+        logoUrl: null,
       },
     });
 
-    const settings = await prisma.companySettings.upsert({
-      where: { id: "default" },
-      update: {
-        companyLogoAssetId: null,
-        companyLogoLegacy: null,
-      },
-      create: {
-        id: "default",
-      },
-      include: {
-        companyLogoAsset: {
-          select: { id: true },
-        },
-      },
-    });
-
-    if (currentSettings?.companyLogoAsset) {
-      await prisma.mediaAsset.delete({
-        where: { id: currentSettings.companyLogoAsset.id },
-      });
-      await deleteMediaAsset(currentSettings.companyLogoAsset);
+    // Cleanup
+    if (previousTenant?.logoUrl && previousTenant.logoUrl.startsWith("/api/assets/")) {
+      const oldId = previousTenant.logoUrl.replace("/api/assets/", "");
+      const oldAsset = await prisma.mediaAsset.findUnique({ where: { id: oldId } });
+      if (oldAsset) {
+        await prisma.mediaAsset.delete({ where: { id: oldId } });
+        await deleteMediaAsset(oldAsset);
+      }
     }
 
-    return NextResponse.json({ settings: serializeCompanySettings(settings) });
+    return NextResponse.json({
+      settings: serializeTenantSettings(updatedTenant),
+    });
   } catch (error) {
-    console.error("Delete logo error:", error);
+    logError("settings.logo.delete.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Failed to delete logo" },
       { status: 500 }

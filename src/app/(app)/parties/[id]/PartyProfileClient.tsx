@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { Card, CardBody, Chip } from "@heroui/react";
+import { useState } from "react";
+import { Button, Card, CardBody, Chip } from "@heroui/react";
+import BalanceHeader from "@/components/parties/BalanceHeader";
+import LedgerChat from "@/components/parties/LedgerChat";
 import {
-  getBalanceIndicator,
   getBalanceStatusLabel,
   type PartyLedgerEntry,
   type SupportedPartyType,
@@ -44,28 +46,64 @@ type MeasurementItem = {
   createdAt: Date;
 };
 
+type ReconcileResult = {
+  total: number;
+  drifted: { partyId: string; name: string; stored: number; computed: number }[];
+};
+
 export default function PartyProfileClient({
   party,
   ledger,
   measurements,
   calculatedCurrent,
+  partyId,
+  role,
 }: {
   party: PartyProfile;
   ledger: PartyLedgerEntry[];
   measurements: MeasurementItem[];
   calculatedCurrent: number;
+  partyId: string;
+  role: string | null;
 }) {
-  const openingBalanceIndicator = getBalanceIndicator(
-    party.type,
-    party.openingBalance
-  );
+  const [reconcileResult, setReconcileResult] = useState<ReconcileResult | null>(null);
+  const [reconcileLoading, setReconcileLoading] = useState<"check" | "fix" | null>(null);
+  const [reconcileError, setReconcileError] = useState<string | null>(null);
+
+  async function handleCheckBalances() {
+    setReconcileLoading("check");
+    setReconcileError(null);
+    setReconcileResult(null);
+    try {
+      const res = await fetch("/api/parties/reconcile");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Check failed");
+      setReconcileResult(data);
+    } catch (err) {
+      setReconcileError(err instanceof Error ? err.message : "Check failed");
+    } finally {
+      setReconcileLoading(null);
+    }
+  }
+
+  async function handleFixBalances() {
+    setReconcileLoading("fix");
+    setReconcileError(null);
+    try {
+      const res = await fetch("/api/parties/reconcile", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Fix failed");
+      setReconcileResult(null);
+      await handleCheckBalances();
+    } catch (err) {
+      setReconcileError(err instanceof Error ? err.message : "Fix failed");
+      setReconcileLoading(null);
+    }
+  }
+
   const openingBalanceLabel = getBalanceStatusLabel(
     party.type,
     party.openingBalance
-  );
-  const currentBalanceLabel = getBalanceStatusLabel(
-    party.type,
-    calculatedCurrent
   );
 
   return (
@@ -107,113 +145,25 @@ export default function PartyProfileClient({
             </p>
           </div>
         </div>
-        <div className="text-right">
-          <p className="text-sm font-semibold uppercase tracking-wider text-default-500">
-            Current Balance
-          </p>
-          <p
-            className={`text-2xl font-bold ${
-              calculatedCurrent > 0
-                ? "text-success"
-                : calculatedCurrent < 0
-                  ? "text-danger"
-                  : "text-default-900"
-            }`}
-          >
-            {formatSignedCurrency(calculatedCurrent)}
-          </p>
-          <p className="text-xs text-default-400">{currentBalanceLabel}</p>
-        </div>
       </div>
+
+      <BalanceHeader
+        partyName={party.name}
+        partyType={party.type}
+        currentBalance={calculatedCurrent}
+        partyPhone={party.phone}
+      />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          <Card shadow="sm">
-            <CardBody className="p-0">
-              <div className="flex items-center justify-between border-b border-default-100 p-4">
-                <h2 className="flex items-center gap-2 text-lg font-semibold">
-                  <svg
-                    className="h-5 w-5 text-primary"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.5}
-                    />
-                  </svg>
-                  Ledger & Transactions
-                </h2>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-left">
-                  <thead>
-                    <tr className="bg-default-50 text-xs uppercase text-default-500">
-                      <th className="p-3 font-medium">Date</th>
-                      <th className="p-3 font-medium">Description</th>
-                      <th className="p-3 text-right font-medium">Debit</th>
-                      <th className="p-3 text-right font-medium">Credit</th>
-                      <th className="p-3 text-right font-medium">Balance</th>
-                    </tr>
-                  </thead>
-                  <tbody className="text-sm">
-                    {ledger.map((entry) => {
-                      const balanceIndicator = getBalanceIndicator(
-                        party.type,
-                        entry.balanceAfter
-                      );
-
-                      return (
-                        <tr
-                          key={entry.id}
-                          className="border-b border-default-100 transition hover:bg-default-50/50"
-                        >
-                          <td className="p-3 text-default-500">
-                            {new Date(entry.date).toLocaleDateString("en-IN", {
-                              day: "2-digit",
-                              month: "short",
-                              year: "numeric",
-                            })}
-                          </td>
-                          <td className="p-3 font-medium">
-                            {entry.link ? (
-                              <Link
-                                href={entry.link}
-                                className="text-primary hover:underline"
-                              >
-                                {entry.description}
-                              </Link>
-                            ) : (
-                              entry.description
-                            )}
-                          </td>
-                          <td className="p-3 text-right text-danger">
-                            {entry.debit > 0 ? formatCurrency(entry.debit) : "-"}
-                          </td>
-                          <td className="p-3 text-right text-success">
-                            {entry.credit > 0 ? formatCurrency(entry.credit) : "-"}
-                          </td>
-                          <td className="p-3 text-right font-medium">
-                            {balanceIndicator
-                              ? `${formatCurrency(entry.balanceAfter)} (${balanceIndicator})`
-                              : "INR 0"}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              {ledger.length === 1 && (
-                <div className="p-8 text-center text-default-500">
-                  <p>No transactions yet.</p>
-                </div>
-              )}
-            </CardBody>
-          </Card>
+          <LedgerChat
+            partyId={partyId}
+            partyName={party.name}
+            partyType={party.type}
+            partyPhone={party.phone}
+            currentBalance={calculatedCurrent}
+            ledger={ledger}
+          />
         </div>
 
         <div className="space-y-6">
@@ -250,7 +200,6 @@ export default function PartyProfileClient({
                   <p className="text-xs text-default-400">Opening Balance</p>
                   <p className="font-medium">
                     {formatSignedCurrency(party.openingBalance)}
-                    {openingBalanceIndicator ? ` (${openingBalanceIndicator})` : ""}
                   </p>
                   <p className="text-xs text-default-400">{openingBalanceLabel}</p>
                 </div>
@@ -263,6 +212,95 @@ export default function PartyProfileClient({
               </div>
             </CardBody>
           </Card>
+
+          {role === "ADMIN" && (
+            <Card shadow="sm">
+              <CardBody className="p-5">
+                <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
+                  <svg
+                    className="h-5 w-5 text-warning"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                    />
+                  </svg>
+                  Balance Health
+                </h2>
+                <p className="mb-4 text-xs text-default-400">
+                  Verify all party balances match their journal history.
+                </p>
+
+                {reconcileError && (
+                  <p className="mb-3 rounded-lg border border-danger/20 bg-danger/10 px-3 py-2 text-xs text-danger">
+                    {reconcileError}
+                  </p>
+                )}
+
+                {reconcileResult && (
+                  <div className="mb-4 space-y-2">
+                    {reconcileResult.drifted.length === 0 ? (
+                      <p className="rounded-lg bg-success/10 px-3 py-2 text-xs font-medium text-success">
+                        All {reconcileResult.total} balances are correct.
+                      </p>
+                    ) : (
+                      <>
+                        <p className="rounded-lg bg-warning/10 px-3 py-2 text-xs font-medium text-warning">
+                          {reconcileResult.drifted.length} of {reconcileResult.total} parties have drift.
+                        </p>
+                        <div className="max-h-36 space-y-1.5 overflow-y-auto">
+                          {reconcileResult.drifted.map((d) => (
+                            <div
+                              key={d.partyId}
+                              className="rounded-lg border border-default-100 p-2 text-xs"
+                            >
+                              <p className="font-medium">{d.name}</p>
+                              <p className="text-default-400">
+                                Stored: {formatSignedCurrency(d.stored)} → Actual:{" "}
+                                {formatSignedCurrency(d.computed)}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="flat"
+                    color="default"
+                    className="flex-1"
+                    isLoading={reconcileLoading === "check"}
+                    isDisabled={reconcileLoading !== null}
+                    onPress={handleCheckBalances}
+                  >
+                    Check
+                  </Button>
+                  {reconcileResult && reconcileResult.drifted.length > 0 && (
+                    <Button
+                      size="sm"
+                      variant="flat"
+                      color="warning"
+                      className="flex-1"
+                      isLoading={reconcileLoading === "fix"}
+                      isDisabled={reconcileLoading !== null}
+                      onPress={handleFixBalances}
+                    >
+                      Fix All
+                    </Button>
+                  )}
+                </div>
+              </CardBody>
+            </Card>
+          )}
 
           {party.type === "CUSTOMER" && (
             <Card shadow="sm">

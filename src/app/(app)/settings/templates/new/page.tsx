@@ -203,6 +203,7 @@ export default function CreateTemplatePage() {
         <Button
           isIconOnly
           variant="light"
+          aria-label="Back to templates"
           onPress={() => router.push("/settings/templates")}
         >
           <svg
@@ -249,7 +250,7 @@ export default function CreateTemplatePage() {
             {columns.map((col, index) => (
               <div
                 key={index}
-                className="flex flex-col gap-4 p-5 rounded-2xl bg-white dark:bg-default-50 border shadow-sm border-default-200 transition-all hover:border-primary/30"
+                className="flex flex-col gap-4 p-5 rounded-2xl bg-default-50 border shadow-sm border-default-200 transition-all hover:border-primary/30"
               >
                 <div className="flex items-start md:items-center gap-4">
                   <div className="flex flex-col gap-1 items-center bg-default-100 dark:bg-default-200/50 rounded-lg p-1">
@@ -294,7 +295,8 @@ export default function CreateTemplatePage() {
                     />
                     <Select
                       label={t("templates.type")}
-                      selectedKeys={[col.type]}
+                      placeholder={t("templates.type")}
+                      selectedKeys={new Set([col.type])}
                       onSelectionChange={(keys) => {
                         const val = Array.from(keys)[0] as string;
                         if (val) updateColumn(index, "type", val);
@@ -303,7 +305,8 @@ export default function CreateTemplatePage() {
                       size="sm"
                     >
                       {columnTypeOptions.map((option) => (
-                        <SelectItem key={option.key}>{option.label}</SelectItem>
+                        <SelectItem key={option.key} textValue={option.label}>{option.label}</SelectItem>
+
                       ))}
                     </Select>
                   </div>
@@ -313,6 +316,7 @@ export default function CreateTemplatePage() {
                     isIconOnly
                     variant="flat"
                     color="danger"
+                    aria-label={`Remove column ${index + 1}`}
                     onPress={() => removeColumn(index)}
                     isDisabled={columns.length === 1}
                     className="mt-1 md:mt-0"
@@ -330,6 +334,7 @@ export default function CreateTemplatePage() {
                       {t("templates.buildFormula")}
                     </p>
                     <Input
+                      aria-label={t("templates.buildFormula")}
                       placeholder={t("templates.formulaPlaceholder")}
                       value={col.formula || ""}
                       onValueChange={(v) => updateColumn(index, "formula", v)}
@@ -369,6 +374,7 @@ export default function CreateTemplatePage() {
                       {t("templates.dropdownOptions")}
                     </p>
                     <Input
+                      aria-label={t("templates.dropdownOptions")}
                       placeholder={t("templates.dropdownPlaceholder")}
                       value={(col.options || []).join(",")}
                       onValueChange={(v) => {
