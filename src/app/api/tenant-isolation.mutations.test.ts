@@ -71,18 +71,16 @@ describe("tenant isolation for critical mutations", () => {
       {
         templateId: "tmpl-shared",
         partyId: "party-1",
+        customerName: "Valid Customer",
         rows: [{ item: "Item", qty: 1 }],
       }
     );
 
     const response = await postBill(request);
-    // With input validation added, since customerName is not passed, it fails with 400 early
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(404);
     const payload = await response.json();
-    expect(payload.error).toBe("Customer name is required");
+    expect(payload.error).toBe("Template not found");
 
-    // We can't reach the template finding part since the validation correctly fails.
-    /*
     expect(prismaMock.billTemplate.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
@@ -92,7 +90,6 @@ describe("tenant isolation for critical mutations", () => {
         }),
       })
     );
-    */
   });
 
   it("rejects payment creation when linked bill belongs to a different tenant", async () => {

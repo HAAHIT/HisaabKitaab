@@ -125,6 +125,10 @@ export async function POST(request: NextRequest) {
   // ── Voucher import ────────────────────────────────────────────────────────
 
   async function resolvePartyId(
+    tx: Omit<
+      import("@prisma/client").PrismaClient,
+      "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
+    >,
     name: string,
     accountCode: AccountCode
   ): Promise<string> {
@@ -134,7 +138,7 @@ export async function POST(request: NextRequest) {
     // Create new party (already know it doesn't exist from cache)
     const partyType =
       accountCode === "SUNDRY_DEBTORS" ? "CUSTOMER" : "VENDOR";
-    const created = await prisma.party.create({
+    const created = await tx.party.create({
       data: {
         tenantId: tid,
         name,
@@ -179,7 +183,7 @@ export async function POST(request: NextRequest) {
         const lines = await Promise.all(
           voucher.lines.map(async (line) => {
             const partyId = line.partyName
-              ? await resolvePartyId(line.partyName, line.accountCode)
+              ? await resolvePartyId(tx, line.partyName, line.accountCode)
               : null;
 
             return {

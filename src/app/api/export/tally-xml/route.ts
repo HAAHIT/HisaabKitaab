@@ -6,6 +6,7 @@ import { logError, getRequestId } from "@/lib/observability";
 import {
   buildTallyVoucherXml,
   buildTallyPartyMasterXml,
+  buildCombinedTallyXml,
   dbVoucherTypeToTally,
   journalLineToTallyEntry,
   type TallyPartyMaster,
@@ -95,6 +96,8 @@ export async function GET(request: NextRequest) {
     let xml = "";
 
     // ── Party masters ────────────────────────────────────────────────────────
+    let fetchedParties: TallyPartyMaster[] = [];
+
     if (type === "masters" || type === "all") {
       const parties = await prisma.party.findMany({
         where: { tenantId, isDeleted: false },
@@ -110,7 +113,7 @@ export async function GET(request: NextRequest) {
         orderBy: { name: "asc" },
       });
 
-      const partyMasters: TallyPartyMaster[] = parties.map((p) => ({
+      fetchedParties = parties.map((p) => ({
         name: p.name,
         group: p.type === "CUSTOMER" ? "Sundry Debtors" : "Sundry Creditors",
         openingBalance: p.openingBalance,
@@ -121,13 +124,9 @@ export async function GET(request: NextRequest) {
       }));
 
       if (type === "masters") {
-        xml = buildTallyPartyMasterXml(partyMasters, companyName);
+        xml = buildTallyPartyMasterXml(fetchedParties, companyName);
         return xmlResponse(xml, `tally_masters_${from}_to_${to}.xml`);
       }
-
-      // For "all" — we'll combine below
-      const mastersXml = buildTallyPartyMasterXml(partyMasters, companyName);
-      xml += mastersXml;
     }
 
     // ── Vouchers ─────────────────────────────────────────────────────────────
@@ -150,32 +149,13 @@ export async function GET(request: NextRequest) {
         ledgerEntries: entry.lines.map(journalLineToTallyEntry),
       }));
 
-      const vouchersXml = buildTallyVoucherXml(vouchers, companyName);
-
       if (type === "vouchers") {
-        return xmlResponse(vouchersXml, `tally_vouchers_${from}_to_${to}.xml`);
+        xml = buildTallyVoucherXml(vouchers, companyName);
+        return xmlResponse(xml, `tally_vouchers_${from}_to_${to}.xml`);
       }
 
       // For "all" — append vouchers after masters
-      // Strip XML declaration from second doc and wrap both in one envelope
-      xml = buildCombinedXml(
-        entries,
-        await prisma.party.findMany({
-          where: { tenantId, isDeleted: false },
-          select: {
-            name: true,
-            type: true,
-            openingBalance: true,
-            phone: true,
-            email: true,
-            address: true,
-            gstin: true,
-          },
-        }),
-        companyName,
-        from,
-        to
-      );
+      xml = buildCombinedXml(fetchedParties, vouchers, companyName, from, to);
     }
 
     return xmlResponse(xml, `tally_export_${from}_to_${to}.xml`);
@@ -194,137 +174,16 @@ function xmlResponse(xml: string, filename: string) {
   });
 }
 
-/**
- * Builds a single XML envelope containing both party masters and vouchers.
- * Masters come first so Tally creates ledgers before processing vouchers.
- */
 function buildCombinedXml(
-  entries: Array<{
-    id: string;
-    entryDate: Date;
-    voucherType: string;
-    narration: string;
-    billId: string | null;
-    purchaseId: string | null;
-    paymentId: string | null;
-    lines: Array<{
-      accountName: string;
-      debit: number;
-      credit: number;
-      partyName: string | null;
-    }>;
-  }>,
-  parties: Array<{
-    name: string;
-    type: string;
-    openingBalance: number;
-    phone: string | null;
-    email: string | null;
-    address: string | null;
-    gstin: string | null;
-  }>,
+  parties: TallyPartyMaster[],
+  vouchers: TallyVoucher[],
   companyName: string,
   from: string,
   to: string
 ): string {
-  const partyMasters: TallyPartyMaster[] = parties.map((p) => ({
-    name: p.name,
-    group: p.type === "CUSTOMER" ? "Sundry Debtors" : "Sundry Creditors",
-    openingBalance: p.openingBalance,
-    phone: p.phone,
-    email: p.email,
-    address: p.address,
-    gstin: p.gstin,
-  }));
-
-  const vouchers: TallyVoucher[] = entries.map((entry) => ({
-    date: entry.entryDate,
-    voucherType: dbVoucherTypeToTally(entry.voucherType),
-    reference: entry.billId ?? entry.purchaseId ?? entry.paymentId ?? entry.id,
-    narration: entry.narration,
-    ledgerEntries: entry.lines.map(journalLineToTallyEntry),
-  }));
-
-  const messages = [
-    ...partyMasters.map(p => `
-    <TALLYMESSAGE xmlns:UDF="TallyUDF">
-      <LEDGER NAME="${escapeXmlForCombine(p.name)}" ACTION="Create">
-        <NAME>${escapeXmlForCombine(p.name)}</NAME>
-        <PARENT>${escapeXmlForCombine(p.group)}</PARENT>
-        ${p.openingBalance !== 0 ? `<OPENINGBALANCE>${p.openingBalance < 0 ? "-" : ""}${Math.abs(p.openingBalance).toFixed(2)}</OPENINGBALANCE>` : ""}
-        ${p.gstin ? `<GSTREGISTRATIONTYPE>Regular</GSTREGISTRATIONTYPE><PARTYGSTIN>${escapeXmlForCombine(p.gstin)}</PARTYGSTIN>` : ""}
-        ${p.address ? `<ADDRESS.LIST TYPE="String"><ADDRESS>${escapeXmlForCombine(p.address)}</ADDRESS></ADDRESS.LIST>` : ""}
-      </LEDGER>
-    </TALLYMESSAGE>`),
-    ...vouchers.map(v => {
-      const ledgerLines = v.ledgerEntries.map(entry => {
-        const billAllocations = entry.partyName
-          ? `
-        <BILLALLOCATIONS.LIST>
-          <NAME>${escapeXmlForCombine(entry.partyName)}</NAME>
-          <BILLTYPE>On Account</BILLTYPE>
-          <AMOUNT>${entry.amount >= 0 ? "" : "-"}${Math.abs(entry.amount).toFixed(2)}</AMOUNT>
-        </BILLALLOCATIONS.LIST>`
-          : "";
-
-        return `
-      <ALLLEDGERENTRIES.LIST>
-        <LEDGERNAME>${escapeXmlForCombine(entry.ledgerName)}</LEDGERNAME>
-        <ISDEEMEDPOSITIVE>${entry.amount >= 0 ? "Yes" : "No"}</ISDEEMEDPOSITIVE>
-        <AMOUNT>${entry.amount >= 0 ? "" : "-"}${Math.abs(entry.amount).toFixed(2)}</AMOUNT>${billAllocations}
-      </ALLLEDGERENTRIES.LIST>`;
-      }).join("");
-
-      return `
-    <TALLYMESSAGE xmlns:UDF="TallyUDF">
-      <VOUCHER VCHTYPE="${escapeXmlForCombine(v.voucherType)}" ACTION="Create" OBJVIEW="Accounting Voucher View">
-        <DATE>${formatTallyDateForCombine(v.date)}</DATE>
-        <VOUCHERTYPENAME>${escapeXmlForCombine(v.voucherType)}</VOUCHERTYPENAME>
-        <VOUCHERNUMBER>${escapeXmlForCombine(v.reference)}</VOUCHERNUMBER>
-        <NARRATION>${escapeXmlForCombine(v.narration)}</NARRATION>${ledgerLines}
-      </VOUCHER>
-    </TALLYMESSAGE>`;
-    })
-  ];
-
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<!-- HisaabKitaab Tally Export: ${from} to ${to} -->
-<ENVELOPE>
-  <HEADER>
-    <TALLYREQUEST>Import Data</TALLYREQUEST>
-  </HEADER>
-  <BODY>
-    <IMPORTDATA>
-      <REQUESTDESC>
-        <REPORTNAME>All Masters</REPORTNAME>
-        <STATICVARIABLES>
-          <SVCURRENTCOMPANY>${escapeXmlForCombine(companyName)}</SVCURRENTCOMPANY>
-        </STATICVARIABLES>
-      </REQUESTDESC>
-      <REQUESTDATA>${messages.join("")}
-      </REQUESTDATA>
-    </IMPORTDATA>
-  </BODY>
-</ENVELOPE>`;
-}
-
-function escapeXmlForCombine(value: string | number | null | undefined): string {
-  if (value === null || value === undefined) return "";
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
-
-function formatTallyDateForCombine(date: Date): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Kolkata",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  })
-    .format(date)
-    .replace(/-/g, ""); // YYYY-MM-DD → YYYYMMDD
+  const combinedXml = buildCombinedTallyXml(parties, vouchers, companyName);
+  return combinedXml.replace(
+    '<?xml version="1.0" encoding="UTF-8"?>\n<ENVELOPE>',
+    `<?xml version="1.0" encoding="UTF-8"?>\n<!-- HisaabKitaab Tally Export: ${from} to ${to} -->\n<ENVELOPE>`
+  );
 }

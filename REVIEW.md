@@ -4,7 +4,7 @@ This review focuses on the static code analysis of the HisaabKitaab backend code
 
 ## Executive Summary
 
-Overall, the application has a very strong foundation. Tenant isolation is enforced vigorously, double-entry bookkeeping rules are strictly observed, and transactions are utilized appropriately for sensitive operations like bill creation. However, there are a few important weaknesses that require attention—primarily incorrect default isInterState behavior affecting tax distribution, minor issues in the API payloads not gracefully handled, and an invalid XML structure produced when exporting Tally data in bulk.
+Overall, the application has a very strong foundation. Tenant isolation is enforced vigorously, double-entry bookkeeping rules are strictly observed, and transactions are utilized appropriately for sensitive operations like bill creation. However, there are a few important weaknesses that require attention—primarily an incorrect default `isInterState` behavior affecting tax distribution for intra/inter-state billing, minor issues in the API payloads not gracefully handled, and an invalid XML structure produced when exporting Tally data in bulk.
 
 ---
 
