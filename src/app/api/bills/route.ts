@@ -13,15 +13,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { logError, getRequestId } from "@/lib/observability";
+import crypto from "crypto";
 
-function generateLockKey(tenantId: string): number {
-  let hash = 0;
-  for (let i = 0; i < tenantId.length; i++) {
-    const char = tenantId.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash |= 0; // Convert to 32bit integer
-  }
-  return hash;
+function generateLockKey(tenantId: string): bigint {
+  const hash = crypto.createHash("sha256").update(tenantId).digest("hex");
+  // Use the first 15 hex characters (60 bits) to fit easily into PostgreSQL's 64-bit bigint lock space
+  return BigInt("0x" + hash.substring(0, 15));
 }
 
 type SupportedPaymentMode = "CASH" | "UPI" | "BANK_TRANSFER" | "CHEQUE";
@@ -40,6 +37,19 @@ function normalizePaymentMode(mode: unknown): SupportedPaymentMode | null {
     return null;
   }
   return VALID_PAYMENT_MODES.has(mode) ? (mode as SupportedPaymentMode) : null;
+}
+
+function isValidBillRequest(finalTemplateId: unknown, partyId: unknown, rows: unknown): boolean {
+  if (!finalTemplateId || typeof finalTemplateId !== "string" || !finalTemplateId.trim()) {
+    return false;
+  }
+  if (!partyId || typeof partyId !== "string" || !partyId.trim()) {
+    return false;
+  }
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return false;
+  }
+  return true;
 }
 
 function parseTenantSettings(value: unknown) {
@@ -195,19 +205,19 @@ export async function POST(request: NextRequest) {
   const tenantId = tenantResolution.tenantId;
 
   try {
-    const bodyText = await request.text();
-    let parsedBody;
+    let parsedBody: Record<string, unknown>;
     try {
+      const bodyText = await request.text();
+      if (!bodyText) {
+        return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+      }
       parsedBody = JSON.parse(bodyText);
     } catch {
-      parsedBody = {};
+      return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
     }
 
-    if (!parsedBody || typeof parsedBody !== "object" || Object.keys(parsedBody).length === 0) {
-      return NextResponse.json(
-        { error: "Template, party, and at least one row are required" },
-        { status: 400 }
-      );
+    if (!parsedBody || typeof parsedBody !== "object" || Array.isArray(parsedBody)) {
+      return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
     }
 
     const {
@@ -229,13 +239,6 @@ export async function POST(request: NextRequest) {
 
     let finalTemplateId = templateId;
     const isQuickBill = templateId === "__QUICK_BILL__";
-
-    if (!finalTemplateId || !partyId || !Array.isArray(rows) || rows.length === 0) {
-      return NextResponse.json(
-        { error: "Template, party, and at least one row are required" },
-        { status: 400 }
-      );
-    }
 
     if (!isQuickBill) {
       if (typeof customerName !== "string" || !customerName.trim()) {
@@ -271,7 +274,7 @@ export async function POST(request: NextRequest) {
       finalTemplateId = quickTemplate.id;
     }
 
-    if (!finalTemplateId || !partyId || !Array.isArray(rows) || rows.length === 0) {
+    if (!isValidBillRequest(finalTemplateId, partyId, rows)) {
       return NextResponse.json(
         { error: "Template, party, and at least one row are required" },
         { status: 400 }
@@ -351,7 +354,7 @@ export async function POST(request: NextRequest) {
 
     if (parsedBody.paymentMode && !normalizedPaymentMode) {
       return NextResponse.json(
-        { error: "Invalid payment mode for Quick Bill" },
+        { error: "Invalid payment mode" },
         { status: 400 }
       );
     }

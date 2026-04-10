@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
   const storage = getStorageStatus();
 
   try {
-    await prisma.tenant.findFirst({ select: { id: true } });
+    await prisma.$queryRaw`SELECT 1`;
 
     const status = storage.status === "ok" ? "ok" : "degraded";
     const response = NextResponse.json(
