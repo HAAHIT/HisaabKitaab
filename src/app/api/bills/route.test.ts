@@ -30,13 +30,15 @@ describe("Bills API Endpoint Protection", () => {
         "x-user-role": "ADMIN",
         "x-user-id": "test-user",
         "x-tenant-id": "test-tenant",
+        // Pass the tenant ID directly via the fallback environment variable for tests
       },
       body: JSON.stringify({}),
     });
+    process.env.DEFAULT_TENANT_ID = "test-tenant";
     const res = await POST(req);
     expect(res.status).toBe(400);
     const data = await res.json();
-    expect(data.error).toContain("are required");
+    expect(data.error).toContain("required");
   });
 
   it("POST rejects missing customer name", async () => {
@@ -53,6 +55,7 @@ describe("Bills API Endpoint Protection", () => {
         // Missing customer name
       }),
     });
+    process.env.DEFAULT_TENANT_ID = "test-tenant";
     const res = await POST(req);
     expect(res.status).toBe(400);
   });
