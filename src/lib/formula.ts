@@ -213,19 +213,23 @@ export function evaluateFormula(
   formula: string,
   rowValues: Record<string, number | string>
 ): number | null {
-  let expression = formula;
-  const refs = extractReferences(formula);
-
-  for (const ref of refs) {
+  let hasMissingRef = false;
+  let expression = formula.replace(/\{([^}]+)\}/g, (match, ref) => {
+    if (hasMissingRef) return match;
     const value = rowValues[ref];
-    if (value === undefined || value === "" || value === null) return null;
+    if (value === undefined || value === "" || value === null) {
+      hasMissingRef = true;
+      return match;
+    }
     const numValue = typeof value === "string" ? parseFloat(value) : value;
-    if (isNaN(numValue)) return null;
-    expression = expression.replace(
-      new RegExp(`\\{${escapeRegex(ref)}\\}`, "g"),
-      String(numValue)
-    );
-  }
+    if (isNaN(numValue)) {
+      hasMissingRef = true;
+      return match;
+    }
+    return String(numValue);
+  });
+
+  if (hasMissingRef) return null;
 
   // Replace × with * and ÷ with /
   expression = expression.replace(/×/g, "*").replace(/÷/g, "/");
@@ -298,29 +302,17 @@ export function validateFormula(
 /** Translates user-facing {Name} to internal {id} */
 export function translateFormulaToIds(userFormula: string, columns: ColumnDef[]): string {
   if (!userFormula) return "";
-  let result = userFormula;
-  const refs = extractReferences(userFormula);
-  for (const ref of refs) {
-    const col = columns.find(c => c.name === ref);
-    if (col) {
-      result = result.replace(new RegExp(`\\{${escapeRegex(ref)}\\}`, "g"), `{${col.id}}`);
-    }
-  }
-  return result;
+  return userFormula.replace(/\{([^}]+)\}/g, (match, name) => {
+    const col = columns.find((c) => c.name === name);
+    return col ? `{${col.id}}` : match;
+  });
 }
 
 /** Translates internal {id} to user-facing {Name} */
 export function translateFormulaToNames(internalFormula: string, columns: ColumnDef[]): string {
   if (!internalFormula) return "";
-  let result = internalFormula;
-  const refs = extractReferences(internalFormula);
-  for (const ref of refs) {
-    const col = columns.find(c => c.id === ref);
-    if (col) {
-      result = result.replace(new RegExp(`\\{${escapeRegex(ref)}\\}`, "g"), `{${col.name}}`);
-    } else {
-      result = result.replace(new RegExp(`\\{${escapeRegex(ref)}\\}`, "g"), `{Deleted}`);
-    }
-  }
-  return result;
+  return internalFormula.replace(/\{([^}]+)\}/g, (match, id) => {
+    const col = columns.find((c) => c.id === id);
+    return col ? `{${col.name}}` : "{Deleted}";
+  });
 }
