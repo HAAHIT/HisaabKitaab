@@ -1,11 +1,9 @@
-@import "tailwindcss";
-
-/* ── HeroUI Tailwind Plugin ───────────────────────────── */
-@source "../../node_modules/@heroui/theme/dist";
-@plugin "../../hero.ts";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 /* ── Custom Theme ─────────────────────────────────────── */
-@theme inline {
+:root {
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", "Fira Code", monospace;
 }
