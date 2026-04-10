@@ -6,6 +6,7 @@ import { logError, getRequestId } from "@/lib/observability";
 import {
   buildTallyVoucherXml,
   buildTallyPartyMasterXml,
+  buildCombinedTallyXml,
   dbVoucherTypeToTally,
   journalLineToTallyEntry,
   type TallyPartyMaster,
@@ -95,6 +96,8 @@ export async function GET(request: NextRequest) {
     let xml = "";
 
     // ── Party masters ────────────────────────────────────────────────────────
+    let fetchedParties: TallyPartyMaster[] = [];
+
     if (type === "masters" || type === "all") {
       const parties = await prisma.party.findMany({
         where: { tenantId, isDeleted: false },
@@ -110,7 +113,7 @@ export async function GET(request: NextRequest) {
         orderBy: { name: "asc" },
       });
 
-      const partyMasters: TallyPartyMaster[] = parties.map((p) => ({
+      fetchedParties = parties.map((p) => ({
         name: p.name,
         group: p.type === "CUSTOMER" ? "Sundry Debtors" : "Sundry Creditors",
         openingBalance: p.openingBalance,
@@ -121,13 +124,9 @@ export async function GET(request: NextRequest) {
       }));
 
       if (type === "masters") {
-        xml = buildTallyPartyMasterXml(partyMasters, companyName);
+        xml = buildTallyPartyMasterXml(fetchedParties, companyName);
         return xmlResponse(xml, `tally_masters_${from}_to_${to}.xml`);
       }
-
-      // For "all" — we'll combine below
-      const mastersXml = buildTallyPartyMasterXml(partyMasters, companyName);
-      xml += mastersXml;
     }
 
     // ── Vouchers ─────────────────────────────────────────────────────────────
@@ -150,32 +149,13 @@ export async function GET(request: NextRequest) {
         ledgerEntries: entry.lines.map(journalLineToTallyEntry),
       }));
 
-      const vouchersXml = buildTallyVoucherXml(vouchers, companyName);
-
       if (type === "vouchers") {
-        return xmlResponse(vouchersXml, `tally_vouchers_${from}_to_${to}.xml`);
+        xml = buildTallyVoucherXml(vouchers, companyName);
+        return xmlResponse(xml, `tally_vouchers_${from}_to_${to}.xml`);
       }
 
       // For "all" — append vouchers after masters
-      // Strip XML declaration from second doc and wrap both in one envelope
-      xml = buildCombinedXml(
-        entries,
-        await prisma.party.findMany({
-          where: { tenantId, isDeleted: false },
-          select: {
-            name: true,
-            type: true,
-            openingBalance: true,
-            phone: true,
-            email: true,
-            address: true,
-            gstin: true,
-          },
-        }),
-        companyName,
-        from,
-        to
-      );
+      xml = buildCombinedXml(fetchedParties, vouchers, companyName, from, to);
     }
 
     return xmlResponse(xml, `tally_export_${from}_to_${to}.xml`);
@@ -194,69 +174,16 @@ function xmlResponse(xml: string, filename: string) {
   });
 }
 
-/**
- * Builds a single XML envelope containing both party masters and vouchers.
- * Masters come first so Tally creates ledgers before processing vouchers.
- */
 function buildCombinedXml(
-  entries: Array<{
-    id: string;
-    entryDate: Date;
-    voucherType: string;
-    narration: string;
-    billId: string | null;
-    purchaseId: string | null;
-    paymentId: string | null;
-    lines: Array<{
-      accountName: string;
-      debit: number;
-      credit: number;
-      partyName: string | null;
-    }>;
-  }>,
-  parties: Array<{
-    name: string;
-    type: string;
-    openingBalance: number;
-    phone: string | null;
-    email: string | null;
-    address: string | null;
-    gstin: string | null;
-  }>,
+  parties: TallyPartyMaster[],
+  vouchers: TallyVoucher[],
   companyName: string,
   from: string,
   to: string
 ): string {
-  const partyMasters: TallyPartyMaster[] = parties.map((p) => ({
-    name: p.name,
-    group: p.type === "CUSTOMER" ? "Sundry Debtors" : "Sundry Creditors",
-    openingBalance: p.openingBalance,
-    phone: p.phone,
-    email: p.email,
-    address: p.address,
-    gstin: p.gstin,
-  }));
-
-  const vouchers: TallyVoucher[] = entries.map((entry) => ({
-    date: entry.entryDate,
-    voucherType: dbVoucherTypeToTally(entry.voucherType),
-    reference: entry.billId ?? entry.purchaseId ?? entry.paymentId ?? entry.id,
-    narration: entry.narration,
-    ledgerEntries: entry.lines.map(journalLineToTallyEntry),
-  }));
-
-  // Combine: masters XML + vouchers XML as one comment-separated file
-  // We return two separate XML documents joined — the user imports them
-  // sequentially, or we return them as a zip (future enhancement).
-  // For now, return masters followed by vouchers as separate XML declarations.
-  const mastersXml = buildTallyPartyMasterXml(partyMasters, companyName);
-  const vouchersXml = buildTallyVoucherXml(vouchers, companyName);
-
-  return (
-    `<!-- HisaabKitaab Tally Export: ${from} to ${to} -->\n` +
-    `<!-- Step 1: Import party masters (ledger definitions) -->\n` +
-    mastersXml +
-    `\n\n<!-- Step 2: Import vouchers -->\n` +
-    vouchersXml
+  const combinedXml = buildCombinedTallyXml(parties, vouchers, companyName);
+  return combinedXml.replace(
+    '<?xml version="1.0" encoding="UTF-8"?>\n<ENVELOPE>',
+    `<?xml version="1.0" encoding="UTF-8"?>\n<!-- HisaabKitaab Tally Export: ${from} to ${to} -->\n<ENVELOPE>`
   );
 }

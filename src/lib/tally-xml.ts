@@ -225,3 +225,19 @@ export function buildTallyPartyMasterXml(
   const messages = parties.map(buildPartyMasterXml);
   return buildEnvelope(messages, companyName);
 }
+
+/**
+ * Serializes both party masters and vouchers to a single Tally-importable XML envelope.
+ * Masters are output first to ensure Tally creates ledgers before processing vouchers.
+ */
+export function buildCombinedTallyXml(
+  parties: TallyPartyMaster[],
+  vouchers: TallyVoucher[],
+  companyName: string
+): string {
+  const messages = [
+    ...parties.map(buildPartyMasterXml),
+    ...vouchers.map(buildVoucherXml),
+  ];
+  return buildEnvelope(messages, companyName);
+}

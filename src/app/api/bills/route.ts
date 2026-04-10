@@ -13,8 +13,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { logError, getRequestId } from "@/lib/observability";
+import crypto from "crypto";
 
-const BILL_NUMBER_LOCK_KEY = 22032026;
+function generateLockKey(tenantId: string): bigint {
+  const hash = crypto.createHash("sha256").update(tenantId).digest("hex");
+  // Use the first 15 hex characters (60 bits) to fit easily into PostgreSQL's 64-bit bigint lock space
+  return BigInt("0x" + hash.substring(0, 15));
+}
+
 type SupportedPaymentMode = "CASH" | "UPI" | "BANK_TRANSFER" | "CHEQUE";
 const VALID_PAYMENT_MODES = new Set([
   "CASH",
@@ -31,6 +37,19 @@ function normalizePaymentMode(mode: unknown): SupportedPaymentMode | null {
     return null;
   }
   return VALID_PAYMENT_MODES.has(mode) ? (mode as SupportedPaymentMode) : null;
+}
+
+function isValidBillRequest(finalTemplateId: unknown, partyId: unknown, rows: unknown): boolean {
+  if (!finalTemplateId || typeof finalTemplateId !== "string" || !finalTemplateId.trim()) {
+    return false;
+  }
+  if (!partyId || typeof partyId !== "string" || !partyId.trim()) {
+    return false;
+  }
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return false;
+  }
+  return true;
 }
 
 function parseTenantSettings(value: unknown) {
@@ -186,7 +205,21 @@ export async function POST(request: NextRequest) {
   const tenantId = tenantResolution.tenantId;
 
   try {
-    const body = await request.json();
+    let parsedBody: Record<string, unknown>;
+    try {
+      const bodyText = await request.text();
+      if (!bodyText) {
+        return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+      }
+      parsedBody = JSON.parse(bodyText);
+    } catch {
+      return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+    }
+
+    if (!parsedBody || typeof parsedBody !== "object" || Array.isArray(parsedBody)) {
+      return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+    }
+
     const {
       templateId,
       partyId,
@@ -202,10 +235,16 @@ export async function POST(request: NextRequest) {
       taxAmount,
       grandTotal,
       status,
-    } = body;
+    } = parsedBody;
 
     let finalTemplateId = templateId;
     const isQuickBill = templateId === "__QUICK_BILL__";
+
+    if (!isQuickBill) {
+      if (typeof customerName !== "string" || !customerName.trim()) {
+        return NextResponse.json({ error: "Customer name is required" }, { status: 400 });
+      }
+    }
 
     if (isQuickBill) {
       if (!partyId) {
@@ -235,7 +274,7 @@ export async function POST(request: NextRequest) {
       finalTemplateId = quickTemplate.id;
     }
 
-    if (!finalTemplateId || !partyId || !Array.isArray(rows) || rows.length === 0) {
+    if (!isValidBillRequest(finalTemplateId, partyId, rows)) {
       return NextResponse.json(
         { error: "Template, party, and at least one row are required" },
         { status: 400 }
@@ -284,14 +323,23 @@ export async function POST(request: NextRequest) {
         ? grandTotal
         : 0;
     const billStatus = status === "FINAL" ? "FINAL" : "DRAFT";
-    if (body.isInterState !== undefined && typeof body.isInterState !== "boolean") {
-      return NextResponse.json(
-        { error: "isInterState must be a boolean" },
-        { status: 400 }
-      );
+    if (!isQuickBill) {
+      if (typeof parsedBody.isInterState !== "boolean") {
+        return NextResponse.json(
+          { error: "isInterState must be a boolean" },
+          { status: 400 }
+        );
+      }
+    } else {
+      if (parsedBody.isInterState !== undefined && typeof parsedBody.isInterState !== "boolean") {
+        return NextResponse.json(
+          { error: "isInterState must be a boolean" },
+          { status: 400 }
+        );
+      }
     }
-    const isInterState = body.isInterState === true;
-    const normalizedPaymentMode = normalizePaymentMode(body.paymentMode);
+    const isInterState = parsedBody.isInterState === true;
+    const normalizedPaymentMode = normalizePaymentMode(parsedBody.paymentMode);
     const now = new Date();
     const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -304,9 +352,9 @@ export async function POST(request: NextRequest) {
       gstin,
     });
 
-    if (body.paymentMode && !normalizedPaymentMode) {
+    if (parsedBody.paymentMode && !normalizedPaymentMode) {
       return NextResponse.json(
-        { error: "Invalid payment mode for Quick Bill" },
+        { error: "Invalid payment mode" },
         { status: 400 }
       );
     }
@@ -326,7 +374,8 @@ export async function POST(request: NextRequest) {
     }
 
     const bill = await prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${BILL_NUMBER_LOCK_KEY})`;
+      const lockKey = generateLockKey(tenantId);
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
 
       const existingCount = await tx.bill.count({
         where: {
