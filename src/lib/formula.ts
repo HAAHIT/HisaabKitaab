@@ -313,6 +313,7 @@ export function translateFormulaToNames(internalFormula: string, columns: Column
   if (!internalFormula) return "";
   return internalFormula.replace(/\{([^}]+)\}/g, (match, id) => {
     const col = columns.find((c) => c.id === id);
-    return col ? `{${col.name}}` : "{Deleted}";
+    return col ? `{${col.name}}` : match;
+  });
   });
 }
