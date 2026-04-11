@@ -88,7 +88,68 @@ export async function GET(
   }
 
   if (asset.storageProvider === "proxy") {
-    return NextResponse.redirect(asset.storageKey);
+    try {
+      const url = new URL(asset.storageKey);
+      if (url.protocol !== "http:" && url.protocol !== "https:") {
+        return NextResponse.json({ error: "Invalid proxy URL" }, { status: 400 });
+      }
+
+      // Check for local/private IP ranges to prevent SSRF
+      const hostname = url.hostname.toLowerCase();
+      const isPrivateIP = (host: string) => {
+        if (host === "localhost" || host === "127.0.0.1" || host === "::1") return true;
+        if (host.startsWith("10.")) return true; // 10.0.0.0/8
+        if (host.startsWith("192.168.")) return true; // 192.168.0.0/16
+        if (host.startsWith("169.254.")) return true; // 169.254.0.0/16
+
+        // 172.16.0.0/12
+        const match = host.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./);
+        if (match) return true;
+
+        return false;
+      };
+
+      if (isPrivateIP(hostname)) {
+        return NextResponse.json({ error: "Forbidden proxy target" }, { status: 403 });
+      }
+
+      const proxyResponse = await fetch(asset.storageKey, {
+        method: "GET",
+        headers: {
+          "User-Agent": "HisaabKitaab/1.0 AssetProxy",
+        },
+        // Limit the timeout to prevent hanging
+        signal: AbortSignal.timeout(5000),
+      });
+
+      if (!proxyResponse.ok) {
+        return NextResponse.json(
+          { error: "Failed to fetch proxied asset" },
+          { status: 502 }
+        );
+      }
+
+      const contentType = proxyResponse.headers.get("content-type");
+      if (contentType && !contentType.startsWith("image/")) {
+        return NextResponse.json(
+          { error: "Proxied asset must be an image" },
+          { status: 400 }
+        );
+      }
+
+      // Proxy the stream instead of loading the whole blob into memory (prevents DoS for large files)
+      return new NextResponse(proxyResponse.body, {
+        headers: {
+          "Content-Type": contentType || asset.mimeType,
+          "Cache-Control": "private, max-age=3600",
+        },
+      });
+    } catch (error) {
+      return NextResponse.json(
+        { error: "Invalid proxy configuration" },
+        { status: 400 }
+      );
+    }
   }
 
   if (!isDirectReadableStorageProvider(asset.storageProvider)) {
