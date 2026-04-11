@@ -24,6 +24,7 @@ describe("Bills API Endpoint Protection", () => {
   });
 
   it("POST rejects missing payload completely", async () => {
+    const prevDefaultTenantId = process.env.DEFAULT_TENANT_ID;
     const req = new NextRequest("http://localhost/api/bills", {
       method: "POST",
       headers: {
@@ -33,13 +34,20 @@ describe("Bills API Endpoint Protection", () => {
       },
       body: JSON.stringify({}),
     });
-    const res = await POST(req);
-    expect(res.status).toBe(400);
-    const data = await res.json();
-    expect(data.error).toContain("are required");
+    process.env.DEFAULT_TENANT_ID = "test-tenant";
+    try {
+      const res = await POST(req);
+      expect(res.status).toBe(400);
+      const data = await res.json();
+      expect(data.error).toContain("are required");
+    } finally {
+      if (prevDefaultTenantId === undefined) delete process.env.DEFAULT_TENANT_ID;
+      else process.env.DEFAULT_TENANT_ID = prevDefaultTenantId;
+    }
   });
 
   it("POST rejects missing customer name", async () => {
+    const prevDefaultTenantId = process.env.DEFAULT_TENANT_ID;
     const req = new NextRequest("http://localhost/api/bills", {
       method: "POST",
       headers: {
@@ -53,7 +61,13 @@ describe("Bills API Endpoint Protection", () => {
         // Missing customer name
       }),
     });
-    const res = await POST(req);
-    expect(res.status).toBe(400);
+    process.env.DEFAULT_TENANT_ID = "test-tenant";
+    try {
+      const res = await POST(req);
+      expect(res.status).toBe(400);
+    } finally {
+      if (prevDefaultTenantId === undefined) delete process.env.DEFAULT_TENANT_ID;
+      else process.env.DEFAULT_TENANT_ID = prevDefaultTenantId;
+    }
   });
 });
