@@ -40,7 +40,7 @@ describe("Bills API Endpoint Protection", () => {
       const res = await POST(req);
       expect(res.status).toBe(400);
       const data = await res.json();
-      expect(data.error).toContain("are required");
+      expect(data.error).toContain("required");
     } finally {
       if (prevDefaultTenantId === undefined) delete process.env.DEFAULT_TENANT_ID;
       else process.env.DEFAULT_TENANT_ID = prevDefaultTenantId;

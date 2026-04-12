@@ -19,10 +19,6 @@ export function extractReferences(formula: string): string[] {
   return matches.map((m) => m.slice(1, -1));
 }
 
-function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 type MathToken =
   | { type: "number"; value: number }
   | { type: "operator"; value: "+" | "-" | "*" | "/" | "%" }
@@ -313,7 +309,6 @@ export function translateFormulaToNames(internalFormula: string, columns: Column
   if (!internalFormula) return "";
   return internalFormula.replace(/\{([^}]+)\}/g, (match, id) => {
     const col = columns.find((c) => c.id === id);
-    return col ? `{${col.name}}` : match;
-  });
+    return col ? `{${col.name}}` : `{Deleted}`;
   });
 }
