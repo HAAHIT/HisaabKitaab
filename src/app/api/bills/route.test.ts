@@ -31,6 +31,7 @@ describe("Bills API Endpoint Protection", () => {
         "x-user-role": "ADMIN",
         "x-user-id": "test-user",
         "x-tenant-id": "test-tenant",
+        // Pass the tenant ID directly via the fallback environment variable for tests
       },
       body: JSON.stringify({}),
     });
