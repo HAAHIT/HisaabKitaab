@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import {
   buildBillSnapshotFromParty,
   getPostedBillBalanceDelta,
@@ -118,8 +119,7 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "20");
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const where: any = { isDeleted: false, tenantId };
+    const where: Prisma.BillWhereInput = { isDeleted: false, tenantId };
 
     if (search) {
       where.OR = [
