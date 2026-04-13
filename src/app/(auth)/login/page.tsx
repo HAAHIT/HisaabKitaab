@@ -29,7 +29,7 @@ function getErrorMessage(language: Language, errorCode: string | undefined) {
 }
 
 function getSafeReturnPath(pathname: string) {
-  if (!pathname.startsWith("/") || pathname.startsWith("//")) {
+  if (!pathname.startsWith("/") || pathname.startsWith("//") || pathname.startsWith("/\\")) {
     return "/login";
   }
 

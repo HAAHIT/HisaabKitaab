@@ -315,5 +315,4 @@ export function translateFormulaToNames(internalFormula: string, columns: Column
     const col = columns.find((c) => c.id === id);
     return col ? `{${col.name}}` : match;
   });
-  });
 }
