@@ -115,6 +115,7 @@ const CreateBillSchema = z.object({
   status: z.string().optional(),
   isInterState: z.boolean().optional(),
   paymentMode: z.string().optional(),
+  hsnCode: z.string().nullish(),
 }).superRefine((data, ctx) => {
   // [P0] FINAL bills must always declare place of supply for GSTR-1 compliance.
   // Not limited to B2B — even B2C inter-state supplies require placeOfSupply.
@@ -139,7 +140,8 @@ const CreateBillSchema = z.object({
         typeof row === "object" &&
         typeof (row as Record<string, unknown>)["_hsnCode"] === "string" &&
         ((row as Record<string, unknown>)["_hsnCode"] as string).trim() !== ""
-    )
+    ) &&
+    !(typeof data.hsnCode === "string" && data.hsnCode.trim() !== "")
   ) {
     ctx.addIssue({
       code: "custom",
@@ -352,6 +354,7 @@ export async function POST(request: NextRequest) {
       taxAmount,
       grandTotal,
       status,
+      hsnCode,
     } = body;
 
     let finalTemplateId = templateId;
@@ -523,6 +526,7 @@ export async function POST(request: NextRequest) {
           status: billStatus,
           isInterState,
           placeOfSupply: body.placeOfSupply ?? null,  // [B1] GSTR-1 mandatory field
+          hsnCode: hsnCode ?? null, // Fallback HSN Code
           createdBy: userId!,
           isDeleted: false,
         },

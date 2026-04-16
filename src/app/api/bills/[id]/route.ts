@@ -35,6 +35,7 @@ const ALLOWED_BILL_PATCH_KEYS = new Set([
   "grandTotal",
   "status",
   "isInterState",
+  "hsnCode",
 ]);
 
 const ALLOWED_BILL_PATCH_STATUSES = new Set(["DRAFT", "FINAL"]);
@@ -196,6 +197,7 @@ export async function PATCH(
         createdBy: true,
         rows: true,        // needed for HSN validation gate
         placeOfSupply: true, // needed for placeOfSupply validation gate
+        hsnCode: true,
       },
     });
 
@@ -308,6 +310,11 @@ export async function PATCH(
       const pos = body.placeOfSupply;
       updateData.placeOfSupply =
         typeof pos === "string" && pos ? pos : null;
+    }
+
+    if (hasOwn(body, "hsnCode")) {
+      const hsn = body.hsnCode;
+      updateData.hsnCode = typeof hsn === "string" && hsn.trim() ? hsn.trim() : null;
     }
 
     let nextPartyId = existing.partyId;
@@ -466,7 +473,9 @@ export async function PATCH(
             typeof (row as Record<string, unknown>)["_hsnCode"] === "string" &&
             ((row as Record<string, unknown>)["_hsnCode"] as string).trim() !== ""
         );
-      if (!hasHsn) {
+      const hasFallbackHsn = hasOwn(updateData, "hsnCode") ? !!updateData.hsnCode : !!existing.hsnCode;
+      
+      if (!hasHsn && !hasFallbackHsn) {
         return NextResponse.json(
           {
             error:

@@ -47,6 +47,7 @@ interface BillResponse {
   notes: string | null;
   terms: string | null;
   taxPercent: number;
+  hsnCode?: string | null;
 }
 
 function formatCurrency(value: number) {
@@ -116,6 +117,7 @@ export default function EditBillPage({
   const [taxPercent, setTaxPercent] = useState(18);
   const [isInterState, setIsInterState] = useState(false);
   const [placeOfSupply, setPlaceOfSupply] = useState("");
+  const [hsnCode, setHsnCode] = useState("");
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("");
 
@@ -153,6 +155,7 @@ export default function EditBillPage({
       setNotes(nextBill.notes || "");
       setTerms(nextBill.terms || "");
       setTaxPercent(nextBill.taxPercent);
+      setHsnCode(nextBill.hsnCode || "");
       setIsInterState(nextBill.isInterState === true);
       setPlaceOfSupply(nextBill.placeOfSupply || "");
 
@@ -280,10 +283,13 @@ export default function EditBillPage({
     if (!customerName.trim()) {
       formErrors.customerName = true;
     }
+    if (status === "FINAL" && !placeOfSupply) {
+      formErrors.placeOfSupply = true;
+    }
 
     if (Object.keys(formErrors).length > 0) {
       setErrors(formErrors);
-      showToast("Please fill in required fields", "error");
+      showToast("Please fill in required fields (Place of Supply is mandatory for final bills)", "error");
       mainScroll?.scrollTo({ top: 0, behavior: "smooth" });
       window.setTimeout(() => setErrors({}), 3000);
       return;
@@ -310,6 +316,8 @@ export default function EditBillPage({
           taxAmount,
           grandTotal,
           isInterState,
+          hsnCode: hsnCode.trim() || null,
+          placeOfSupply: placeOfSupply.trim() || null,
           status,
         }),
       });
@@ -465,7 +473,32 @@ export default function EditBillPage({
 
         <Card shadow="sm" className="mb-6">
           <CardHeader className="flex items-center justify-between px-6 pt-6 pb-0">
-            <h2 className="text-lg font-semibold">Line Items</h2>
+            <div className="flex gap-4 items-center">
+              <h2 className="text-lg font-semibold">Line Items</h2>
+              <Select
+                aria-label="Place of supply"
+                placeholder="Place of Supply (State)"
+                size="sm"
+                variant="bordered"
+                className="w-[200px]"
+                selectedKeys={placeOfSupply ? new Set([placeOfSupply]) : new Set([])}
+                onSelectionChange={(keys) => {
+                  const value = Array.from(keys)[0] as string | undefined;
+                  setPlaceOfSupply(value ?? "");
+                  if (value) {
+                    setErrors((curr) => ({ ...curr, placeOfSupply: false }));
+                  }
+                }}
+                isInvalid={Boolean(errors.placeOfSupply)}
+                errorMessage={errors.placeOfSupply ? "Required for final bills" : undefined}
+              >
+                {Object.entries(GST_STATE_CODES).map(([code, name]) => (
+                  <SelectItem key={code} textValue={`${code} - ${name}`}>
+                    {code} — {name}
+                  </SelectItem>
+                ))}
+              </Select>
+            </div>
             <Button
               size="sm"
               variant="flat"
@@ -657,6 +690,18 @@ export default function EditBillPage({
                     />
                     <span className="text-xs text-default-500">Inter-state (IGST)</span>
                   </label>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="shrink-0 text-sm text-default-500">HSN/SAC Code</span>
+                  <Input
+                    aria-label="HSN/SAC Code"
+                    placeholder="e.g. 9983"
+                    size="sm"
+                    variant="bordered"
+                    value={hsnCode}
+                    onValueChange={setHsnCode}
+                    className="max-w-[200px]"
+                  />
                 </div>
                 <Divider />
                 <div className="flex justify-between">
