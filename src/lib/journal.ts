@@ -7,7 +7,7 @@ import {
 import { roundTo2 } from "@/lib/journal-reporting";
 
 type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
-type VoucherType = "SALES" | "PURCHASE" | "RECEIPT" | "PAYMENT" | "JOURNAL" | "CREDIT_NOTE";
+type VoucherType = "SALES" | "PURCHASE" | "RECEIPT" | "PAYMENT" | "JOURNAL" | "CREDIT_NOTE" | "DEBIT_NOTE";
 
 interface JournalLineInput {
   accountCode: AccountCode;
@@ -26,6 +26,12 @@ interface JournalEntryParams {
   purchaseId?: string;
   paymentId?: string;
   isReverseCharge?: boolean;
+  /**
+   * Tally REMOTEID (with "HisaabKitaab-" prefix already stripped).
+   * Stored in JournalEntry.remoteId for idempotent Tally re-imports.
+   * Null / undefined for natively-created entries.
+   */
+  remoteId?: string | null;
   createdBy: string;
   lines: JournalLineInput[];
 }
@@ -146,6 +152,7 @@ export async function createJournalEntry(
       purchaseId: params.purchaseId,
       paymentId: params.paymentId,
       isReverseCharge: params.isReverseCharge || false,
+      remoteId: params.remoteId ?? null,
       createdBy: params.createdBy,
       totalDebit,
       totalCredit,

@@ -46,7 +46,7 @@ export async function recomputePartyBalance(
 
       if (!party) throw new Error(`Party ${partyId} not found`);
 
-      const [bills, payments, notes] = await Promise.all([
+      const [bills, payments, noteLines] = await Promise.all([
         tx.bill.findMany({
           where: { partyId, tenantId, status: "FINAL", isDeleted: false },
           select: { grandTotal: true },
@@ -55,13 +55,26 @@ export async function recomputePartyBalance(
           where: { partyId, tenantId, status: "COMPLETED", isDeleted: false },
           select: { amount: true, direction: true },
         }),
-        tx.journalEntry.findMany({
+        // Query the party-specific JournalLine rows for all CREDIT_NOTE / DEBIT_NOTE entries.
+        // This mirrors the sign convention in buildPartyLedger (accounting.ts:296-299):
+        //   CREDIT_NOTE party line → credit = grandTotal, debit = 0  → delta = +(credit − debit)
+        //   DEBIT_NOTE  party line → debit = grandTotal, credit = 0  → delta = +(debit − credit)
+        // Both add +grandTotal to balance (outstanding amount is reduced in both cases).
+        // Using JournalLine directly is defensive: it remains correct even if a JournalEntry
+        // is somehow stored with isBalanced=false (totalDebit ≠ grandTotal).
+        tx.journalLine.findMany({
           where: {
-            tenantId,
-            voucherType: { in: ["CREDIT_NOTE", "DEBIT_NOTE"] },
-            lines: { some: { partyId } },
+            partyId,
+            journal: {
+              tenantId,
+              voucherType: { in: ["CREDIT_NOTE", "DEBIT_NOTE"] },
+            },
           },
-          select: { totalDebit: true },
+          select: {
+            debit: true,
+            credit: true,
+            journal: { select: { voucherType: true } },
+          },
         }),
       ]);
 
@@ -80,10 +93,21 @@ export async function recomputePartyBalance(
           ),
         0
       );
-      // Both CREDIT_NOTE and DEBIT_NOTE reduce the outstanding balance by their grandTotal.
-      const noteDelta = notes.reduce(
-        (sum: number, n: { totalDebit: { toNumber: () => number } }) =>
-          sum + n.totalDebit.toNumber(),
+      const noteDelta = noteLines.reduce(
+        (
+          sum: number,
+          line: {
+            debit: { toNumber: () => number };
+            credit: { toNumber: () => number };
+            journal: { voucherType: string };
+          }
+        ) => {
+          const d = line.debit.toNumber();
+          const c = line.credit.toNumber();
+          // DEBIT_NOTE party line is a debit (debit > credit) → positive delta.
+          // CREDIT_NOTE party line is a credit (credit > debit) → positive delta.
+          return sum + (line.journal.voucherType === "DEBIT_NOTE" ? d - c : c - d);
+        },
         0
       );
 

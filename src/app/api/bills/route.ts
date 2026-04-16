@@ -527,6 +527,19 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      // [MCA GSR 247(E)] Append-only edit log — mandatory since April 1 2023.
+      // Logged inside the same transaction so log entry and bill creation are atomic.
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          entityType: "Bill",
+          entityId: createdBill.id,
+          userId: userId!,  // guarded: 401 returned at line 302-304 if missing
+          action: "CREATE",
+          // fieldName / oldValue / newValue = null for whole-record CREATE events
+        },
+      });
+
       const balanceChange = getPostedBillBalanceDelta(
         party.type,
         billStatus,

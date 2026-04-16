@@ -126,7 +126,8 @@ model ItemCatalog {
   hsnCode   String?
   unit      String   @default("pcs")
   rate      Decimal  @default(0) @db.Decimal(19, 4) // [B3] Float → Decimal
-  taxRate   Decimal? @db.Decimal(5, 2) // [B3] Float → Decimal
+  taxRate   Decimal? @db.Decimal(5, 2)  // [B3] Float → Decimal
+  cessRate  Decimal? @db.Decimal(5, 2)  // GST Cess % (tobacco, aerated drinks, luxury goods)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -149,7 +150,8 @@ model Bill {
   terms           String?
   subtotal        Decimal        @db.Decimal(19, 4) // [B3] Float → Decimal
   taxPercent      Decimal        @default(0) @db.Decimal(5, 2) // [B3] Float → Decimal
-  taxAmount       Decimal        @default(0) @db.Decimal(19, 4) // [B3] Float → Decimal
+  taxAmount       Decimal        @default(0) @db.Decimal(19, 4)  // [B3] Float → Decimal
+  cessAmount      Decimal        @default(0) @db.Decimal(19, 4)  // GST Cess amount charged on this bill
   grandTotal      Decimal        @db.Decimal(19, 4) // [B3] Float → Decimal
   placeOfSupply   String? // [B1] GSTR-1 mandatory field
   status          BillStatus     @default(DRAFT)

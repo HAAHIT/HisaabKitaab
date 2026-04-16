@@ -73,8 +73,22 @@ export interface TallyVoucher {
   /** True = IGST; false = CGST+SGST split.  Affects <TAXTYPE> tag. */
   isInterState?: boolean;
   /**
-   * Unique HSN/SAC codes found in bill rows (_hsnCode key convention).
-   * Written into <GSTDETAILS.LIST> when present.
+   * Bill-level Cess amount (₹) — emitted as <CESS> in GSTDETAILS.LIST.
+   * Required for tobacco, aerated drinks, and luxury goods.
+   * Zero / null for non-cess items.
+   */
+  cessAmount?: number | null;
+  /**
+   * Unique (HSN code, tax rate) pairs found in bill rows.
+   * Keyed by `_hsnCode` and the per-line or bill-level `_taxPercent`.
+   * One <GSTDETAILS.LIST> block emitted per pair — required for correct
+   * GSTR-1 Table 12 when a single bill contains items at different GST rates.
+   * Empty array → emit one block without HSNCODE (bill-level rate only).
+   */
+  hsnRatePairs?: Array<{ hsnCode: string; taxPercent: number }>;
+  /**
+   * @deprecated Use hsnRatePairs. Kept for backwards-compat with callers
+   * that have not yet been updated to provide per-line rates.
    */
   hsnCodes?: string[];
   /**
@@ -215,6 +229,7 @@ export function journalLineToTallyEntry(line: {
  */
 function buildGstDetailsXml(
   taxPercent: number,
+  cessAmount: number,
   hsnCode?: string,
   gstin?: string | null
 ): string {
@@ -231,7 +246,7 @@ function buildGstDetailsXml(
           <TAXRATE>${taxPercent.toFixed(2)}</TAXRATE>
           <BASICTAXRATE>${taxPercent.toFixed(2)}</BASICTAXRATE>
           <ISPARTYLEDGER>No</ISPARTYLEDGER>
-          <CESS>0</CESS>${hsnTag}
+          <CESS>${cessAmount.toFixed(2)}</CESS>${hsnTag}
           <SOURCEOFDETAILS>${sourceOfDetails}</SOURCEOFDETAILS>
         </GSTDETAILS.LIST>`;
 }
@@ -240,7 +255,13 @@ function buildGstDetailsXml(
 
 function buildLedgerEntryXml(
   entry: TallyLedgerEntry,
-  gstContext?: { taxPercent: number; hsnCodes: string[]; gstin?: string | null }
+  gstContext?: {
+    taxPercent: number;
+    cessAmount: number;
+    hsnRatePairs: Array<{ hsnCode: string; taxPercent: number }>;
+    hsnCodes: string[];
+    gstin?: string | null;
+  }
 ): string {
   const billAllocations = entry.partyName
     ? `
@@ -252,16 +273,33 @@ function buildLedgerEntryXml(
     : "";
 
   // Attach GSTDETAILS.LIST only to the Sales/Purchase income ledger entry.
-  // When multiple HSN codes exist, emit one block per code; otherwise emit one
-  // block without HSNCODE (bill-level rate, no HSN breakdown).
+  // Priority: hsnRatePairs (per-line rates) > hsnCodes (legacy, bill-level rate).
+  // When hsnRatePairs is non-empty, emit one block per (HSN, rate) pair.
+  // When only hsnCodes are available, emit one block per HSN at the bill-level rate.
+  // When neither is provided, emit one block without HSNCODE.
   let gstDetails = "";
   if (entry.isIncomeLedger && gstContext && gstContext.taxPercent > 0) {
-    if (gstContext.hsnCodes.length > 0) {
+    const cess = gstContext.cessAmount ?? 0;
+    if (gstContext.hsnRatePairs.length > 0) {
+      // De-duplicate: same HSN + same rate should produce only one block
+      const seen = new Set<string>();
+      gstDetails = gstContext.hsnRatePairs
+        .filter(({ hsnCode, taxPercent }) => {
+          const key = `${hsnCode}::${taxPercent}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+        .map(({ hsnCode, taxPercent }) =>
+          buildGstDetailsXml(taxPercent, cess, hsnCode, gstContext.gstin)
+        )
+        .join("");
+    } else if (gstContext.hsnCodes.length > 0) {
       gstDetails = gstContext.hsnCodes
-        .map((code) => buildGstDetailsXml(gstContext.taxPercent, code, gstContext.gstin))
+        .map((code) => buildGstDetailsXml(gstContext.taxPercent, cess, code, gstContext.gstin))
         .join("");
     } else {
-      gstDetails = buildGstDetailsXml(gstContext.taxPercent, undefined, gstContext.gstin);
+      gstDetails = buildGstDetailsXml(gstContext.taxPercent, cess, undefined, gstContext.gstin);
     }
   }
 
@@ -277,7 +315,14 @@ function buildVoucherXml(voucher: TallyVoucher): string {
   // Build GST context from voucher-level fields (populated from Bill when available)
   const gstContext =
     voucher.taxPercent != null && voucher.taxPercent > 0
-      ? { taxPercent: voucher.taxPercent, hsnCodes: voucher.hsnCodes ?? [], gstin: voucher.gstin }
+      ? {
+          taxPercent: voucher.taxPercent,
+          cessAmount: voucher.cessAmount ?? 0,
+          // hsnRatePairs takes priority; fall back to legacy hsnCodes list
+          hsnRatePairs: voucher.hsnRatePairs ?? [],
+          hsnCodes: voucher.hsnCodes ?? [],
+          gstin: voucher.gstin,
+        }
       : undefined;
 
   const ledgerLines = voucher.ledgerEntries

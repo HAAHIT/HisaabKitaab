@@ -19,11 +19,15 @@ const prismaMock = vi.hoisted(() => ({
   },
   party: {
     findUnique: vi.fn(),
+    findFirst: vi.fn(),
     update: vi.fn(),
   },
   journalEntry: {
     create: vi.fn(),
     update: vi.fn(),
+  },
+  auditLog: {
+    create: vi.fn().mockResolvedValue({}),
   },
   $transaction: vi.fn((cb) => cb(prismaMock)),
   $executeRaw: vi.fn(),
@@ -59,7 +63,7 @@ describe("Credit/Debit Notes API", () => {
   });
 
   it("creates a credit note successfully", async () => {
-    prismaMock.party.findUnique.mockResolvedValue({
+    prismaMock.party.findFirst.mockResolvedValue({
       id: "party-1",
       name: "Customer 1",
       type: "CUSTOMER",

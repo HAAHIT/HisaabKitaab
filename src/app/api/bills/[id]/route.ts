@@ -598,6 +598,20 @@ export async function DELETE(
         data: { status: "CANCELLED" },
       });
 
+      // [MCA GSR 247(E)] Append-only audit log — record the cancellation actor.
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          entityType: "Bill",
+          entityId: existing.id,
+          userId: userId!,  // ADMIN-only endpoint; userId guarded at line 562
+          action: "DELETE",
+          fieldName: "status",
+          oldValue: existing.status,
+          newValue: "CANCELLED",
+        },
+      });
+
       if (!existing.partyId) {
         return;
       }

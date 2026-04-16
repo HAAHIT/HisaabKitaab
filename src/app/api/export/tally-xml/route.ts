@@ -38,6 +38,53 @@ function extractHsnCodes(rows: unknown): string[] {
 }
 
 /**
+ * Extracts unique (HSN code, tax rate) pairs from bill rows.
+ *
+ * Used to emit one <GSTDETAILS.LIST> per (HSN, rate) pair so that bills
+ * containing items at multiple GST rates produce correct GSTR-1 Table 12
+ * entries in TallyPrime.
+ *
+ * Convention:
+ *   _hsnCode     — HSN/SAC code (from ItemCatalog or manually entered)
+ *   _taxPercent  — per-line GST rate (optional; absent on pre-migration rows)
+ *
+ * Returns an empty array when rows lack `_taxPercent`, so the caller falls
+ * back to the flat `hsnCodes` list with the bill-level rate.
+ */
+function extractHsnRatePairs(
+  rows: unknown,
+  billLevelTaxPercent?: number | null
+): Array<{ hsnCode: string; taxPercent: number }> {
+  if (!Array.isArray(rows)) return [];
+  const pairs: Array<{ hsnCode: string; taxPercent: number }> = [];
+  let hasPerLineRate = false;
+
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    const r = row as Record<string, unknown>;
+
+    const hsnCode =
+      typeof r["_hsnCode"] === "string" ? r["_hsnCode"].trim() : null;
+    if (!hsnCode) continue;
+
+    // Per-line rate is present only when the UI writes _taxPercent per row
+    const rawRate = r["_taxPercent"];
+    if (typeof rawRate === "number" && Number.isFinite(rawRate)) {
+      hasPerLineRate = true;
+      pairs.push({ hsnCode, taxPercent: rawRate });
+    } else if (typeof billLevelTaxPercent === "number" && Number.isFinite(billLevelTaxPercent)) {
+      // Fallback: use the bill-level rate for this HSN
+      pairs.push({ hsnCode, taxPercent: billLevelTaxPercent });
+    }
+  }
+
+  // If no row had an explicit _taxPercent we return empty, which signals the
+  // caller to use the simpler extractHsnCodes path (backwards-compatible).
+  if (!hasPerLineRate) return [];
+  return pairs;
+}
+
+/**
  * GET /api/export/tally-xml
  *
  * Query params:
@@ -177,6 +224,7 @@ export async function GET(request: NextRequest) {
               isInterState: true,
               placeOfSupply: true,
               rows: true,
+              cessAmount: true,  // [Task 3b] Cess amount for tobacco/luxury goods
               gstin: true, // [P1] Used to emit SOURCEOFDETAILS=Autofill for registered parties
             },
           },
@@ -185,31 +233,38 @@ export async function GET(request: NextRequest) {
 
       const vouchers: TallyVoucher[] = entries.map((entry: (typeof entries)[number]) => ({
         date: entry.entryDate,
-        // [A4] resolveExportVoucherType handles CREDIT_NOTE / DEBIT_NOTE (primary paths) and
-        //      legacy JOURNAL entries with "Reversal of Sales Bill" narration.
         voucherType: resolveExportVoucherType(entry.voucherType, entry.narration),
         reference:
           entry.billId ?? entry.purchaseId ?? entry.paymentId ?? entry.id,
         narration: entry.narration,
-        ledgerEntries: entry.lines.map(journalLineToTallyEntry),
-        // [A2] Stable GUID prevents duplicate entries on Tally re-import.
+        ledgerEntries: entry.lines.map((line) =>
+          journalLineToTallyEntry({
+            ...line,
+            debit: line.debit.toNumber(),
+            credit: line.credit.toNumber(),
+          })
+        ),
         guid: entry.id,
-        // GST fields — populated from linked Bill when available.
-        // Absent for RECEIPT / PAYMENT / JOURNAL entries (no billId).
         placeOfSupply: entry.bill?.placeOfSupply ?? null,
         taxPercent: entry.bill?.taxPercent.toNumber() ?? null,
         isInterState: entry.bill?.isInterState ?? false,
+        // [Task 3b] Real cess amount replaces the hardcoded 0
+        cessAmount: entry.bill?.cessAmount.toNumber() ?? 0,
+        // [Task 3c] Per-line (HSN, rate) pairs for GSTR-1 Table 12 compliance.
+        // Falls back to legacy flat hsnCodes when rows lack _taxPercent.
+        hsnRatePairs: extractHsnRatePairs(entry.bill?.rows, entry.bill?.taxPercent.toNumber()),
         hsnCodes: extractHsnCodes(entry.bill?.rows),
-        // [P1] gstin flows into SOURCEOFDETAILS: Autofill (registered) vs NotApplicable (B2C/unregistered)
         gstin: entry.bill?.gstin ?? null,
-        // [P1] RCM flag — emits <ISREVERSECHARGE>Yes</ISREVERSECHARGE> for GSTR-3B ITC
         isReverseCharge: entry.isReverseCharge,
       }));
 
-      // [FIX-P2] Count vouchers with tax > 0% but no HSN code.
+      // [FIX-P2] Count vouchers with tax > 0% but no HSN code (either format).
       // These will produce incomplete GSTR-1 Table 12 entries in Tally.
       const hsnMissingCount = vouchers.filter(
-        (v) => (v.taxPercent ?? 0) > 0 && (v.hsnCodes ?? []).length === 0
+        (v) =>
+          (v.taxPercent ?? 0) > 0 &&
+          (v.hsnRatePairs ?? []).length === 0 &&
+          (v.hsnCodes ?? []).length === 0
       ).length;
 
       const hsnWarningComment =
