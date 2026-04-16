@@ -5,7 +5,7 @@ import {
 } from "@/lib/i18n/translations";
 
 function getSafeReturnPath(value: string | null) {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) {
+  if (!value || !value.startsWith("/") || value.startsWith("//") || value.startsWith("/\\")) {
     return "/login";
   }
 
