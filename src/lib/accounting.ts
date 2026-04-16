@@ -1,7 +1,7 @@
 export type SupportedPartyType = "CUSTOMER" | "VENDOR";
 export type SupportedPayDirection = "INCOMING" | "OUTGOING";
 export type SupportedBillStatus = "DRAFT" | "FINAL" | "CANCELLED";
-export type PartyLedgerEntryType = "BILL" | "PAYMENT" | "OPENING";
+export type PartyLedgerEntryType = "BILL" | "PAYMENT" | "OPENING" | "NOTE";
 
 export type PartyLedgerEntry = {
   id: string;
@@ -29,12 +29,22 @@ type PartyLedgerPayment = {
   date: Date;
 };
 
+type PartyLedgerNote = {
+  id: string;
+  date: Date;
+  voucherType: string;
+  narration: string;
+  debit: number;
+  credit: number;
+};
+
 type PartyLedgerInput = {
   partyType: SupportedPartyType;
   openingBalance: number;
   createdAt: Date;
   bills: PartyLedgerBill[];
   payments: PartyLedgerPayment[];
+  notes?: PartyLedgerNote[];
 };
 
 type BillSnapshotSource = {
@@ -198,6 +208,7 @@ export function buildPartyLedger({
   createdAt,
   bills,
   payments,
+  notes,
 }: PartyLedgerInput) {
   let runningBalance = openingBalance;
   const openingEntry = getLedgerAmountsForBalanceDelta(
@@ -228,6 +239,11 @@ export function buildPartyLedger({
       kind: "PAYMENT" as const,
       payment,
     })),
+    ...(notes || []).map((note) => ({
+      txDate: note.date,
+      kind: "NOTE" as const,
+      note,
+    })),
   ].sort((left, right) => left.txDate.getTime() - right.txDate.getTime());
 
   for (const transaction of allTransactions) {
@@ -252,29 +268,41 @@ export function buildPartyLedger({
         balanceAfter: runningBalance,
         link: `/bills/${transaction.bill.id}`,
       });
-      continue;
-    }
-
-    const delta = getPaymentBalanceDelta(
-      partyType,
-      transaction.payment.direction,
-      transaction.payment.amount
-    );
-    runningBalance += delta;
-    const entryAmounts = getLedgerAmountsForBalanceDelta(partyType, delta);
-
-    ledger.push({
-      id: transaction.payment.id,
-      date: transaction.payment.date,
-      type: "PAYMENT",
-      description: getPaymentLedgerDescription(
+    } else if (transaction.kind === "PAYMENT") {
+      const delta = getPaymentBalanceDelta(
+        partyType,
         transaction.payment.direction,
-        transaction.payment.mode
-      ),
-      debit: entryAmounts.debit,
-      credit: entryAmounts.credit,
-      balanceAfter: runningBalance,
-    });
+        transaction.payment.amount
+      );
+      runningBalance += delta;
+      const entryAmounts = getLedgerAmountsForBalanceDelta(partyType, delta);
+
+      ledger.push({
+        id: transaction.payment.id,
+        date: transaction.payment.date,
+        type: "PAYMENT",
+        description: getPaymentLedgerDescription(
+          transaction.payment.direction,
+          transaction.payment.mode
+        ),
+        debit: entryAmounts.debit,
+        credit: entryAmounts.credit,
+        balanceAfter: runningBalance,
+      });
+    } else if (transaction.kind === "NOTE") {
+      const delta = transaction.note.credit - transaction.note.debit;
+      runningBalance += delta;
+
+      ledger.push({
+        id: transaction.note.id,
+        date: transaction.note.date,
+        type: "NOTE",
+        description: transaction.note.narration,
+        debit: transaction.note.debit,
+        credit: transaction.note.credit,
+        balanceAfter: runningBalance,
+      });
+    }
   }
 
   return {

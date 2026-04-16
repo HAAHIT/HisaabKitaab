@@ -1,0 +1,133 @@
+"use client";
+
+import { useState } from "react";
+import {
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Button,
+  Input,
+  Select,
+  SelectItem,
+} from "@heroui/react";
+import { useLanguage } from "@/contexts/LanguageContext";
+
+interface Props {
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
+  onSuccess: (party: any) => void;
+  initialType?: "CUSTOMER" | "VENDOR";
+}
+
+export function QuickAddPartyModal({ isOpen, onOpenChange, onSuccess, initialType = "CUSTOMER" }: Props) {
+  const { t } = useLanguage();
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [gstin, setGstin] = useState("");
+  const [type, setType] = useState<string>(initialType);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSave(onClose: () => void) {
+    if (!name.trim()) {
+      setError("Name is required");
+      return;
+    }
+
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/parties", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          phone: phone.trim() || null,
+          gstin: gstin.trim() || null,
+          type,
+          openingBalance: 0,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to create party");
+      }
+
+      const data = await response.json();
+      onSuccess(data.party);
+      onClose();
+      // Reset form
+      setName("");
+      setPhone("");
+      setGstin("");
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  return (
+    <Modal isOpen={isOpen} onOpenChange={onOpenChange} size="md" backdrop="blur">
+      <ModalContent>
+        {(onClose) => (
+          <>
+            <ModalHeader className="flex flex-col gap-1">Quick Add Party</ModalHeader>
+            <ModalBody>
+              {error && (
+                <div className="bg-danger-50 text-danger-600 px-4 py-2 rounded-lg text-sm mb-2 border border-danger-200">
+                  {error}
+                </div>
+              )}
+              <div className="flex flex-col gap-4">
+                <Input
+                  label="Party Name *"
+                  autoFocus
+                  placeholder="Enter name"
+                  value={name}
+                  onValueChange={setName}
+                  variant="bordered"
+                />
+                <Input
+                  label="Phone"
+                  placeholder="10 digit mobile number"
+                  value={phone}
+                  onValueChange={setPhone}
+                  variant="bordered"
+                />
+                <Input
+                  label="GSTIN"
+                  placeholder="22AAAAA0000A1Z5"
+                  value={gstin}
+                  onValueChange={setGstin}
+                  variant="bordered"
+                />
+                <Select
+                  label="Type"
+                  variant="bordered"
+                  selectedKeys={[type]}
+                  onSelectionChange={(keys) => setType(Array.from(keys)[0] as string)}
+                >
+                  <SelectItem key="CUSTOMER">{t("parties.customerType")}</SelectItem>
+                  <SelectItem key="VENDOR">{t("parties.vendorType")}</SelectItem>
+                </Select>
+              </div>
+            </ModalBody>
+            <ModalFooter>
+              <Button color="danger" variant="light" onPress={onClose}>
+                Cancel
+              </Button>
+              <Button color="primary" onPress={() => handleSave(onClose)} isLoading={isLoading}>
+                Create Party
+              </Button>
+            </ModalFooter>
+          </>
+        )}
+      </ModalContent>
+    </Modal>
+  );
+}

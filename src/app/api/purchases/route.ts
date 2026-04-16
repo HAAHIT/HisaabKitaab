@@ -28,6 +28,7 @@ const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
 
 const CreatePurchaseSchema = z.object({
   partyId: z.string().min(1),
+  templateId: z.string().optional(),
   supplierName: z.string().optional(),
   supplierInvoiceNo: z.string().optional(),
   billDate: z.string().datetime().optional(),
@@ -107,6 +108,7 @@ export async function POST(request: NextRequest) {
       grandTotal,
       status,
       isReverseCharge,
+      templateId,
     } = body;
 
     const party = await prisma.party.findFirst({
@@ -127,22 +129,32 @@ export async function POST(request: NextRequest) {
     const isInterState = body.isInterState === true;
     const now = new Date();
     
-    // Attempt to get a generic template or the quick bill one to satisfy DB relations
-    let template = await prisma.billTemplate.findFirst({
-      where: { name: "__PURCHASE_BILL__", tenantId },
-    });
-    if (!template) {
-      template = await prisma.billTemplate.create({
-        data: {
-          tenantId,
-          name: "__PURCHASE_BILL__",
-          columns: [
-            { id: "desc", name: "Description", type: "text", position: 0 },
-            { id: "amt", name: "Amount", type: "number", position: 1 },
-          ],
-          createdBy: userId!,
-        },
+    // Use provided templateId or fallback to __PURCHASE_BILL__
+    let template;
+    if (templateId) {
+      template = await prisma.billTemplate.findFirst({
+        where: { id: templateId, tenantId },
       });
+    }
+
+    if (!template) {
+      template = await prisma.billTemplate.findFirst({
+        where: { name: "__PURCHASE_BILL__", tenantId },
+      });
+      
+      if (!template) {
+        template = await prisma.billTemplate.create({
+          data: {
+            tenantId,
+            name: "__PURCHASE_BILL__",
+            columns: [
+              { id: "desc", name: "Description", type: "text", position: 0 },
+              { id: "amt", name: "Amount", type: "number", position: 1 },
+            ],
+            createdBy: userId!,
+          },
+        });
+      }
     }
 
     if (billStatus === "FINAL" && resolvedGrandTotal <= 0) {
