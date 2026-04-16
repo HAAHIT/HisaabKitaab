@@ -1,4 +1,4 @@
-## 2026-04-13 - [Open Redirect Bypass via URL Normalization]
-**Vulnerability:** Open redirect allowing attackers to bypass `startsWith("//")` check by using `/\` which gets normalized to `//` by browsers.
-**Learning:** Checking for `//` is not sufficient to prevent protocol-relative redirects because browsers and Next.js URL parsing normalize mixed slashes (e.g., `/\malicious.com` -> `//malicious.com`).
-**Prevention:** Always validate relative paths by explicitly checking and blocking `/\` as well as `//`.
+## 2024-XX-XX - Open Redirect via Forward-Backslash Path Normalization
+**Vulnerability:** Open Redirect
+**Learning:** Browsers and URL parsers normalize paths starting with `/\` (slash-backslash) into `//` (protocol-relative). Checking only for `//` is insufficient.
+**Prevention:** Explicitly block paths starting with `/\` when validating relative redirect URLs.
