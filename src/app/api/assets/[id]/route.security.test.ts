@@ -35,13 +35,13 @@ describe("Assets API Security - Open Redirect Fix", () => {
     const mockImageData = new Uint8Array([0, 1, 2, 3]);
 
     // Mock tenant resolution
-    (resolveReadTenant as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+    (resolveReadTenant as import("vitest").Mock).mockReturnValue({
       ok: true,
       tenantId,
     });
 
     // Mock asset lookup
-    (prisma.mediaAsset.findUnique as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+    (prisma.mediaAsset.findUnique as import("vitest").Mock).mockResolvedValue({
       id: assetId,
       kind: "MEASUREMENT_PHOTO",
       storageProvider: "proxy",
@@ -93,8 +93,8 @@ describe("Assets API Security - Open Redirect Fix", () => {
     const assetId = "test-asset-id";
     const tenantId = "test-tenant-id";
 
-    (resolveReadTenant as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ ok: true, tenantId });
-    (prisma.mediaAsset.findUnique as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+    (resolveReadTenant as import("vitest").Mock).mockReturnValue({ ok: true, tenantId });
+    (prisma.mediaAsset.findUnique as import("vitest").Mock).mockResolvedValue({
       id: assetId,
       kind: "MEASUREMENT_PHOTO",
       storageProvider: "proxy",
@@ -123,8 +123,8 @@ describe("Assets API Security - Open Redirect Fix", () => {
     const assetId = "test-asset-id";
     const tenantId = "test-tenant-id";
 
-    (resolveReadTenant as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ ok: true, tenantId });
-    (prisma.mediaAsset.findUnique as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+    (resolveReadTenant as import("vitest").Mock).mockReturnValue({ ok: true, tenantId });
+    (prisma.mediaAsset.findUnique as import("vitest").Mock).mockResolvedValue({
       id: assetId,
       kind: "MEASUREMENT_PHOTO",
       storageProvider: "proxy",
