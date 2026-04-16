@@ -86,14 +86,14 @@ export default function BillsListPage() {
 
       if (existing) {
         existing.bills.push(bill);
-        existing.total += bill.grandTotal;
+        existing.total += Number(bill.grandTotal);
         continue;
       }
 
       groups.set(groupKey, {
         label: monthFormatter.format(createdDate),
         bills: [bill],
-        total: bill.grandTotal,
+        total: Number(bill.grandTotal),
       });
     }
 
