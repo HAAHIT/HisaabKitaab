@@ -28,6 +28,7 @@ model Tenant {
   parties        Party[]
   payments       Payment[]
   users          User[]
+  importJobs     ImportJob[]
 }
 
 model User {
@@ -82,7 +83,6 @@ model AuthThrottle {
 
 /**
  * AuditLog — MCA-mandated Edit Log (GSR 247(E), effective April 1 2023)
- *
  * Append-only: rows are NEVER updated or deleted.
  * Captures every CREATE / UPDATE / DELETE on accounting-relevant entities.
  * Indexed for tenant-scoped audit queries and date-range exports.
@@ -90,13 +90,13 @@ model AuthThrottle {
 model AuditLog {
   id         String   @id @default(cuid())
   tenantId   String
-  entityType String   // "Bill" | "Payment" | "Party" | "User"
-  entityId   String   // PK of the changed record
-  userId     String   // actor who triggered the change
-  action     String   // "CREATE" | "UPDATE" | "DELETE"
-  fieldName  String?  // null for whole-record events (CREATE / DELETE)
-  oldValue   String?  // JSON-serialised previous value
-  newValue   String?  // JSON-serialised next value
+  entityType String // "Bill" | "Payment" | "Party" | "User"
+  entityId   String // PK of the changed record
+  userId     String // actor who triggered the change
+  action     String // "CREATE" | "UPDATE" | "DELETE"
+  fieldName  String? // null for whole-record events (CREATE / DELETE)
+  oldValue   String? // JSON-serialised previous value
+  newValue   String? // JSON-serialised next value
   createdAt  DateTime @default(now())
   tenant     Tenant   @relation(fields: [tenantId], references: [id])
 
@@ -126,7 +126,7 @@ model ItemCatalog {
   hsnCode   String?
   unit      String   @default("pcs")
   rate      Decimal  @default(0) @db.Decimal(19, 4) // [B3] Float → Decimal
-  taxRate   Decimal? @db.Decimal(5, 2)              // [B3] Float → Decimal
+  taxRate   Decimal? @db.Decimal(5, 2) // [B3] Float → Decimal
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -137,7 +137,7 @@ model ItemCatalog {
 }
 
 model Bill {
-  id              String       @id @default(cuid())
+  id              String         @id @default(cuid())
   billNumber      String
   templateId      String
   customerName    String
@@ -147,23 +147,23 @@ model Bill {
   rows            Json
   notes           String?
   terms           String?
-  subtotal        Decimal      @db.Decimal(19, 4)           // [B3] Float → Decimal
-  taxPercent      Decimal      @default(0) @db.Decimal(5, 2) // [B3] Float → Decimal
-  taxAmount       Decimal      @default(0) @db.Decimal(19, 4) // [B3] Float → Decimal
-  grandTotal      Decimal      @db.Decimal(19, 4)           // [B3] Float → Decimal
-  placeOfSupply   String?                                   // [B1] GSTR-1 mandatory field
-  status          BillStatus   @default(DRAFT)
+  subtotal        Decimal        @db.Decimal(19, 4) // [B3] Float → Decimal
+  taxPercent      Decimal        @default(0) @db.Decimal(5, 2) // [B3] Float → Decimal
+  taxAmount       Decimal        @default(0) @db.Decimal(19, 4) // [B3] Float → Decimal
+  grandTotal      Decimal        @db.Decimal(19, 4) // [B3] Float → Decimal
+  placeOfSupply   String? // [B1] GSTR-1 mandatory field
+  status          BillStatus     @default(DRAFT)
   createdBy       String
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-  isDeleted       Boolean      @default(false)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  isDeleted       Boolean        @default(false)
   partyId         String?
   tenantId        String
-  isInterState    Boolean      @default(false)
-  creator         User         @relation(fields: [createdBy], references: [id])
-  party           Party?       @relation(fields: [partyId], references: [id])
-  template        BillTemplate @relation(fields: [templateId], references: [id])
-  tenant          Tenant       @relation(fields: [tenantId], references: [id])
+  isInterState    Boolean        @default(false)
+  creator         User           @relation(fields: [createdBy], references: [id])
+  party           Party?         @relation(fields: [partyId], references: [id])
+  template        BillTemplate   @relation(fields: [templateId], references: [id])
+  tenant          Tenant         @relation(fields: [tenantId], references: [id])
   journalEntries  JournalEntry[]
   payments        Payment[]
 
@@ -194,7 +194,7 @@ model Party {
   tenant         Tenant              @relation(fields: [tenantId], references: [id])
   payments       Payment[]
 
-  @@unique([tenantId, name])  // [B2] prevents TOCTOU duplicate party on Tally import
+  @@unique([tenantId, name]) // [B2] prevents TOCTOU duplicate party on Tally import
   @@index([tenantId])
   @@index([tenantId, type])
 }
@@ -203,7 +203,7 @@ model Payment {
   id           String        @id @default(cuid())
   partyId      String
   direction    PayDirection
-  amount       Decimal       @db.Decimal(19, 4)  // [B3] Float → Decimal
+  amount       Decimal       @db.Decimal(19, 4) // [B3] Float → Decimal
   date         DateTime
   mode         PaymentMode
   status       PaymentStatus @default(COMPLETED)
@@ -243,20 +243,20 @@ model JournalEntry {
    * Used as the primary idempotency key for Tally XML re-imports.
    * Null for entries created natively in HisaabKitaab (not via Tally import).
    */
-  remoteId        String?                                       // [B5] Tally import idempotency
+  remoteId        String? // [B5] Tally import idempotency
   /**
    * isReverseCharge — true when this entry is an RCM purchase under
    * IGST Act Section 9(3) / 9(4). Emitted as <ISREVERSECHARGE>Yes</ISREVERSECHARGE>
    * in Tally XML so GSTR-3B ITC columns are correctly populated.
    */
-  isReverseCharge Boolean       @default(false)               // [P1] RCM flag for GSTR-3B
+  isReverseCharge Boolean       @default(false) // [P1] RCM flag for GSTR-3B
   createdBy       String
   createdAt       DateTime      @default(now())
   tenant          Tenant        @relation(fields: [tenantId], references: [id])
   bill            Bill?         @relation(fields: [billId], references: [id])
   lines           JournalLine[]
 
-  @@unique([tenantId, remoteId])  // [B5] partial unique — DB enforces no duplicate Tally imports per tenant
+  @@unique([tenantId, remoteId]) // [B5] partial unique — DB enforces no duplicate Tally imports per tenant
   @@index([tenantId])
   @@index([tenantId, entryDate])
   @@index([tenantId, voucherType])
@@ -382,8 +382,8 @@ enum VoucherType {
   RECEIPT
   PAYMENT
   JOURNAL
-  CREDIT_NOTE  // GST Credit Note — reversal of a FINAL sales bill (GSTR-1 Table 9B)
-  DEBIT_NOTE   // GST Debit Note — Purchase Return under IGST Act (GSTR-3B Table 4)
+  CREDIT_NOTE // GST Credit Note — reversal of a FINAL sales bill (GSTR-1 Table 9B)
+  DEBIT_NOTE // GST Debit Note — Purchase Return under IGST Act (GSTR-3B Table 4)
 }
 
 enum MediaAssetKind {
@@ -397,4 +397,28 @@ enum MeasurementStatus {
   REVIEWED
   IN_PRODUCTION
   COMPLETED
+}
+
+model ImportJob {
+  id         String    @id @default(cuid())
+  tenantId   String
+  status     JobStatus @default(PENDING) // PENDING, PROCESSING, COMPLETED, FAILED
+  totalItems Int       @default(0)
+  processed  Int       @default(0)
+  failed     Int       @default(0)
+  xmlData    String
+  error      String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  tenant     Tenant    @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([status])
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
 }
