@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import {
   getPaymentBalanceDelta,
   getSettlementDirectionForParty,
@@ -75,8 +76,8 @@ export async function GET(request: NextRequest) {
   const status = searchParams.get("status") || "";
   const from = searchParams.get("from");
   const to = searchParams.get("to");
-  const page = parseInt(searchParams.get("page") || "1", 10);
-  const limit = parseInt(searchParams.get("limit") || "20", 10);
+  const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1);
+  const limit = Math.max(1, parseInt(searchParams.get("limit") || "20", 10) || 20);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: any = { isDeleted: false, tenantId };
@@ -268,7 +269,7 @@ export async function POST(request: NextRequest) {
             id: newPayment.id,
             partyId: party.id,
             partyName: party.name,
-            amount: newPayment.amount,
+            amount: newPayment.amount.toNumber(),
             mode: newPayment.mode,
             date: newPayment.date,
             createdBy: userId!,
@@ -278,7 +279,7 @@ export async function POST(request: NextRequest) {
             id: newPayment.id,
             partyId: party.id,
             partyName: party.name,
-            amount: newPayment.amount,
+            amount: newPayment.amount.toNumber(),
             mode: newPayment.mode,
             date: newPayment.date,
             createdBy: userId!,
@@ -291,8 +292,14 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ payment }, { status: 201 });
   } catch (error) {
-    const msg = error instanceof Error ? error.message : "Internal server error";
     logError("payments.create.error", { requestId: getRequestId(request), error });
+    // Return the application error message for intentional business-logic throws
+    // (e.g. wrong party, wrong direction). Hide unexpected infrastructure errors.
+    if (error instanceof Prisma.PrismaClientKnownRequestError ||
+        error instanceof Prisma.PrismaClientValidationError) {
+      return NextResponse.json({ error: "Failed to process payment" }, { status: 500 });
+    }
+    const msg = error instanceof Error ? error.message : "Failed to process payment";
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 }
@@ -346,7 +353,7 @@ export async function PATCH(request: NextRequest) {
       const balanceChange = getPaymentBalanceDelta(
         payment.party.type,
         payment.direction,
-        payment.amount
+        payment.amount.toNumber()
       );
 
       await tx.party.update({
@@ -361,7 +368,7 @@ export async function PATCH(request: NextRequest) {
           id: updated.id,
           partyId: payment.partyId,
           partyName: updated.party.name,
-          amount: payment.amount,
+          amount: payment.amount.toNumber(),
           mode: payment.mode,
           date: payment.date,
           createdBy: userId || payment.createdBy,
@@ -371,7 +378,7 @@ export async function PATCH(request: NextRequest) {
           id: updated.id,
           partyId: payment.partyId,
           partyName: updated.party.name,
-          amount: payment.amount,
+          amount: payment.amount.toNumber(),
           mode: payment.mode,
           date: payment.date,
           createdBy: userId || payment.createdBy,
@@ -383,8 +390,12 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({ payment: result });
   } catch (error) {
-    const msg = error instanceof Error ? error.message : "Internal server error";
     logError("payments.complete.error", { requestId: getRequestId(request), error });
+    if (error instanceof Prisma.PrismaClientKnownRequestError ||
+        error instanceof Prisma.PrismaClientValidationError) {
+      return NextResponse.json({ error: "Failed to complete payment" }, { status: 500 });
+    }
+    const msg = error instanceof Error ? error.message : "Failed to complete payment";
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 }

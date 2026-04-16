@@ -1,11 +1,7 @@
-import type { Prisma } from "@prisma/client";
-
-type PrismaOrTx = Prisma.TransactionClient;
-
 export type SupportedPartyType = "CUSTOMER" | "VENDOR";
 export type SupportedPayDirection = "INCOMING" | "OUTGOING";
 export type SupportedBillStatus = "DRAFT" | "FINAL" | "CANCELLED";
-export type PartyLedgerEntryType = "BILL" | "PAYMENT" | "OPENING";
+export type PartyLedgerEntryType = "BILL" | "PAYMENT" | "OPENING" | "NOTE";
 
 export type PartyLedgerEntry = {
   id: string;
@@ -33,12 +29,22 @@ type PartyLedgerPayment = {
   date: Date;
 };
 
+type PartyLedgerNote = {
+  id: string;
+  date: Date;
+  voucherType: string;
+  narration: string;
+  debit: number;
+  credit: number;
+};
+
 type PartyLedgerInput = {
   partyType: SupportedPartyType;
   openingBalance: number;
   createdAt: Date;
   bills: PartyLedgerBill[];
   payments: PartyLedgerPayment[];
+  notes?: PartyLedgerNote[];
 };
 
 type BillSnapshotSource = {
@@ -202,6 +208,7 @@ export function buildPartyLedger({
   createdAt,
   bills,
   payments,
+  notes,
 }: PartyLedgerInput) {
   let runningBalance = openingBalance;
   const openingEntry = getLedgerAmountsForBalanceDelta(
@@ -232,6 +239,11 @@ export function buildPartyLedger({
       kind: "PAYMENT" as const,
       payment,
     })),
+    ...(notes || []).map((note) => ({
+      txDate: note.date,
+      kind: "NOTE" as const,
+      note,
+    })),
   ].sort((left, right) => left.txDate.getTime() - right.txDate.getTime());
 
   for (const transaction of allTransactions) {
@@ -256,29 +268,47 @@ export function buildPartyLedger({
         balanceAfter: runningBalance,
         link: `/bills/${transaction.bill.id}`,
       });
-      continue;
-    }
-
-    const delta = getPaymentBalanceDelta(
-      partyType,
-      transaction.payment.direction,
-      transaction.payment.amount
-    );
-    runningBalance += delta;
-    const entryAmounts = getLedgerAmountsForBalanceDelta(partyType, delta);
-
-    ledger.push({
-      id: transaction.payment.id,
-      date: transaction.payment.date,
-      type: "PAYMENT",
-      description: getPaymentLedgerDescription(
+    } else if (transaction.kind === "PAYMENT") {
+      const delta = getPaymentBalanceDelta(
+        partyType,
         transaction.payment.direction,
-        transaction.payment.mode
-      ),
-      debit: entryAmounts.debit,
-      credit: entryAmounts.credit,
-      balanceAfter: runningBalance,
-    });
+        transaction.payment.amount
+      );
+      runningBalance += delta;
+      const entryAmounts = getLedgerAmountsForBalanceDelta(partyType, delta);
+
+      ledger.push({
+        id: transaction.payment.id,
+        date: transaction.payment.date,
+        type: "PAYMENT",
+        description: getPaymentLedgerDescription(
+          transaction.payment.direction,
+          transaction.payment.mode
+        ),
+        debit: entryAmounts.debit,
+        credit: entryAmounts.credit,
+        balanceAfter: runningBalance,
+      });
+    } else if (transaction.kind === "NOTE") {
+      // CREDIT_NOTE party line: credit=grandTotal, debit=0  → credit - debit = +grandTotal ✓
+      // DEBIT_NOTE party line:  debit=grandTotal,  credit=0 → credit - debit = -grandTotal ✗
+      // Both note types reduce the outstanding balance, so DEBIT_NOTE must use debit - credit.
+      const delta =
+        transaction.note.voucherType === "DEBIT_NOTE"
+          ? transaction.note.debit - transaction.note.credit
+          : transaction.note.credit - transaction.note.debit;
+      runningBalance += delta;
+
+      ledger.push({
+        id: transaction.note.id,
+        date: transaction.note.date,
+        type: "NOTE",
+        description: transaction.note.narration,
+        debit: transaction.note.debit,
+        credit: transaction.note.credit,
+        balanceAfter: runningBalance,
+      });
+    }
   }
 
   return {
@@ -287,49 +317,3 @@ export function buildPartyLedger({
   };
 }
 
-/**
- * Recomputes a party's balance from the source-of-truth records (bills +
- * payments). Use this to detect or repair stale `currentBalance` values.
- *
- * Safe to call both inside and outside a Prisma transaction.
- */
-export async function recomputePartyBalance(
-  db: PrismaOrTx,
-  partyId: string,
-  tenantId: string
-): Promise<number> {
-  const party = await db.party.findFirst({
-    where: { id: partyId, tenantId },
-    select: { openingBalance: true, type: true },
-  });
-
-  if (!party) throw new Error(`Party ${partyId} not found`);
-
-  const [bills, payments] = await Promise.all([
-    db.bill.findMany({
-      where: { partyId, tenantId, status: "FINAL", isDeleted: false },
-      select: { grandTotal: true },
-    }),
-    db.payment.findMany({
-      where: { partyId, tenantId, status: "COMPLETED", isDeleted: false },
-      select: { amount: true, direction: true },
-    }),
-  ]);
-
-  const billDelta = bills.reduce(
-    (sum, b) => sum + getBillBalanceDelta(party.type as SupportedPartyType, b.grandTotal),
-    0
-  );
-  const paymentDelta = payments.reduce(
-    (sum, p) =>
-      sum +
-      getPaymentBalanceDelta(
-        party.type as SupportedPartyType,
-        p.direction as SupportedPayDirection,
-        p.amount
-      ),
-    0
-  );
-
-  return party.openingBalance + billDelta + paymentDelta;
-}

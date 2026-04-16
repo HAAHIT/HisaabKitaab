@@ -16,6 +16,11 @@
     "postinstall": "prisma generate",
     "test": "vitest"
   },
+  "overrides": {
+    "picomatch": "^2.3.2",
+    "@hono/node-server": "^1.19.13",
+    "@tootallnate/once": "^3.0.1"
+  },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"
   },
@@ -23,16 +28,17 @@
     "@google-cloud/storage": "^7.19.0",
     "@heroui/react": "^2.8.10",
     "@prisma/adapter-pg": "^7.5.0",
-    "@prisma/client": "^6.19.2",
+    "@prisma/client": "^7.7.0",
     "bcryptjs": "^3.0.3",
     "dexie": "^4.3.0",
     "dotenv": "^17.3.1",
     "fast-xml-parser": "^5.5.10",
     "framer-motion": "^12.38.0",
     "jose": "^6.2.2",
-    "next": "16.2.1",
+    "zod": "^4.3.6",
+    "next": "^16.2.4",
     "pg": "^8.20.0",
-    "prisma": "^6.19.2",
+    "prisma": "^7.7.0",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },

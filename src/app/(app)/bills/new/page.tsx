@@ -17,6 +17,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { evaluateRow, type ColumnDef } from "@/lib/formula";
+import { GST_STATE_CODES } from "@/lib/gst-states";
 
 interface Template {
   id: string;
@@ -85,6 +86,7 @@ export default function NewBillPage() {
   const [rows, setRows] = useState<Record<string, string | number>[]>([]);
   const [taxPercent, setTaxPercent] = useState(18);
   const [isInterState, setIsInterState] = useState(false);
+  const [placeOfSupply, setPlaceOfSupply] = useState("");
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("");
   const [didAutoFocusRow, setDidAutoFocusRow] = useState(false);
@@ -297,6 +299,7 @@ export default function NewBillPage() {
           taxAmount,
           grandTotal,
           isInterState,
+          placeOfSupply: placeOfSupply || null,
           notes: notes.trim() || null,
           terms: terms.trim() || null,
           status,
@@ -463,6 +466,11 @@ export default function NewBillPage() {
                     setSelectedParty(party);
                     if (party) {
                       setErrors((prev) => ({ ...prev, partyId: false }));
+                      // Auto-fill place of supply from first 2 digits of customer GSTIN
+                      if (party.gstin && party.gstin.length >= 2) {
+                        const code = party.gstin.substring(0, 2);
+                        if (GST_STATE_CODES[code]) setPlaceOfSupply(code);
+                      }
                     }
                   }}
                   partyType="CUSTOMER"
@@ -729,6 +737,27 @@ export default function NewBillPage() {
                         />
                         <span className="text-xs text-default-500">Inter-state (IGST)</span>
                       </label>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="shrink-0 text-sm text-default-500">Place of Supply</span>
+                      <Select
+                        aria-label="Place of supply"
+                        placeholder="Select state"
+                        size="sm"
+                        variant="bordered"
+                        className="max-w-[200px]"
+                        selectedKeys={placeOfSupply ? new Set([placeOfSupply]) : new Set([])}
+                        onSelectionChange={(keys) => {
+                          const value = Array.from(keys)[0] as string | undefined;
+                          setPlaceOfSupply(value ?? "");
+                        }}
+                      >
+                        {Object.entries(GST_STATE_CODES).map(([code, name]) => (
+                          <SelectItem key={code} textValue={`${code} - ${name}`}>
+                            {code} — {name}
+                          </SelectItem>
+                        ))}
+                      </Select>
                     </div>
                     <Divider />
                     <div className="flex justify-between">

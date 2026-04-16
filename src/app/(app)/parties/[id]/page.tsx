@@ -31,7 +31,7 @@ export default async function PartyProfilePage({
     return notFound();
   }
 
-  const [payments, bills, measurements] = await Promise.all([
+  const [payments, bills, measurements, journalLines] = await Promise.all([
     prisma.payment.findMany({
       where: {
         tenantId,
@@ -58,20 +58,56 @@ export default async function PartyProfilePage({
       },
       orderBy: { createdAt: "desc" },
     }),
+    prisma.journalLine.findMany({
+      where: {
+        partyId: id,
+        journal: {
+          tenantId,
+          voucherType: { in: ["CREDIT_NOTE", "DEBIT_NOTE"] },
+        },
+      },
+      include: {
+        journal: true,
+      },
+      orderBy: {
+        journal: { entryDate: "asc" },
+      },
+    }),
   ]);
+
+  const notes = journalLines.map((line: { id: string; debit: any; credit: any; journal: { id: string; entryDate: Date; voucherType: string; narration: string | null } }) => ({
+    id: line.journal.id,
+    date: line.journal.entryDate,
+    voucherType: line.journal.voucherType as "CREDIT_NOTE" | "DEBIT_NOTE",
+    narration: line.journal.narration ?? "",  // PartyLedgerNote requires string, not string|null
+    debit: Number(line.debit),
+    credit: Number(line.credit),
+  }));
 
   const { ledger, calculatedCurrent } = buildPartyLedger({
     partyType: party.type,
-    openingBalance: party.openingBalance,
+    openingBalance: party.openingBalance.toNumber(),
     createdAt: party.createdAt,
-    bills,
-    payments,
+    bills: bills.map((b: { id: string; billNumber: string; grandTotal: any; createdAt: Date }) => ({
+      id: b.id,
+      billNumber: b.billNumber,
+      grandTotal: Number(b.grandTotal),
+      createdAt: b.createdAt
+    })),
+    payments: payments.map((p: { id: string; amount: any; direction: string; mode: string; date: Date }) => ({
+      id: p.id,
+      amount: Number(p.amount),
+      direction: p.direction as "INCOMING" | "OUTGOING",  // Prisma returns string; narrow for SupportedPayDirection
+      mode: p.mode,
+      date: p.date
+    })),
+    notes,
   });
 
   return (
     <PartyProfileClient
       partyId={party.id}
-      party={party}
+      party={{ ...party, openingBalance: party.openingBalance.toNumber() }}
       ledger={ledger}
       measurements={measurements}
       calculatedCurrent={calculatedCurrent}

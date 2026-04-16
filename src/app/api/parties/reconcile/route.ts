@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { recomputePartyBalance } from "@/lib/accounting";
+import { recomputePartyBalance } from "@/lib/party-balance.server";
+
 import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
 import { logError, logInfo, getRequestId } from "@/lib/observability";
 import { NextRequest, NextResponse } from "next/server";
@@ -26,9 +27,9 @@ export async function GET(request: NextRequest) {
     });
 
     const results = await Promise.all(
-      parties.map(async (party) => {
+      parties.map(async (party: { id: string; name: string; currentBalance: { toNumber: () => number } }) => {
         const computed = await recomputePartyBalance(prisma, party.id, tenantId);
-        const drift = Math.abs(computed - party.currentBalance);
+        const drift = Math.abs(computed - party.currentBalance.toNumber());
         return {
           partyId: party.id,
           name: party.name,
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
       })
     );
 
-    const drifted = results.filter((r) => !r.ok);
+    const drifted = results.filter((r: { ok: boolean }) => !r.ok);
     return NextResponse.json({ total: results.length, drifted });
   } catch (error) {
     logError("parties.reconcile.check.error", { requestId: getRequestId(request), error });
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
     let fixed = 0;
     for (const party of parties) {
       const computed = await recomputePartyBalance(prisma, party.id, tenantId);
-      if (Math.abs(computed - party.currentBalance) >= 0.01) {
+      if (Math.abs(computed - party.currentBalance.toNumber()) >= 0.01) {
         await prisma.party.update({
           where: { id: party.id },
           data: { currentBalance: computed },

@@ -140,8 +140,8 @@ export async function GET(request: NextRequest) {
 
     const cashFlow = cashFlowResults;
 
-    const receivable = Math.abs(receivableParties._sum.currentBalance || 0);
-    const payable = Math.abs(payableParties._sum.currentBalance || 0);
+    const receivable = Math.abs(receivableParties._sum.currentBalance?.toNumber() ?? 0);
+    const payable = Math.abs(payableParties._sum.currentBalance?.toNumber() ?? 0);
     const collectedThisMonth = monthPayments._sum.amount || 0;
 
     return NextResponse.json({

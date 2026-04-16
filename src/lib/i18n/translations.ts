@@ -4,7 +4,8 @@ export type Language = "en" | "hi";
 export const translations = {
   en: {
     "nav.home": "Home",
-    "nav.bills": "Bills",
+    "nav.bills": "Sales",
+    "nav.purchases": "Purchases",
     "nav.parties": "Parties",
     "nav.payments": "Payments",
     "nav.measures": "Measures",
@@ -15,6 +16,8 @@ export const translations = {
     "nav.more": "More",
     "nav.khata": "Khata",
     "nav.reports": "Reports",
+    "nav.transactions": "Transactions",
+    "nav.notes": "Notes",
     "install.banner": "Install App",
     "install.message": "Add to Home Screen for faster access",
     "shell.settings": "Settings",
@@ -88,7 +91,7 @@ export const translations = {
     "bills.customer": "Customer Name",
     "bills.saveDraft": "Save Draft",
     "bills.finalize": "Finalize Bill",
-    "bills.title": "Bills",
+    "bills.title": "Sales",
     "bills.subtitle":
       "Create and manage invoices from the server record only.",
     "bills.create": "Create Bill",
@@ -469,6 +472,7 @@ export const translations = {
   hi: {
     "nav.home": "होम",
     "nav.bills": "बिल",
+    "nav.purchases": "खरीद",
     "nav.parties": "पार्टियां",
     "nav.payments": "भुगतान",
     "nav.measures": "माप",
@@ -479,6 +483,8 @@ export const translations = {
     "nav.more": "और",
     "nav.khata": "खाता",
     "nav.reports": "रिपोर्ट",
+    "nav.transactions": "लेन-देन",
+    "nav.notes": "नोट्स",
     "install.banner": "ऐप इंस्टॉल करें",
     "install.message": "तेज़ एक्सेस के लिए होम स्क्रीन पर जोड़ें",
     "shell.settings": "सेटिंग्स",

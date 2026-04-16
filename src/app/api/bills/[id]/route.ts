@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { GST_STATE_CODE_SET } from "@/lib/gst-states";
 import {
   buildBillSnapshotFromParty,
   getBillBalanceDeltaForTransition,
@@ -7,10 +8,15 @@ import {
   journalForCancelledSalesBill,
   journalForSalesBill,
 } from "@/lib/journal";
-import type { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
+
+// Derive Prisma types from the client instance to avoid the
+// @prisma/client → .prisma/client re-export resolution failure
+// under moduleResolution:"bundler" in Prisma v7.
+type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+type BillUpdateData = Parameters<typeof prisma.bill.update>[0]["data"];
 
 const ALLOWED_BILL_PATCH_KEYS = new Set([
   "templateId",
@@ -19,6 +25,7 @@ const ALLOWED_BILL_PATCH_KEYS = new Set([
   "customerPhone",
   "customerAddress",
   "gstin",
+  "placeOfSupply",
   "rows",
   "notes",
   "terms",
@@ -50,10 +57,13 @@ function normalizeOptionalString(value: unknown) {
 }
 
 function parseOptionalNumber(value: unknown) {
+  if (typeof value === "string") {
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return undefined;
   }
-
   return value;
 }
 
@@ -146,6 +156,22 @@ export async function PATCH(
       );
     }
 
+    const hasPlaceOfSupply = hasOwn(body, "placeOfSupply");
+    if (hasPlaceOfSupply) {
+      const pos = body.placeOfSupply;
+      if (pos !== null && pos !== undefined) {
+        if (typeof pos !== "string" || !GST_STATE_CODE_SET.has(pos)) {
+          return NextResponse.json(
+            {
+              error:
+                "Invalid place of supply. Must be a 2-digit GST state code (e.g. '27' for Maharashtra).",
+            },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
     const existing = await prisma.bill.findFirst({
       where: {
         id,
@@ -157,6 +183,7 @@ export async function PATCH(
         status: true,
         billNumber: true,
         subtotal: true,
+        taxPercent: true,
         taxAmount: true,
         grandTotal: true,
         isInterState: true,
@@ -167,6 +194,8 @@ export async function PATCH(
         customerAddress: true,
         gstin: true,
         createdBy: true,
+        rows: true,        // needed for HSN validation gate
+        placeOfSupply: true, // needed for placeOfSupply validation gate
       },
     });
 
@@ -242,7 +271,7 @@ export async function PATCH(
     }
 
     for (const field of ["taxPercent", "subtotal", "taxAmount", "grandTotal"] as const) {
-      if (!hasOwn(body, field)) {
+      if (!hasOwn(body, field) || body[field] === null) {
         continue;
       }
 
@@ -273,6 +302,12 @@ export async function PATCH(
 
     if (hasIsInterState) {
       updateData.isInterState = isInterState;
+    }
+
+    if (hasPlaceOfSupply) {
+      const pos = body.placeOfSupply;
+      updateData.placeOfSupply =
+        typeof pos === "string" && pos ? pos : null;
     }
 
     let nextPartyId = existing.partyId;
@@ -386,11 +421,11 @@ export async function PATCH(
     }
 
     const nextGrandTotal =
-      (updateData.grandTotal as number | undefined) ?? existing.grandTotal;
+      (updateData.grandTotal as number | undefined) ?? existing.grandTotal.toNumber();
     const nextSubtotal =
-      (updateData.subtotal as number | undefined) ?? existing.subtotal;
+      (updateData.subtotal as number | undefined) ?? existing.subtotal.toNumber();
     const nextTaxAmount =
-      (updateData.taxAmount as number | undefined) ?? existing.taxAmount;
+      (updateData.taxAmount as number | undefined) ?? existing.taxAmount.toNumber();
 
     if (finalStatus === "FINAL" && nextGrandTotal <= 0) {
       return NextResponse.json(
@@ -399,10 +434,53 @@ export async function PATCH(
       );
     }
 
-    const bill = await prisma.$transaction(async (tx) => {
+    const nextTaxPercent =
+      (updateData.taxPercent as number | undefined) ?? existing.taxPercent?.toNumber() ?? 0;
+
+    // [P0] Block FINAL transition if placeOfSupply is missing.
+    // Required for ALL final bills under GSTR-1 — not just B2B.
+    const finalPlaceOfSupply = hasPlaceOfSupply
+      ? (updateData.placeOfSupply as string | null | undefined)
+      : existing.placeOfSupply;
+
+    if (finalStatus === "FINAL" && !finalPlaceOfSupply) {
+      return NextResponse.json(
+        {
+          error:
+            "Place of Supply is required to finalise a bill (mandatory for GSTR-1 compliance).",
+        },
+        { status: 400 }
+      );
+    }
+
+    // [P0] Block FINAL transition if tax > 0 but no HSN code present in rows.
+    // Without HSN, GSTR-1 Table 12 (HSN-wise summary) will be incomplete.
+    if (finalStatus === "FINAL" && nextTaxPercent > 0) {
+      const rowsToCheck = (updateData.rows ?? existing.rows) as unknown[];
+      const hasHsn =
+        Array.isArray(rowsToCheck) &&
+        rowsToCheck.some(
+          (row) =>
+            row &&
+            typeof row === "object" &&
+            typeof (row as Record<string, unknown>)["_hsnCode"] === "string" &&
+            ((row as Record<string, unknown>)["_hsnCode"] as string).trim() !== ""
+        );
+      if (!hasHsn) {
+        return NextResponse.json(
+          {
+            error:
+              "At least one HSN/SAC code is required when tax is applied (mandatory for GSTR-1 Table 12).",
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    const bill = await prisma.$transaction(async (tx: PrismaTx) => {
       const updatedBill = await tx.bill.update({
         where: { id },
-        data: updateData as Prisma.BillUncheckedUpdateInput,
+        data: updateData as BillUpdateData,
       });
 
       if (!finalPartyId) {
@@ -430,7 +508,7 @@ export async function PATCH(
       const balanceChange = getBillBalanceDeltaForTransition({
         partyType: party.type,
         previousStatus: existing.status,
-        previousAmount: existing.grandTotal,
+        previousAmount: existing.grandTotal.toNumber(),
         nextStatus: finalStatus,
         nextAmount: nextGrandTotal,
       });
@@ -514,10 +592,24 @@ export async function DELETE(
       return NextResponse.json({ error: "Bill not found" }, { status: 404 });
     }
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: PrismaTx) => {
       await tx.bill.update({
         where: { id },
         data: { status: "CANCELLED" },
+      });
+
+      // [MCA GSR 247(E)] Append-only audit log — record the cancellation actor.
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          entityType: "Bill",
+          entityId: existing.id,
+          userId: userId!,  // ADMIN-only endpoint; userId guarded at line 562
+          action: "DELETE",
+          fieldName: "status",
+          oldValue: existing.status,
+          newValue: "CANCELLED",
+        },
       });
 
       if (!existing.partyId) {
@@ -544,9 +636,9 @@ export async function DELETE(
       const balanceChange = getBillBalanceDeltaForTransition({
         partyType: party.type,
         previousStatus: existing.status,
-        previousAmount: existing.grandTotal,
+        previousAmount: existing.grandTotal.toNumber(),
         nextStatus: "CANCELLED",
-        nextAmount: existing.grandTotal,
+        nextAmount: existing.grandTotal.toNumber(),
       });
 
       if (balanceChange !== 0) {
@@ -564,9 +656,9 @@ export async function DELETE(
           billNumber: existing.billNumber,
           partyId: party.id,
           partyName: party.name,
-          subtotal: existing.subtotal,
-          taxAmount: existing.taxAmount,
-          grandTotal: existing.grandTotal,
+          subtotal: existing.subtotal.toNumber(),
+          taxAmount: existing.taxAmount.toNumber(),
+          grandTotal: existing.grandTotal.toNumber(),
           createdBy: userId || existing.createdBy,
           entryDate: new Date(),
           isInterState: existing.isInterState,

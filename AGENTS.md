@@ -17,16 +17,34 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ---
 
-## Tenant Isolation (Non-negotiable)
+## Tenant Isolation (Systematic Enforcement)
 
-Every DB query must be scoped to `tenantId`. There are two resolution strategies — use the correct one:
+**Zero-Trust Policy**: Every DB query must be scoped to `tenantId`. Never rely on unverified headers.
 
 | Operation | Function | Why |
 |-----------|----------|-----|
-| GET (read-only) | `resolveTenantIdFromRequest(request)` from `@/lib/tenant` | Fast, header-based |
-| POST / PATCH / PUT / DELETE | `await resolveVerifiedTenantId(request)` from `@/lib/session-server` | JWT-verified, spoofing-safe |
+| All Operations (READ/WRITE) | `await resolveVerifiedTenantId(request)` from `@/lib/session-server` | **Mandatory**. Every request must be verified against the JWT payload. |
+| DB Access | `...await tenantScope()` | Helper for Prisma query scoping. |
 
-Never use header-based resolution for writes. Never use `getTenantId()` (server-component helper) in API routes.
+> [!WARNING]
+> The legacy `resolveTenantIdFromRequest(request)` is deprecated and must not be used for new routes. Relying on unverified `x-tenant-id` headers is a security risk.
+
+---
+
+## Concurrency & Scalability
+
+- **Tenant-Scoped Locking**: Never use a global constant for `pg_advisory_xact_lock`. Locks must be scoped to the tenant to prevent cross-tenant bottlenecks.
+  - Correct: `hash(tenantId + resourceType)`
+  - Incorrect: `BILL_NUMBER_LOCK_KEY = 12345`
+- **Advisory Locks**: Only use advisory locks inside transactions for critical sequential numbering (e.g., Bills).
+
+---
+
+## Build Stability & Hygiene
+
+- **Zero-Tolerance for Errors**: New code must not introduce any TypeScript errors. Existing errors in `ts_errors.txt` should be resolved as you touch related files.
+- **Deduplication**: Object keys (especially in `translations.ts`) must be unique. Overwriting keys is a build failure.
+- **No Artifact Clutter**: Professional root directory only. Scripts belong in `scripts/`, documentation in `docs/`. Obsolete `.js` or `.ts` files in root must be deleted.
 
 ---
 

@@ -97,8 +97,8 @@ export async function GET(request: NextRequest) {
         credit: 0,
       };
     }
-    aggregateMap[line.accountCode].debit += line.debit;
-    aggregateMap[line.accountCode].credit += line.credit;
+    aggregateMap[line.accountCode].debit += line.debit.toNumber();
+    aggregateMap[line.accountCode].credit += line.credit.toNumber();
   }
 
   const aggregates = Object.values(aggregateMap).sort((a, b) => a.accountCode.localeCompare(b.accountCode));

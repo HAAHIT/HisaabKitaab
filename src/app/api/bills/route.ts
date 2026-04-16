@@ -1,5 +1,12 @@
 import { prisma } from "@/lib/prisma";
-import type { Prisma } from "@prisma/client";
+import { GST_STATE_CODE_SET } from "@/lib/gst-states";
+
+// Derive Prisma query types from the client instance to avoid the
+// @prisma/client → .prisma/client re-export resolution failure
+// under moduleResolution:"bundler" in Prisma v7.
+type BillWhere = NonNullable<NonNullable<Parameters<typeof prisma.bill.findMany>[0]>["where"]>;
+type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+type BillRowsJson = NonNullable<Parameters<typeof prisma.bill.create>[0]["data"]>["rows"];
 import {
   buildBillSnapshotFromParty,
   getPostedBillBalanceDelta,
@@ -15,6 +22,7 @@ import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { logError, getRequestId } from "@/lib/observability";
 import crypto from "crypto";
+import { z } from "zod";
 
 function generateLockKey(tenantId: string): bigint {
   const hash = crypto.createHash("sha256").update(tenantId).digest("hex");
@@ -70,6 +78,78 @@ function parseTenantSettings(value: unknown) {
   return {};
 }
 
+const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+
+const CreateBillSchema = z.object({
+  templateId: z.string().min(1),
+  partyId: z.string().min(1),
+  customerName: z.string().optional(),
+  customerPhone: z.string().nullish(),
+  customerAddress: z.string().nullish(),
+  // [A3] GSTIN must be a valid 15-character Indian GSTIN format.
+  // Regex: 2-digit state code + PAN (5 alpha + 4 digit + 1 alpha) + 1 entity + Z + 1 checksum.
+  gstin: z
+    .string()
+    .regex(GSTIN_REGEX, {
+      message:
+        "Invalid GSTIN format. Expected 15-character string like 27AAPFU0939F1ZV",
+    })
+    .nullish(),
+  // [B1] Place of Supply — 2-digit GST state code (e.g. "27" for Maharashtra).
+  // Required for B2B final bills (GSTIN present) per GSTR-1 Table 4A.
+  // Validated against the 37 official GSTN state/UT codes.
+  placeOfSupply: z
+    .string()
+    .refine((val) => GST_STATE_CODE_SET.has(val), {
+      message:
+        "Invalid place of supply. Must be a 2-digit GST state code (e.g. '27' for Maharashtra).",
+    })
+    .nullish(),
+  rows: z.array(z.record(z.string(), z.unknown())).min(1),
+  notes: z.string().nullish(),
+  terms: z.string().nullish(),
+  taxPercent: z.number().nonnegative().nullish(),
+  subtotal: z.number().nonnegative().default(0),
+  taxAmount: z.number().nonnegative().default(0),
+  grandTotal: z.number().nonnegative().default(0),
+  status: z.string().optional(),
+  isInterState: z.boolean().optional(),
+  paymentMode: z.string().optional(),
+}).superRefine((data, ctx) => {
+  // [P0] FINAL bills must always declare place of supply for GSTR-1 compliance.
+  // Not limited to B2B — even B2C inter-state supplies require placeOfSupply.
+  if (data.status === "FINAL" && !data.placeOfSupply) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["placeOfSupply"],
+      message:
+        "Place of Supply is required for all final bills (mandatory for GSTR-1 compliance).",
+    });
+  }
+
+  // [P0] FINAL bills with tax must carry at least one HSN/SAC code.
+  // Without HSN, GSTR-1 Table 12 (HSN-wise summary) will be incomplete.
+  if (
+    data.status === "FINAL" &&
+    (data.taxPercent ?? 0) > 0 &&
+    Array.isArray(data.rows) &&
+    !data.rows.some(
+      (row) =>
+        row &&
+        typeof row === "object" &&
+        typeof (row as Record<string, unknown>)["_hsnCode"] === "string" &&
+        ((row as Record<string, unknown>)["_hsnCode"] as string).trim() !== ""
+    )
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["rows"],
+      message:
+        "At least one HSN/SAC code is required when tax is applied (mandatory for GSTR-1 Table 12).",
+    });
+  }
+});
+
 async function loadBillingSettings(tenantId: string) {
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
@@ -114,19 +194,43 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search") || "";
     const status = searchParams.get("status") || "";
     const partyId = searchParams.get("partyId") || "";
+    const partyType = searchParams.get("partyType") || "";
     const from = searchParams.get("from");
     const to = searchParams.get("to");
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "20");
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1);
+    const limit = Math.max(1, parseInt(searchParams.get("limit") || "20", 10) || 20);
 
-    const where: Prisma.BillWhereInput = { isDeleted: false, tenantId };
+    const where: any = { isDeleted: false, tenantId };
+
+    if (partyType === "VENDOR") {
+      // Purchases always have a vendor linked in this system
+      where.party = { type: "VENDOR" };
+    } else if (partyType === "CUSTOMER") {
+      // Sales can be to a registered Customer OR a walk-in (null partyId)
+      where.OR = [
+        { party: { type: "CUSTOMER" } },
+        { partyId: null },
+      ];
+    }
 
     if (search) {
-      where.OR = [
+      // If search is present, we need to be careful with existing OR
+      const searchOR = [
         { billNumber: { contains: search, mode: "insensitive" } },
         { customerName: { contains: search, mode: "insensitive" } },
         { party: { name: { contains: search, mode: "insensitive" } } },
       ];
+
+      if (where.OR) {
+        // If we already have an OR for partyType (CUSTOMER), we nest the search
+        where.AND = [
+          { OR: where.OR },
+          { OR: searchOR }
+        ];
+        delete where.OR;
+      } else {
+        where.OR = searchOR;
+      }
     }
 
     if (status && status !== "ALL") {
@@ -205,19 +309,32 @@ export async function POST(request: NextRequest) {
   const tenantId = tenantResolution.tenantId;
 
   try {
-    let parsedBody: Record<string, unknown>;
+    let rawBody: Record<string, unknown>;
     try {
       const bodyText = await request.text();
       if (!bodyText) {
         return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
       }
-      parsedBody = JSON.parse(bodyText);
+      rawBody = JSON.parse(bodyText);
     } catch {
       return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
     }
 
-    if (!parsedBody || typeof parsedBody !== "object" || Array.isArray(parsedBody)) {
+    if (!rawBody || typeof rawBody !== "object" || Array.isArray(rawBody)) {
       return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+    }
+
+    let body: z.infer<typeof CreateBillSchema>;
+    try {
+      body = CreateBillSchema.parse(rawBody);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return NextResponse.json(
+          { error: "Invalid request", details: err.issues },
+          { status: 400 }
+        );
+      }
+      throw err;
     }
 
     const {
@@ -235,7 +352,7 @@ export async function POST(request: NextRequest) {
       taxAmount,
       grandTotal,
       status,
-    } = parsedBody;
+    } = body;
 
     let finalTemplateId = templateId;
     const isQuickBill = templateId === "__QUICK_BILL__";
@@ -324,22 +441,22 @@ export async function POST(request: NextRequest) {
         : 0;
     const billStatus = status === "FINAL" ? "FINAL" : "DRAFT";
     if (!isQuickBill) {
-      if (typeof parsedBody.isInterState !== "boolean") {
+      if (typeof body.isInterState !== "boolean") {
         return NextResponse.json(
           { error: "isInterState must be a boolean" },
           { status: 400 }
         );
       }
     } else {
-      if (parsedBody.isInterState !== undefined && typeof parsedBody.isInterState !== "boolean") {
+      if (body.isInterState !== undefined && typeof body.isInterState !== "boolean") {
         return NextResponse.json(
           { error: "isInterState must be a boolean" },
           { status: 400 }
         );
       }
     }
-    const isInterState = parsedBody.isInterState === true;
-    const normalizedPaymentMode = normalizePaymentMode(parsedBody.paymentMode);
+    const isInterState = body.isInterState === true;
+    const normalizedPaymentMode = normalizePaymentMode(body.paymentMode);
     const now = new Date();
     const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -352,7 +469,7 @@ export async function POST(request: NextRequest) {
       gstin,
     });
 
-    if (parsedBody.paymentMode && !normalizedPaymentMode) {
+    if (body.paymentMode && !normalizedPaymentMode) {
       return NextResponse.json(
         { error: "Invalid payment mode" },
         { status: 400 }
@@ -373,7 +490,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const bill = await prisma.$transaction(async (tx) => {
+    const bill = await prisma.$transaction(async (tx: PrismaTx) => {
       const lockKey = generateLockKey(tenantId);
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
 
@@ -395,7 +512,7 @@ export async function POST(request: NextRequest) {
           customerPhone: snapshot.customerPhone,
           customerAddress: snapshot.customerAddress,
           gstin: snapshot.gstin,
-          rows,
+          rows: rows as unknown as BillRowsJson,
           notes: notes || null,
           terms: terms || null,
           subtotal: subtotal || 0,
@@ -404,8 +521,22 @@ export async function POST(request: NextRequest) {
           grandTotal: resolvedGrandTotal,
           status: billStatus,
           isInterState,
+          placeOfSupply: body.placeOfSupply ?? null,  // [B1] GSTR-1 mandatory field
           createdBy: userId!,
           isDeleted: false,
+        },
+      });
+
+      // [MCA GSR 247(E)] Append-only edit log — mandatory since April 1 2023.
+      // Logged inside the same transaction so log entry and bill creation are atomic.
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          entityType: "Bill",
+          entityId: createdBill.id,
+          userId: userId!,  // guarded: 401 returned at line 302-304 if missing
+          action: "CREATE",
+          // fieldName / oldValue / newValue = null for whole-record CREATE events
         },
       });
 
@@ -430,9 +561,9 @@ export async function POST(request: NextRequest) {
           billNumber,
           partyId: party.id,
           partyName: party.name,
-          subtotal: createdBill.subtotal,
-          taxAmount: createdBill.taxAmount,
-          grandTotal: createdBill.grandTotal,
+          subtotal: createdBill.subtotal.toNumber(),
+          taxAmount: createdBill.taxAmount.toNumber(),
+          grandTotal: createdBill.grandTotal.toNumber(),
           createdBy: userId!,
           entryDate: createdBill.createdAt,
           isInterState,
@@ -469,7 +600,7 @@ export async function POST(request: NextRequest) {
             id: createdPayment.id,
             partyId: party.id,
             partyName: party.name,
-            amount: createdPayment.amount,
+            amount: createdPayment.amount.toNumber(),
             mode: createdPayment.mode,
             date: createdPayment.date,
             createdBy: userId!,
@@ -479,7 +610,7 @@ export async function POST(request: NextRequest) {
             id: createdPayment.id,
             partyId: party.id,
             partyName: party.name,
-            amount: createdPayment.amount,
+            amount: createdPayment.amount.toNumber(),
             mode: createdPayment.mode,
             date: createdPayment.date,
             createdBy: userId!,

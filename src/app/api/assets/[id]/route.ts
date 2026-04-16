@@ -113,16 +113,19 @@ export async function GET(
         return NextResponse.json({ error: "Forbidden proxy target" }, { status: 403 });
       }
 
-      const proxyResponse = await fetch(asset.storageKey, {
-        method: "GET",
-        headers: {
-          "User-Agent": "HisaabKitaab/1.0 AssetProxy",
-        },
-        // Limit the timeout to prevent hanging
-        signal: AbortSignal.timeout(5000),
-      });
+      let proxyResponse: Response | null = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        proxyResponse = await fetch(asset.storageKey, {
+          method: "GET",
+          headers: { "User-Agent": "HisaabKitaab/1.0 AssetProxy" },
+          signal: AbortSignal.timeout(5000),
+        });
+        // Only retry on server-side errors — 4xx means the resource is
+        // definitively absent or forbidden, retrying will not help.
+        if (proxyResponse.ok || proxyResponse.status < 500) break;
+      }
 
-      if (!proxyResponse.ok) {
+      if (!proxyResponse || !proxyResponse.ok) {
         return NextResponse.json(
           { error: "Failed to fetch proxied asset" },
           { status: 502 }

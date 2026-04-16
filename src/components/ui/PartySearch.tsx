@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Autocomplete, AutocompleteItem, Button } from "@heroui/react";
+import { Autocomplete, AutocompleteItem, Button, useDisclosure } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getBalanceStatusLabel } from "@/lib/accounting";
+import { QuickAddPartyModal } from "@/components/parties/QuickAddPartyModal";
 
 export interface PartyOption {
   id: string;
@@ -46,6 +47,7 @@ export function PartySearch({
   const router = useRouter();
   const [parties, setParties] = useState<PartyOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { isOpen, onOpen, onOpenChange } = useDisclosure();
 
   useEffect(() => {
     async function fetchParties() {
@@ -96,7 +98,7 @@ export function PartySearch({
                 size="sm"
                 color="primary"
                 variant="flat"
-                onPress={() => router.push(`/parties/new?type=${partyType || "CUSTOMER"}`)}
+                onPress={onOpen}
               >
                 + Add New Party
               </Button>
@@ -134,6 +136,16 @@ export function PartySearch({
           </AutocompleteItem>
         )}
       </Autocomplete>
+
+      <QuickAddPartyModal
+        isOpen={isOpen}
+        onOpenChange={onOpenChange}
+        initialType={partyType || "CUSTOMER"}
+        onSuccess={(newParty) => {
+          setParties((prev) => [...prev, newParty]);
+          onChange(newParty);
+        }}
+      />
     </div>
   );
 }

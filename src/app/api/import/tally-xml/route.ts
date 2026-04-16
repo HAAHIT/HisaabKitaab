@@ -7,6 +7,10 @@ import { parseTallyXml } from "@/lib/tally-xml-import";
 import { createJournalEntry } from "@/lib/journal";
 import type { AccountCode } from "@/lib/chart-of-accounts";
 
+// Derive Prisma tx type from the client instance to avoid the
+// @prisma/client → .prisma/client re-export failure under Prisma v7.
+type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+
 export const runtime = "nodejs";
 
 // Max 5 imports per minute per tenant
@@ -76,7 +80,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Failed to read uploaded file" }, { status: 400 });
   }
 
-  // ── Parse ─────────────────────────────────────────────────────────────────
+  // ── Parse quickly to get counts ──────────────────────────────────────────
   const { vouchers, partyMasters, parseErrors } = parseTallyXml(xmlText);
 
   if (vouchers.length === 0 && partyMasters.length === 0) {
@@ -89,149 +93,28 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // ── Party master upsert ───────────────────────────────────────────────────
-  let partiesCreated = 0;
-
-  // Pre-fetch all existing parties for this tenant to avoid loop queries
-  const existingParties = await prisma.party.findMany({
-    where: { tenantId: tid, isDeleted: false },
-    select: { id: true, name: true },
+  // Create the tracking job
+  const job = await prisma.importJob.create({
+    data: {
+      tenantId: tid,
+      totalItems: vouchers.length + partyMasters.length,
+      xmlData: xmlText,
+      status: "PENDING",
+    }
   });
 
-  // Build party name → id cache to avoid repeated DB lookups
-  const partyCache = new Map<string, string>();
-  for (const p of existingParties) {
-    partyCache.set(p.name, p.id);
-  }
-
-  for (const pm of partyMasters) {
-    if (partyCache.has(pm.name)) continue;
-
-    const created = await prisma.party.create({
-      data: {
-        tenantId: tid,
-        name: pm.name,
-        type: pm.group === "Sundry Debtors" ? "CUSTOMER" : "VENDOR",
-        openingBalance: pm.openingBalance,
-        currentBalance: pm.openingBalance,
-        createdBy: actorId,
-      },
-      select: { id: true }
-    });
-    partyCache.set(pm.name, created.id);
-    partiesCreated++;
-  }
-
-  // ── Voucher import ────────────────────────────────────────────────────────
-
-  async function resolvePartyId(
-    tx: Omit<
-      import("@prisma/client").PrismaClient,
-      "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
-    >,
-    name: string,
-    accountCode: AccountCode
-  ): Promise<string> {
-    const cached = partyCache.get(name);
-    if (cached) return cached;
-
-    // Create new party (already know it doesn't exist from cache)
-    const partyType =
-      accountCode === "SUNDRY_DEBTORS" ? "CUSTOMER" : "VENDOR";
-    const created = await tx.party.create({
-      data: {
-        tenantId: tid,
-        name,
-        type: partyType,
-        openingBalance: 0,
-        currentBalance: 0,
-        createdBy: actorId,
-      },
-      select: { id: true },
-    });
-    partiesCreated++;
-
-    partyCache.set(name, created.id);
-    return created.id;
-  }
-
-  let imported = 0;
-  let skipped = 0;
-  let failed = 0;
-  const importErrors: string[] = [];
-
-  for (const voucher of vouchers) {
-    // Duplicate detection: (voucherType, entryDate, narration, totalDebit)
-    const duplicate = await prisma.journalEntry.findFirst({
-      where: {
-        tenantId: tid,
-        voucherType: voucher.voucherType,
-        entryDate: voucher.entryDate,
-        narration: voucher.narration,
-        totalDebit: voucher.totalDebit,
-      },
-      select: { id: true },
-    });
-
-    if (duplicate) {
-      skipped++;
-      continue;
-    }
-
-    try {
-      await prisma.$transaction(async (tx) => {
-        const lines = await Promise.all(
-          voucher.lines.map(async (line) => {
-            const partyId = line.partyName
-              ? await resolvePartyId(tx, line.partyName, line.accountCode)
-              : null;
-
-            return {
-              accountCode: line.accountCode,
-              debit: line.debit,
-              credit: line.credit,
-              partyId,
-              partyName: line.partyName ?? undefined,
-            };
-          })
-        );
-
-        await createJournalEntry(tx, {
-          tenantId: tid,
-          entryDate: voucher.entryDate,
-          narration: voucher.narration,
-          voucherType: voucher.voucherType,
-          createdBy: actorId,
-          lines,
-        });
-      });
-
-      imported++;
-    } catch (err) {
-      failed++;
-      importErrors.push(
-        `Voucher "${voucher.reference}" (${voucher.voucherType}): ${
-          err instanceof Error ? err.message : String(err)
-        }`
-      );
-    }
-  }
-
-  logInfo("import.tally-xml.complete", {
+  logInfo("import.tally-xml.queued", {
     requestId: getRequestId(request),
-    tenantId,
-    partiesCreated,
-    imported,
-    skipped,
-    failed,
+    tenantId: tid,
+    jobId: job.id,
+    vouchersParsed: vouchers.length,
+    mastersParsed: partyMasters.length,
   });
 
   return NextResponse.json({
-    partiesCreated,
-    imported,
-    skipped,
-    failed,
+    jobId: job.id,
+    message: "Import job queued successfully.",
+    totalDetected: vouchers.length + partyMasters.length,
     parseErrors,
-    importErrors,
   });
 }

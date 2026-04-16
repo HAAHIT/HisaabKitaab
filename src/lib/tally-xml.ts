@@ -2,15 +2,27 @@
  * Tally XML serializer
  *
  * Produces XML compatible with Tally ERP 9 and Tally Prime import.
- * Format: ENVELOPE > BODY > TALLYMESSAGE > VOUCHER / LEDGER
  *
- * Reference: Tally TDL XML import specification
- * Dates: YYYYMMDD in IST
- * Amounts: plain decimal, 2dp, no currency symbol
- * Tally debit/credit convention: DEBIT entries have positive amount on the
- * ledger line, CREDIT entries have negative amount (Tally uses sign-based
- * single-amount per ledger entry, not separate debit/credit columns).
+ * Format reference (TallyPrime 4.x import spec):
+ *   ENVELOPE > HEADER > BODY > IMPORTDATA > REQUESTDESC + REQUESTDATA
+ *
+ * REPORTNAME dispatch rules (critical):
+ *   - "All Masters"  → Tally processes <LEDGER> nodes only
+ *   - "Vouchers"     → Tally processes <VOUCHER> nodes only
+ *   Combined exports require TWO separate <IMPORTDATA> blocks in one <ENVELOPE>.
+ *
+ * Amount convention (Tally):
+ *   DEBIT  = positive amount, ISDEEMEDPOSITIVE=Yes
+ *   CREDIT = negative amount, ISDEEMEDPOSITIVE=No
+ *
+ * Dates: YYYYMMDD in IST (Asia/Kolkata).
+ *
+ * GST fields added (per TallyPrime 4.x GST spec):
+ *   <PLACEOFSUPPLY>  — on <VOUCHER>; state name derived from 2-digit GST code
+ *   <GSTDETAILS.LIST> — on Sales/Purchase <ALLLEDGERENTRIES.LIST>; carries tax rate + HSN
  */
+
+import { gstCodeToStateName } from "@/lib/gst-states";
 
 const INDIA_TIMEZONE = "Asia/Kolkata";
 
@@ -22,13 +34,17 @@ export type TallyVoucherType =
   | "Receipt"
   | "Payment"
   | "Journal"
-  | "Contra";
+  | "Contra"
+  | "Sales Return"    // Credit Note — required for GSTR-1 Table 9B
+  | "Purchase Return"; // Debit Note — required for GSTR-3B
 
 export interface TallyLedgerEntry {
   ledgerName: string;
   /** Positive = debit, Negative = credit (Tally convention) */
   amount: number;
   partyName?: string | null;
+  /** Set to true for the Sales Account / Purchase Account line — receives GSTDETAILS.LIST */
+  isIncomeLedger?: boolean;
 }
 
 export interface TallyVoucher {
@@ -38,6 +54,55 @@ export interface TallyVoucher {
   reference: string;
   narration: string;
   ledgerEntries: TallyLedgerEntry[];
+  /**
+   * Stable unique ID for this voucher — used as <GUID> and <REMOTEID>.
+   * Prevents duplicate entries on Tally re-import.  Pass journal entry ID.
+   * Format emitted: "HisaabKitaab-{guid}"
+   */
+  guid?: string;
+  /**
+   * 2-digit GST state code (e.g. "27").  Converted to state name for Tally XML.
+   * Required for GSTR-1 B2B vouchers (Table 4A).
+   */
+  placeOfSupply?: string | null;
+  /**
+   * GST rate applied to the whole bill (e.g. 18 for 18%).
+   * Written into <GSTDETAILS.LIST> on the income/expense ledger entry.
+   */
+  taxPercent?: number | null;
+  /** True = IGST; false = CGST+SGST split.  Affects <TAXTYPE> tag. */
+  isInterState?: boolean;
+  /**
+   * Bill-level Cess amount (₹) — emitted as <CESS> in GSTDETAILS.LIST.
+   * Required for tobacco, aerated drinks, and luxury goods.
+   * Zero / null for non-cess items.
+   */
+  cessAmount?: number | null;
+  /**
+   * Unique (HSN code, tax rate) pairs found in bill rows.
+   * Keyed by `_hsnCode` and the per-line or bill-level `_taxPercent`.
+   * One <GSTDETAILS.LIST> block emitted per pair — required for correct
+   * GSTR-1 Table 12 when a single bill contains items at different GST rates.
+   * Empty array → emit one block without HSNCODE (bill-level rate only).
+   */
+  hsnRatePairs?: Array<{ hsnCode: string; taxPercent: number }>;
+  /**
+   * @deprecated Use hsnRatePairs. Kept for backwards-compat with callers
+   * that have not yet been updated to provide per-line rates.
+   */
+  hsnCodes?: string[];
+  /**
+   * True = Reverse Charge Mechanism (RCM) purchase under IGST Act Section 9(3)/9(4).
+   * Emits <ISREVERSECHARGE>Yes</ISREVERSECHARGE> on the voucher node.
+   * Required for correct ITC computation in Tally GSTR-3B.
+   */
+  isReverseCharge?: boolean;
+  /**
+   * Customer GSTIN from the linked Bill (if any). Used to determine SOURCEOFDETAILS:
+   *   "Autofill"      = registered party (GSTIN present) — Tally auto-populates GST return data
+   *   "NotApplicable" = B2C / unregistered / composite — no GSTIN lookup
+   */
+  gstin?: string | null;
 }
 
 export interface TallyPartyMaster {
@@ -59,10 +124,40 @@ const VOUCHER_TYPE_MAP: Record<string, TallyVoucherType> = {
   RECEIPT: "Receipt",
   PAYMENT: "Payment",
   JOURNAL: "Journal",
+  CREDIT_NOTE: "Sales Return",
+  DEBIT_NOTE: "Purchase Return", // GST Debit Note — GSTR-3B Table 4
 };
 
 export function dbVoucherTypeToTally(voucherType: string): TallyVoucherType {
   return VOUCHER_TYPE_MAP[voucherType] ?? "Journal";
+}
+
+/**
+ * Determines whether a journal entry should be exported as "Sales Return"
+ * (Credit Note) instead of the generic "Journal" type.
+ *
+ * Primary path:  DB voucherType === "CREDIT_NOTE" → "Sales Return"
+ * Legacy path:   Old entries stored as JOURNAL with the reversal narration prefix
+ *                (written before the CREDIT_NOTE enum was introduced) → "Sales Return"
+ */
+export function resolveExportVoucherType(
+  dbVoucherType: string,
+  narration: string
+): TallyVoucherType {
+  if (dbVoucherType === "CREDIT_NOTE") {
+    return "Sales Return";
+  }
+  if (dbVoucherType === "DEBIT_NOTE") {
+    return "Purchase Return";
+  }
+  // Legacy: cancellations created before CREDIT_NOTE enum existed
+  if (
+    dbVoucherType === "JOURNAL" &&
+    narration.startsWith("Reversal of Sales Bill")
+  ) {
+    return "Sales Return";
+  }
+  return dbVoucherTypeToTally(dbVoucherType);
 }
 
 // ── Date formatting ───────────────────────────────────────────────────────────
@@ -100,6 +195,9 @@ function formatAmount(amount: number): string {
  * Converts a journal line (separate debit/credit columns) to Tally's
  * sign-based single-amount convention.
  * Debit = positive amount, Credit = negative amount.
+ *
+ * isIncomeLedger must be true for the Sales Account / Purchase Account line
+ * so the serializer knows where to attach <GSTDETAILS.LIST>.
  */
 export function journalLineToTallyEntry(line: {
   accountName: string;
@@ -108,44 +206,159 @@ export function journalLineToTallyEntry(line: {
   partyName?: string | null;
 }): TallyLedgerEntry {
   const amount = line.debit > 0 ? line.debit : -line.credit;
+  const isIncomeLedger =
+    line.accountName === "Sales Account" ||
+    line.accountName === "Purchase Account";
   return {
     ledgerName: line.accountName,
     amount,
     partyName: line.partyName,
+    isIncomeLedger,
   };
+}
+
+// ── GST detail XML helpers ────────────────────────────────────────────────────
+
+/**
+ * Builds one <GSTDETAILS.LIST> block.
+ * hsnCode is optional — omitted when the bill line has no HSN code.
+ *
+ * SOURCEOFDETAILS rules (TallyPrime 4.x GST spec):
+ *   "Autofill"       — party GSTIN is known; Tally auto-populates GST return details
+ *   "NotApplicable"  — unregistered / composite / B2C; Tally skips GSTIN lookup
+ */
+function buildGstDetailsXml(
+  taxPercent: number,
+  cessAmount: number,
+  hsnCode?: string,
+  gstin?: string | null
+): string {
+  const hsnTag = hsnCode
+    ? `
+          <HSNCODE>${escapeXml(hsnCode)}</HSNCODE>`
+    : "";
+
+  const sourceOfDetails = gstin ? "Autofill" : "NotApplicable";
+
+  return `
+        <GSTDETAILS.LIST>
+          <TAXTYPE>GST</TAXTYPE>
+          <TAXRATE>${taxPercent.toFixed(2)}</TAXRATE>
+          <BASICTAXRATE>${taxPercent.toFixed(2)}</BASICTAXRATE>
+          <ISPARTYLEDGER>No</ISPARTYLEDGER>
+          <CESS>${cessAmount.toFixed(2)}</CESS>${hsnTag}
+          <SOURCEOFDETAILS>${sourceOfDetails}</SOURCEOFDETAILS>
+        </GSTDETAILS.LIST>`;
 }
 
 // ── XML builders ─────────────────────────────────────────────────────────────
 
-function buildLedgerEntryXml(entry: TallyLedgerEntry): string {
-  const billAllocations =
-    entry.partyName
-      ? `
+function buildLedgerEntryXml(
+  entry: TallyLedgerEntry,
+  gstContext?: {
+    taxPercent: number;
+    cessAmount: number;
+    hsnRatePairs: Array<{ hsnCode: string; taxPercent: number }>;
+    hsnCodes: string[];
+    gstin?: string | null;
+  }
+): string {
+  const billAllocations = entry.partyName
+    ? `
         <BILLALLOCATIONS.LIST>
           <NAME>${escapeXml(entry.partyName)}</NAME>
           <BILLTYPE>On Account</BILLTYPE>
           <AMOUNT>${entry.amount >= 0 ? "" : "-"}${formatAmount(entry.amount)}</AMOUNT>
         </BILLALLOCATIONS.LIST>`
-      : "";
+    : "";
+
+  // Attach GSTDETAILS.LIST only to the Sales/Purchase income ledger entry.
+  // Priority: hsnRatePairs (per-line rates) > hsnCodes (legacy, bill-level rate).
+  // When hsnRatePairs is non-empty, emit one block per (HSN, rate) pair.
+  // When only hsnCodes are available, emit one block per HSN at the bill-level rate.
+  // When neither is provided, emit one block without HSNCODE.
+  let gstDetails = "";
+  if (entry.isIncomeLedger && gstContext && gstContext.taxPercent > 0) {
+    const cess = gstContext.cessAmount ?? 0;
+    if (gstContext.hsnRatePairs.length > 0) {
+      // De-duplicate: same HSN + same rate should produce only one block
+      const seen = new Set<string>();
+      gstDetails = gstContext.hsnRatePairs
+        .filter(({ hsnCode, taxPercent }) => {
+          const key = `${hsnCode}::${taxPercent}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+        .map(({ hsnCode, taxPercent }) =>
+          buildGstDetailsXml(taxPercent, cess, hsnCode, gstContext.gstin)
+        )
+        .join("");
+    } else if (gstContext.hsnCodes.length > 0) {
+      gstDetails = gstContext.hsnCodes
+        .map((code) => buildGstDetailsXml(gstContext.taxPercent, cess, code, gstContext.gstin))
+        .join("");
+    } else {
+      gstDetails = buildGstDetailsXml(gstContext.taxPercent, cess, undefined, gstContext.gstin);
+    }
+  }
 
   return `
       <ALLLEDGERENTRIES.LIST>
         <LEDGERNAME>${escapeXml(entry.ledgerName)}</LEDGERNAME>
         <ISDEEMEDPOSITIVE>${entry.amount >= 0 ? "Yes" : "No"}</ISDEEMEDPOSITIVE>
-        <AMOUNT>${entry.amount >= 0 ? "" : "-"}${formatAmount(entry.amount)}</AMOUNT>${billAllocations}
+        <AMOUNT>${entry.amount >= 0 ? "" : "-"}${formatAmount(entry.amount)}</AMOUNT>${billAllocations}${gstDetails}
       </ALLLEDGERENTRIES.LIST>`;
 }
 
 function buildVoucherXml(voucher: TallyVoucher): string {
-  const ledgerLines = voucher.ledgerEntries.map(buildLedgerEntryXml).join("");
+  // Build GST context from voucher-level fields (populated from Bill when available)
+  const gstContext =
+    voucher.taxPercent != null && voucher.taxPercent > 0
+      ? {
+          taxPercent: voucher.taxPercent,
+          cessAmount: voucher.cessAmount ?? 0,
+          // hsnRatePairs takes priority; fall back to legacy hsnCodes list
+          hsnRatePairs: voucher.hsnRatePairs ?? [],
+          hsnCodes: voucher.hsnCodes ?? [],
+          gstin: voucher.gstin,
+        }
+      : undefined;
+
+  const ledgerLines = voucher.ledgerEntries
+    .map((entry) => buildLedgerEntryXml(entry, gstContext))
+    .join("");
+
+  // GUID prevents duplicate imports on re-import (TallyPrime idempotency).
+  const guidTag = voucher.guid
+    ? `
+        <GUID>HisaabKitaab-${escapeXml(voucher.guid)}</GUID>
+        <REMOTEID>HisaabKitaab-${escapeXml(voucher.guid)}</REMOTEID>`
+    : "";
+
+  // PLACEOFSUPPLY: convert 2-digit GST code to English state name for Tally.
+  const placeOfSupplyTag =
+    voucher.placeOfSupply
+      ? `
+        <PLACEOFSUPPLY>${escapeXml(
+          gstCodeToStateName(voucher.placeOfSupply) ?? voucher.placeOfSupply
+        )}</PLACEOFSUPPLY>`
+      : "";
+
+  // ISREVERSECHARGE — required for RCM purchases (IGST Act Section 9(3)/9(4)).
+  // Without this tag, Tally will NOT populate the RCM ITC columns in GSTR-3B.
+  const reverseChargeTag = voucher.isReverseCharge
+    ? `
+        <ISREVERSECHARGE>Yes</ISREVERSECHARGE>`
+    : "";
 
   return `
     <TALLYMESSAGE xmlns:UDF="TallyUDF">
-      <VOUCHER VCHTYPE="${escapeXml(voucher.voucherType)}" ACTION="Create" OBJVIEW="Accounting Voucher View">
+      <VOUCHER VCHTYPE="${escapeXml(voucher.voucherType)}" ACTION="Create" OBJVIEW="Accounting Voucher View">${guidTag}
         <DATE>${formatTallyDate(voucher.date)}</DATE>
         <VOUCHERTYPENAME>${escapeXml(voucher.voucherType)}</VOUCHERTYPENAME>
         <VOUCHERNUMBER>${escapeXml(voucher.reference)}</VOUCHERNUMBER>
-        <NARRATION>${escapeXml(voucher.narration)}</NARRATION>${ledgerLines}
+        <NARRATION>${escapeXml(voucher.narration)}</NARRATION>${placeOfSupplyTag}${reverseChargeTag}${ledgerLines}
       </VOUCHER>
     </TALLYMESSAGE>`;
 }
@@ -165,9 +378,13 @@ function buildPartyMasterXml(party: TallyPartyMaster): string {
     ? `<ADDRESS.LIST TYPE="String"><ADDRESS>${escapeXml(party.address)}</ADDRESS></ADDRESS.LIST>`
     : "";
 
+  // ACTION="Alter" is idempotent in TallyPrime 3+:
+  //   - Ledger does not exist → Tally creates it
+  //   - Ledger exists         → Tally updates GSTIN, opening balance, address
+  // ACTION="Create" silently fails on re-import of an existing ledger.
   return `
     <TALLYMESSAGE xmlns:UDF="TallyUDF">
-      <LEDGER NAME="${escapeXml(party.name)}" ACTION="Create">
+      <LEDGER NAME="${escapeXml(party.name)}" ACTION="Alter">
         <NAME>${escapeXml(party.name)}</NAME>
         <PARENT>${escapeXml(party.group)}</PARENT>
         ${openingBalanceFormatted}
@@ -177,45 +394,62 @@ function buildPartyMasterXml(party: TallyPartyMaster): string {
     </TALLYMESSAGE>`;
 }
 
-// ── Public: full envelope builders ───────────────────────────────────────────
+// ── Envelope builders ─────────────────────────────────────────────────────────
+//
+// CRITICAL: TallyPrime dispatches imports based on REPORTNAME:
+//   "All Masters" → processes <LEDGER> elements only
+//   "Vouchers"    → processes <VOUCHER> elements only
+// A combined export therefore requires TWO <IMPORTDATA> blocks inside ONE
+// <ENVELOPE>. Using a single block with either REPORTNAME silently drops
+// whichever element type doesn't match.
 
-/**
- * Wraps voucher and/or ledger TALLYMESSAGE blocks in a full Tally envelope.
- */
-function buildEnvelope(messages: string[], companyName: string): string {
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<ENVELOPE>
-  <HEADER>
-    <TALLYREQUEST>Import Data</TALLYREQUEST>
-  </HEADER>
-  <BODY>
+function buildImportDataBlock(
+  messages: string[],
+  reportName: "All Masters" | "Vouchers",
+  companyName: string
+): string {
+  return `
     <IMPORTDATA>
       <REQUESTDESC>
-        <REPORTNAME>All Masters</REPORTNAME>
+        <REPORTNAME>${reportName}</REPORTNAME>
         <STATICVARIABLES>
           <SVCURRENTCOMPANY>${escapeXml(companyName)}</SVCURRENTCOMPANY>
         </STATICVARIABLES>
       </REQUESTDESC>
       <REQUESTDATA>${messages.join("")}
       </REQUESTDATA>
-    </IMPORTDATA>
+    </IMPORTDATA>`;
+}
+
+function wrapEnvelope(importDataBlocks: string[]): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<ENVELOPE>
+  <HEADER>
+    <TALLYREQUEST>Import Data</TALLYREQUEST>
+  </HEADER>
+  <BODY>${importDataBlocks.join("")}
   </BODY>
 </ENVELOPE>`;
 }
 
+// ── Public API ────────────────────────────────────────────────────────────────
+
 /**
  * Serializes a list of journal vouchers to a Tally-importable XML string.
+ * Uses REPORTNAME="Vouchers" so TallyPrime processes <VOUCHER> elements.
  */
 export function buildTallyVoucherXml(
   vouchers: TallyVoucher[],
   companyName: string
 ): string {
   const messages = vouchers.map(buildVoucherXml);
-  return buildEnvelope(messages, companyName);
+  const block = buildImportDataBlock(messages, "Vouchers", companyName);
+  return wrapEnvelope([block]);
 }
 
 /**
  * Serializes party masters (ledger definitions) to a Tally-importable XML string.
+ * Uses REPORTNAME="All Masters" so TallyPrime processes <LEDGER> elements.
  * Import this before importing vouchers so ledger names resolve correctly.
  */
 export function buildTallyPartyMasterXml(
@@ -223,21 +457,32 @@ export function buildTallyPartyMasterXml(
   companyName: string
 ): string {
   const messages = parties.map(buildPartyMasterXml);
-  return buildEnvelope(messages, companyName);
+  const block = buildImportDataBlock(messages, "All Masters", companyName);
+  return wrapEnvelope([block]);
 }
 
 /**
- * Serializes both party masters and vouchers to a single Tally-importable XML envelope.
- * Masters are output first to ensure Tally creates ledgers before processing vouchers.
+ * Serializes both party masters and vouchers to a single Tally-importable XML
+ * envelope with TWO <IMPORTDATA> blocks — masters first (REPORTNAME="All Masters"),
+ * then vouchers (REPORTNAME="Vouchers").
+ *
+ * This is the correct combined-export format per TallyPrime 4.x import spec.
+ * A single <IMPORTDATA> block with mixed types silently drops one category.
  */
 export function buildCombinedTallyXml(
   parties: TallyPartyMaster[],
   vouchers: TallyVoucher[],
   companyName: string
 ): string {
-  const messages = [
-    ...parties.map(buildPartyMasterXml),
-    ...vouchers.map(buildVoucherXml),
-  ];
-  return buildEnvelope(messages, companyName);
+  const masterBlock = buildImportDataBlock(
+    parties.map(buildPartyMasterXml),
+    "All Masters",
+    companyName
+  );
+  const voucherBlock = buildImportDataBlock(
+    vouchers.map(buildVoucherXml),
+    "Vouchers",
+    companyName
+  );
+  return wrapEnvelope([masterBlock, voucherBlock]);
 }

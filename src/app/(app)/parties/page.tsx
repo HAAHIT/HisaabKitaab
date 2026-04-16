@@ -36,12 +36,21 @@ function formatCurrency(value: number): string {
   }).format(Math.abs(value));
 }
 
-function formatSignedCurrency(value: number) {
-  if (value === 0) {
-    return "INR 0";
-  }
+function roundBalance(value: number) {
+  return Math.round(value * 100) / 100;
+}
 
-  return `${value > 0 ? "+" : "-"}${formatCurrency(value)}`;
+function formatAbsCurrency(value: number) {
+  const v = roundBalance(value);
+  if (v === 0) return "₹0";
+  return `+${formatCurrency(v)}`;
+}
+
+function getBalanceColor(partyType: string, balance: number) {
+  const v = roundBalance(balance);
+  if (v === 0) return "text-default-400";
+  if (v > 0) return "text-warning";
+  return partyType === "CUSTOMER" ? "text-success" : "text-danger";
 }
 
 async function readError(response: Response) {
@@ -339,21 +348,13 @@ export default function PartiesPage() {
 
                     <div className="flex items-center gap-3">
                       <div className="text-right">
-                        <p
-                          className={`text-lg font-bold ${
-                            party.currentBalance > 0
-                              ? "text-success"
-                              : party.currentBalance < 0
-                                ? "text-danger"
-                                : "text-default-400"
-                          }`}
-                        >
-                          {formatSignedCurrency(party.currentBalance)}
+                        <p className={`text-lg font-bold ${getBalanceColor(party.type, party.currentBalance)}`}>
+                          {formatAbsCurrency(party.currentBalance)}
                         </p>
                         <p className="text-xs text-default-400">
                           {getBalanceStatusLabel(
                             party.type as SupportedPartyType,
-                            party.currentBalance
+                            roundBalance(party.currentBalance)
                           )}
                         </p>
                       </div>

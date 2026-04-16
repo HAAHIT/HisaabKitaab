@@ -75,6 +75,8 @@ export default function ReportsClient({
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<TallyImportResult | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [importJobId, setImportJobId] = useState<string | null>(null);
+  const [jobProgress, setJobProgress] = useState({ processed: 0, total: 0, status: "" });
   const [preview, setPreview] = useState<TrialBalancePreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
 
@@ -166,6 +168,47 @@ export default function ReportsClient({
     return () => controller.abort();
   }, [exportBlocked, from, t, to]);
 
+  useEffect(() => {
+    if (!importJobId) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/import/status/${importJobId}`);
+        if (!res.ok) throw new Error("Failed to fetch job status");
+        const data = await res.json();
+
+        setJobProgress({
+          processed: data.processed, // Total successfully or skipped processed
+          total: data.totalItems,
+          status: data.status,
+        });
+
+        if (data.status === "COMPLETED" || data.status === "FAILED") {
+          clearInterval(interval);
+          setImporting(false);
+          setImportJobId(null);
+
+          if (data.status === "COMPLETED") {
+            setImportResult({
+              partiesCreated: 0, // Detailed metrics omitted in async architecture
+              imported: data.processed, 
+              skipped: 0,
+              failed: data.failed,
+              parseErrors: [],
+              importErrors: [],
+            });
+          } else {
+            setImportError(data.error || "Job failed in background");
+          }
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [importJobId]);
+
   async function handleImport() {
     if (!importFile) return;
     setImporting(true);
@@ -177,10 +220,16 @@ export default function ReportsClient({
       const res = await fetch("/api/import/tally-xml", { method: "POST", body });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Import failed");
-      setImportResult(data as TallyImportResult);
+      
+      if (data.jobId) {
+        setImportJobId(data.jobId);
+        setJobProgress({ processed: 0, total: data.totalDetected || 0, status: "PENDING" });
+      } else {
+        setImportResult(data as TallyImportResult);
+        setImporting(false);
+      }
     } catch (err) {
       setImportError(err instanceof Error ? err.message : "Import failed");
-    } finally {
       setImporting(false);
     }
   }
@@ -422,13 +471,28 @@ export default function ReportsClient({
               color="warning"
               variant="flat"
               className="font-semibold shrink-0"
-              isDisabled={!importFile}
-              isLoading={importing}
+              isDisabled={!importFile || importing}
+              isLoading={importing && !importJobId}
               onPress={handleImport}
             >
               Import
             </Button>
           </div>
+
+          {importJobId && (
+            <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm space-y-1">
+              <p className="font-medium text-primary">Import {jobProgress.status.toLowerCase()}...</p>
+              <div className="w-full bg-default-200 rounded-full h-2.5 dark:bg-default-700 mt-2">
+                <div
+                  className="bg-primary h-2.5 rounded-full"
+                  style={{ width: `${Math.max(5, (jobProgress.processed / (jobProgress.total || 1)) * 100)}%` }}
+                ></div>
+              </div>
+              <p className="text-default-500 mt-1">
+                Processed {jobProgress.processed} of {jobProgress.total} items
+              </p>
+            </div>
+          )}
 
           {importError && (
             <p className="rounded-xl border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger">

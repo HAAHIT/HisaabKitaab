@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import {
   CHART_OF_ACCOUNTS,
   paymentModeToAccount,
@@ -6,8 +6,8 @@ import {
 } from "@/lib/chart-of-accounts";
 import { roundTo2 } from "@/lib/journal-reporting";
 
-type PrismaTx = Prisma.TransactionClient;
-type VoucherType = "SALES" | "PURCHASE" | "RECEIPT" | "PAYMENT" | "JOURNAL";
+type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+type VoucherType = "SALES" | "PURCHASE" | "RECEIPT" | "PAYMENT" | "JOURNAL" | "CREDIT_NOTE" | "DEBIT_NOTE";
 
 interface JournalLineInput {
   accountCode: AccountCode;
@@ -25,6 +25,13 @@ interface JournalEntryParams {
   billId?: string;
   purchaseId?: string;
   paymentId?: string;
+  isReverseCharge?: boolean;
+  /**
+   * Tally REMOTEID (with "HisaabKitaab-" prefix already stripped).
+   * Stored in JournalEntry.remoteId for idempotent Tally re-imports.
+   * Null / undefined for natively-created entries.
+   */
+  remoteId?: string | null;
   createdBy: string;
   lines: JournalLineInput[];
 }
@@ -61,6 +68,7 @@ interface PurchaseBillJournalInput {
   sgst: number;
   igst: number;
   grandTotal: number;
+  isReverseCharge?: boolean;
   createdBy: string;
   billDate: Date;
 }
@@ -110,7 +118,10 @@ export async function createJournalEntry(
     params.lines.reduce((sum, line) => sum + line.credit, 0)
   );
 
-  if (Math.abs(totalDebit - totalCredit) > 0.01) {
+  // [FIX-P1] Tolerance reduced from 0.01 → 0.001 now that JournalLine.debit/credit
+  // are stored as Decimal(19,4). Any residual above 0.001 is a real accounting error,
+  // not IEEE-754 float drift.
+  if (Math.abs(totalDebit - totalCredit) > 0.001) {
     throw new Error(
       `UNBALANCED JOURNAL ENTRY: Debit (${totalDebit}) != Credit (${totalCredit}). ` +
         `Narration: "${params.narration}".`
@@ -140,6 +151,8 @@ export async function createJournalEntry(
       billId: params.billId,
       purchaseId: params.purchaseId,
       paymentId: params.paymentId,
+      isReverseCharge: params.isReverseCharge || false,
+      remoteId: params.remoteId ?? null,
       createdBy: params.createdBy,
       totalDebit,
       totalCredit,
@@ -171,6 +184,9 @@ export async function journalForSalesBill(
   tenantId: string,
   bill: SalesBillJournalInput
 ) {
+  const theoreticalTotal = roundTo2(bill.subtotal + bill.taxAmount);
+  const diff = roundTo2(bill.grandTotal - theoreticalTotal);
+
   return createJournalEntry(tx, {
     tenantId,
     entryDate: bill.entryDate,
@@ -192,6 +208,15 @@ export async function journalForSalesBill(
         credit: bill.subtotal,
       },
       ...buildSalesTaxLines(bill.taxAmount, "CREDIT", bill.isInterState),
+      ...(diff !== 0
+        ? [
+            {
+              accountCode: "ROUND_OFF" as const,
+              debit: diff < 0 ? Math.abs(diff) : 0,
+              credit: diff > 0 ? diff : 0,
+            },
+          ]
+        : []),
     ],
   });
 }
@@ -201,11 +226,16 @@ export async function journalForCancelledSalesBill(
   tenantId: string,
   bill: SalesBillJournalInput
 ) {
+  const theoreticalTotal = roundTo2(bill.subtotal + bill.taxAmount);
+  const diff = roundTo2(bill.grandTotal - theoreticalTotal);
+
   return createJournalEntry(tx, {
     tenantId,
     entryDate: bill.entryDate,
     narration: `Reversal of Sales Bill ${bill.billNumber} for ${bill.partyName}`,
-    voucherType: "JOURNAL",
+    // CREDIT_NOTE is the correct GST voucher type for a sales bill cancellation.
+    // Tally XML export maps this directly to "Sales Return" (GSTR-1 Table 9B).
+    voucherType: "CREDIT_NOTE",
     billId: bill.id,
     createdBy: bill.createdBy,
     lines: [
@@ -222,6 +252,15 @@ export async function journalForCancelledSalesBill(
         credit: 0,
       },
       ...buildSalesTaxLines(bill.taxAmount, "DEBIT", bill.isInterState),
+      ...(diff !== 0
+        ? [
+            {
+              accountCode: "ROUND_OFF" as const,
+              debit: diff > 0 ? diff : 0,
+              credit: diff < 0 ? Math.abs(diff) : 0,
+            },
+          ]
+        : []),
     ],
   });
 }
@@ -289,6 +328,9 @@ export async function journalForPurchaseBill(
   tenantId: string,
   purchase: PurchaseBillJournalInput
 ) {
+  const theoreticalTotal = roundTo2(purchase.subtotal + purchase.cgst + purchase.sgst + purchase.igst);
+  const diff = roundTo2(purchase.grandTotal - theoreticalTotal);
+
   const lines: JournalLineInput[] = [
     {
       accountCode: "PURCHASE",
@@ -328,12 +370,21 @@ export async function journalForPurchaseBill(
     });
   }
 
+  if (diff !== 0) {
+    lines.push({
+      accountCode: "ROUND_OFF",
+      debit: diff > 0 ? diff : 0,
+      credit: diff < 0 ? Math.abs(diff) : 0,
+    });
+  }
+
   return createJournalEntry(tx, {
     tenantId,
     entryDate: purchase.billDate,
     narration: `Purchase from ${purchase.vendorName}`,
     voucherType: "PURCHASE",
     purchaseId: purchase.id,
+    isReverseCharge: purchase.isReverseCharge,
     createdBy: purchase.createdBy,
     lines,
   });

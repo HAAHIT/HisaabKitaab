@@ -18,20 +18,24 @@ export async function resolveVerifiedTenantId(
 ): Promise<string | null> {
   const token = request.cookies.get(COOKIE_NAME)?.value;
 
-  if (token) {
-    try {
-      const { payload } = await jwtVerify(token, getJwtSecret());
-      const tenantId =
-        typeof payload.tenantId === "string" && payload.tenantId.trim()
-          ? payload.tenantId.trim()
-          : null;
-      if (tenantId) return tenantId;
-    } catch {
-      // Token invalid or expired — fall through to env fallback.
-    }
+  // No token at all — caller is unauthenticated. Never fall back to the env
+  // variable here: doing so would let any client forge x-user-role/x-user-id
+  // headers and write to the default tenant without a session.
+  if (!token) {
+    return null;
   }
 
-  // Single-tenant deployments that rely solely on DEFAULT_TENANT_ID
-  // (no tenantId embedded in JWT) are still supported.
-  return process.env.DEFAULT_TENANT_ID?.trim() ?? null;
+  try {
+    const { payload } = await jwtVerify(token, getJwtSecret());
+    const tenantId =
+      typeof payload.tenantId === "string" && payload.tenantId.trim()
+        ? payload.tenantId.trim()
+        : null;
+    // Token is valid but has no tenantId claim — single-tenant JWT. Fall back
+    // to the env variable only in this case (token was genuinely verified).
+    return tenantId ?? process.env.DEFAULT_TENANT_ID?.trim() ?? null;
+  } catch {
+    // Token is present but invalid or expired — reject, do not fall back.
+    return null;
+  }
 }
