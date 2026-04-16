@@ -91,14 +91,23 @@ export async function POST(request: NextRequest) {
 
   // ── Party master upsert ───────────────────────────────────────────────────
   let partiesCreated = 0;
-  for (const pm of partyMasters) {
-    const existing = await prisma.party.findFirst({
-      where: { tenantId: tid, name: pm.name, isDeleted: false },
-      select: { id: true },
-    });
-    if (existing) continue;
 
-    await prisma.party.create({
+  // Pre-fetch all existing parties for this tenant to avoid loop queries
+  const existingParties = await prisma.party.findMany({
+    where: { tenantId: tid, isDeleted: false },
+    select: { id: true, name: true },
+  });
+
+  // Build party name → id cache to avoid repeated DB lookups
+  const partyCache = new Map<string, string>();
+  for (const p of existingParties) {
+    partyCache.set(p.name, p.id);
+  }
+
+  for (const pm of partyMasters) {
+    if (partyCache.has(pm.name)) continue;
+
+    const created = await prisma.party.create({
       data: {
         tenantId: tid,
         name: pm.name,
@@ -107,36 +116,29 @@ export async function POST(request: NextRequest) {
         currentBalance: pm.openingBalance,
         createdBy: actorId,
       },
+      select: { id: true }
     });
+    partyCache.set(pm.name, created.id);
     partiesCreated++;
   }
 
   // ── Voucher import ────────────────────────────────────────────────────────
-  // Build party name → id cache to avoid repeated DB lookups
-  const partyCache = new Map<string, string>();
 
   async function resolvePartyId(
+    tx: Omit<
+      import("@prisma/client").PrismaClient,
+      "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
+    >,
     name: string,
     accountCode: AccountCode
   ): Promise<string> {
     const cached = partyCache.get(name);
     if (cached) return cached;
 
-    // Exact name match first
-    const existing = await prisma.party.findFirst({
-      where: { tenantId: tid, name, isDeleted: false },
-      select: { id: true },
-    });
-
-    if (existing) {
-      partyCache.set(name, existing.id);
-      return existing.id;
-    }
-
-    // Create new party
+    // Create new party (already know it doesn't exist from cache)
     const partyType =
       accountCode === "SUNDRY_DEBTORS" ? "CUSTOMER" : "VENDOR";
-    const created = await prisma.party.create({
+    const created = await tx.party.create({
       data: {
         tenantId: tid,
         name,
@@ -181,7 +183,7 @@ export async function POST(request: NextRequest) {
         const lines = await Promise.all(
           voucher.lines.map(async (line) => {
             const partyId = line.partyName
-              ? await resolvePartyId(line.partyName, line.accountCode)
+              ? await resolvePartyId(tx, line.partyName, line.accountCode)
               : null;
 
             return {
