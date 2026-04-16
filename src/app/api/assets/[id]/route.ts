@@ -144,7 +144,7 @@ export async function GET(
           "Cache-Control": "private, max-age=3600",
         },
       });
-    } catch (error) {
+    } catch {
       return NextResponse.json(
         { error: "Invalid proxy configuration" },
         { status: 400 }
