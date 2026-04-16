@@ -4,7 +4,7 @@ export type Language = "en" | "hi";
 export const translations = {
   en: {
     "nav.home": "Home",
-    "nav.bills": "Bills",
+    "nav.bills": "Sales",
     "nav.purchases": "Purchases",
     "nav.parties": "Parties",
     "nav.payments": "Payments",
@@ -91,7 +91,7 @@ export const translations = {
     "bills.customer": "Customer Name",
     "bills.saveDraft": "Save Draft",
     "bills.finalize": "Finalize Bill",
-    "bills.title": "Bills",
+    "bills.title": "Sales",
     "bills.subtitle":
       "Create and manage invoices from the server record only.",
     "bills.create": "Create Bill",

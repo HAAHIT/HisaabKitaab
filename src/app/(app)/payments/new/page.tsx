@@ -27,12 +27,17 @@ interface Party {
 }
 
 function formatSignedBalance(value: number) {
-  const absolute = Math.abs(value).toLocaleString("en-IN");
-  if (value === 0) {
-    return `INR ${absolute}`;
-  }
+  const v = Math.round(value * 100) / 100;
+  const absolute = Math.abs(v).toLocaleString("en-IN");
+  if (v === 0) return `INR ${absolute}`;
+  return `+INR ${absolute}`;
+}
 
-  return `${value > 0 ? "+" : "-"}INR ${absolute}`;
+function getBalanceBannerClass(partyType: SupportedPartyType, balance: number) {
+  const v = Math.round(balance * 100) / 100;
+  if (v === 0) return "bg-default-100 text-default-500";
+  if (v > 0) return "bg-warning/10 text-warning";
+  return partyType === "CUSTOMER" ? "bg-success/10 text-success" : "bg-danger/10 text-danger";
 }
 
 interface BillOption {
@@ -365,24 +370,11 @@ export default function RecordPaymentPage() {
           </Select>
 
           {selectedParty && (
-            <div
-              className={`rounded-lg px-3 py-2 text-sm ${
-                selectedParty.currentBalance > 0
-                  ? "bg-success/10 text-success"
-                  : selectedParty.currentBalance < 0
-                    ? "bg-danger/10 text-danger"
-                    : "bg-default-100 text-default-500"
-              }`}
-            >
+            <div className={`rounded-lg px-3 py-2 text-sm ${getBalanceBannerClass(selectedParty.type, selectedParty.currentBalance)}`}>
               Current balance:{" "}
-              <strong>
-                {formatSignedBalance(selectedParty.currentBalance)}
-              </strong>
+              <strong>{formatSignedBalance(selectedParty.currentBalance)}</strong>
               {" "}
-              {getBalanceStatusLabel(
-                selectedParty.type,
-                selectedParty.currentBalance
-              )}
+              {getBalanceStatusLabel(selectedParty.type, Math.round(selectedParty.currentBalance * 100) / 100)}
             </div>
           )}
 
