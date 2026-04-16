@@ -92,23 +92,16 @@ export async function POST(request: NextRequest) {
   // ── Party master upsert ───────────────────────────────────────────────────
   let partiesCreated = 0;
 
-  // Pre-fetch all existing parties for this tenant to avoid loop queries
-  const existingParties = await prisma.party.findMany({
-    where: { tenantId: tid, isDeleted: false },
-    select: { id: true, name: true },
-  });
-
-  // Build party name → id cache to avoid repeated DB lookups
+  // [B2] Use upsert with the new @@unique([tenantId, name]) constraint.
+  // The unique constraint is the authoritative race guard — no concurrent
+  // import can create duplicate party rows even if the cache misses.
   const partyCache = new Map<string, string>();
-  for (const p of existingParties) {
-    partyCache.set(p.name, p.id);
-  }
 
   for (const pm of partyMasters) {
-    if (partyCache.has(pm.name)) continue;
-
-    const created = await prisma.party.create({
-      data: {
+    const upserted = await prisma.party.upsert({
+      where: { tenantId_name: { tenantId: tid, name: pm.name } },
+      update: {}, // party exists — do not overwrite balances set by user
+      create: {
         tenantId: tid,
         name: pm.name,
         type: pm.group === "Sundry Debtors" ? "CUSTOMER" : "VENDOR",
@@ -116,30 +109,34 @@ export async function POST(request: NextRequest) {
         currentBalance: pm.openingBalance,
         createdBy: actorId,
       },
-      select: { id: true }
+      select: { id: true, createdAt: true, updatedAt: true },
     });
-    partyCache.set(pm.name, created.id);
-    partiesCreated++;
+    // Count as created only when createdAt === updatedAt (i.e., just INSERTed)
+    if (upserted.createdAt.getTime() === upserted.updatedAt.getTime()) {
+      partiesCreated++;
+    }
+    partyCache.set(pm.name, upserted.id);
   }
 
   // ── Voucher import ────────────────────────────────────────────────────────
 
   async function resolvePartyId(
-    tx: Omit<
-      import("@prisma/client").PrismaClient,
-      "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
-    >,
+    tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
     name: string,
     accountCode: AccountCode
   ): Promise<string> {
     const cached = partyCache.get(name);
     if (cached) return cached;
 
-    // Create new party (already know it doesn't exist from cache)
+    // [B2] Use upsert — the @@unique([tenantId, name]) constraint is the
+    // atomic guard. A concurrent request creating the same party will cause
+    // the upsert to resolve to the existing row without a conflict error.
     const partyType =
       accountCode === "SUNDRY_DEBTORS" ? "CUSTOMER" : "VENDOR";
-    const created = await tx.party.create({
-      data: {
+    const upserted = await tx.party.upsert({
+      where: { tenantId_name: { tenantId: tid, name } },
+      update: {},
+      create: {
         tenantId: tid,
         name,
         type: partyType,
@@ -147,12 +144,13 @@ export async function POST(request: NextRequest) {
         currentBalance: 0,
         createdBy: actorId,
       },
-      select: { id: true },
+      select: { id: true, createdAt: true, updatedAt: true },
     });
-    partiesCreated++;
-
-    partyCache.set(name, created.id);
-    return created.id;
+    if (upserted.createdAt.getTime() === upserted.updatedAt.getTime()) {
+      partiesCreated++;
+    }
+    partyCache.set(name, upserted.id);
+    return upserted.id;
   }
 
   let imported = 0;
@@ -177,7 +175,7 @@ export async function POST(request: NextRequest) {
 
   const duplicateFingerprints = new Set(
     existingEntries.map(
-      (e) => `${e.voucherType}|${e.entryDate.toISOString()}|${e.narration}|${String(e.totalDebit)}`
+      (e: (typeof existingEntries)[number]) => `${e.voucherType}|${e.entryDate.toISOString()}|${e.narration}|${String(e.totalDebit)}`
     )
   );
 
@@ -190,7 +188,7 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
         const lines = await Promise.all(
           voucher.lines.map(async (line) => {
             const partyId = line.partyName

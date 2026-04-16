@@ -2,14 +2,20 @@
  * Tally XML serializer
  *
  * Produces XML compatible with Tally ERP 9 and Tally Prime import.
- * Format: ENVELOPE > BODY > TALLYMESSAGE > VOUCHER / LEDGER
  *
- * Reference: Tally TDL XML import specification
- * Dates: YYYYMMDD in IST
- * Amounts: plain decimal, 2dp, no currency symbol
- * Tally debit/credit convention: DEBIT entries have positive amount on the
- * ledger line, CREDIT entries have negative amount (Tally uses sign-based
- * single-amount per ledger entry, not separate debit/credit columns).
+ * Format reference (TallyPrime 4.x import spec):
+ *   ENVELOPE > HEADER > BODY > IMPORTDATA > REQUESTDESC + REQUESTDATA
+ *
+ * REPORTNAME dispatch rules (critical):
+ *   - "All Masters"  → Tally processes <LEDGER> nodes only
+ *   - "Vouchers"     → Tally processes <VOUCHER> nodes only
+ *   Combined exports require TWO separate <IMPORTDATA> blocks in one <ENVELOPE>.
+ *
+ * Amount convention (Tally):
+ *   DEBIT  = positive amount, ISDEEMEDPOSITIVE=Yes
+ *   CREDIT = negative amount, ISDEEMEDPOSITIVE=No
+ *
+ * Dates: YYYYMMDD in IST (Asia/Kolkata).
  */
 
 const INDIA_TIMEZONE = "Asia/Kolkata";
@@ -22,7 +28,9 @@ export type TallyVoucherType =
   | "Receipt"
   | "Payment"
   | "Journal"
-  | "Contra";
+  | "Contra"
+  | "Sales Return"    // Credit Note — required for GSTR-1 Table 9B
+  | "Purchase Return"; // Debit Note — required for GSTR-3B
 
 export interface TallyLedgerEntry {
   ledgerName: string;
@@ -38,6 +46,12 @@ export interface TallyVoucher {
   reference: string;
   narration: string;
   ledgerEntries: TallyLedgerEntry[];
+  /**
+   * Stable unique ID for this voucher — used as <GUID> and <REMOTEID>.
+   * Prevents duplicate entries on Tally re-import.  Pass journal entry ID.
+   * Format emitted: "HisaabKitaab-{guid}"
+   */
+  guid?: string;
 }
 
 export interface TallyPartyMaster {
@@ -63,6 +77,25 @@ const VOUCHER_TYPE_MAP: Record<string, TallyVoucherType> = {
 
 export function dbVoucherTypeToTally(voucherType: string): TallyVoucherType {
   return VOUCHER_TYPE_MAP[voucherType] ?? "Journal";
+}
+
+/**
+ * Determines whether a journal entry should be exported as "Sales Return"
+ * (Credit Note) instead of the generic "Journal" type.
+ * Detection rule: narration starts with the prefix written by
+ * journalForCancelledSalesBill() in journal.ts.
+ */
+export function resolveExportVoucherType(
+  dbVoucherType: string,
+  narration: string
+): TallyVoucherType {
+  if (
+    dbVoucherType === "JOURNAL" &&
+    narration.startsWith("Reversal of Sales Bill")
+  ) {
+    return "Sales Return";
+  }
+  return dbVoucherTypeToTally(dbVoucherType);
 }
 
 // ── Date formatting ───────────────────────────────────────────────────────────
@@ -139,9 +172,17 @@ function buildLedgerEntryXml(entry: TallyLedgerEntry): string {
 function buildVoucherXml(voucher: TallyVoucher): string {
   const ledgerLines = voucher.ledgerEntries.map(buildLedgerEntryXml).join("");
 
+  // GUID prevents duplicate imports on re-import (TallyPrime idempotency).
+  // Format: "HisaabKitaab-{uuid}" keeps the namespace distinct from native Tally GUIDs.
+  const guidTag = voucher.guid
+    ? `
+        <GUID>HisaabKitaab-${escapeXml(voucher.guid)}</GUID>
+        <REMOTEID>HisaabKitaab-${escapeXml(voucher.guid)}</REMOTEID>`
+    : "";
+
   return `
     <TALLYMESSAGE xmlns:UDF="TallyUDF">
-      <VOUCHER VCHTYPE="${escapeXml(voucher.voucherType)}" ACTION="Create" OBJVIEW="Accounting Voucher View">
+      <VOUCHER VCHTYPE="${escapeXml(voucher.voucherType)}" ACTION="Create" OBJVIEW="Accounting Voucher View">${guidTag}
         <DATE>${formatTallyDate(voucher.date)}</DATE>
         <VOUCHERTYPENAME>${escapeXml(voucher.voucherType)}</VOUCHERTYPENAME>
         <VOUCHERNUMBER>${escapeXml(voucher.reference)}</VOUCHERNUMBER>
@@ -177,45 +218,62 @@ function buildPartyMasterXml(party: TallyPartyMaster): string {
     </TALLYMESSAGE>`;
 }
 
-// ── Public: full envelope builders ───────────────────────────────────────────
+// ── Envelope builders ─────────────────────────────────────────────────────────
+//
+// CRITICAL: TallyPrime dispatches imports based on REPORTNAME:
+//   "All Masters" → processes <LEDGER> elements only
+//   "Vouchers"    → processes <VOUCHER> elements only
+// A combined export therefore requires TWO <IMPORTDATA> blocks inside ONE
+// <ENVELOPE>. Using a single block with either REPORTNAME silently drops
+// whichever element type doesn't match.
 
-/**
- * Wraps voucher and/or ledger TALLYMESSAGE blocks in a full Tally envelope.
- */
-function buildEnvelope(messages: string[], companyName: string): string {
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<ENVELOPE>
-  <HEADER>
-    <TALLYREQUEST>Import Data</TALLYREQUEST>
-  </HEADER>
-  <BODY>
+function buildImportDataBlock(
+  messages: string[],
+  reportName: "All Masters" | "Vouchers",
+  companyName: string
+): string {
+  return `
     <IMPORTDATA>
       <REQUESTDESC>
-        <REPORTNAME>All Masters</REPORTNAME>
+        <REPORTNAME>${reportName}</REPORTNAME>
         <STATICVARIABLES>
           <SVCURRENTCOMPANY>${escapeXml(companyName)}</SVCURRENTCOMPANY>
         </STATICVARIABLES>
       </REQUESTDESC>
       <REQUESTDATA>${messages.join("")}
       </REQUESTDATA>
-    </IMPORTDATA>
+    </IMPORTDATA>`;
+}
+
+function wrapEnvelope(importDataBlocks: string[]): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<ENVELOPE>
+  <HEADER>
+    <TALLYREQUEST>Import Data</TALLYREQUEST>
+  </HEADER>
+  <BODY>${importDataBlocks.join("")}
   </BODY>
 </ENVELOPE>`;
 }
 
+// ── Public API ────────────────────────────────────────────────────────────────
+
 /**
  * Serializes a list of journal vouchers to a Tally-importable XML string.
+ * Uses REPORTNAME="Vouchers" so TallyPrime processes <VOUCHER> elements.
  */
 export function buildTallyVoucherXml(
   vouchers: TallyVoucher[],
   companyName: string
 ): string {
   const messages = vouchers.map(buildVoucherXml);
-  return buildEnvelope(messages, companyName);
+  const block = buildImportDataBlock(messages, "Vouchers", companyName);
+  return wrapEnvelope([block]);
 }
 
 /**
  * Serializes party masters (ledger definitions) to a Tally-importable XML string.
+ * Uses REPORTNAME="All Masters" so TallyPrime processes <LEDGER> elements.
  * Import this before importing vouchers so ledger names resolve correctly.
  */
 export function buildTallyPartyMasterXml(
@@ -223,21 +281,32 @@ export function buildTallyPartyMasterXml(
   companyName: string
 ): string {
   const messages = parties.map(buildPartyMasterXml);
-  return buildEnvelope(messages, companyName);
+  const block = buildImportDataBlock(messages, "All Masters", companyName);
+  return wrapEnvelope([block]);
 }
 
 /**
- * Serializes both party masters and vouchers to a single Tally-importable XML envelope.
- * Masters are output first to ensure Tally creates ledgers before processing vouchers.
+ * Serializes both party masters and vouchers to a single Tally-importable XML
+ * envelope with TWO <IMPORTDATA> blocks — masters first (REPORTNAME="All Masters"),
+ * then vouchers (REPORTNAME="Vouchers").
+ *
+ * This is the correct combined-export format per TallyPrime 4.x import spec.
+ * A single <IMPORTDATA> block with mixed types silently drops one category.
  */
 export function buildCombinedTallyXml(
   parties: TallyPartyMaster[],
   vouchers: TallyVoucher[],
   companyName: string
 ): string {
-  const messages = [
-    ...parties.map(buildPartyMasterXml),
-    ...vouchers.map(buildVoucherXml),
-  ];
-  return buildEnvelope(messages, companyName);
+  const masterBlock = buildImportDataBlock(
+    parties.map(buildPartyMasterXml),
+    "All Masters",
+    companyName
+  );
+  const voucherBlock = buildImportDataBlock(
+    vouchers.map(buildVoucherXml),
+    "Vouchers",
+    companyName
+  );
+  return wrapEnvelope([masterBlock, voucherBlock]);
 }

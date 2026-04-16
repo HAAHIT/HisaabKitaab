@@ -241,9 +241,17 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       const isDeemedPositive =
         String(e["ISDEEMEDPOSITIVE"] ?? "").trim().toLowerCase() === "yes";
 
-      // Reconstruct debit/credit from ISDEEMEDPOSITIVE and signed AMOUNT
+      // Reconstruct debit/credit from ISDEEMEDPOSITIVE and signed AMOUNT.
+      //
+      // ISDEEMEDPOSITIVE is the authoritative side indicator in TallyPrime XML.
+      // We must NOT use the sign of AMOUNT to infer the side — on reversal
+      // vouchers, Tally can emit ISDEEMEDPOSITIVE=Yes with a negative AMOUNT,
+      // which the old `isDeemedPositive || amountRaw > 0` incorrectly treated
+      // as two independent indicators.  The correct rule:
+      //   ISDEEMEDPOSITIVE=Yes → debit side  (amount is always positive abs value)
+      //   ISDEEMEDPOSITIVE=No  → credit side (amount may be negative — take abs)
       const absAmount = Math.abs(amountRaw);
-      const isDebit = isDeemedPositive || amountRaw > 0;
+      const isDebit = isDeemedPositive; // sole authority: ISDEEMEDPOSITIVE
       const debit = isDebit ? absAmount : 0;
       const credit = isDebit ? 0 : absAmount;
 

@@ -7,7 +7,7 @@ import {
   buildTallyVoucherXml,
   buildTallyPartyMasterXml,
   buildCombinedTallyXml,
-  dbVoucherTypeToTally,
+  resolveExportVoucherType,   // [A4] Sales Return detection for cancellation entries
   journalLineToTallyEntry,
   type TallyPartyMaster,
   type TallyVoucher,
@@ -142,11 +142,16 @@ export async function GET(request: NextRequest) {
 
       const vouchers: TallyVoucher[] = entries.map((entry) => ({
         date: entry.entryDate,
-        voucherType: dbVoucherTypeToTally(entry.voucherType),
+        // [A4] resolveExportVoucherType detects "Reversal of Sales Bill" narration
+        //      and maps it to "Sales Return" (Credit Note) for GSTR-1 Table 9B.
+        voucherType: resolveExportVoucherType(entry.voucherType, entry.narration),
         reference:
           entry.billId ?? entry.purchaseId ?? entry.paymentId ?? entry.id,
         narration: entry.narration,
         ledgerEntries: entry.lines.map(journalLineToTallyEntry),
+        // [A2] Stable GUID prevents duplicate entries on Tally re-import.
+        //      Format in XML: "HisaabKitaab-{id}" — see buildVoucherXml().
+        guid: entry.id,
       }));
 
       if (type === "vouchers") {

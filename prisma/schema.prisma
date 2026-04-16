@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
+  provider = "postgresql"
 }
 
 model Tenant {
@@ -100,8 +100,8 @@ model ItemCatalog {
   name      String
   hsnCode   String?
   unit      String   @default("pcs")
-  rate      Float    @default(0)
-  taxRate   Float?
+  rate      Decimal  @default(0) @db.Decimal(19, 4) // [B3] Float → Decimal
+  taxRate   Decimal? @db.Decimal(5, 2)              // [B3] Float → Decimal
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -122,18 +122,19 @@ model Bill {
   rows            Json
   notes           String?
   terms           String?
-  subtotal        Float
-  taxPercent      Float        @default(0)
-  taxAmount       Float        @default(0)
-  grandTotal      Float
+  subtotal        Decimal      @db.Decimal(19, 4)           // [B3] Float → Decimal
+  taxPercent      Decimal      @default(0) @db.Decimal(5, 2) // [B3] Float → Decimal
+  taxAmount       Decimal      @default(0) @db.Decimal(19, 4) // [B3] Float → Decimal
+  grandTotal      Decimal      @db.Decimal(19, 4)           // [B3] Float → Decimal
+  placeOfSupply   String?                                   // [B1] GSTR-1 mandatory field
   status          BillStatus   @default(DRAFT)
   createdBy       String
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
   isDeleted       Boolean      @default(false)
-  isInterState    Boolean      @default(false)
   partyId         String?
   tenantId        String
+  isInterState    Boolean      @default(false)
   creator         User         @relation(fields: [createdBy], references: [id])
   party           Party?       @relation(fields: [partyId], references: [id])
   template        BillTemplate @relation(fields: [templateId], references: [id])
@@ -154,8 +155,8 @@ model Party {
   email          String?
   address        String?
   gstin          String?
-  openingBalance Float               @default(0)
-  currentBalance Float               @default(0)
+  openingBalance Decimal             @default(0) @db.Decimal(19, 4) // [B3] Float → Decimal
+  currentBalance Decimal             @default(0) @db.Decimal(19, 4) // [B3] Float → Decimal
   isActive       Boolean             @default(true)
   isDeleted      Boolean             @default(false)
   createdBy      String?
@@ -167,6 +168,7 @@ model Party {
   tenant         Tenant              @relation(fields: [tenantId], references: [id])
   payments       Payment[]
 
+  @@unique([tenantId, name])  // [B2] prevents TOCTOU duplicate party on Tally import
   @@index([tenantId])
   @@index([tenantId, type])
 }
@@ -175,7 +177,7 @@ model Payment {
   id           String        @id @default(cuid())
   partyId      String
   direction    PayDirection
-  amount       Float
+  amount       Decimal       @db.Decimal(19, 4)  // [B3] Float → Decimal
   date         DateTime
   mode         PaymentMode
   status       PaymentStatus @default(COMPLETED)

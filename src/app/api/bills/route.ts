@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import {
   buildBillSnapshotFromParty,
   getPostedBillBalanceDelta,
@@ -71,13 +71,25 @@ function parseTenantSettings(value: unknown) {
   return {};
 }
 
+const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+
 const CreateBillSchema = z.object({
   templateId: z.string().min(1),
   partyId: z.string().min(1),
   customerName: z.string().optional(),
   customerPhone: z.string().optional(),
   customerAddress: z.string().optional(),
-  gstin: z.string().optional(),
+  // [A3] GSTIN must be a valid 15-character Indian GSTIN format.
+  // Regex: 2-digit state code + PAN (5 alpha + 4 digit + 1 alpha) + 1 entity + Z + 1 checksum.
+  gstin: z
+    .string()
+    .regex(GSTIN_REGEX, {
+      message:
+        "Invalid GSTIN format. Expected 15-character string like 27AAPFU0939F1ZV",
+    })
+    .optional(),
+  // [B1] Place of Supply — Indian state name, required for GSTR-1 B2B (Table 4A).
+  placeOfSupply: z.string().optional(),
   rows: z.array(z.record(z.string(), z.unknown())).min(1),
   notes: z.string().optional(),
   terms: z.string().optional(),
@@ -246,7 +258,7 @@ export async function POST(request: NextRequest) {
     } catch (err) {
       if (err instanceof z.ZodError) {
         return NextResponse.json(
-          { error: "Invalid request", details: err.errors },
+          { error: "Invalid request", details: err.issues },
           { status: 400 }
         );
       }
@@ -437,6 +449,7 @@ export async function POST(request: NextRequest) {
           grandTotal: resolvedGrandTotal,
           status: billStatus,
           isInterState,
+          placeOfSupply: body.placeOfSupply ?? null,  // [B1] GSTR-1 mandatory field
           createdBy: userId!,
           isDeleted: false,
         },
