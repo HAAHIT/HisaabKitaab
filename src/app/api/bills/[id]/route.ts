@@ -50,10 +50,13 @@ function normalizeOptionalString(value: unknown) {
 }
 
 function parseOptionalNumber(value: unknown) {
+  if (typeof value === "string") {
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return undefined;
   }
-
   return value;
 }
 
@@ -242,7 +245,7 @@ export async function PATCH(
     }
 
     for (const field of ["taxPercent", "subtotal", "taxAmount", "grandTotal"] as const) {
-      if (!hasOwn(body, field)) {
+      if (!hasOwn(body, field) || body[field] === null) {
         continue;
       }
 
@@ -386,11 +389,11 @@ export async function PATCH(
     }
 
     const nextGrandTotal =
-      (updateData.grandTotal as number | undefined) ?? existing.grandTotal;
+      (updateData.grandTotal as number | undefined) ?? existing.grandTotal.toNumber();
     const nextSubtotal =
-      (updateData.subtotal as number | undefined) ?? existing.subtotal;
+      (updateData.subtotal as number | undefined) ?? existing.subtotal.toNumber();
     const nextTaxAmount =
-      (updateData.taxAmount as number | undefined) ?? existing.taxAmount;
+      (updateData.taxAmount as number | undefined) ?? existing.taxAmount.toNumber();
 
     if (finalStatus === "FINAL" && nextGrandTotal <= 0) {
       return NextResponse.json(
@@ -430,7 +433,7 @@ export async function PATCH(
       const balanceChange = getBillBalanceDeltaForTransition({
         partyType: party.type,
         previousStatus: existing.status,
-        previousAmount: existing.grandTotal,
+        previousAmount: existing.grandTotal.toNumber(),
         nextStatus: finalStatus,
         nextAmount: nextGrandTotal,
       });
@@ -544,9 +547,9 @@ export async function DELETE(
       const balanceChange = getBillBalanceDeltaForTransition({
         partyType: party.type,
         previousStatus: existing.status,
-        previousAmount: existing.grandTotal,
+        previousAmount: existing.grandTotal.toNumber(),
         nextStatus: "CANCELLED",
-        nextAmount: existing.grandTotal,
+        nextAmount: existing.grandTotal.toNumber(),
       });
 
       if (balanceChange !== 0) {
@@ -564,9 +567,9 @@ export async function DELETE(
           billNumber: existing.billNumber,
           partyId: party.id,
           partyName: party.name,
-          subtotal: existing.subtotal,
-          taxAmount: existing.taxAmount,
-          grandTotal: existing.grandTotal,
+          subtotal: existing.subtotal.toNumber(),
+          taxAmount: existing.taxAmount.toNumber(),
+          grandTotal: existing.grandTotal.toNumber(),
           createdBy: userId || existing.createdBy,
           entryDate: new Date(),
           isInterState: existing.isInterState,

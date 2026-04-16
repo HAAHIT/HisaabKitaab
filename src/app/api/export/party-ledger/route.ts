@@ -125,13 +125,13 @@ export async function GET(request: NextRequest) {
 
   const { ledger } = buildPartyLedger({
     partyType: party.type,
-    openingBalance: party.openingBalance,
+    openingBalance: party.openingBalance.toNumber(),
     createdAt: party.createdAt,
-    bills,
-    payments,
+    bills: bills.map((b) => ({ ...b, grandTotal: b.grandTotal.toNumber() })),
+    payments: payments.map((p) => ({ ...p, amount: p.amount.toNumber() })),
   });
 
-  let openingBalance = party.openingBalance;
+  let openingBalance: number = party.openingBalance.toNumber();
   for (const entry of ledger) {
     if (entry.date.getTime() < fromDate.getTime()) {
       openingBalance = entry.balanceAfter;

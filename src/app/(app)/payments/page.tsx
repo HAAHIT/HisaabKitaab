@@ -83,9 +83,9 @@ export default function PaymentsListPage() {
       if (existing) {
         existing.payments.push(payment);
         if (isIncoming) {
-          existing.incomingTotal += payment.amount;
+          existing.incomingTotal += Number(payment.amount);
         } else {
-          existing.outgoingTotal += payment.amount;
+          existing.outgoingTotal += Number(payment.amount);
         }
         continue;
       }
@@ -93,8 +93,8 @@ export default function PaymentsListPage() {
       groups.set(groupKey, {
         label: monthFormatter.format(paymentDate),
         payments: [payment],
-        incomingTotal: isIncoming ? payment.amount : 0,
-        outgoingTotal: isIncoming ? 0 : payment.amount,
+        incomingTotal: isIncoming ? Number(payment.amount) : 0,
+        outgoingTotal: isIncoming ? 0 : Number(payment.amount),
       });
     }
 

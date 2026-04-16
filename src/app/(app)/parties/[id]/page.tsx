@@ -62,16 +62,16 @@ export default async function PartyProfilePage({
 
   const { ledger, calculatedCurrent } = buildPartyLedger({
     partyType: party.type,
-    openingBalance: party.openingBalance,
+    openingBalance: party.openingBalance.toNumber(),
     createdAt: party.createdAt,
-    bills,
-    payments,
+    bills: bills.map((b) => ({ id: b.id, billNumber: b.billNumber, grandTotal: b.grandTotal.toNumber(), createdAt: b.createdAt })),
+    payments: payments.map((p) => ({ id: p.id, amount: p.amount.toNumber(), direction: p.direction, mode: p.mode, date: p.date })),
   });
 
   return (
     <PartyProfileClient
       partyId={party.id}
-      party={party}
+      party={{ ...party, openingBalance: party.openingBalance.toNumber() }}
       ledger={ledger}
       measurements={measurements}
       calculatedCurrent={calculatedCurrent}

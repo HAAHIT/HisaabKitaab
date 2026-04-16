@@ -317,7 +317,7 @@ export async function recomputePartyBalance(
   ]);
 
   const billDelta = bills.reduce(
-    (sum, b) => sum + getBillBalanceDelta(party.type as SupportedPartyType, b.grandTotal),
+    (sum, b) => sum + getBillBalanceDelta(party.type as SupportedPartyType, b.grandTotal.toNumber()),
     0
   );
   const paymentDelta = payments.reduce(
@@ -326,10 +326,10 @@ export async function recomputePartyBalance(
       getPaymentBalanceDelta(
         party.type as SupportedPartyType,
         p.direction as SupportedPayDirection,
-        p.amount
+        p.amount.toNumber()
       ),
     0
   );
 
-  return party.openingBalance + billDelta + paymentDelta;
+  return party.openingBalance.toNumber() + billDelta + paymentDelta;
 }

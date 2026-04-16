@@ -116,7 +116,7 @@ export async function GET(request: NextRequest) {
       fetchedParties = parties.map((p) => ({
         name: p.name,
         group: p.type === "CUSTOMER" ? "Sundry Debtors" : "Sundry Creditors",
-        openingBalance: p.openingBalance,
+        openingBalance: p.openingBalance.toNumber(),
         phone: p.phone,
         email: p.email,
         address: p.address,

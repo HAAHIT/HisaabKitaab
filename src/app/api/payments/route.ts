@@ -269,7 +269,7 @@ export async function POST(request: NextRequest) {
             id: newPayment.id,
             partyId: party.id,
             partyName: party.name,
-            amount: newPayment.amount,
+            amount: newPayment.amount.toNumber(),
             mode: newPayment.mode,
             date: newPayment.date,
             createdBy: userId!,
@@ -279,7 +279,7 @@ export async function POST(request: NextRequest) {
             id: newPayment.id,
             partyId: party.id,
             partyName: party.name,
-            amount: newPayment.amount,
+            amount: newPayment.amount.toNumber(),
             mode: newPayment.mode,
             date: newPayment.date,
             createdBy: userId!,
@@ -353,7 +353,7 @@ export async function PATCH(request: NextRequest) {
       const balanceChange = getPaymentBalanceDelta(
         payment.party.type,
         payment.direction,
-        payment.amount
+        payment.amount.toNumber()
       );
 
       await tx.party.update({
@@ -368,7 +368,7 @@ export async function PATCH(request: NextRequest) {
           id: updated.id,
           partyId: payment.partyId,
           partyName: updated.party.name,
-          amount: payment.amount,
+          amount: payment.amount.toNumber(),
           mode: payment.mode,
           date: payment.date,
           createdBy: userId || payment.createdBy,
@@ -378,7 +378,7 @@ export async function PATCH(request: NextRequest) {
           id: updated.id,
           partyId: payment.partyId,
           partyName: updated.party.name,
-          amount: payment.amount,
+          amount: payment.amount.toNumber(),
           mode: payment.mode,
           date: payment.date,
           createdBy: userId || payment.createdBy,

@@ -77,8 +77,8 @@ const CreateBillSchema = z.object({
   templateId: z.string().min(1),
   partyId: z.string().min(1),
   customerName: z.string().optional(),
-  customerPhone: z.string().optional(),
-  customerAddress: z.string().optional(),
+  customerPhone: z.string().nullish(),
+  customerAddress: z.string().nullish(),
   // [A3] GSTIN must be a valid 15-character Indian GSTIN format.
   // Regex: 2-digit state code + PAN (5 alpha + 4 digit + 1 alpha) + 1 entity + Z + 1 checksum.
   gstin: z
@@ -87,13 +87,13 @@ const CreateBillSchema = z.object({
       message:
         "Invalid GSTIN format. Expected 15-character string like 27AAPFU0939F1ZV",
     })
-    .optional(),
+    .nullish(),
   // [B1] Place of Supply — Indian state name, required for GSTR-1 B2B (Table 4A).
-  placeOfSupply: z.string().optional(),
+  placeOfSupply: z.string().nullish(),
   rows: z.array(z.record(z.string(), z.unknown())).min(1),
-  notes: z.string().optional(),
-  terms: z.string().optional(),
-  taxPercent: z.number().nonnegative().optional(),
+  notes: z.string().nullish(),
+  terms: z.string().nullish(),
+  taxPercent: z.number().nonnegative().nullish(),
   subtotal: z.number().nonnegative().default(0),
   taxAmount: z.number().nonnegative().default(0),
   grandTotal: z.number().nonnegative().default(0),
@@ -162,7 +162,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (status && status !== "ALL") {
-      where.status = status;
+      where.status = status as Prisma.BillWhereInput["status"];
     }
 
     if (partyId) {
@@ -476,9 +476,9 @@ export async function POST(request: NextRequest) {
           billNumber,
           partyId: party.id,
           partyName: party.name,
-          subtotal: createdBill.subtotal,
-          taxAmount: createdBill.taxAmount,
-          grandTotal: createdBill.grandTotal,
+          subtotal: createdBill.subtotal.toNumber(),
+          taxAmount: createdBill.taxAmount.toNumber(),
+          grandTotal: createdBill.grandTotal.toNumber(),
           createdBy: userId!,
           entryDate: createdBill.createdAt,
           isInterState,
@@ -515,7 +515,7 @@ export async function POST(request: NextRequest) {
             id: createdPayment.id,
             partyId: party.id,
             partyName: party.name,
-            amount: createdPayment.amount,
+            amount: createdPayment.amount.toNumber(),
             mode: createdPayment.mode,
             date: createdPayment.date,
             createdBy: userId!,
@@ -525,7 +525,7 @@ export async function POST(request: NextRequest) {
             id: createdPayment.id,
             partyId: party.id,
             partyName: party.name,
-            amount: createdPayment.amount,
+            amount: createdPayment.amount.toNumber(),
             mode: createdPayment.mode,
             date: createdPayment.date,
             createdBy: userId!,

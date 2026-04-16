@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
     const results = await Promise.all(
       parties.map(async (party) => {
         const computed = await recomputePartyBalance(prisma, party.id, tenantId);
-        const drift = Math.abs(computed - party.currentBalance);
+        const drift = Math.abs(computed - party.currentBalance.toNumber());
         return {
           partyId: party.id,
           name: party.name,
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
     let fixed = 0;
     for (const party of parties) {
       const computed = await recomputePartyBalance(prisma, party.id, tenantId);
-      if (Math.abs(computed - party.currentBalance) >= 0.01) {
+      if (Math.abs(computed - party.currentBalance.toNumber()) >= 0.01) {
         await prisma.party.update({
           where: { id: party.id },
           data: { currentBalance: computed },
