@@ -42,7 +42,7 @@ export const GST_STATE_CODES: Record<string, string> = {
   // Pre-2020 merger codes — kept for backwards-compat with GSTINs issued before
   // the Dadra & Nagar Haveli + Daman & Diu merger (Gazette Notification 26/Jan/2020).
   // GSTN continues to accept these in filings but the combined UT now uses code "26".
-  "25": "Dadra and Nagar Haveli (Deprecated — merged into 26)",
+  "25": "Dadra and Nagar Haveli and Daman and Diu",
   "26": "Dadra and Nagar Haveli and Daman and Diu",
   "27": "Maharashtra",
   "28": "Andhra Pradesh",

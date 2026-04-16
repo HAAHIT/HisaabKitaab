@@ -313,8 +313,11 @@ function buildLedgerEntryXml(
 
 function buildVoucherXml(voucher: TallyVoucher): string {
   // Build GST context from voucher-level fields (populated from Bill when available)
+  // [Fix P1] Discard GST info for non-taxable voucher types like Journal/Contra/Payment
+  const isGstEligible = ["Sales", "Purchase", "Credit Note", "Debit Note"].includes(voucher.voucherType);
+
   const gstContext =
-    voucher.taxPercent != null && voucher.taxPercent > 0
+    isGstEligible && voucher.taxPercent != null && voucher.taxPercent > 0
       ? {
           taxPercent: voucher.taxPercent,
           cessAmount: voucher.cessAmount ?? 0,

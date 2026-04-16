@@ -287,6 +287,16 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          entityType: "Payment",
+          entityId: newPayment.id,
+          userId: userId!,
+          action: "CREATE",
+        },
+      });
+
       return newPayment;
     });
 
@@ -384,6 +394,19 @@ export async function PATCH(request: NextRequest) {
           createdBy: userId || payment.createdBy,
         });
       }
+
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          entityType: "Payment",
+          entityId: updated.id,
+          userId: userId || payment.createdBy,
+          action: "UPDATE",
+          fieldName: "status",
+          oldValue: JSON.stringify("EXPECTED"),
+          newValue: JSON.stringify("COMPLETED"),
+        },
+      });
 
       return updated;
     });

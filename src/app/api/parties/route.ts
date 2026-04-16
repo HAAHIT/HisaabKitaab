@@ -120,21 +120,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const party = await prisma.party.create({
-      data: {
-        tenantId,
-        name: normalizedName,
-        type: normalizedType,
-        phone: normalizeOptionalString(phone),
-        email: normalizeOptionalString(email),
-        address: normalizeOptionalString(address),
-        gstin: normalizeOptionalString(gstin),
-        openingBalance: normalizedOpeningBalance,
-        currentBalance: normalizedOpeningBalance,
-        isActive: true,
-        isDeleted: false,
-        createdBy: userId,
-      },
+    const party = await prisma.$transaction(async (tx) => {
+      const p = await tx.party.create({
+        data: {
+          tenantId,
+          name: normalizedName,
+          type: normalizedType,
+          phone: normalizeOptionalString(phone),
+          email: normalizeOptionalString(email),
+          address: normalizeOptionalString(address),
+          gstin: normalizeOptionalString(gstin),
+          openingBalance: normalizedOpeningBalance,
+          currentBalance: normalizedOpeningBalance,
+          isActive: true,
+          isDeleted: false,
+          createdBy: userId,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          entityType: "Party",
+          entityId: p.id,
+          userId,
+          action: "CREATE",
+        },
+      });
+
+      return p;
     });
 
     return NextResponse.json({ party }, { status: 201 });

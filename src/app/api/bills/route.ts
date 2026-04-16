@@ -492,6 +492,7 @@ export async function POST(request: NextRequest) {
 
     const bill = await prisma.$transaction(async (tx: PrismaTx) => {
       const lockKey = generateLockKey(tenantId);
+      await tx.$executeRaw`SET LOCAL lock_timeout = '5s'`;
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
 
       const existingCount = await tx.bill.count({
