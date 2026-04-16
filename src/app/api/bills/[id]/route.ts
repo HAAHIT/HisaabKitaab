@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { GST_STATE_CODE_SET } from "@/lib/gst-states";
 import {
   buildBillSnapshotFromParty,
   getBillBalanceDeltaForTransition,
@@ -19,6 +20,7 @@ const ALLOWED_BILL_PATCH_KEYS = new Set([
   "customerPhone",
   "customerAddress",
   "gstin",
+  "placeOfSupply",
   "rows",
   "notes",
   "terms",
@@ -149,6 +151,22 @@ export async function PATCH(
       );
     }
 
+    const hasPlaceOfSupply = hasOwn(body, "placeOfSupply");
+    if (hasPlaceOfSupply) {
+      const pos = body.placeOfSupply;
+      if (pos !== null && pos !== undefined) {
+        if (typeof pos !== "string" || !GST_STATE_CODE_SET.has(pos)) {
+          return NextResponse.json(
+            {
+              error:
+                "Invalid place of supply. Must be a 2-digit GST state code (e.g. '27' for Maharashtra).",
+            },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
     const existing = await prisma.bill.findFirst({
       where: {
         id,
@@ -276,6 +294,12 @@ export async function PATCH(
 
     if (hasIsInterState) {
       updateData.isInterState = isInterState;
+    }
+
+    if (hasPlaceOfSupply) {
+      const pos = body.placeOfSupply;
+      updateData.placeOfSupply =
+        typeof pos === "string" && pos ? pos : null;
     }
 
     let nextPartyId = existing.partyId;

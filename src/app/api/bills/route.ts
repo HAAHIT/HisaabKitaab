@@ -1,5 +1,12 @@
 import { prisma } from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
+import { GST_STATE_CODE_SET } from "@/lib/gst-states";
+
+// Derive Prisma query types from the client instance to avoid the
+// @prisma/client → .prisma/client re-export resolution failure
+// under moduleResolution:"bundler" in Prisma v7.
+type BillWhere = NonNullable<NonNullable<Parameters<typeof prisma.bill.findMany>[0]>["where"]>;
+type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+type BillRowsJson = NonNullable<Parameters<typeof prisma.bill.create>[0]["data"]>["rows"];
 import {
   buildBillSnapshotFromParty,
   getPostedBillBalanceDelta,
@@ -88,8 +95,16 @@ const CreateBillSchema = z.object({
         "Invalid GSTIN format. Expected 15-character string like 27AAPFU0939F1ZV",
     })
     .nullish(),
-  // [B1] Place of Supply — Indian state name, required for GSTR-1 B2B (Table 4A).
-  placeOfSupply: z.string().nullish(),
+  // [B1] Place of Supply — 2-digit GST state code (e.g. "27" for Maharashtra).
+  // Required for B2B final bills (GSTIN present) per GSTR-1 Table 4A.
+  // Validated against the 37 official GSTN state/UT codes.
+  placeOfSupply: z
+    .string()
+    .refine((val) => GST_STATE_CODE_SET.has(val), {
+      message:
+        "Invalid place of supply. Must be a 2-digit GST state code (e.g. '27' for Maharashtra).",
+    })
+    .nullish(),
   rows: z.array(z.record(z.string(), z.unknown())).min(1),
   notes: z.string().nullish(),
   terms: z.string().nullish(),
@@ -100,6 +115,17 @@ const CreateBillSchema = z.object({
   status: z.string().optional(),
   isInterState: z.boolean().optional(),
   paymentMode: z.string().optional(),
+}).superRefine((data, ctx) => {
+  // B2B final bills with a customer GSTIN must include place of supply.
+  // This is mandatory for GSTR-1 Table 4A compliance.
+  if (data.status === "FINAL" && data.gstin && !data.placeOfSupply) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["placeOfSupply"],
+      message:
+        "Place of Supply is required for B2B invoices (when customer GSTIN is provided).",
+    });
+  }
 });
 
 async function loadBillingSettings(tenantId: string) {
@@ -151,7 +177,7 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1);
     const limit = Math.max(1, parseInt(searchParams.get("limit") || "20", 10) || 20);
 
-    const where: Prisma.BillWhereInput = { isDeleted: false, tenantId };
+    const where: BillWhere = { isDeleted: false, tenantId };
 
     if (search) {
       where.OR = [
@@ -162,7 +188,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (status && status !== "ALL") {
-      where.status = status as Prisma.BillWhereInput["status"];
+      where.status = status as BillWhere["status"];
     }
 
     if (partyId) {
@@ -418,7 +444,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const bill = await prisma.$transaction(async (tx) => {
+    const bill = await prisma.$transaction(async (tx: PrismaTx) => {
       const lockKey = generateLockKey(tenantId);
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
 
@@ -440,7 +466,7 @@ export async function POST(request: NextRequest) {
           customerPhone: snapshot.customerPhone,
           customerAddress: snapshot.customerAddress,
           gstin: snapshot.gstin,
-          rows: rows as unknown as Prisma.InputJsonValue,
+          rows: rows as unknown as BillRowsJson,
           notes: notes || null,
           terms: terms || null,
           subtotal: subtotal || 0,

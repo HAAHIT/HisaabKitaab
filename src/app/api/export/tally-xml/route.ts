@@ -16,6 +16,28 @@ import {
 export const runtime = "nodejs";
 
 /**
+ * Extracts unique HSN/SAC codes from a bill's JSON rows array.
+ *
+ * Convention: when a bill row references an ItemCatalog item with a
+ * hsnCode, the UI writes `_hsnCode` into the row object alongside the
+ * template columns.  This is an optional additive key — absent on
+ * existing bills created before the convention was introduced.
+ */
+function extractHsnCodes(rows: unknown): string[] {
+  if (!Array.isArray(rows)) return [];
+  const codes = new Set<string>();
+  for (const row of rows) {
+    if (row && typeof row === "object") {
+      const hsnCode = (row as Record<string, unknown>)["_hsnCode"];
+      if (typeof hsnCode === "string" && hsnCode.trim()) {
+        codes.add(hsnCode.trim());
+      }
+    }
+  }
+  return [...codes];
+}
+
+/**
  * GET /api/export/tally-xml
  *
  * Query params:
@@ -113,7 +135,7 @@ export async function GET(request: NextRequest) {
         orderBy: { name: "asc" },
       });
 
-      fetchedParties = parties.map((p) => ({
+      fetchedParties = parties.map((p: (typeof parties)[number]) => ({
         name: p.name,
         group: p.type === "CUSTOMER" ? "Sundry Debtors" : "Sundry Creditors",
         openingBalance: p.openingBalance.toNumber(),
@@ -137,21 +159,39 @@ export async function GET(request: NextRequest) {
           entryDate: { gte: fromDate, lte: toDate },
         },
         orderBy: [{ entryDate: "asc" }, { createdAt: "asc" }],
-        include: { lines: true },
+        include: {
+          lines: true,
+          // Join Bill to get GST fields required for Tally XML compliance.
+          // Only SALES and CREDIT_NOTE entries have a billId; others get null.
+          bill: {
+            select: {
+              taxPercent: true,
+              isInterState: true,
+              placeOfSupply: true,
+              rows: true,
+              gstin: true,
+            },
+          },
+        },
       });
 
       const vouchers: TallyVoucher[] = entries.map((entry) => ({
         date: entry.entryDate,
-        // [A4] resolveExportVoucherType detects "Reversal of Sales Bill" narration
-        //      and maps it to "Sales Return" (Credit Note) for GSTR-1 Table 9B.
+        // [A4] resolveExportVoucherType handles CREDIT_NOTE (primary path) and
+        //      legacy JOURNAL entries with "Reversal of Sales Bill" narration.
         voucherType: resolveExportVoucherType(entry.voucherType, entry.narration),
         reference:
           entry.billId ?? entry.purchaseId ?? entry.paymentId ?? entry.id,
         narration: entry.narration,
         ledgerEntries: entry.lines.map(journalLineToTallyEntry),
         // [A2] Stable GUID prevents duplicate entries on Tally re-import.
-        //      Format in XML: "HisaabKitaab-{id}" — see buildVoucherXml().
         guid: entry.id,
+        // GST fields — populated from linked Bill when available.
+        // Absent for RECEIPT / PAYMENT / JOURNAL entries (no billId).
+        placeOfSupply: entry.bill?.placeOfSupply ?? null,
+        taxPercent: entry.bill?.taxPercent.toNumber() ?? null,
+        isInterState: entry.bill?.isInterState ?? false,
+        hsnCodes: extractHsnCodes(entry.bill?.rows),
       }));
 
       if (type === "vouchers") {

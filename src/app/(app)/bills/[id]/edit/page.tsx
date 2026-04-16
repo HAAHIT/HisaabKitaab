@@ -16,6 +16,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { evaluateRow, type ColumnDef } from "@/lib/formula";
+import { GST_STATE_CODES } from "@/lib/gst-states";
 
 interface Template {
   id: string;
@@ -37,6 +38,7 @@ interface BillResponse {
   templateId: string;
   partyId: string | null;
   isInterState?: boolean;
+  placeOfSupply?: string | null;
   customerName: string;
   customerPhone: string | null;
   customerAddress: string | null;
@@ -113,6 +115,7 @@ export default function EditBillPage({
   const [rows, setRows] = useState<Record<string, string | number>[]>([]);
   const [taxPercent, setTaxPercent] = useState(18);
   const [isInterState, setIsInterState] = useState(false);
+  const [placeOfSupply, setPlaceOfSupply] = useState("");
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("");
 
@@ -151,6 +154,7 @@ export default function EditBillPage({
       setTerms(nextBill.terms || "");
       setTaxPercent(nextBill.taxPercent);
       setIsInterState(nextBill.isInterState === true);
+      setPlaceOfSupply(nextBill.placeOfSupply || "");
 
       const template = nextTemplates.find((item) => item.id === nextBill.templateId) || null;
       setSelectedTemplate(template);
@@ -182,6 +186,11 @@ export default function EditBillPage({
     setCustomerPhone(party.phone || "");
     setCustomerAddress(party.address || "");
     setGstin(party.gstin || "");
+    // Auto-fill place of supply from first 2 digits of customer GSTIN
+    if (party.gstin && party.gstin.length >= 2) {
+      const code = party.gstin.substring(0, 2);
+      if (GST_STATE_CODES[code]) setPlaceOfSupply(code);
+    }
     setErrors((currentErrors) => ({
       ...currentErrors,
       partyId: false,

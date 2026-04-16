@@ -158,19 +158,29 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
     };
   }
 
-  // Navigate to TALLYMESSAGE array — handle both single-doc and concatenated docs
+  // Navigate to TALLYMESSAGE array.
+  // A combined Tally export (masters + vouchers) contains TWO <IMPORTDATA> blocks
+  // inside one <BODY>.  fast-xml-parser returns IMPORTDATA as either a single object
+  // or an array depending on the document — always normalise with asArray().
   const messageCollections: unknown[][] = [];
   try {
-    // fast-xml-parser may produce an array of ENVELOPEs if there are multiple XML declarations
+    // fast-xml-parser may produce an array of ENVELOPEs for concatenated XML declarations
     const envelopes = asArray(parsed["ENVELOPE"]);
     for (const env of envelopes) {
       const envelope = env as Record<string, unknown>;
       const body = envelope?.["BODY"] as Record<string, unknown> | undefined;
-      const importData = body?.["IMPORTDATA"] as Record<string, unknown> | undefined;
-      const requestData = importData?.["REQUESTDATA"] as Record<string, unknown> | undefined;
-      const raw = requestData?.["TALLYMESSAGE"];
-      if (raw) {
-        messageCollections.push(asArray(raw));
+      // Use asArray — combined exports have multiple IMPORTDATA siblings
+      const importDataBlocks = asArray(
+        body?.["IMPORTDATA"] as Record<string, unknown> | Record<string, unknown>[] | undefined
+      );
+      for (const importData of importDataBlocks) {
+        const requestData = (importData as Record<string, unknown>)?.["REQUESTDATA"] as
+          | Record<string, unknown>
+          | undefined;
+        const raw = requestData?.["TALLYMESSAGE"];
+        if (raw) {
+          messageCollections.push(asArray(raw));
+        }
       }
     }
   } catch {

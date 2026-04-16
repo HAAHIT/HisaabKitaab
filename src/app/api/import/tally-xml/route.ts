@@ -175,54 +175,79 @@ export async function POST(request: NextRequest) {
 
   const duplicateFingerprints = new Set(
     existingEntries.map(
-      (e: (typeof existingEntries)[number]) => `${e.voucherType}|${e.entryDate.toISOString()}|${e.narration}|${String(e.totalDebit)}`
+      (e: (typeof existingEntries)[number]) =>
+        `${e.voucherType}|${e.entryDate.toISOString()}|${e.narration}|${String(e.totalDebit)}`
     )
   );
 
-  for (const voucher of vouchers) {
-    // Duplicate detection against the pre-fetched fingerprint set — O(1), no DB round-trip.
+  // Import vouchers in parallel batches of 25.
+  // Each voucher keeps its own transaction so a single bad row never rolls
+  // back the whole batch (per-voucher fault isolation is intentional).
+  // Promise.allSettled ensures one failed transaction does not abort siblings.
+  const BATCH_SIZE = 25;
+
+  async function importVoucher(voucher: (typeof vouchers)[number]): Promise<"imported" | "skipped" | Error> {
     const fingerprint = `${voucher.voucherType}|${voucher.entryDate.toISOString()}|${voucher.narration}|${String(voucher.totalDebit)}`;
     if (duplicateFingerprints.has(fingerprint)) {
-      skipped++;
-      continue;
+      return "skipped";
     }
 
     try {
-      await prisma.$transaction(async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
-        const lines = await Promise.all(
-          voucher.lines.map(async (line) => {
-            const partyId = line.partyName
-              ? await resolvePartyId(tx, line.partyName, line.accountCode)
-              : null;
-
-            return {
-              accountCode: line.accountCode,
-              debit: line.debit,
-              credit: line.credit,
-              partyId,
-              partyName: line.partyName ?? undefined,
-            };
-          })
-        );
-
-        await createJournalEntry(tx, {
-          tenantId: tid,
-          entryDate: voucher.entryDate,
-          narration: voucher.narration,
-          voucherType: voucher.voucherType,
-          createdBy: actorId,
-          lines,
-        });
-      });
-
-      imported++;
-    } catch (err) {
-      failed++;
-      importErrors.push(
-        `Voucher "${voucher.reference}" (${voucher.voucherType}): ${
-          err instanceof Error ? err.message : String(err)
-        }`
+      await prisma.$transaction(
+        async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
+          const lines = await Promise.all(
+            voucher.lines.map(async (line) => {
+              const partyId = line.partyName
+                ? await resolvePartyId(tx, line.partyName, line.accountCode)
+                : null;
+              return {
+                accountCode: line.accountCode,
+                debit: line.debit,
+                credit: line.credit,
+                partyId,
+                partyName: line.partyName ?? undefined,
+              };
+            })
+          );
+          await createJournalEntry(tx, {
+            tenantId: tid,
+            entryDate: voucher.entryDate,
+            narration: voucher.narration,
+            voucherType: voucher.voucherType,
+            createdBy: actorId,
+            lines,
+          });
+        }
       );
+      return "imported";
+    } catch (err) {
+      return err instanceof Error ? err : new Error(String(err));
+    }
+  }
+
+  for (let i = 0; i < vouchers.length; i += BATCH_SIZE) {
+    const batch = vouchers.slice(i, i + BATCH_SIZE);
+    const results = await Promise.allSettled(batch.map(importVoucher));
+
+    for (let j = 0; j < results.length; j++) {
+      const result = results[j];
+      if (result.status === "rejected") {
+        // Promise itself rejected (should not happen — importVoucher catches internally)
+        failed++;
+        importErrors.push(
+          `Voucher "${batch[j].reference}" (${batch[j].voucherType}): unexpected rejection`
+        );
+      } else if (result.value === "skipped") {
+        skipped++;
+      } else if (result.value === "imported") {
+        imported++;
+      } else {
+        // result.value is an Error
+        failed++;
+        importErrors.push(
+          `Voucher "${batch[j].reference}" (${batch[j].voucherType}): ${result.value.message}`
+        );
+      }
     }
   }
 

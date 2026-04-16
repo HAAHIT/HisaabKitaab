@@ -7,7 +7,7 @@ import {
 import { roundTo2 } from "@/lib/journal-reporting";
 
 type PrismaTx = Prisma.TransactionClient;
-type VoucherType = "SALES" | "PURCHASE" | "RECEIPT" | "PAYMENT" | "JOURNAL";
+type VoucherType = "SALES" | "PURCHASE" | "RECEIPT" | "PAYMENT" | "JOURNAL" | "CREDIT_NOTE";
 
 interface JournalLineInput {
   accountCode: AccountCode;
@@ -205,7 +205,9 @@ export async function journalForCancelledSalesBill(
     tenantId,
     entryDate: bill.entryDate,
     narration: `Reversal of Sales Bill ${bill.billNumber} for ${bill.partyName}`,
-    voucherType: "JOURNAL",
+    // CREDIT_NOTE is the correct GST voucher type for a sales bill cancellation.
+    // Tally XML export maps this directly to "Sales Return" (GSTR-1 Table 9B).
+    voucherType: "CREDIT_NOTE",
     billId: bill.id,
     createdBy: bill.createdBy,
     lines: [

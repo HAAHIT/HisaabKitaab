@@ -19,6 +19,7 @@ model Tenant {
   settings       Json                @default("{}")
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
+  auditLogs      AuditLog[]
   bills          Bill[]
   templates      BillTemplate[]
   items          ItemCatalog[]
@@ -77,6 +78,30 @@ model AuthThrottle {
   @@unique([scope, throttleKey])
   @@index([blockedUntil])
   @@index([userId])
+}
+
+/**
+ * AuditLog — MCA-mandated Edit Log (GSR 247(E), effective April 1 2023)
+ *
+ * Append-only: rows are NEVER updated or deleted.
+ * Captures every CREATE / UPDATE / DELETE on accounting-relevant entities.
+ * Indexed for tenant-scoped audit queries and date-range exports.
+ */
+model AuditLog {
+  id         String   @id @default(cuid())
+  tenantId   String
+  entityType String   // "Bill" | "Payment" | "Party" | "User"
+  entityId   String   // PK of the changed record
+  userId     String   // actor who triggered the change
+  action     String   // "CREATE" | "UPDATE" | "DELETE"
+  fieldName  String?  // null for whole-record events (CREATE / DELETE)
+  oldValue   String?  // JSON-serialised previous value
+  newValue   String?  // JSON-serialised next value
+  createdAt  DateTime @default(now())
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, entityType, entityId])
+  @@index([tenantId, createdAt])
 }
 
 model BillTemplate {
@@ -139,6 +164,7 @@ model Bill {
   party           Party?       @relation(fields: [partyId], references: [id])
   template        BillTemplate @relation(fields: [templateId], references: [id])
   tenant          Tenant       @relation(fields: [tenantId], references: [id])
+  journalEntries  JournalEntry[]
   payments        Payment[]
 
   @@unique([tenantId, billNumber])
@@ -215,6 +241,7 @@ model JournalEntry {
   createdBy   String
   createdAt   DateTime      @default(now())
   tenant      Tenant        @relation(fields: [tenantId], references: [id])
+  bill        Bill?         @relation(fields: [billId], references: [id])
   lines       JournalLine[]
 
   @@index([tenantId])
@@ -342,6 +369,7 @@ enum VoucherType {
   RECEIPT
   PAYMENT
   JOURNAL
+  CREDIT_NOTE  // GST Credit Note — reversal of a FINAL sales bill (GSTR-1 Table 9B)
 }
 
 enum MediaAssetKind {

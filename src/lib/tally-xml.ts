@@ -16,7 +16,13 @@
  *   CREDIT = negative amount, ISDEEMEDPOSITIVE=No
  *
  * Dates: YYYYMMDD in IST (Asia/Kolkata).
+ *
+ * GST fields added (per TallyPrime 4.x GST spec):
+ *   <PLACEOFSUPPLY>  — on <VOUCHER>; state name derived from 2-digit GST code
+ *   <GSTDETAILS.LIST> — on Sales/Purchase <ALLLEDGERENTRIES.LIST>; carries tax rate + HSN
  */
+
+import { gstCodeToStateName } from "@/lib/gst-states";
 
 const INDIA_TIMEZONE = "Asia/Kolkata";
 
@@ -37,6 +43,8 @@ export interface TallyLedgerEntry {
   /** Positive = debit, Negative = credit (Tally convention) */
   amount: number;
   partyName?: string | null;
+  /** Set to true for the Sales Account / Purchase Account line — receives GSTDETAILS.LIST */
+  isIncomeLedger?: boolean;
 }
 
 export interface TallyVoucher {
@@ -52,6 +60,23 @@ export interface TallyVoucher {
    * Format emitted: "HisaabKitaab-{guid}"
    */
   guid?: string;
+  /**
+   * 2-digit GST state code (e.g. "27").  Converted to state name for Tally XML.
+   * Required for GSTR-1 B2B vouchers (Table 4A).
+   */
+  placeOfSupply?: string | null;
+  /**
+   * GST rate applied to the whole bill (e.g. 18 for 18%).
+   * Written into <GSTDETAILS.LIST> on the income/expense ledger entry.
+   */
+  taxPercent?: number | null;
+  /** True = IGST; false = CGST+SGST split.  Affects <TAXTYPE> tag. */
+  isInterState?: boolean;
+  /**
+   * Unique HSN/SAC codes found in bill rows (_hsnCode key convention).
+   * Written into <GSTDETAILS.LIST> when present.
+   */
+  hsnCodes?: string[];
 }
 
 export interface TallyPartyMaster {
@@ -73,6 +98,7 @@ const VOUCHER_TYPE_MAP: Record<string, TallyVoucherType> = {
   RECEIPT: "Receipt",
   PAYMENT: "Payment",
   JOURNAL: "Journal",
+  CREDIT_NOTE: "Sales Return",
 };
 
 export function dbVoucherTypeToTally(voucherType: string): TallyVoucherType {
@@ -82,13 +108,19 @@ export function dbVoucherTypeToTally(voucherType: string): TallyVoucherType {
 /**
  * Determines whether a journal entry should be exported as "Sales Return"
  * (Credit Note) instead of the generic "Journal" type.
- * Detection rule: narration starts with the prefix written by
- * journalForCancelledSalesBill() in journal.ts.
+ *
+ * Primary path:  DB voucherType === "CREDIT_NOTE" → "Sales Return"
+ * Legacy path:   Old entries stored as JOURNAL with the reversal narration prefix
+ *                (written before the CREDIT_NOTE enum was introduced) → "Sales Return"
  */
 export function resolveExportVoucherType(
   dbVoucherType: string,
   narration: string
 ): TallyVoucherType {
+  if (dbVoucherType === "CREDIT_NOTE") {
+    return "Sales Return";
+  }
+  // Legacy: cancellations created before CREDIT_NOTE enum existed
   if (
     dbVoucherType === "JOURNAL" &&
     narration.startsWith("Reversal of Sales Bill")
@@ -133,6 +165,9 @@ function formatAmount(amount: number): string {
  * Converts a journal line (separate debit/credit columns) to Tally's
  * sign-based single-amount convention.
  * Debit = positive amount, Credit = negative amount.
+ *
+ * isIncomeLedger must be true for the Sales Account / Purchase Account line
+ * so the serializer knows where to attach <GSTDETAILS.LIST>.
  */
 export function journalLineToTallyEntry(line: {
   accountName: string;
@@ -141,44 +176,106 @@ export function journalLineToTallyEntry(line: {
   partyName?: string | null;
 }): TallyLedgerEntry {
   const amount = line.debit > 0 ? line.debit : -line.credit;
+  const isIncomeLedger =
+    line.accountName === "Sales Account" ||
+    line.accountName === "Purchase Account";
   return {
     ledgerName: line.accountName,
     amount,
     partyName: line.partyName,
+    isIncomeLedger,
   };
+}
+
+// ── GST detail XML helpers ────────────────────────────────────────────────────
+
+/**
+ * Builds one <GSTDETAILS.LIST> block.
+ * hsnCode is optional — omitted when the bill line has no HSN code.
+ */
+function buildGstDetailsXml(
+  taxPercent: number,
+  hsnCode?: string
+): string {
+  const hsnTag = hsnCode
+    ? `
+          <HSNCODE>${escapeXml(hsnCode)}</HSNCODE>`
+    : "";
+
+  return `
+        <GSTDETAILS.LIST>
+          <TAXTYPE>GST</TAXTYPE>
+          <TAXRATE>${taxPercent.toFixed(2)}</TAXRATE>
+          <BASICTAXRATE>${taxPercent.toFixed(2)}</BASICTAXRATE>
+          <ISPARTYLEDGER>No</ISPARTYLEDGER>
+          <CESS>0</CESS>${hsnTag}
+          <SOURCEOFDETAILS>NotApplicable</SOURCEOFDETAILS>
+        </GSTDETAILS.LIST>`;
 }
 
 // ── XML builders ─────────────────────────────────────────────────────────────
 
-function buildLedgerEntryXml(entry: TallyLedgerEntry): string {
-  const billAllocations =
-    entry.partyName
-      ? `
+function buildLedgerEntryXml(
+  entry: TallyLedgerEntry,
+  gstContext?: { taxPercent: number; hsnCodes: string[] }
+): string {
+  const billAllocations = entry.partyName
+    ? `
         <BILLALLOCATIONS.LIST>
           <NAME>${escapeXml(entry.partyName)}</NAME>
           <BILLTYPE>On Account</BILLTYPE>
           <AMOUNT>${entry.amount >= 0 ? "" : "-"}${formatAmount(entry.amount)}</AMOUNT>
         </BILLALLOCATIONS.LIST>`
-      : "";
+    : "";
+
+  // Attach GSTDETAILS.LIST only to the Sales/Purchase income ledger entry.
+  // When multiple HSN codes exist, emit one block per code; otherwise emit one
+  // block without HSNCODE (bill-level rate, no HSN breakdown).
+  let gstDetails = "";
+  if (entry.isIncomeLedger && gstContext && gstContext.taxPercent > 0) {
+    if (gstContext.hsnCodes.length > 0) {
+      gstDetails = gstContext.hsnCodes
+        .map((code) => buildGstDetailsXml(gstContext.taxPercent, code))
+        .join("");
+    } else {
+      gstDetails = buildGstDetailsXml(gstContext.taxPercent);
+    }
+  }
 
   return `
       <ALLLEDGERENTRIES.LIST>
         <LEDGERNAME>${escapeXml(entry.ledgerName)}</LEDGERNAME>
         <ISDEEMEDPOSITIVE>${entry.amount >= 0 ? "Yes" : "No"}</ISDEEMEDPOSITIVE>
-        <AMOUNT>${entry.amount >= 0 ? "" : "-"}${formatAmount(entry.amount)}</AMOUNT>${billAllocations}
+        <AMOUNT>${entry.amount >= 0 ? "" : "-"}${formatAmount(entry.amount)}</AMOUNT>${billAllocations}${gstDetails}
       </ALLLEDGERENTRIES.LIST>`;
 }
 
 function buildVoucherXml(voucher: TallyVoucher): string {
-  const ledgerLines = voucher.ledgerEntries.map(buildLedgerEntryXml).join("");
+  // Build GST context from voucher-level fields (populated from Bill when available)
+  const gstContext =
+    voucher.taxPercent != null && voucher.taxPercent > 0
+      ? { taxPercent: voucher.taxPercent, hsnCodes: voucher.hsnCodes ?? [] }
+      : undefined;
+
+  const ledgerLines = voucher.ledgerEntries
+    .map((entry) => buildLedgerEntryXml(entry, gstContext))
+    .join("");
 
   // GUID prevents duplicate imports on re-import (TallyPrime idempotency).
-  // Format: "HisaabKitaab-{uuid}" keeps the namespace distinct from native Tally GUIDs.
   const guidTag = voucher.guid
     ? `
         <GUID>HisaabKitaab-${escapeXml(voucher.guid)}</GUID>
         <REMOTEID>HisaabKitaab-${escapeXml(voucher.guid)}</REMOTEID>`
     : "";
+
+  // PLACEOFSUPPLY: convert 2-digit GST code to English state name for Tally.
+  const placeOfSupplyTag =
+    voucher.placeOfSupply
+      ? `
+        <PLACEOFSUPPLY>${escapeXml(
+          gstCodeToStateName(voucher.placeOfSupply) ?? voucher.placeOfSupply
+        )}</PLACEOFSUPPLY>`
+      : "";
 
   return `
     <TALLYMESSAGE xmlns:UDF="TallyUDF">
@@ -186,7 +283,7 @@ function buildVoucherXml(voucher: TallyVoucher): string {
         <DATE>${formatTallyDate(voucher.date)}</DATE>
         <VOUCHERTYPENAME>${escapeXml(voucher.voucherType)}</VOUCHERTYPENAME>
         <VOUCHERNUMBER>${escapeXml(voucher.reference)}</VOUCHERNUMBER>
-        <NARRATION>${escapeXml(voucher.narration)}</NARRATION>${ledgerLines}
+        <NARRATION>${escapeXml(voucher.narration)}</NARRATION>${placeOfSupplyTag}${ledgerLines}
       </VOUCHER>
     </TALLYMESSAGE>`;
 }
@@ -206,9 +303,13 @@ function buildPartyMasterXml(party: TallyPartyMaster): string {
     ? `<ADDRESS.LIST TYPE="String"><ADDRESS>${escapeXml(party.address)}</ADDRESS></ADDRESS.LIST>`
     : "";
 
+  // ACTION="Alter" is idempotent in TallyPrime 3+:
+  //   - Ledger does not exist → Tally creates it
+  //   - Ledger exists         → Tally updates GSTIN, opening balance, address
+  // ACTION="Create" silently fails on re-import of an existing ledger.
   return `
     <TALLYMESSAGE xmlns:UDF="TallyUDF">
-      <LEDGER NAME="${escapeXml(party.name)}" ACTION="Create">
+      <LEDGER NAME="${escapeXml(party.name)}" ACTION="Alter">
         <NAME>${escapeXml(party.name)}</NAME>
         <PARENT>${escapeXml(party.group)}</PARENT>
         ${openingBalanceFormatted}
