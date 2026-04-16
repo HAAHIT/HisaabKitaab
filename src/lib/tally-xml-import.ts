@@ -54,16 +54,36 @@ const FALLBACK_BY_VOUCHER: Record<string, AccountCode> = {
   JOURNAL: "SUNDRY_DEBTORS",
 };
 
+/**
+ * Maps Tally's voucher type name strings (both HisaabKitaab exports and
+ * native TallyPrime exports) to our internal VoucherType enum values.
+ *
+ * [FIX-P0] Added GST return types so native Tally exports with
+ * "Sales Return" / "Credit Note" / "Purchase Return" / "Debit Note" are
+ * no longer dropped with parse errors.
+ *
+ * Mapping rationale:
+ *   "Sales Return" / "Credit Note" → SALES  (reversal detected by narration
+ *       / voucherType at journal-write time, consistent with existing
+ *       legacy-narration path for CREDIT_NOTE promotion)
+ *   "Purchase Return" / "Debit Note" → PURCHASE  (symmetric)
+ */
 const VOUCHER_TYPE_MAP: Record<
   string,
   "SALES" | "PURCHASE" | "RECEIPT" | "PAYMENT" | "JOURNAL"
 > = {
+  // Standard types (HisaabKitaab exports + native Tally)
   Sales: "SALES",
   Purchase: "PURCHASE",
   Receipt: "RECEIPT",
   Payment: "PAYMENT",
   Journal: "JOURNAL",
   Contra: "JOURNAL",
+  // GST return types — native TallyPrime export strings
+  "Sales Return": "SALES",    // Credit Note (GSTR-1 Table 9B)
+  "Credit Note": "SALES",    // alt wording used by some Tally versions
+  "Purchase Return": "PURCHASE", // Debit Note (GSTR-3B)
+  "Debit Note": "PURCHASE",   // alt wording
 };
 
 // ── Output types ─────────────────────────────────────────────────────────────
@@ -79,11 +99,23 @@ export type ParsedLedgerLine = {
 
 export type ParsedVoucher = {
   voucherType: "SALES" | "PURCHASE" | "RECEIPT" | "PAYMENT" | "JOURNAL";
+  /**
+   * The original Tally voucher type name string (e.g. "Sales Return").
+   * Preserved so callers can detect Credit Notes / Debit Notes that should be
+   * mapped to CREDIT_NOTE at the journal-write layer.
+   */
+  originalTypeName: string;
   entryDate: Date;
   reference: string;
   narration: string;
   lines: ParsedLedgerLine[];
   totalDebit: number;
+  /**
+   * Tally's <REMOTEID> or <GUID> tag value with "HisaabKitaab-" prefix stripped.
+   * Used as the primary idempotency key on import (stored in JournalEntry.remoteId).
+   * Null for native Tally XML that does not carry a REMOTEID.
+   */
+  remoteId: string | null;
 };
 
 export type ParsedPartyMaster = {
@@ -238,6 +270,16 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
     const reference = String(v["VOUCHERNUMBER"] ?? "").trim();
     const narration = String(v["NARRATION"] ?? "").trim();
 
+    // Extract Tally's REMOTEID / GUID for idempotent re-import.
+    // HisaabKitaab exports prefix the journal entry ID with "HisaabKitaab-";
+    // strip the prefix so we store only the raw UUID for DB lookup.
+    // Native Tally exports may have a GUID without our prefix — store as-is.
+    const rawRemoteId =
+      String(v["REMOTEID"] ?? v["GUID"] ?? "").trim() || null;
+    const remoteId = rawRemoteId
+      ? rawRemoteId.replace(/^HisaabKitaab-/i, "")
+      : null;
+
     const rawEntries = v["ALLLEDGERENTRIES.LIST"];
     const entryList = asArray(rawEntries as Record<string, unknown> | Record<string, unknown>[] | undefined);
 
@@ -291,7 +333,16 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
 
     const totalDebit = lines.reduce((s, l) => s + l.debit, 0);
 
-    vouchers.push({ voucherType, entryDate, reference, narration, lines, totalDebit });
+    vouchers.push({
+      voucherType,
+      originalTypeName: typeName,
+      entryDate,
+      reference,
+      narration,
+      lines,
+      totalDebit,
+      remoteId,
+    });
   }
 
   return { vouchers, partyMasters, parseErrors };

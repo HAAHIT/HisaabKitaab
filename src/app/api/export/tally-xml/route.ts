@@ -159,7 +159,15 @@ export async function GET(request: NextRequest) {
           entryDate: { gte: fromDate, lte: toDate },
         },
         orderBy: [{ entryDate: "asc" }, { createdAt: "asc" }],
-        include: {
+        select: {
+          id: true,
+          entryDate: true,
+          voucherType: true,
+          narration: true,
+          billId: true,
+          purchaseId: true,
+          paymentId: true,
+          isReverseCharge: true, // [P1] RCM flag — wired to <ISREVERSECHARGE> in Tally XML
           lines: true,
           // Join Bill to get GST fields required for Tally XML compliance.
           // Only SALES and CREDIT_NOTE entries have a billId; others get null.
@@ -169,15 +177,15 @@ export async function GET(request: NextRequest) {
               isInterState: true,
               placeOfSupply: true,
               rows: true,
-              gstin: true,
+              gstin: true, // [P1] Used to emit SOURCEOFDETAILS=Autofill for registered parties
             },
           },
         },
       });
 
-      const vouchers: TallyVoucher[] = entries.map((entry) => ({
+      const vouchers: TallyVoucher[] = entries.map((entry: (typeof entries)[number]) => ({
         date: entry.entryDate,
-        // [A4] resolveExportVoucherType handles CREDIT_NOTE (primary path) and
+        // [A4] resolveExportVoucherType handles CREDIT_NOTE / DEBIT_NOTE (primary paths) and
         //      legacy JOURNAL entries with "Reversal of Sales Bill" narration.
         voucherType: resolveExportVoucherType(entry.voucherType, entry.narration),
         reference:
@@ -192,15 +200,43 @@ export async function GET(request: NextRequest) {
         taxPercent: entry.bill?.taxPercent.toNumber() ?? null,
         isInterState: entry.bill?.isInterState ?? false,
         hsnCodes: extractHsnCodes(entry.bill?.rows),
+        // [P1] gstin flows into SOURCEOFDETAILS: Autofill (registered) vs NotApplicable (B2C/unregistered)
+        gstin: entry.bill?.gstin ?? null,
+        // [P1] RCM flag — emits <ISREVERSECHARGE>Yes</ISREVERSECHARGE> for GSTR-3B ITC
+        isReverseCharge: entry.isReverseCharge,
       }));
 
+      // [FIX-P2] Count vouchers with tax > 0% but no HSN code.
+      // These will produce incomplete GSTR-1 Table 12 entries in Tally.
+      const hsnMissingCount = vouchers.filter(
+        (v) => (v.taxPercent ?? 0) > 0 && (v.hsnCodes ?? []).length === 0
+      ).length;
+
+      const hsnWarningComment =
+        hsnMissingCount > 0
+          ? `<!-- WARNING: ${hsnMissingCount} voucher(s) have tax > 0% but no HSN/SAC code. GSTR-1 Table 12 may be incomplete. -->`
+          : "";
+
       if (type === "vouchers") {
-        xml = buildTallyVoucherXml(vouchers, companyName);
-        return xmlResponse(xml, `tally_vouchers_${from}_to_${to}.xml`);
+        let voucherXml = buildTallyVoucherXml(vouchers, companyName);
+        if (hsnWarningComment) {
+          voucherXml = voucherXml.replace(
+            '<?xml version="1.0" encoding="UTF-8"?>',
+            `<?xml version="1.0" encoding="UTF-8"?>\n${hsnWarningComment}`
+          );
+        }
+        return xmlResponse(voucherXml, `tally_vouchers_${from}_to_${to}.xml`, hsnMissingCount);
       }
 
       // For "all" — append vouchers after masters
-      xml = buildCombinedXml(fetchedParties, vouchers, companyName, from, to);
+      let combinedXml = buildCombinedXml(fetchedParties, vouchers, companyName, from, to);
+      if (hsnWarningComment) {
+        combinedXml = combinedXml.replace(
+          '<?xml version="1.0" encoding="UTF-8"?>',
+          `<?xml version="1.0" encoding="UTF-8"?>\n${hsnWarningComment}`
+        );
+      }
+      xml = combinedXml;
     }
 
     return xmlResponse(xml, `tally_export_${from}_to_${to}.xml`);
@@ -210,13 +246,16 @@ export async function GET(request: NextRequest) {
   }
 }
 
-function xmlResponse(xml: string, filename: string) {
-  return new NextResponse(xml, {
-    headers: {
-      "Content-Type": "application/xml; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${filename}"`,
-    },
-  });
+function xmlResponse(xml: string, filename: string, hsnMissingCount = 0) {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/xml; charset=utf-8",
+    "Content-Disposition": `attachment; filename="${filename}"`,
+  };
+  if (hsnMissingCount > 0) {
+    // Surface HSN gap count so the UI / CI pipeline can show a warning banner.
+    headers["X-HisaabKitaab-HSN-Missing"] = String(hsnMissingCount);
+  }
+  return new NextResponse(xml, { headers });
 }
 
 function buildCombinedXml(

@@ -8,10 +8,15 @@ import {
   journalForCancelledSalesBill,
   journalForSalesBill,
 } from "@/lib/journal";
-import type { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
+
+// Derive Prisma types from the client instance to avoid the
+// @prisma/client → .prisma/client re-export resolution failure
+// under moduleResolution:"bundler" in Prisma v7.
+type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+type BillUpdateData = Parameters<typeof prisma.bill.update>[0]["data"];
 
 const ALLOWED_BILL_PATCH_KEYS = new Set([
   "templateId",
@@ -178,6 +183,7 @@ export async function PATCH(
         status: true,
         billNumber: true,
         subtotal: true,
+        taxPercent: true,
         taxAmount: true,
         grandTotal: true,
         isInterState: true,
@@ -188,6 +194,8 @@ export async function PATCH(
         customerAddress: true,
         gstin: true,
         createdBy: true,
+        rows: true,        // needed for HSN validation gate
+        placeOfSupply: true, // needed for placeOfSupply validation gate
       },
     });
 
@@ -426,10 +434,53 @@ export async function PATCH(
       );
     }
 
-    const bill = await prisma.$transaction(async (tx) => {
+    const nextTaxPercent =
+      (updateData.taxPercent as number | undefined) ?? existing.taxPercent?.toNumber() ?? 0;
+
+    // [P0] Block FINAL transition if placeOfSupply is missing.
+    // Required for ALL final bills under GSTR-1 — not just B2B.
+    const finalPlaceOfSupply = hasPlaceOfSupply
+      ? (updateData.placeOfSupply as string | null | undefined)
+      : existing.placeOfSupply;
+
+    if (finalStatus === "FINAL" && !finalPlaceOfSupply) {
+      return NextResponse.json(
+        {
+          error:
+            "Place of Supply is required to finalise a bill (mandatory for GSTR-1 compliance).",
+        },
+        { status: 400 }
+      );
+    }
+
+    // [P0] Block FINAL transition if tax > 0 but no HSN code present in rows.
+    // Without HSN, GSTR-1 Table 12 (HSN-wise summary) will be incomplete.
+    if (finalStatus === "FINAL" && nextTaxPercent > 0) {
+      const rowsToCheck = (updateData.rows ?? existing.rows) as unknown[];
+      const hasHsn =
+        Array.isArray(rowsToCheck) &&
+        rowsToCheck.some(
+          (row) =>
+            row &&
+            typeof row === "object" &&
+            typeof (row as Record<string, unknown>)["_hsnCode"] === "string" &&
+            ((row as Record<string, unknown>)["_hsnCode"] as string).trim() !== ""
+        );
+      if (!hasHsn) {
+        return NextResponse.json(
+          {
+            error:
+              "At least one HSN/SAC code is required when tax is applied (mandatory for GSTR-1 Table 12).",
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    const bill = await prisma.$transaction(async (tx: PrismaTx) => {
       const updatedBill = await tx.bill.update({
         where: { id },
-        data: updateData as Prisma.BillUncheckedUpdateInput,
+        data: updateData as BillUpdateData,
       });
 
       if (!finalPartyId) {
@@ -541,7 +592,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Bill not found" }, { status: 404 });
     }
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: PrismaTx) => {
       await tx.bill.update({
         where: { id },
         data: { status: "CANCELLED" },

@@ -116,14 +116,36 @@ const CreateBillSchema = z.object({
   isInterState: z.boolean().optional(),
   paymentMode: z.string().optional(),
 }).superRefine((data, ctx) => {
-  // B2B final bills with a customer GSTIN must include place of supply.
-  // This is mandatory for GSTR-1 Table 4A compliance.
-  if (data.status === "FINAL" && data.gstin && !data.placeOfSupply) {
+  // [P0] FINAL bills must always declare place of supply for GSTR-1 compliance.
+  // Not limited to B2B — even B2C inter-state supplies require placeOfSupply.
+  if (data.status === "FINAL" && !data.placeOfSupply) {
     ctx.addIssue({
       code: "custom",
       path: ["placeOfSupply"],
       message:
-        "Place of Supply is required for B2B invoices (when customer GSTIN is provided).",
+        "Place of Supply is required for all final bills (mandatory for GSTR-1 compliance).",
+    });
+  }
+
+  // [P0] FINAL bills with tax must carry at least one HSN/SAC code.
+  // Without HSN, GSTR-1 Table 12 (HSN-wise summary) will be incomplete.
+  if (
+    data.status === "FINAL" &&
+    (data.taxPercent ?? 0) > 0 &&
+    Array.isArray(data.rows) &&
+    !data.rows.some(
+      (row) =>
+        row &&
+        typeof row === "object" &&
+        typeof (row as Record<string, unknown>)["_hsnCode"] === "string" &&
+        ((row as Record<string, unknown>)["_hsnCode"] as string).trim() !== ""
+    )
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["rows"],
+      message:
+        "At least one HSN/SAC code is required when tax is applied (mandatory for GSTR-1 Table 12).",
     });
   }
 });

@@ -152,7 +152,9 @@ describe("Bills API — POST business logic", () => {
         grandTotal: 0,
         subtotal: 0,
         taxAmount: 0,
+        taxPercent: 0,
         isInterState: false,
+        placeOfSupply: "27", // Maharashtra — satisfies P0 placeOfSupply gate
       }),
     });
 

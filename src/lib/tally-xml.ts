@@ -77,6 +77,18 @@ export interface TallyVoucher {
    * Written into <GSTDETAILS.LIST> when present.
    */
   hsnCodes?: string[];
+  /**
+   * True = Reverse Charge Mechanism (RCM) purchase under IGST Act Section 9(3)/9(4).
+   * Emits <ISREVERSECHARGE>Yes</ISREVERSECHARGE> on the voucher node.
+   * Required for correct ITC computation in Tally GSTR-3B.
+   */
+  isReverseCharge?: boolean;
+  /**
+   * Customer GSTIN from the linked Bill (if any). Used to determine SOURCEOFDETAILS:
+   *   "Autofill"      = registered party (GSTIN present) — Tally auto-populates GST return data
+   *   "NotApplicable" = B2C / unregistered / composite — no GSTIN lookup
+   */
+  gstin?: string | null;
 }
 
 export interface TallyPartyMaster {
@@ -99,6 +111,7 @@ const VOUCHER_TYPE_MAP: Record<string, TallyVoucherType> = {
   PAYMENT: "Payment",
   JOURNAL: "Journal",
   CREDIT_NOTE: "Sales Return",
+  DEBIT_NOTE: "Purchase Return", // GST Debit Note — GSTR-3B Table 4
 };
 
 export function dbVoucherTypeToTally(voucherType: string): TallyVoucherType {
@@ -119,6 +132,9 @@ export function resolveExportVoucherType(
 ): TallyVoucherType {
   if (dbVoucherType === "CREDIT_NOTE") {
     return "Sales Return";
+  }
+  if (dbVoucherType === "DEBIT_NOTE") {
+    return "Purchase Return";
   }
   // Legacy: cancellations created before CREDIT_NOTE enum existed
   if (
@@ -192,15 +208,22 @@ export function journalLineToTallyEntry(line: {
 /**
  * Builds one <GSTDETAILS.LIST> block.
  * hsnCode is optional — omitted when the bill line has no HSN code.
+ *
+ * SOURCEOFDETAILS rules (TallyPrime 4.x GST spec):
+ *   "Autofill"       — party GSTIN is known; Tally auto-populates GST return details
+ *   "NotApplicable"  — unregistered / composite / B2C; Tally skips GSTIN lookup
  */
 function buildGstDetailsXml(
   taxPercent: number,
-  hsnCode?: string
+  hsnCode?: string,
+  gstin?: string | null
 ): string {
   const hsnTag = hsnCode
     ? `
           <HSNCODE>${escapeXml(hsnCode)}</HSNCODE>`
     : "";
+
+  const sourceOfDetails = gstin ? "Autofill" : "NotApplicable";
 
   return `
         <GSTDETAILS.LIST>
@@ -209,7 +232,7 @@ function buildGstDetailsXml(
           <BASICTAXRATE>${taxPercent.toFixed(2)}</BASICTAXRATE>
           <ISPARTYLEDGER>No</ISPARTYLEDGER>
           <CESS>0</CESS>${hsnTag}
-          <SOURCEOFDETAILS>NotApplicable</SOURCEOFDETAILS>
+          <SOURCEOFDETAILS>${sourceOfDetails}</SOURCEOFDETAILS>
         </GSTDETAILS.LIST>`;
 }
 
@@ -217,7 +240,7 @@ function buildGstDetailsXml(
 
 function buildLedgerEntryXml(
   entry: TallyLedgerEntry,
-  gstContext?: { taxPercent: number; hsnCodes: string[] }
+  gstContext?: { taxPercent: number; hsnCodes: string[]; gstin?: string | null }
 ): string {
   const billAllocations = entry.partyName
     ? `
@@ -235,10 +258,10 @@ function buildLedgerEntryXml(
   if (entry.isIncomeLedger && gstContext && gstContext.taxPercent > 0) {
     if (gstContext.hsnCodes.length > 0) {
       gstDetails = gstContext.hsnCodes
-        .map((code) => buildGstDetailsXml(gstContext.taxPercent, code))
+        .map((code) => buildGstDetailsXml(gstContext.taxPercent, code, gstContext.gstin))
         .join("");
     } else {
-      gstDetails = buildGstDetailsXml(gstContext.taxPercent);
+      gstDetails = buildGstDetailsXml(gstContext.taxPercent, undefined, gstContext.gstin);
     }
   }
 
@@ -254,7 +277,7 @@ function buildVoucherXml(voucher: TallyVoucher): string {
   // Build GST context from voucher-level fields (populated from Bill when available)
   const gstContext =
     voucher.taxPercent != null && voucher.taxPercent > 0
-      ? { taxPercent: voucher.taxPercent, hsnCodes: voucher.hsnCodes ?? [] }
+      ? { taxPercent: voucher.taxPercent, hsnCodes: voucher.hsnCodes ?? [], gstin: voucher.gstin }
       : undefined;
 
   const ledgerLines = voucher.ledgerEntries
@@ -277,13 +300,20 @@ function buildVoucherXml(voucher: TallyVoucher): string {
         )}</PLACEOFSUPPLY>`
       : "";
 
+  // ISREVERSECHARGE — required for RCM purchases (IGST Act Section 9(3)/9(4)).
+  // Without this tag, Tally will NOT populate the RCM ITC columns in GSTR-3B.
+  const reverseChargeTag = voucher.isReverseCharge
+    ? `
+        <ISREVERSECHARGE>Yes</ISREVERSECHARGE>`
+    : "";
+
   return `
     <TALLYMESSAGE xmlns:UDF="TallyUDF">
       <VOUCHER VCHTYPE="${escapeXml(voucher.voucherType)}" ACTION="Create" OBJVIEW="Accounting Voucher View">${guidTag}
         <DATE>${formatTallyDate(voucher.date)}</DATE>
         <VOUCHERTYPENAME>${escapeXml(voucher.voucherType)}</VOUCHERTYPENAME>
         <VOUCHERNUMBER>${escapeXml(voucher.reference)}</VOUCHERNUMBER>
-        <NARRATION>${escapeXml(voucher.narration)}</NARRATION>${placeOfSupplyTag}${ledgerLines}
+        <NARRATION>${escapeXml(voucher.narration)}</NARRATION>${placeOfSupplyTag}${reverseChargeTag}${ledgerLines}
       </VOUCHER>
     </TALLYMESSAGE>`;
 }

@@ -7,6 +7,10 @@ import { parseTallyXml } from "@/lib/tally-xml-import";
 import { createJournalEntry } from "@/lib/journal";
 import type { AccountCode } from "@/lib/chart-of-accounts";
 
+// Derive Prisma tx type from the client instance to avoid the
+// @prisma/client → .prisma/client re-export failure under Prisma v7.
+type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+
 export const runtime = "nodejs";
 
 // Max 5 imports per minute per tenant
@@ -89,6 +93,19 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // [P2] Pre-flight count guard — large imports exhaust the DB connection pool
+  // and cause downstream timeouts. Enforce a 200-voucher cap per API import;
+  // larger datasets should use the CLI tool which streams in batches.
+  if (vouchers.length > 200) {
+    return NextResponse.json(
+      {
+        error: `Too many vouchers (${vouchers.length}). Max 200 per import. Use the CLI tool for bulk imports.`,
+        voucherCount: vouchers.length,
+      },
+      { status: 413 }
+    );
+  }
+
   // ── Party master upsert ───────────────────────────────────────────────────
   let partiesCreated = 0;
 
@@ -120,20 +137,24 @@ export async function POST(request: NextRequest) {
 
   // ── Voucher import ────────────────────────────────────────────────────────
 
+  /**
+   * Resolve party name → partyId using the pre-warmed cache.
+   * Called OUTSIDE per-voucher transactions so no DB round-trip is made
+   * inside any open transaction (prevents connection pool exhaustion on
+   * large bulk imports).
+   * [FIX-P1] replaces the previous tx-scoped resolvePartyId.
+   */
   async function resolvePartyId(
-    tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
     name: string,
     accountCode: AccountCode
   ): Promise<string> {
     const cached = partyCache.get(name);
     if (cached) return cached;
 
-    // [B2] Use upsert — the @@unique([tenantId, name]) constraint is the
-    // atomic guard. A concurrent request creating the same party will cause
-    // the upsert to resolve to the existing row without a conflict error.
+    // Upsert via prisma (not tx) — @@unique([tenantId, name]) is the race guard.
     const partyType =
       accountCode === "SUNDRY_DEBTORS" ? "CUSTOMER" : "VENDOR";
-    const upserted = await tx.party.upsert({
+    const upserted = await prisma.party.upsert({
       where: { tenantId_name: { tenantId: tid, name } },
       update: {},
       create: {
@@ -153,86 +174,124 @@ export async function POST(request: NextRequest) {
     return upserted.id;
   }
 
+  // [FIX-P1] Pre-warm party cache for ALL unique party names across ALL vouchers
+  // before any per-voucher transactions begin.  This ensures resolvePartyId
+  // never needs a DB call inside an open transaction.
+  const allPartyNames = [
+    ...new Set(
+      vouchers
+        .flatMap((v) => v.lines.map((l) => l.partyName))
+        .filter((n): n is string => !!n)
+    ),
+  ];
+  await Promise.all(
+    allPartyNames
+      .filter((name) => !partyCache.has(name))
+      .map((name) => resolvePartyId(name, "SUNDRY_DEBTORS")) // group inferred inside resolvePartyId
+  );
+
   let imported = 0;
   let skipped = 0;
   let failed = 0;
   const importErrors: string[] = [];
 
-  // Pre-fetch all existing journal entries in the date range of this import
-  // to avoid one DB query per voucher (N+1). Build an in-memory fingerprint
-  // Set and check against it inside the loop.
-  const voucherDates = vouchers.map((v) => v.entryDate.getTime());
-  const rangeMin = new Date(Math.min(...voucherDates));
-  const rangeMax = new Date(Math.max(...voucherDates));
+  // [FIX-P0] Primary dedup key: voucher.remoteId stored in JournalEntry.remoteId.
+  // The @@unique([tenantId, remoteId]) DB constraint is the atomic guard —
+  // concurrent imports of the same XML both attempt the insert; only one
+  // succeeds, the other gets a unique-constraint violation (counted as "skipped").
+  //
+  // Fallback fingerprint for vouchers without REMOTEID (native old-format
+  // Tally exports or hand-typed XML): unchanged pre-fetch approach.
+  const vouchersWithRemoteId = vouchers.filter((v) => v.remoteId);
+  const vouchersWithoutRemoteId = vouchers.filter((v) => !v.remoteId);
 
-  const existingEntries = await prisma.journalEntry.findMany({
-    where: {
-      tenantId: tid,
-      entryDate: { gte: rangeMin, lte: rangeMax },
-    },
-    select: { voucherType: true, entryDate: true, narration: true, totalDebit: true },
-  });
-
-  const duplicateFingerprints = new Set(
-    existingEntries.map(
-      (e: (typeof existingEntries)[number]) =>
-        `${e.voucherType}|${e.entryDate.toISOString()}|${e.narration}|${String(e.totalDebit)}`
-    )
-  );
+  // Build fingerprint set only for the no-remoteId subset to avoid N+1.
+  let duplicateFingerprints = new Set<string>();
+  if (vouchersWithoutRemoteId.length > 0) {
+    const dates = vouchersWithoutRemoteId.map((v) => v.entryDate.getTime());
+    const rangeMin = new Date(Math.min(...dates));
+    const rangeMax = new Date(Math.max(...dates));
+    const existingEntries = await prisma.journalEntry.findMany({
+      where: {
+        tenantId: tid,
+        entryDate: { gte: rangeMin, lte: rangeMax },
+        remoteId: null, // only un-tagged entries participate in fingerprint dedup
+      },
+      select: { voucherType: true, entryDate: true, narration: true, totalDebit: true },
+    });
+    duplicateFingerprints = new Set(
+      existingEntries.map(
+        (e: (typeof existingEntries)[number]) =>
+          `${e.voucherType}|${e.entryDate.toISOString()}|${e.narration}|${e.totalDebit.toString()}`
+      )
+    );
+  }
 
   // Import vouchers in parallel batches of 25.
-  // Each voucher keeps its own transaction so a single bad row never rolls
-  // back the whole batch (per-voucher fault isolation is intentional).
-  // Promise.allSettled ensures one failed transaction does not abort siblings.
+  // Each voucher has its own transaction for per-voucher fault isolation.
   const BATCH_SIZE = 25;
 
-  async function importVoucher(voucher: (typeof vouchers)[number]): Promise<"imported" | "skipped" | Error> {
-    const fingerprint = `${voucher.voucherType}|${voucher.entryDate.toISOString()}|${voucher.narration}|${String(voucher.totalDebit)}`;
-    if (duplicateFingerprints.has(fingerprint)) {
-      return "skipped";
+  async function importVoucher(
+    voucher: (typeof vouchers)[number]
+  ): Promise<"imported" | "skipped" | Error> {
+    // ── Fingerprint dedup (vouchers without remoteId only) ─────────────────
+    if (!voucher.remoteId) {
+      const fingerprint = `${voucher.voucherType}|${voucher.entryDate.toISOString()}|${voucher.narration}|${String(voucher.totalDebit)}`;
+      if (duplicateFingerprints.has(fingerprint)) {
+        return "skipped";
+      }
     }
 
     try {
-      await prisma.$transaction(
-        async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
-          const lines = await Promise.all(
-            voucher.lines.map(async (line) => {
-              const partyId = line.partyName
-                ? await resolvePartyId(tx, line.partyName, line.accountCode)
-                : null;
-              return {
-                accountCode: line.accountCode,
-                debit: line.debit,
-                credit: line.credit,
-                partyId,
-                partyName: line.partyName ?? undefined,
-              };
-            })
-          );
-          await createJournalEntry(tx, {
-            tenantId: tid,
-            entryDate: voucher.entryDate,
-            narration: voucher.narration,
-            voucherType: voucher.voucherType,
-            createdBy: actorId,
-            lines,
-          });
-        }
+      // Build resolved lines BEFORE opening the transaction — partyCache is
+      // fully warm so no DB calls are needed inside the tx.
+      const lines = await Promise.all(
+        voucher.lines.map(async (line) => {
+          const partyId = line.partyName
+            ? await resolvePartyId(line.partyName, line.accountCode)
+            : null;
+          return {
+            accountCode: line.accountCode,
+            debit: line.debit,
+            credit: line.credit,
+            partyId,
+            partyName: line.partyName ?? undefined,
+          };
+        })
       );
+
+      await prisma.$transaction(async (tx: PrismaTx) => {
+        await createJournalEntry(tx, {
+          tenantId: tid,
+          entryDate: voucher.entryDate,
+          narration: voucher.narration,
+          voucherType: voucher.voucherType,
+          createdBy: actorId,
+          // [FIX-P0] Store remoteId so @@unique constraint prevents re-import
+          ...(voucher.remoteId ? { remoteId: voucher.remoteId } : {}),
+          lines,
+        });
+      }, { timeout: 8000 }); // [P2] 8s cap prevents long-running import tx from blocking the pool
       return "imported";
-    } catch (err) {
-      return err instanceof Error ? err : new Error(String(err));
+    } catch (err: unknown) {
+      // Unique constraint violation on (tenantId, remoteId) → already imported
+      const msg =
+        err instanceof Error ? err.message : String(err);
+      if (msg.includes("Unique constraint") && voucher.remoteId) {
+        return "skipped";
+      }
+      return err instanceof Error ? err : new Error(msg);
     }
   }
 
-  for (let i = 0; i < vouchers.length; i += BATCH_SIZE) {
-    const batch = vouchers.slice(i, i + BATCH_SIZE);
+  const allVouchers = [...vouchersWithRemoteId, ...vouchersWithoutRemoteId];
+  for (let i = 0; i < allVouchers.length; i += BATCH_SIZE) {
+    const batch = allVouchers.slice(i, i + BATCH_SIZE);
     const results = await Promise.allSettled(batch.map(importVoucher));
 
     for (let j = 0; j < results.length; j++) {
       const result = results[j];
       if (result.status === "rejected") {
-        // Promise itself rejected (should not happen — importVoucher catches internally)
         failed++;
         importErrors.push(
           `Voucher "${batch[j].reference}" (${batch[j].voucherType}): unexpected rejection`
@@ -242,7 +301,6 @@ export async function POST(request: NextRequest) {
       } else if (result.value === "imported") {
         imported++;
       } else {
-        // result.value is an Error
         failed++;
         importErrors.push(
           `Voucher "${batch[j].reference}" (${batch[j].voucherType}): ${result.value.message}`

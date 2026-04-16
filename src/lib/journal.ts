@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import {
   CHART_OF_ACCOUNTS,
   paymentModeToAccount,
@@ -110,7 +110,10 @@ export async function createJournalEntry(
     params.lines.reduce((sum, line) => sum + line.credit, 0)
   );
 
-  if (Math.abs(totalDebit - totalCredit) > 0.01) {
+  // [FIX-P1] Tolerance reduced from 0.01 → 0.001 now that JournalLine.debit/credit
+  // are stored as Decimal(19,4). Any residual above 0.001 is a real accounting error,
+  // not IEEE-754 float drift.
+  if (Math.abs(totalDebit - totalCredit) > 0.001) {
     throw new Error(
       `UNBALANCED JOURNAL ENTRY: Debit (${totalDebit}) != Credit (${totalCredit}). ` +
         `Narration: "${params.narration}".`
