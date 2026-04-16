@@ -290,7 +290,13 @@ export function buildPartyLedger({
         balanceAfter: runningBalance,
       });
     } else if (transaction.kind === "NOTE") {
-      const delta = transaction.note.credit - transaction.note.debit;
+      // CREDIT_NOTE party line: credit=grandTotal, debit=0  → credit - debit = +grandTotal ✓
+      // DEBIT_NOTE party line:  debit=grandTotal,  credit=0 → credit - debit = -grandTotal ✗
+      // Both note types reduce the outstanding balance, so DEBIT_NOTE must use debit - credit.
+      const delta =
+        transaction.note.voucherType === "DEBIT_NOTE"
+          ? transaction.note.debit - transaction.note.credit
+          : transaction.note.credit - transaction.note.debit;
       runningBalance += delta;
 
       ledger.push({

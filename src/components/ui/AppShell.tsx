@@ -14,7 +14,6 @@ import {
 import { ThemeSwitcher } from "./ThemeSwitcher";
 import BottomSheet from "./BottomSheet";
 import { QuickBillSheet } from "@/components/bills/QuickBillSheet";
-import { CreditDebitNoteModal } from "@/components/bills/CreditDebitNoteModal";
 import { useEffect } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { TranslationKey } from "@/lib/i18n/translations";
@@ -116,6 +115,16 @@ const MORE_ITEMS: NavItem[] = [
   {
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 14l-4-4m0 0l4-4m-4 4h12M15 10l4 4m0 0l-4 4m4-4H3" />
+      </svg>
+    ),
+    translationKey: "nav.notes",
+    href: "/notes",
+    roles: ["ADMIN", "STAFF", "ACCOUNTANT"],
+  },
+  {
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -180,8 +189,6 @@ export default function AppShell({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [moreSheetOpen, setMoreSheetOpen] = useState(false);
   const [quickBillOpen, setQuickBillOpen] = useState(false);
-  const [creditNoteOpen, setCreditNoteOpen] = useState(false);
-  const [debitNoteOpen, setDebitNoteOpen] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -680,7 +687,7 @@ export default function AppShell({
           )}
           {canQuickBill && (
             <button
-              onClick={() => { setMoreSheetOpen(false); setCreditNoteOpen(true); }}
+              onClick={() => { setMoreSheetOpen(false); router.push("/notes/new?type=CREDIT_NOTE"); }}
               className="w-full mt-2 rounded-2xl bg-gradient-to-r from-teal-500 to-emerald-500 px-3 py-3 text-left text-white shadow-lg shadow-teal-500/20 transition hover:shadow-xl hover:shadow-teal-500/25"
             >
               <div className="flex items-center gap-3">
@@ -696,7 +703,7 @@ export default function AppShell({
           )}
           {canQuickBill && (
             <button
-              onClick={() => { setMoreSheetOpen(false); setDebitNoteOpen(true); }}
+              onClick={() => { setMoreSheetOpen(false); router.push("/notes/new?type=DEBIT_NOTE"); }}
               className="w-full mt-2 rounded-2xl bg-gradient-to-r from-orange-400 to-red-500 px-3 py-3 text-left text-white shadow-lg shadow-orange-500/20 transition hover:shadow-xl hover:shadow-orange-500/25"
             >
               <div className="flex items-center gap-3">
@@ -797,21 +804,6 @@ export default function AppShell({
         />
       )}
 
-      {canQuickBill && (
-         <CreditDebitNoteModal
-           isOpen={creditNoteOpen}
-           onOpenChange={setCreditNoteOpen}
-           noteType="CREDIT_NOTE"
-         />
-      )}
-
-      {canQuickBill && (
-         <CreditDebitNoteModal
-           isOpen={debitNoteOpen}
-           onOpenChange={setDebitNoteOpen}
-           noteType="DEBIT_NOTE"
-         />
-      )}
     </div>
   );
 }

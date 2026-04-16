@@ -46,7 +46,7 @@ export async function recomputePartyBalance(
 
       if (!party) throw new Error(`Party ${partyId} not found`);
 
-      const [bills, payments] = await Promise.all([
+      const [bills, payments, notes] = await Promise.all([
         tx.bill.findMany({
           where: { partyId, tenantId, status: "FINAL", isDeleted: false },
           select: { grandTotal: true },
@@ -54,6 +54,14 @@ export async function recomputePartyBalance(
         tx.payment.findMany({
           where: { partyId, tenantId, status: "COMPLETED", isDeleted: false },
           select: { amount: true, direction: true },
+        }),
+        tx.journalEntry.findMany({
+          where: {
+            tenantId,
+            voucherType: { in: ["CREDIT_NOTE", "DEBIT_NOTE"] },
+            lines: { some: { partyId } },
+          },
+          select: { totalDebit: true },
         }),
       ]);
 
@@ -72,9 +80,15 @@ export async function recomputePartyBalance(
           ),
         0
       );
+      // Both CREDIT_NOTE and DEBIT_NOTE reduce the outstanding balance by their grandTotal.
+      const noteDelta = notes.reduce(
+        (sum: number, n: { totalDebit: { toNumber: () => number } }) =>
+          sum + n.totalDebit.toNumber(),
+        0
+      );
 
       const newBalance =
-        party.openingBalance.toNumber() + billDelta + paymentDelta;
+        party.openingBalance.toNumber() + billDelta + paymentDelta + noteDelta;
 
       await tx.party.update({
         where: { id: partyId },

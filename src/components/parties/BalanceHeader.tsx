@@ -11,19 +11,16 @@ interface BalanceHeaderProps {
   partyPhone: string | null;
 }
 
-function formatSignedCurrency(value: number) {
-  const absolute = Math.abs(value);
+function formatAbsCurrency(value: number) {
+  const v = Math.round(value * 100) / 100;
   const formatted = new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
     maximumFractionDigits: 0,
-  }).format(absolute);
+  }).format(Math.abs(v));
 
-  if (value === 0) {
-    return formatted;
-  }
-
-  return `${value > 0 ? "+" : "-"}${formatted}`;
+  if (v === 0) return formatted;
+  return `+${formatted}`;
 }
 
 function getBalanceLabel(
@@ -42,6 +39,20 @@ function getBalanceLabel(
   return partyType === "CUSTOMER" ? t("khata.toReceive") : t("khata.toPay");
 }
 
+/**
+ * Maps the raw stored balance to a display color based on semantic meaning:
+ * - "to receive" (customer, balance < 0) → success (green) — money coming in
+ * - "to pay"     (vendor, balance < 0)   → danger  (red)  — money going out
+ * - "advance"    (balance > 0)            → warning        — overpayment / credit on account
+ * - settled      (balance = 0)            → default
+ */
+function getBalanceColor(partyType: SupportedPartyType, balance: number) {
+  const v = Math.round(balance * 100) / 100;
+  if (v === 0) return "text-default-400";
+  if (v > 0) return "text-warning";
+  return partyType === "CUSTOMER" ? "text-success" : "text-danger";
+}
+
 export default function BalanceHeader({
   partyName,
   partyType,
@@ -49,7 +60,8 @@ export default function BalanceHeader({
   partyPhone,
 }: BalanceHeaderProps) {
   const { t } = useLanguage();
-  const balanceLabel = getBalanceLabel(partyType, currentBalance, t);
+  const roundedBalance = Math.round(currentBalance * 100) / 100;
+  const balanceLabel = getBalanceLabel(partyType, roundedBalance, t);
 
   return (
     <div className="sticky top-14 z-30 rounded-3xl border border-divider bg-background/90 p-5 shadow-lg shadow-default-200/40 backdrop-blur-lg lg:top-6">
@@ -73,16 +85,8 @@ export default function BalanceHeader({
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-default-400">
               {t("khata.currentBalance")}
             </p>
-            <p
-              className={`text-3xl font-black ${
-                currentBalance > 0
-                  ? "text-success"
-                  : currentBalance < 0
-                    ? "text-danger"
-                    : "text-default-900"
-              }`}
-            >
-              {formatSignedCurrency(currentBalance)}
+            <p className={`text-3xl font-black ${getBalanceColor(partyType, roundedBalance)}`}>
+              {formatAbsCurrency(roundedBalance)}
             </p>
             <p className="text-sm text-default-500">{balanceLabel}</p>
           </div>

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button, Card, CardBody, Chip } from "@heroui/react";
 import BalanceHeader from "@/components/parties/BalanceHeader";
 import LedgerChat from "@/components/parties/LedgerChat";
@@ -66,6 +67,7 @@ export default function PartyProfileClient({
   partyId: string;
   role: string | null;
 }) {
+  const router = useRouter();
   const [reconcileResult, setReconcileResult] = useState<ReconcileResult | null>(null);
   const [reconcileLoading, setReconcileLoading] = useState<"check" | "fix" | null>(null);
   const [reconcileError, setReconcileError] = useState<string | null>(null);
@@ -94,6 +96,7 @@ export default function PartyProfileClient({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Fix failed");
       setReconcileResult(null);
+      router.refresh();
       await handleCheckBalances();
     } catch (err) {
       setReconcileError(err instanceof Error ? err.message : "Fix failed");

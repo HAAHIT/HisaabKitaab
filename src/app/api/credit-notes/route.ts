@@ -1,13 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { GST_STATE_CODE_SET } from "@/lib/gst-states";
-import {
-  getPostedBillBalanceDelta,
-} from "@/lib/accounting";
-import {
-  journalForCancelledSalesBill,
-} from "@/lib/journal";
 import { NextRequest, NextResponse } from "next/server";
-import { resolveWriteTenant } from "@/lib/api-tenant";
+import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { logError, getRequestId } from "@/lib/observability";
 import crypto from "crypto";
@@ -33,6 +27,82 @@ const CreateNoteSchema = z.object({
   grandTotal: z.number().nonnegative().default(0),
   isInterState: z.boolean().optional(),
 });
+
+export async function GET(request: NextRequest) {
+  const role = request.headers.get("x-user-role");
+  if (!role || role === "CUSTOMER") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  const tenantResolution = resolveReadTenant(request);
+  if (!tenantResolution.ok) {
+    return tenantResolution.response;
+  }
+  const tenantId = tenantResolution.tenantId;
+
+  try {
+    const { searchParams } = new URL(request.url);
+    const search = searchParams.get("search") || "";
+    const type = searchParams.get("type") || "ALL";
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1);
+    const limit = 20;
+
+    const voucherTypeFilter =
+      type === "CREDIT_NOTE"
+        ? ["CREDIT_NOTE"]
+        : type === "DEBIT_NOTE"
+        ? ["DEBIT_NOTE"]
+        : ["CREDIT_NOTE", "DEBIT_NOTE"];
+
+    const where = {
+      tenantId,
+      voucherType: { in: voucherTypeFilter as ("CREDIT_NOTE" | "DEBIT_NOTE")[] },
+      ...(search
+        ? { narration: { contains: search, mode: "insensitive" as const } }
+        : {}),
+    };
+
+    const [entries, total] = await Promise.all([
+      prisma.journalEntry.findMany({
+        where,
+        orderBy: { entryDate: "desc" },
+        skip: (page - 1) * limit,
+        take: limit,
+        select: {
+          id: true,
+          entryDate: true,
+          narration: true,
+          voucherType: true,
+          totalDebit: true,
+          lines: {
+            where: { partyName: { not: null } },
+            take: 1,
+            select: { partyName: true, partyId: true },
+          },
+        },
+      }),
+      prisma.journalEntry.count({ where }),
+    ]);
+
+    const notes = entries.map((e) => ({
+      id: e.id,
+      entryDate: e.entryDate,
+      narration: e.narration,
+      voucherType: e.voucherType,
+      grandTotal: Number(e.totalDebit),
+      partyName: e.lines[0]?.partyName ?? null,
+      partyId: e.lines[0]?.partyId ?? null,
+    }));
+
+    return NextResponse.json({
+      notes,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    });
+  } catch (error) {
+    logError("notes.list.error", { requestId: getRequestId(request), error });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
 
 export async function POST(request: NextRequest) {
   const rateLimitResponse = await checkRateLimit(request, "notes.create", 30);
@@ -101,30 +171,58 @@ export async function POST(request: NextRequest) {
       const isSalesReturn = noteType === "CREDIT_NOTE";
       
       if (isSalesReturn) {
-         // Decrease customer balance
-         const balanceChange = -grandTotal; // Assuming + is receivable for CUSTOMER, we decrease it
+         // Sales return: customer owes us less → balance increases (becomes less negative)
          await tx.party.update({
             where: { id: party.id },
-            data: { currentBalance: { increment: balanceChange } },
+            data: { currentBalance: { increment: grandTotal } },
          });
 
-         const entry = await journalForCancelledSalesBill(tx, tenantId, {
-            id: `CN-${Date.now()}`,
-            billNumber: originalInvoiceNo,
-            partyId: party.id,
-            partyName: party.name,
-            subtotal,
-            taxAmount,
-            grandTotal,
-            createdBy: userId!,
-            entryDate: new Date(),
-            isInterState: isInterState || false,
-         });
+         // Build tax lines (output tax is reversed — debited)
+         const taxLines = taxAmount > 0
+           ? (isInterState
+               ? [{ accountCode: "IGST_OUTPUT", accountName: "IGST Output", tallyGroup: "Duties & Taxes", debit: taxAmount, credit: 0 }]
+               : (() => {
+                   const half = Math.round((taxAmount / 2) * 100) / 100;
+                   const other = Math.round((taxAmount - half) * 100) / 100;
+                   return [
+                     { accountCode: "CGST_OUTPUT", accountName: "CGST Output", tallyGroup: "Duties & Taxes", debit: half, credit: 0 },
+                     { accountCode: "SGST_OUTPUT", accountName: "SGST Output", tallyGroup: "Duties & Taxes", debit: other, credit: 0 },
+                   ];
+                 })())
+           : [];
 
-         // add narration logic
-         await tx.journalEntry.update({
-            where: { id: entry.id },
-            data: { narration: `Credit Note against ${originalInvoiceNo} (${reasonForIssuance})` },
+         const entry = await tx.journalEntry.create({
+            data: {
+               tenantId,
+               entryDate: new Date(),
+               narration: `Credit Note against ${originalInvoiceNo} (${reasonForIssuance})`,
+               voucherType: "CREDIT_NOTE",
+               createdBy: userId!,
+               totalDebit: grandTotal,
+               totalCredit: grandTotal,
+               isBalanced: true,
+               lines: {
+                  create: [
+                     {
+                        accountCode: "SUNDRY_DEBTORS",
+                        accountName: "Sundry Debtors",
+                        tallyGroup: "Sundry Debtors",
+                        partyId: party.id,
+                        partyName: party.name,
+                        debit: 0,
+                        credit: grandTotal,
+                     },
+                     {
+                        accountCode: "SALES",
+                        accountName: "Sales",
+                        tallyGroup: "Sales Accounts",
+                        debit: subtotal,
+                        credit: 0,
+                     },
+                     ...taxLines,
+                  ],
+               },
+            },
          });
          return entry;
       } else {
