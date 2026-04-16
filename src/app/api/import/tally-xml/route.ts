@@ -160,20 +160,31 @@ export async function POST(request: NextRequest) {
   let failed = 0;
   const importErrors: string[] = [];
 
-  for (const voucher of vouchers) {
-    // Duplicate detection: (voucherType, entryDate, narration, totalDebit)
-    const duplicate = await prisma.journalEntry.findFirst({
-      where: {
-        tenantId: tid,
-        voucherType: voucher.voucherType,
-        entryDate: voucher.entryDate,
-        narration: voucher.narration,
-        totalDebit: voucher.totalDebit,
-      },
-      select: { id: true },
-    });
+  // Pre-fetch all existing journal entries in the date range of this import
+  // to avoid one DB query per voucher (N+1). Build an in-memory fingerprint
+  // Set and check against it inside the loop.
+  const voucherDates = vouchers.map((v) => v.entryDate.getTime());
+  const rangeMin = new Date(Math.min(...voucherDates));
+  const rangeMax = new Date(Math.max(...voucherDates));
 
-    if (duplicate) {
+  const existingEntries = await prisma.journalEntry.findMany({
+    where: {
+      tenantId: tid,
+      entryDate: { gte: rangeMin, lte: rangeMax },
+    },
+    select: { voucherType: true, entryDate: true, narration: true, totalDebit: true },
+  });
+
+  const duplicateFingerprints = new Set(
+    existingEntries.map(
+      (e) => `${e.voucherType}|${e.entryDate.toISOString()}|${e.narration}|${String(e.totalDebit)}`
+    )
+  );
+
+  for (const voucher of vouchers) {
+    // Duplicate detection against the pre-fetched fingerprint set — O(1), no DB round-trip.
+    const fingerprint = `${voucher.voucherType}|${voucher.entryDate.toISOString()}|${voucher.narration}|${String(voucher.totalDebit)}`;
+    if (duplicateFingerprints.has(fingerprint)) {
       skipped++;
       continue;
     }

@@ -1,17 +1,23 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { checkRateLimit } from "@/lib/api-rate-limit";
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const rateLimitResponse = await checkRateLimit(request, "bills.public", 60);
+  if (rateLimitResponse) return rateLimitResponse;
+
   const { id } = await params;
+  const tenantId = request.nextUrl.searchParams.get("tenantId")?.trim() || null;
 
   const bill = await prisma.bill.findFirst({
     where: {
       id,
       status: "FINAL",
       isDeleted: false,
+      ...(tenantId ? { tenantId } : {}),
     },
     select: {
       billNumber: true,

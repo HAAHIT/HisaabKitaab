@@ -15,6 +15,7 @@ import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { logError, getRequestId } from "@/lib/observability";
 import crypto from "crypto";
+import { z } from "zod";
 
 function generateLockKey(tenantId: string): bigint {
   const hash = crypto.createHash("sha256").update(tenantId).digest("hex");
@@ -70,6 +71,25 @@ function parseTenantSettings(value: unknown) {
   return {};
 }
 
+const CreateBillSchema = z.object({
+  templateId: z.string().min(1),
+  partyId: z.string().min(1),
+  customerName: z.string().optional(),
+  customerPhone: z.string().optional(),
+  customerAddress: z.string().optional(),
+  gstin: z.string().optional(),
+  rows: z.array(z.record(z.string(), z.unknown())).min(1),
+  notes: z.string().optional(),
+  terms: z.string().optional(),
+  taxPercent: z.number().nonnegative().optional(),
+  subtotal: z.number().nonnegative().default(0),
+  taxAmount: z.number().nonnegative().default(0),
+  grandTotal: z.number().nonnegative().default(0),
+  status: z.string().optional(),
+  isInterState: z.boolean().optional(),
+  paymentMode: z.string().optional(),
+});
+
 async function loadBillingSettings(tenantId: string) {
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
@@ -116,8 +136,8 @@ export async function GET(request: NextRequest) {
     const partyId = searchParams.get("partyId") || "";
     const from = searchParams.get("from");
     const to = searchParams.get("to");
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "20");
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1);
+    const limit = Math.max(1, parseInt(searchParams.get("limit") || "20", 10) || 20);
 
     const where: Prisma.BillWhereInput = { isDeleted: false, tenantId };
 
@@ -205,19 +225,32 @@ export async function POST(request: NextRequest) {
   const tenantId = tenantResolution.tenantId;
 
   try {
-    let parsedBody: Record<string, unknown>;
+    let rawBody: Record<string, unknown>;
     try {
       const bodyText = await request.text();
       if (!bodyText) {
         return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
       }
-      parsedBody = JSON.parse(bodyText);
+      rawBody = JSON.parse(bodyText);
     } catch {
       return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
     }
 
-    if (!parsedBody || typeof parsedBody !== "object" || Array.isArray(parsedBody)) {
+    if (!rawBody || typeof rawBody !== "object" || Array.isArray(rawBody)) {
       return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+    }
+
+    let body: z.infer<typeof CreateBillSchema>;
+    try {
+      body = CreateBillSchema.parse(rawBody);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return NextResponse.json(
+          { error: "Invalid request", details: err.errors },
+          { status: 400 }
+        );
+      }
+      throw err;
     }
 
     const {
@@ -235,7 +268,7 @@ export async function POST(request: NextRequest) {
       taxAmount,
       grandTotal,
       status,
-    } = parsedBody;
+    } = body;
 
     let finalTemplateId = templateId;
     const isQuickBill = templateId === "__QUICK_BILL__";
@@ -324,22 +357,22 @@ export async function POST(request: NextRequest) {
         : 0;
     const billStatus = status === "FINAL" ? "FINAL" : "DRAFT";
     if (!isQuickBill) {
-      if (typeof parsedBody.isInterState !== "boolean") {
+      if (typeof body.isInterState !== "boolean") {
         return NextResponse.json(
           { error: "isInterState must be a boolean" },
           { status: 400 }
         );
       }
     } else {
-      if (parsedBody.isInterState !== undefined && typeof parsedBody.isInterState !== "boolean") {
+      if (body.isInterState !== undefined && typeof body.isInterState !== "boolean") {
         return NextResponse.json(
           { error: "isInterState must be a boolean" },
           { status: 400 }
         );
       }
     }
-    const isInterState = parsedBody.isInterState === true;
-    const normalizedPaymentMode = normalizePaymentMode(parsedBody.paymentMode);
+    const isInterState = body.isInterState === true;
+    const normalizedPaymentMode = normalizePaymentMode(body.paymentMode);
     const now = new Date();
     const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -352,7 +385,7 @@ export async function POST(request: NextRequest) {
       gstin,
     });
 
-    if (parsedBody.paymentMode && !normalizedPaymentMode) {
+    if (body.paymentMode && !normalizedPaymentMode) {
       return NextResponse.json(
         { error: "Invalid payment mode" },
         { status: 400 }
@@ -395,7 +428,7 @@ export async function POST(request: NextRequest) {
           customerPhone: snapshot.customerPhone,
           customerAddress: snapshot.customerAddress,
           gstin: snapshot.gstin,
-          rows,
+          rows: rows as unknown as Prisma.InputJsonValue,
           notes: notes || null,
           terms: terms || null,
           subtotal: subtotal || 0,

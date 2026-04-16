@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { logError } from "@/lib/observability";
 
 const WINDOW_MS = 60_000; // 1 minute sliding window
 
@@ -29,7 +30,10 @@ export async function checkRateLimit(
   limit: number
 ): Promise<NextResponse | null> {
   const ip = getClientIp(request);
-  const storeKey = `${key}:${ip}`;
+  // Scope the key by tenant so one tenant's traffic cannot exhaust another's
+  // quota. Public paths (no proxy-verified tenant header) fall back to IP-only.
+  const tenantId = request.headers.get("x-tenant-id")?.trim();
+  const storeKey = tenantId ? `${key}:${tenantId}:${ip}` : `${key}:${ip}`;
   const now = new Date();
   const windowCutoff = new Date(now.getTime() - WINDOW_MS);
 
@@ -68,9 +72,11 @@ export async function checkRateLimit(
       .catch(() => undefined);
 
     return null;
-  } catch {
+  } catch (error) {
     // If the rate limit check itself fails, allow the request through
-    // rather than blocking legitimate traffic.
+    // rather than blocking legitimate traffic — but always log so an
+    // attacker cannot silently exploit DB downtime to bypass limits.
+    logError("rate-limit.check.error", { key: storeKey, error });
     return null;
   }
 }
