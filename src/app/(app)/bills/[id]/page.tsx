@@ -45,6 +45,8 @@ interface BillDetail {
   taxPercent: number;
   taxAmount: number;
   grandTotal: number;
+  placeOfSupply: string | null;
+  hsnCode: string | null;
   status: string;
   createdAt: string;
   template: {
@@ -310,11 +312,13 @@ export default function BillDetailPage({
             <h2 className="font-semibold">Customer</h2>
           </CardHeader>
           <CardBody className="p-6">
-            <div className="grid md:grid-cols-2 gap-4 text-sm">
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
               <div><span className="text-default-400">Name</span><p className="font-medium">{bill.customerName}</p></div>
               {bill.customerPhone && (<div><span className="text-default-400">Phone</span><p className="font-medium">{bill.customerPhone}</p></div>)}
               {bill.customerAddress && (<div><span className="text-default-400">Address</span><p className="font-medium">{bill.customerAddress}</p></div>)}
               {bill.gstin && (<div><span className="text-default-400">GSTIN</span><p className="font-medium font-mono">{bill.gstin}</p></div>)}
+              {bill.placeOfSupply && (<div><span className="text-default-400">Place of Supply</span><p className="font-medium">{bill.placeOfSupply} {bill.isInterState ? <span className="text-xs text-default-400 ml-1">(Inter-State)</span> : ""}</p></div>)}
+              {bill.hsnCode && (<div><span className="text-default-400">HSN/SAC</span><p className="font-medium font-mono">{bill.hsnCode}</p></div>)}
             </div>
             {bill.party && (
               <div className="mt-4 border-t border-divider pt-4">
@@ -479,6 +483,8 @@ export default function BillDetailPage({
                 {bill.customerAddress}
                 {bill.customerPhone && `\nPhone: ${bill.customerPhone}`}
                 {bill.gstin && `\nGSTIN: ${bill.gstin}`}
+                {bill.placeOfSupply && `\nPlace of Supply: ${bill.placeOfSupply} ${bill.isInterState ? "(Inter-State)" : ""}`}
+                {bill.hsnCode && `\nHSN/SAC: ${bill.hsnCode}`}
               </div>
             </div>
           </div>
