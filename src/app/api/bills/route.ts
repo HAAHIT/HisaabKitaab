@@ -194,23 +194,47 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search") || "";
     const status = searchParams.get("status") || "";
     const partyId = searchParams.get("partyId") || "";
+    const partyType = searchParams.get("partyType") || "";
     const from = searchParams.get("from");
     const to = searchParams.get("to");
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1);
     const limit = Math.max(1, parseInt(searchParams.get("limit") || "20", 10) || 20);
 
-    const where: BillWhere = { isDeleted: false, tenantId };
+    const where: any = { isDeleted: false, tenantId };
+
+    if (partyType === "VENDOR") {
+      // Purchases always have a vendor linked in this system
+      where.party = { type: "VENDOR" };
+    } else if (partyType === "CUSTOMER") {
+      // Sales can be to a registered Customer OR a walk-in (null partyId)
+      where.OR = [
+        { party: { type: "CUSTOMER" } },
+        { partyId: null },
+      ];
+    }
 
     if (search) {
-      where.OR = [
+      // If search is present, we need to be careful with existing OR
+      const searchOR = [
         { billNumber: { contains: search, mode: "insensitive" } },
         { customerName: { contains: search, mode: "insensitive" } },
         { party: { name: { contains: search, mode: "insensitive" } } },
       ];
+
+      if (where.OR) {
+        // If we already have an OR for partyType (CUSTOMER), we nest the search
+        where.AND = [
+          { OR: where.OR },
+          { OR: searchOR }
+        ];
+        delete where.OR;
+      } else {
+        where.OR = searchOR;
+      }
     }
 
     if (status && status !== "ALL") {
-      where.status = status as BillWhere["status"];
+      where.status = status;
     }
 
     if (partyId) {

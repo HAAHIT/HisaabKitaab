@@ -77,7 +77,7 @@ const MAIN_NAV: NavItem[] = [
       </svg>
     ),
     translationKey: "nav.purchases" as any,
-    href: "/purchases/new",
+    href: "/purchases",
     roles: ["ADMIN", "STAFF", "ACCOUNTANT"],
   },
   {

@@ -48,7 +48,7 @@ async function readError(response: Response) {
   return data?.error || "Request failed";
 }
 
-export default function BillsListPage() {
+export default function PurchasesListPage() {
   const router = useRouter();
   const { t } = useLanguage();
   const [bills, setBills] = useState<Bill[]>([]);
@@ -107,7 +107,7 @@ export default function BillsListPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      params.set("partyType", "CUSTOMER"); // Only show sales
+      params.set("partyType", "VENDOR"); // Filter for purchases only
       if (search) {
         params.set("search", search);
       }
@@ -127,11 +127,11 @@ export default function BillsListPage() {
     } catch (error) {
       setBills([]);
       setTotalPages(1);
-      showToast(error instanceof Error ? error.message : t("bills.loadFailed"), "error");
+      showToast(error instanceof Error ? error.message : "Load failed", "error");
     } finally {
       setLoading(false);
     }
-  }, [page, search, statusFilter, t]);
+  }, [page, search, statusFilter]);
 
   const statusOptions = [
     { key: "ALL", label: t("bills.filter.all") },
@@ -170,15 +170,15 @@ export default function BillsListPage() {
 
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">{t("bills.title")}</h1>
+          <h1 className="text-2xl font-bold">Purchases</h1>
           <p className="mt-1 text-sm text-default-500">
-            {t("bills.subtitle")}
+            View and manage your purchase invoices from vendors.
           </p>
         </div>
         <Button
           color="primary"
           className="bg-gradient-to-r from-blue-600 to-indigo-600 font-semibold shadow-lg shadow-blue-500/25"
-          onPress={() => router.push("/bills/new")}
+          onPress={() => router.push("/purchases/new")}
           startContent={
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -190,7 +190,7 @@ export default function BillsListPage() {
             </svg>
           }
         >
-          {t("bills.create")}
+          Record Purchase
         </Button>
       </div>
 
@@ -230,7 +230,6 @@ export default function BillsListPage() {
           {statusOptions.map((option) => (
             <SelectItem key={option.key} textValue={option.label}>{option.label}</SelectItem>
           ))}
-
         </Select>
       </div>
 
@@ -246,7 +245,7 @@ export default function BillsListPage() {
             <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
               <svg className="h-10 w-10 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={1.5}
@@ -255,13 +254,13 @@ export default function BillsListPage() {
             </div>
             <p className="text-lg font-medium text-default-600">
               {search || statusFilter !== "ALL"
-                ? t("bills.emptyFiltered")
-                : t("bills.empty")}
+                ? "No purchases found matching your filters"
+                : "No purchases recorded yet"}
             </p>
             <p className="mt-1 text-sm text-default-400">
               {search || statusFilter !== "ALL"
-                ? t("bills.emptyFilteredHint")
-                : t("bills.emptyHint")}
+                ? "Try adjusting your search or filters"
+                : "Click below to record your first purchase from a vendor"}
             </p>
             {!search && statusFilter === "ALL" && (
               <Button
@@ -269,9 +268,9 @@ export default function BillsListPage() {
                 variant="flat"
                 size="sm"
                 className="mt-4"
-                onPress={() => router.push("/bills/new")}
+                onPress={() => router.push("/purchases/new")}
               >
-                {t("bills.create")}
+                Record Purchase
               </Button>
             )}
           </CardBody>
@@ -286,7 +285,7 @@ export default function BillsListPage() {
                   <button
                     type="button"
                     aria-expanded={!isCollapsed}
-                    aria-controls={`bill-month-${group.key}`}
+                    aria-controls={`purchase-month-${group.key}`}
                     className="w-full rounded-xl border border-default-200 bg-content2/40 px-4 py-2 text-left transition hover:bg-content2/60"
                     onClick={() => toggleMonth(group.key)}
                   >
@@ -294,7 +293,7 @@ export default function BillsListPage() {
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-semibold text-default-700">{group.label}</p>
                         <Chip size="sm" variant="flat" color="default">
-                          {group.bills.length} bills
+                          {group.bills.length} purchases
                         </Chip>
                       </div>
                       <div className="flex items-center gap-3">
@@ -321,7 +320,7 @@ export default function BillsListPage() {
                   </button>
                   {!isCollapsed && (
                     <div
-                      id={`bill-month-${group.key}`}
+                      id={`purchase-month-${group.key}`}
                       className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
                     >
                       {group.bills.map((bill) => (
@@ -346,10 +345,10 @@ export default function BillsListPage() {
                                     {bill.status.toLowerCase()}
                                   </Chip>
                                 </div>
-                                <p className="text-default-600">{bill.customerName}</p>
+                                <p className="text-default-600 line-clamp-1">{bill.customerName}</p>
                                 {bill.party && (
                                   <p className="text-xs text-default-400">
-                                    {t("bills.partyPrefix")}: {bill.party.name}
+                                    Vendor: {bill.party.name}
                                   </p>
                                 )}
                                 <p className="text-xs text-default-400">
