@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { jobId: string } }
+  { params }: { params: Promise<{ jobId: string }> }
 ) {
   const tenantResolution = await resolveWriteTenant(request);
   if (!tenantResolution.ok) {
@@ -14,8 +14,10 @@ export async function GET(
   }
   const tenantId = tenantResolution.tenantId;
 
+  const { jobId } = await params;
+
   const job = await prisma.importJob.findUnique({
-    where: { id: params.jobId }
+    where: { id: jobId }
   });
 
   if (!job || job.tenantId !== tenantId) {

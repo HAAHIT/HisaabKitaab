@@ -39,7 +39,10 @@ export const GST_STATE_CODES: Record<string, string> = {
   "22": "Chhattisgarh",
   "23": "Madhya Pradesh",
   "24": "Gujarat",
-  "25": "Daman and Diu",
+  // Pre-2020 merger codes — kept for backwards-compat with GSTINs issued before
+  // the Dadra & Nagar Haveli + Daman & Diu merger (Gazette Notification 26/Jan/2020).
+  // GSTN continues to accept these in filings but the combined UT now uses code "26".
+  "25": "Dadra and Nagar Haveli (Deprecated — merged into 26)",
   "26": "Dadra and Nagar Haveli and Daman and Diu",
   "27": "Maharashtra",
   "28": "Andhra Pradesh",
@@ -53,6 +56,9 @@ export const GST_STATE_CODES: Record<string, string> = {
   "36": "Telangana",
   "37": "Andhra Pradesh (Amaravati)",
   "38": "Ladakh",
+  // Special codes used by GSTN for e-commerce / SEZ / other-territory supplies
+  "97": "Other Territory",
+  "99": "Centre",
 };
 
 /** Set of valid 2-digit GST state codes — used for O(1) Zod validation. */

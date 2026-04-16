@@ -78,8 +78,8 @@ export default async function PartyProfilePage({
   const notes = journalLines.map((line: { id: string; debit: any; credit: any; journal: { id: string; entryDate: Date; voucherType: string; narration: string | null } }) => ({
     id: line.journal.id,
     date: line.journal.entryDate,
-    voucherType: line.journal.voucherType,
-    narration: line.journal.narration,
+    voucherType: line.journal.voucherType as "CREDIT_NOTE" | "DEBIT_NOTE",
+    narration: line.journal.narration ?? "",  // PartyLedgerNote requires string, not string|null
     debit: Number(line.debit),
     credit: Number(line.credit),
   }));
@@ -88,18 +88,18 @@ export default async function PartyProfilePage({
     partyType: party.type,
     openingBalance: party.openingBalance.toNumber(),
     createdAt: party.createdAt,
-    bills: bills.map((b: { id: string; billNumber: string; grandTotal: any; createdAt: Date }) => ({ 
-      id: b.id, 
-      billNumber: b.billNumber, 
-      grandTotal: Number(b.grandTotal), 
-      createdAt: b.createdAt 
+    bills: bills.map((b: { id: string; billNumber: string; grandTotal: any; createdAt: Date }) => ({
+      id: b.id,
+      billNumber: b.billNumber,
+      grandTotal: Number(b.grandTotal),
+      createdAt: b.createdAt
     })),
-    payments: payments.map((p: { id: string; amount: any; direction: string; mode: string; date: Date }) => ({ 
-      id: p.id, 
-      amount: Number(p.amount), 
-      direction: p.direction, 
-      mode: p.mode, 
-      date: p.date 
+    payments: payments.map((p: { id: string; amount: any; direction: string; mode: string; date: Date }) => ({
+      id: p.id,
+      amount: Number(p.amount),
+      direction: p.direction as "INCOMING" | "OUTGOING",  // Prisma returns string; narrow for SupportedPayDirection
+      mode: p.mode,
+      date: p.date
     })),
     notes,
   });
@@ -107,7 +107,7 @@ export default async function PartyProfilePage({
   return (
     <PartyProfileClient
       partyId={party.id}
-      party={{ ...party, openingBalance: party.openingBalance.toNumber(), currentBalance: party.currentBalance.toNumber() }}
+      party={{ ...party, openingBalance: party.openingBalance.toNumber() }}
       ledger={ledger}
       measurements={measurements}
       calculatedCurrent={calculatedCurrent}

@@ -200,6 +200,28 @@ export async function GET(request: NextRequest) {
 
     // ── Vouchers ─────────────────────────────────────────────────────────────
     if (type === "vouchers" || type === "all") {
+      // [P2] Pagination guard: refuse date ranges that would produce >5000 vouchers
+      // in a single request to prevent OOM crashes on large books.
+      // Callers should split large ranges by quarter or month.
+      const MAX_VOUCHERS = 5_000;
+      const voucherCount = await prisma.journalEntry.count({
+        where: { tenantId, entryDate: { gte: fromDate, lte: toDate } },
+      });
+
+      if (voucherCount > MAX_VOUCHERS) {
+        return NextResponse.json(
+          {
+            error:
+              `Date range contains ${voucherCount} vouchers, which exceeds the ` +
+              `${MAX_VOUCHERS}-voucher limit per export. ` +
+              `Split the range into shorter periods (e.g. by quarter) and export each separately.`,
+            voucherCount,
+            maxVouchers: MAX_VOUCHERS,
+          },
+          { status: 400 }
+        );
+      }
+
       const entries = await prisma.journalEntry.findMany({
         where: {
           tenantId,
