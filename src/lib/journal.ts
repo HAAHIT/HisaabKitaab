@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import {
   CHART_OF_ACCOUNTS,
   paymentModeToAccount,
@@ -6,7 +6,7 @@ import {
 } from "@/lib/chart-of-accounts";
 import { roundTo2 } from "@/lib/journal-reporting";
 
-type PrismaTx = Prisma.TransactionClient;
+type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 type VoucherType = "SALES" | "PURCHASE" | "RECEIPT" | "PAYMENT" | "JOURNAL" | "CREDIT_NOTE";
 
 interface JournalLineInput {
@@ -174,6 +174,9 @@ export async function journalForSalesBill(
   tenantId: string,
   bill: SalesBillJournalInput
 ) {
+  const theoreticalTotal = roundTo2(bill.subtotal + bill.taxAmount);
+  const diff = roundTo2(bill.grandTotal - theoreticalTotal);
+
   return createJournalEntry(tx, {
     tenantId,
     entryDate: bill.entryDate,
@@ -195,6 +198,15 @@ export async function journalForSalesBill(
         credit: bill.subtotal,
       },
       ...buildSalesTaxLines(bill.taxAmount, "CREDIT", bill.isInterState),
+      ...(diff !== 0
+        ? [
+            {
+              accountCode: "ROUND_OFF" as const,
+              debit: diff < 0 ? Math.abs(diff) : 0,
+              credit: diff > 0 ? diff : 0,
+            },
+          ]
+        : []),
     ],
   });
 }
@@ -204,6 +216,9 @@ export async function journalForCancelledSalesBill(
   tenantId: string,
   bill: SalesBillJournalInput
 ) {
+  const theoreticalTotal = roundTo2(bill.subtotal + bill.taxAmount);
+  const diff = roundTo2(bill.grandTotal - theoreticalTotal);
+
   return createJournalEntry(tx, {
     tenantId,
     entryDate: bill.entryDate,
@@ -227,6 +242,15 @@ export async function journalForCancelledSalesBill(
         credit: 0,
       },
       ...buildSalesTaxLines(bill.taxAmount, "DEBIT", bill.isInterState),
+      ...(diff !== 0
+        ? [
+            {
+              accountCode: "ROUND_OFF" as const,
+              debit: diff > 0 ? diff : 0,
+              credit: diff < 0 ? Math.abs(diff) : 0,
+            },
+          ]
+        : []),
     ],
   });
 }
@@ -294,6 +318,9 @@ export async function journalForPurchaseBill(
   tenantId: string,
   purchase: PurchaseBillJournalInput
 ) {
+  const theoreticalTotal = roundTo2(purchase.subtotal + purchase.cgst + purchase.sgst + purchase.igst);
+  const diff = roundTo2(purchase.grandTotal - theoreticalTotal);
+
   const lines: JournalLineInput[] = [
     {
       accountCode: "PURCHASE",
@@ -330,6 +357,14 @@ export async function journalForPurchaseBill(
       accountCode: "IGST_INPUT",
       debit: purchase.igst,
       credit: 0,
+    });
+  }
+
+  if (diff !== 0) {
+    lines.push({
+      accountCode: "ROUND_OFF",
+      debit: diff > 0 ? diff : 0,
+      credit: diff < 0 ? Math.abs(diff) : 0,
     });
   }
 

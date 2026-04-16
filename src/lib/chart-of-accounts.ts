@@ -13,7 +13,8 @@ export type AccountCode =
   | "SGST_INPUT"
   | "IGST_INPUT"
   | "OWNER_EQUITY"
-  | "OPENING_BALANCE";
+  | "OPENING_BALANCE"
+  | "ROUND_OFF";
 
 export interface AccountDefinition {
   code: AccountCode;
@@ -128,6 +129,13 @@ export const CHART_OF_ACCOUNTS: Record<AccountCode, AccountDefinition> = {
     tallyGroup: "Capital Account",
     type: "EQUITY",
     normalBalance: "CREDIT",
+  },
+  ROUND_OFF: {
+    code: "ROUND_OFF",
+    name: "Round Off",
+    tallyGroup: "Indirect Expenses",
+    type: "EXPENSE",
+    normalBalance: "DEBIT",
   },
 };
 

@@ -100,6 +100,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: `Too many vouchers (${vouchers.length}). Max 200 per import. Use the CLI tool for bulk imports.`,
+        instruction: "Batch size exceeds UI limits. Please use the HisaabKitaab CLI for bulk imports or split your XML.",
         voucherCount: vouchers.length,
       },
       { status: 413 }
