@@ -25,6 +25,7 @@ interface JournalEntryParams {
   billId?: string;
   purchaseId?: string;
   paymentId?: string;
+  isReverseCharge?: boolean;
   createdBy: string;
   lines: JournalLineInput[];
 }
@@ -61,6 +62,7 @@ interface PurchaseBillJournalInput {
   sgst: number;
   igst: number;
   grandTotal: number;
+  isReverseCharge?: boolean;
   createdBy: string;
   billDate: Date;
 }
@@ -143,6 +145,7 @@ export async function createJournalEntry(
       billId: params.billId,
       purchaseId: params.purchaseId,
       paymentId: params.paymentId,
+      isReverseCharge: params.isReverseCharge || false,
       createdBy: params.createdBy,
       totalDebit,
       totalCredit,
@@ -374,6 +377,7 @@ export async function journalForPurchaseBill(
     narration: `Purchase from ${purchase.vendorName}`,
     voucherType: "PURCHASE",
     purchaseId: purchase.id,
+    isReverseCharge: purchase.isReverseCharge,
     createdBy: purchase.createdBy,
     lines,
   });

@@ -5,6 +5,7 @@ export const translations = {
   en: {
     "nav.home": "Home",
     "nav.bills": "Bills",
+    "nav.purchases": "Purchases",
     "nav.parties": "Parties",
     "nav.payments": "Payments",
     "nav.measures": "Measures",
@@ -469,6 +470,7 @@ export const translations = {
   hi: {
     "nav.home": "होम",
     "nav.bills": "बिल",
+    "nav.purchases": "खरीद",
     "nav.parties": "पार्टियां",
     "nav.payments": "भुगतान",
     "nav.measures": "माप",

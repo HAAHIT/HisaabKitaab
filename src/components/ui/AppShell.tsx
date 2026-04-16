@@ -14,6 +14,8 @@ import {
 import { ThemeSwitcher } from "./ThemeSwitcher";
 import BottomSheet from "./BottomSheet";
 import { QuickBillSheet } from "@/components/bills/QuickBillSheet";
+import { CreditDebitNoteModal } from "@/components/bills/CreditDebitNoteModal";
+import { useEffect } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { TranslationKey } from "@/lib/i18n/translations";
 import { FEATURE_FLAGS, type FeatureFlagKey } from "@/lib/feature-flags";
@@ -60,12 +62,22 @@ const MAIN_NAV: NavItem[] = [
   },
   {
     icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
       </svg>
     ),
     translationKey: "nav.bills",
     href: "/bills",
+    roles: ["ADMIN", "STAFF", "ACCOUNTANT"],
+  },
+  {
+    icon: (
+      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+      </svg>
+    ),
+    translationKey: "nav.purchases" as any,
+    href: "/purchases/new",
     roles: ["ADMIN", "STAFF", "ACCOUNTANT"],
   },
   {
@@ -158,6 +170,33 @@ export default function AppShell({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [moreSheetOpen, setMoreSheetOpen] = useState(false);
   const [quickBillOpen, setQuickBillOpen] = useState(false);
+  const [creditNoteOpen, setCreditNoteOpen] = useState(false);
+  const [debitNoteOpen, setDebitNoteOpen] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeTag = document.activeElement?.tagName;
+      if (
+        activeTag === "INPUT" ||
+        activeTag === "TEXTAREA" ||
+        activeTag === "SELECT" ||
+        (document.activeElement as HTMLElement)?.isContentEditable
+      ) {
+        return;
+      }
+      
+      if (e.key === "F8") {
+        e.preventDefault();
+        router.push("/bills/new");
+      } else if (e.key === "F9") {
+        e.preventDefault();
+        router.push("/purchases/new");
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [router]);
 
   const showFab =
     user.role !== "CUSTOMER" &&
@@ -629,6 +668,38 @@ export default function AppShell({
               </div>
             </button>
           )}
+          {canQuickBill && (
+            <button
+              onClick={() => { setMoreSheetOpen(false); setCreditNoteOpen(true); }}
+              className="w-full mt-2 rounded-2xl bg-gradient-to-r from-teal-500 to-emerald-500 px-3 py-3 text-left text-white shadow-lg shadow-teal-500/20 transition hover:shadow-xl hover:shadow-teal-500/25"
+            >
+              <div className="flex items-center gap-3">
+                <span className="flex-shrink-0">
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                </span>
+                <div>
+                  <p className="font-semibold">Credit Note</p>
+                  <p className="text-xs text-white/80">Sales Return / Discount</p>
+                </div>
+              </div>
+            </button>
+          )}
+          {canQuickBill && (
+            <button
+              onClick={() => { setMoreSheetOpen(false); setDebitNoteOpen(true); }}
+              className="w-full mt-2 rounded-2xl bg-gradient-to-r from-orange-400 to-red-500 px-3 py-3 text-left text-white shadow-lg shadow-orange-500/20 transition hover:shadow-xl hover:shadow-orange-500/25"
+            >
+              <div className="flex items-center gap-3">
+                <span className="flex-shrink-0">
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                </span>
+                <div>
+                  <p className="font-semibold">Debit Note</p>
+                  <p className="text-xs text-white/80">Purchase Return</p>
+                </div>
+              </div>
+            </button>
+          )}
 
           {moreItems.map((item) => (
             <button
@@ -714,6 +785,22 @@ export default function AppShell({
           onClose={() => setQuickBillOpen(false)}
           onBillCreated={({ id }) => router.push(`/bills/${id}`)}
         />
+      )}
+
+      {canQuickBill && (
+         <CreditDebitNoteModal
+           isOpen={creditNoteOpen}
+           onOpenChange={setCreditNoteOpen}
+           noteType="CREDIT_NOTE"
+         />
+      )}
+
+      {canQuickBill && (
+         <CreditDebitNoteModal
+           isOpen={debitNoteOpen}
+           onOpenChange={setDebitNoteOpen}
+           noteType="DEBIT_NOTE"
+         />
       )}
     </div>
   );
