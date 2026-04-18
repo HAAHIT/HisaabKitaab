@@ -673,6 +673,16 @@ export async function DELETE(
         },
       });
 
+      // TODO: [CRITICAL] - Tally sync-state divergence on bill cancellation
+      // [CRITICAL] Tally sync-state — flag original Tally-imported vouchers as MODIFIED
+      // so the next XML re-export warns CAs of the cancellation-induced data divergence.
+      // Without this, cancelled bills show syncState=SYNCED, creating a false impression
+      // that the voucher is unchanged in the cloud.
+      await tx.journalEntry.updateMany({
+        where: { billId: existing.id, remoteId: { not: null } },
+        data: { syncState: "MODIFIED" },
+      });
+
       if (!existing.partyId) {
         return;
       }

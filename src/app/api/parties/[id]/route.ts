@@ -161,6 +161,39 @@ export async function PATCH(
       },
     });
 
+    // TODO: [CRITICAL] - MCA GSR 247(E) audit trail for party UPDATE
+    // [MCA GSR 247(E)] Append-only edit log — mandatory since April 1 2023.
+    // Captures field-level changes for statutory audit compliance.
+    const changedFields = Object.keys(body);
+    if (changedFields.length > 0) {
+      await prisma.auditLog.create({
+        data: {
+          tenantId,
+          entityType: "Party",
+          entityId: party.id,
+          userId: request.headers.get("x-user-id") || null,
+          action: "UPDATE",
+          fieldName: changedFields.join(","),
+          oldValue: JSON.stringify(
+            Object.fromEntries(
+              changedFields.map((f) => [
+                f,
+                (existingParty as Record<string, unknown>)[f] ?? null,
+              ])
+            )
+          ),
+          newValue: JSON.stringify(
+            Object.fromEntries(
+              changedFields.map((f) => [
+                f,
+                (party as Record<string, unknown>)[f] ?? null,
+              ])
+            )
+          ),
+        },
+      });
+    }
+
     return NextResponse.json({ party });
   } catch (error) {
     logError("parties.update.error", { requestId: getRequestId(request), error });
@@ -200,6 +233,22 @@ export async function DELETE(
       data: {
         isActive: false,
         isDeleted: true,
+      },
+    });
+
+    // TODO: [CRITICAL] - MCA GSR 247(E) audit trail for party DELETE
+    // [MCA GSR 247(E)] Append-only edit log — mandatory since April 1 2023.
+    // Records the soft-deletion actor for statutory audit compliance.
+    await prisma.auditLog.create({
+      data: {
+        tenantId,
+        entityType: "Party",
+        entityId: existingParty.id,
+        userId: request.headers.get("x-user-id") || null,
+        action: "DELETE",
+        fieldName: "isDeleted",
+        oldValue: JSON.stringify(false),
+        newValue: JSON.stringify(true),
       },
     });
 

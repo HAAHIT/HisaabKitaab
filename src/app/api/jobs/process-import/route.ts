@@ -4,7 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { parseTallyXml } from "@/lib/tally-xml-import";
 import { createJournalEntry } from "@/lib/journal";
 import { recomputePartyBalance } from "@/lib/party-balance.server";
+import { logError } from "@/lib/observability";
 import { gunzipSync } from "zlib";
+import crypto from "crypto";
 import type { AccountCode } from "@/lib/chart-of-accounts";
 
 type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
@@ -72,6 +74,14 @@ export async function GET(request: NextRequest) {
   }
 
   const job = candidate;
+
+  // TODO: [CRITICAL] FIXED — tenantLockKey computed here (before the try block) so the
+  // catch path can call pg_advisory_unlock() even when an exception is thrown after
+  // the lock is acquired.  Previously defined inside try, making it inaccessible to
+  // catch → session-level lock leaked on any import error in pooled/serverless DBs.
+  const tenantLockKey = BigInt(
+    "0x" + crypto.createHash("sha256").update(job.tenantId).digest("hex").substring(0, 15)
+  );
 
   try {
     const tid = job.tenantId;
@@ -188,8 +198,7 @@ export async function GET(request: NextRequest) {
     
     // [W-1] Acquire tenant-level advisory lock BEFORE fingerprint query
     // to prevent concurrent imports from producing false-negative matches.
-    const tenantLockKey = BigInt("0x" + require("crypto").createHash("sha256")
-      .update(tid).digest("hex").substring(0, 15));
+    // tenantLockKey is declared above the try block so the catch path can unlock.
     await prisma.$executeRaw`SELECT pg_advisory_lock(${tenantLockKey})`;
     
     if (vouchersWithoutRemoteId.length > 0) {
@@ -352,7 +361,7 @@ export async function GET(request: NextRequest) {
         await recomputePartyBalance(null, pid, tid);
       } catch (err) {
         // Log but don't fail the import — balance can be recomputed on-demand
-        console.error(`[T2] Failed to recompute balance for party ${pid}:`, err);
+        logError("import.party-balance.error", { pid, jobId: job.id, error: err });
       }
     }
 
@@ -365,6 +374,11 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (err) {
+    // TODO: [CRITICAL] FIXED — release the session-level advisory lock on any error path.
+    // Without this, a pooled connection holds the lock until the pool recycles it,
+    // blocking all future imports for this tenant. pg_advisory_unlock returns false
+    // (not an error) if the lock was never acquired, so this is always safe.
+    try { await prisma.$executeRaw`SELECT pg_advisory_unlock(${tenantLockKey})`; } catch { /* best effort */ }
     await prisma.importJob.update({
       where: { id: job.id },
       data: {
