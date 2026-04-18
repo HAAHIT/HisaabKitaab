@@ -35,8 +35,8 @@ export type TallyVoucherType =
   | "Payment"
   | "Journal"
   | "Contra"
-  | "Sales Return"    // Credit Note — required for GSTR-1 Table 9B
-  | "Purchase Return"; // Debit Note — required for GSTR-3B
+  | "Credit Note"    // Credit Note — required for GSTR-1 Table 9B
+  | "Debit Note"; // Debit Note — required for GSTR-3B
 
 export interface TallyLedgerEntry {
   ledgerName: string;
@@ -129,8 +129,8 @@ const VOUCHER_TYPE_MAP: Record<string, TallyVoucherType> = {
   RECEIPT: "Receipt",
   PAYMENT: "Payment",
   JOURNAL: "Journal",
-  CREDIT_NOTE: "Sales Return",
-  DEBIT_NOTE: "Purchase Return", // GST Debit Note — GSTR-3B Table 4
+  CREDIT_NOTE: "Credit Note",
+  DEBIT_NOTE: "Debit Note", // GST Debit Note — GSTR-3B Table 4
   CONTRA: "Contra", // [X4] Bank-to-cash transfers — native Tally type
 };
 
@@ -151,17 +151,17 @@ export function resolveExportVoucherType(
   narration: string
 ): TallyVoucherType {
   if (dbVoucherType === "CREDIT_NOTE") {
-    return "Sales Return";
+    return "Credit Note";
   }
   if (dbVoucherType === "DEBIT_NOTE") {
-    return "Purchase Return";
+    return "Debit Note";
   }
   // Legacy: cancellations created before CREDIT_NOTE enum existed
   if (
     dbVoucherType === "JOURNAL" &&
     narration.startsWith("Reversal of Sales Bill")
   ) {
-    return "Sales Return";
+    return "Credit Note";
   }
   return dbVoucherTypeToTally(dbVoucherType);
 }
@@ -335,7 +335,7 @@ function buildLedgerEntryXml(
 function buildVoucherXml(voucher: TallyVoucher): string {
   // Build GST context from voucher-level fields (populated from Bill when available)
   // [Fix P1] Discard GST info for non-taxable voucher types like Journal/Contra/Payment
-  const isGstEligible = ["Sales", "Purchase", "Sales Return", "Purchase Return"].includes(voucher.voucherType);
+  const isGstEligible = ["Sales", "Purchase", "Credit Note", "Debit Note"].includes(voucher.voucherType);
 
   const gstContext =
     isGstEligible && voucher.taxPercent != null && voucher.taxPercent > 0

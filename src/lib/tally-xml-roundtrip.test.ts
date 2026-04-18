@@ -67,7 +67,7 @@ describe("Sales voucher round-trip", () => {
 describe("Sales Return (Credit Note) round-trip — C1/W1 guard", () => {
   it("emits <GSTDETAILS.LIST> on Sales Return vouchers", () => {
     const voucher = makeSalesVoucher({
-      voucherType: "Sales Return",
+      voucherType: "Credit Note",
       reference: "CN-001",
       narration: "Reversal of Sales Bill INV-001",
       guid: "test-guid-cn-001",
@@ -75,18 +75,18 @@ describe("Sales Return (Credit Note) round-trip — C1/W1 guard", () => {
     const xml = buildTallyVoucherXml([voucher], COMPANY);
 
     // The XML MUST contain GSTDETAILS.LIST for the return voucher.
-    // Before the C1/W1 fix, isGstEligible excluded "Sales Return" so
+    // Before the C1/W1 fix, isGstEligible excluded "Credit Note" so
     // no GSTDETAILS.LIST was emitted.
     expect(xml).toContain("<GSTDETAILS.LIST>");
     expect(xml).toContain("<HSNCODE>6204</HSNCODE>");
     expect(xml).toContain("<TAXRATE>18.00</TAXRATE>");
-    expect(xml).toContain("VCHTYPE=\"Sales Return\"");
+    expect(xml).toContain("VCHTYPE=\"Credit Note\"");
     expect(xml).toContain("<ISPARTYLEDGER>No</ISPARTYLEDGER>");
   });
 
   it("emits <GSTDETAILS.LIST> on Purchase Return vouchers", () => {
     const voucher = makeSalesVoucher({
-      voucherType: "Purchase Return",
+      voucherType: "Debit Note",
       reference: "DN-001",
       narration: "Purchase return to Vendor",
       guid: "test-guid-dn-001",
@@ -94,7 +94,7 @@ describe("Sales Return (Credit Note) round-trip — C1/W1 guard", () => {
     const xml = buildTallyVoucherXml([voucher], COMPANY);
 
     expect(xml).toContain("<GSTDETAILS.LIST>");
-    expect(xml).toContain("VCHTYPE=\"Purchase Return\"");
+    expect(xml).toContain("VCHTYPE=\"Debit Note\"");
   });
 
   it("does NOT emit <GSTDETAILS.LIST> on Journal vouchers", () => {
@@ -130,7 +130,7 @@ describe("Combined export (masters + vouchers) round-trip", () => {
     const vouchers = [
       makeSalesVoucher(),
       makeSalesVoucher({
-        voucherType: "Sales Return",
+        voucherType: "Credit Note",
         reference: "CN-002",
         guid: "test-guid-cn-002",
       }),
