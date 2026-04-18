@@ -92,11 +92,10 @@ function buildSalesTaxLines(
     ];
   }
 
-  // [G-W1] Pre-round taxAmount to paise to prevent sub-paise drift
-  // when Decimal→Number conversion produces >2 fractional digits.
-  const roundedTax = roundTo2(taxAmount);
-  const halfTax = roundTo2(roundedTax / 2);
-  const otherHalf = roundTo2(roundedTax - halfTax);
+  // TODO: [CRITICAL] - GST amounts (IGST/CGST/SGST) must be rounded to the "Nearest Rupee" (Math.round) per Section 170 of the CGST Act.
+  const roundedTax = Math.round(taxAmount);
+  const halfTax = Math.round(roundedTax / 2);
+  const otherHalf = roundedTax - halfTax;
 
   return [
     {

@@ -295,22 +295,52 @@ export async function GET(request: NextRequest) {
         }
       }
 
+      // [W2-FIX] Resolve linked bill numbers for payment/receipt vouchers so
+      // BILLALLOCATIONS.LIST emits <NAME>{billNumber}</NAME> instead of <NAME>{paymentId}</NAME>.
+      // Without this, Tally cannot auto-match receipts to outstanding bills.
+      const paymentEntryIds = entries
+        .filter((e: (typeof entries)[number]) => e.paymentId && !e.billId)
+        .map((e: (typeof entries)[number]) => e.paymentId as string);
+      const paymentBillRefMap = new Map<string, string>();
+      if (paymentEntryIds.length > 0) {
+        const linkedPayments = await prisma.payment.findMany({
+          where: { id: { in: paymentEntryIds }, tenantId },
+          select: {
+            id: true,
+            linkedBill: { select: { billNumber: true } },
+          },
+        });
+        for (const p of linkedPayments) {
+          if (p.linkedBill?.billNumber) {
+            paymentBillRefMap.set(p.id, p.linkedBill.billNumber);
+          }
+        }
+      }
+
       const vouchers: TallyVoucher[] = entries.map((entry: (typeof entries)[number]) => {
         // Use direct bill relation for sales, or secondary lookup for purchases
         const billData = entry.bill ?? (entry.purchaseId ? purchaseBillMap.get(entry.purchaseId) : null) ?? null;
+        // [W2-FIX] For payment entries, resolve the linked bill number for settlement matching
+        const linkedBillRef = entry.paymentId ? paymentBillRefMap.get(entry.paymentId) ?? null : null;
         return {
           date: entry.entryDate,
           voucherType: resolveExportVoucherType(entry.voucherType, entry.narration),
           reference:
             billData?.billNumber ?? entry.purchaseId ?? entry.paymentId ?? entry.id,
           narration: entry.narration,
-          ledgerEntries: entry.lines.map((line) =>
-            journalLineToTallyEntry({
+          ledgerEntries: entry.lines.map((line) => {
+            const tallyEntry = journalLineToTallyEntry({
               ...line,
               debit: line.debit.toNumber(),
               credit: line.credit.toNumber(),
-            })
-          ),
+            });
+            // Set reference to the linked bill number on the party ledger entry
+            // so Tally emits <BILLTYPE>Against Ref</BILLTYPE> with the correct bill name
+            if (linkedBillRef && tallyEntry.partyName) {
+              tallyEntry.reference = linkedBillRef;
+            }
+            return tallyEntry;
+          }),
           guid: entry.id,
           placeOfSupply: billData?.placeOfSupply ?? null,
           taxPercent: billData?.taxPercent.toNumber() ?? null,

@@ -75,13 +75,13 @@ export async function GET(request: NextRequest) {
 
   const job = candidate;
 
-  // TODO: [CRITICAL] FIXED — tenantLockKey computed here (before the try block) so the
-  // catch path can call pg_advisory_unlock() even when an exception is thrown after
-  // the lock is acquired.  Previously defined inside try, making it inaccessible to
-  // catch → session-level lock leaked on any import error in pooled/serverless DBs.
   const tenantLockKey = BigInt(
     "0x" + crypto.createHash("sha256").update(job.tenantId).digest("hex").substring(0, 15)
   );
+
+  // [W1-FIX] Track whether the session-level advisory lock was acquired so
+  // the finally block only attempts to unlock when necessary.
+  let lockAcquired = false;
 
   try {
     const tid = job.tenantId;
@@ -196,10 +196,25 @@ export async function GET(request: NextRequest) {
 
     let duplicateFingerprints = new Set<string>();
     
-    // [W-1] Acquire tenant-level advisory lock BEFORE fingerprint query
-    // to prevent concurrent imports from producing false-negative matches.
-    // tenantLockKey is declared above the try block so the catch path can unlock.
-    await prisma.$executeRaw`SELECT pg_advisory_lock(${tenantLockKey})`;
+    // [W1-FIX] Non-blocking advisory lock — prevents indefinite hangs when a
+    // previous import leaked a session-level lock (e.g. process crash, serverless
+    // timeout). pg_try_advisory_lock returns false immediately if already held,
+    // instead of blocking forever like pg_advisory_lock.
+    const lockResult: { acquired: boolean }[] =
+      await prisma.$queryRaw`SELECT pg_try_advisory_lock(${tenantLockKey}) as acquired`;
+    lockAcquired = lockResult[0]?.acquired === true;
+
+    if (!lockAcquired) {
+      // Another import is already running (or a leaked lock exists).
+      // Revert claim so the next cron cycle retries this job.
+      await prisma.importJob.update({
+        where: { id: job.id },
+        data: { status: "PENDING" },
+      });
+      return NextResponse.json({
+        message: "Import already in progress for this tenant, will retry",
+      });
+    }
     
     if (vouchersWithoutRemoteId.length > 0) {
       // [S3] DB-side duplicate check: query only fingerprint strings instead of
@@ -337,9 +352,6 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Release the tenant advisory lock after all imports
-    await prisma.$executeRaw`SELECT pg_advisory_unlock(${tenantLockKey})`;
-
     await prisma.importJob.update({
       where: { id: job.id },
       data: {
@@ -374,11 +386,6 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (err) {
-    // TODO: [CRITICAL] FIXED — release the session-level advisory lock on any error path.
-    // Without this, a pooled connection holds the lock until the pool recycles it,
-    // blocking all future imports for this tenant. pg_advisory_unlock returns false
-    // (not an error) if the lock was never acquired, so this is always safe.
-    try { await prisma.$executeRaw`SELECT pg_advisory_unlock(${tenantLockKey})`; } catch { /* best effort */ }
     await prisma.importJob.update({
       where: { id: job.id },
       data: {
@@ -387,5 +394,12 @@ export async function GET(request: NextRequest) {
       }
     });
     return NextResponse.json({ error: "Job failed" }, { status: 500 });
+  } finally {
+    // [W1-FIX] Guaranteed lock release in finally — covers success, catch, and
+    // early returns. pg_advisory_unlock returns false (not an error) if the lock
+    // was never acquired, but we gate on lockAcquired to avoid unnecessary calls.
+    if (lockAcquired) {
+      try { await prisma.$executeRaw`SELECT pg_advisory_unlock(${tenantLockKey})`; } catch { /* best effort */ }
+    }
   }
 }

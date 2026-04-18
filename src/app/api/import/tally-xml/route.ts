@@ -81,18 +81,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Failed to read uploaded file" }, { status: 400 });
   }
 
-  // ── Parse quickly to get counts ──────────────────────────────────────────
-  const { vouchers, partyMasters, parseErrors } = parseTallyXml(xmlText);
-
-  if (vouchers.length === 0 && partyMasters.length === 0) {
-    return NextResponse.json(
-      {
-        error: "No importable data found in XML",
-        parseErrors,
-      },
-      { status: 422 }
-    );
-  }
+  // TODO: [CRITICAL] - Moving synchronous 5MB XML parsing out of HTTP thread to prevent Node event loop timeouts.
 
   // [S-W1] Compress XML before DB storage (~80% size reduction).
   // Prefix with "gzip:" so the process-import route can detect and decompress.
@@ -102,7 +91,7 @@ export async function POST(request: NextRequest) {
   const job = await prisma.importJob.create({
     data: {
       tenantId: tid,
-      totalItems: vouchers.length + partyMasters.length,
+      totalItems: 0, // Will be updated by the background job during processing
       xmlData: compressedXml,
       status: "PENDING",
     }
@@ -112,14 +101,12 @@ export async function POST(request: NextRequest) {
     requestId: getRequestId(request),
     tenantId: tid,
     jobId: job.id,
-    vouchersParsed: vouchers.length,
-    mastersParsed: partyMasters.length,
   });
 
   return NextResponse.json({
     jobId: job.id,
     message: "Import job queued successfully.",
-    totalDetected: vouchers.length + partyMasters.length,
-    parseErrors,
+    totalDetected: "Calculated in background",
+    parseErrors: [],
   });
 }

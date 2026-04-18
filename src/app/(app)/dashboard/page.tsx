@@ -189,7 +189,7 @@ export default function DashboardPage() {
             <Button size="sm" variant="flat" onPress={() => setBannerDismissed(true)}>
               ✕
             </Button>
-            <Button size="sm" color="default" variant="flat" className="bg-teal-400 text-white hover:scale-105 transition-all" onPress={promptInstall}>
+            <Button size="sm" color="primary" variant="flat" className="hover:scale-105 transition-all" onPress={promptInstall}>
               Install
             </Button>
           </div>
@@ -242,12 +242,12 @@ export default function DashboardPage() {
         <Card shadow="none" isPressable onPress={() => router.push("/bills")} className="glass-card hover:scale-105 transition-all">
           <CardBody className="p-5">
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 rounded-xl bg-teal-400/10 flex items-center justify-center">
-                <svg className="w-5 h-5 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
               </div>
               <span className="text-sm text-default-500">{t("dash.totalBills")}</span>
             </div>
-            <p className="text-2xl font-bold text-teal-400">{formatCurrency(billTotal)}</p>
+            <p className="text-2xl font-bold text-primary">{formatCurrency(billTotal)}</p>
             <p className="text-xs text-default-400 mt-1">{billCount} {t("dash.billsCount")}</p>
           </CardBody>
         </Card>
@@ -286,7 +286,7 @@ export default function DashboardPage() {
           <CardBody className="p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold">{t("dash.recentPayments")}</h3>
-              <button onClick={() => router.push("/payments")} className="text-xs text-teal-400 hover:underline">{t("dash.viewAll")} →</button>
+              <button onClick={() => router.push("/payments")} className="text-xs text-primary hover:underline">{t("dash.viewAll")} →</button>
             </div>
             {data?.recentPayments && data.recentPayments.length > 0 ? (
               <div className="space-y-3">
