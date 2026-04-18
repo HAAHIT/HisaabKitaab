@@ -6,27 +6,66 @@ import type { AccountCode } from "@/lib/chart-of-accounts";
 
 type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 
+// ── Voucher type resolver ─────────────────────────────────────────────────────
+// Maps native Tally return-type strings to our internal VoucherType enum.
+// Without this, "Sales Return" imports get stored as SALES, which excludes
+// them from recomputePartyBalance (which queries CREDIT_NOTE/DEBIT_NOTE)
+// and causes GSTR-1 Table 9B under-reporting on re-export.
+type VoucherType =
+  | "SALES"
+  | "PURCHASE"
+  | "RECEIPT"
+  | "PAYMENT"
+  | "JOURNAL"
+  | "CREDIT_NOTE"
+  | "DEBIT_NOTE";
+
+export function resolveImportVoucherType(
+  originalTypeName: string,
+  baseType: string
+): VoucherType {
+  if (originalTypeName === "Sales Return" || originalTypeName === "Credit Note")
+    return "CREDIT_NOTE";
+  if (
+    originalTypeName === "Purchase Return" ||
+    originalTypeName === "Debit Note"
+  )
+    return "DEBIT_NOTE";
+  return baseType as VoucherType;
+}
+
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
-  // In a real app, verify cron-secret here via headers
-  // For now, to allow testing, we proceed.
+  // ── Auth: require CRON_SECRET header ───────────────────────────────────────
+  const cronSecret = request.headers.get("x-cron-secret");
+  if (!process.env.CRON_SECRET || cronSecret !== process.env.CRON_SECRET) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   
-  // Pick a PENDING or long-running PROCESSING job
-  const job = await prisma.importJob.findFirst({
+  // ── Atomic job claim ────────────────────────────────────────────────────────
+  // Two-step: find oldest PENDING job, then atomically update only if it is
+  // still PENDING. If two cron workers race, only one will see count=1.
+  const candidate = await prisma.importJob.findFirst({
     where: { status: "PENDING" },
-    orderBy: { createdAt: "asc" }
+    orderBy: { createdAt: "asc" },
   });
 
-  if (!job) {
+  if (!candidate) {
     return NextResponse.json({ message: "No pending jobs" });
   }
 
-  // Mark as processing
-  await prisma.importJob.update({
-    where: { id: job.id },
-    data: { status: "PROCESSING" }
+  const claimed = await prisma.importJob.updateMany({
+    where: { id: candidate.id, status: "PENDING" },
+    data: { status: "PROCESSING" },
   });
+
+  if (claimed.count === 0) {
+    // Another worker already claimed this job between our findFirst and updateMany
+    return NextResponse.json({ message: "Job already claimed by another worker" });
+  }
+
+  const job = candidate;
 
   try {
     const tid = job.tenantId;
@@ -131,7 +170,10 @@ export async function GET(request: NextRequest) {
       voucher: (typeof vouchers)[number]
     ): Promise<"imported" | "skipped" | Error> {
       if (!voucher.remoteId) {
-        const fingerprint = `${voucher.voucherType}|${voucher.entryDate.toISOString()}|${voucher.narration}|${String(voucher.totalDebit)}`;
+        // Use date string only (YYYY-MM-DD) for fingerprint — avoids IST/UTC
+        // mismatch where Tally's YYYYMMDD date becomes the previous day in UTC.
+        const dateStr = voucher.entryDate.toISOString().slice(0, 10);
+        const fingerprint = `${voucher.voucherType}|${dateStr}|${voucher.narration}|${String(voucher.totalDebit)}`;
         if (duplicateFingerprints.has(fingerprint)) {
           return "skipped";
         }
@@ -158,7 +200,14 @@ export async function GET(request: NextRequest) {
             tenantId: tid,
             entryDate: voucher.entryDate,
             narration: voucher.narration,
-            voucherType: voucher.voucherType,
+            // [FIX] Resolve Credit Note / Debit Note types correctly.
+            // parseTallyXml coerces voucherType to SALES/PURCHASE for return
+            // vouchers; originalTypeName carries the raw Tally string needed
+            // to restore CREDIT_NOTE / DEBIT_NOTE for balance computation.
+            voucherType: resolveImportVoucherType(
+              voucher.originalTypeName,
+              voucher.voucherType
+            ),
             createdBy: actorId,
             ...(voucher.remoteId ? { remoteId: voucher.remoteId } : {}),
             lines,
@@ -176,26 +225,30 @@ export async function GET(request: NextRequest) {
 
     const allVouchers = [...vouchersWithRemoteId, ...vouchersWithoutRemoteId];
     
-    // Process in batches and track progress
+    // Process in batches sequentially to avoid deadlocks on shared party rows.
+    // Promise.allSettled was replaced: 50 parallel transactions caused lock
+    // contention when multiple vouchers referenced the same party.
     for (let i = 0; i < allVouchers.length; i += BATCH_SIZE) {
       const batch = allVouchers.slice(i, i + BATCH_SIZE);
-      const results = await Promise.allSettled(batch.map(importVoucher));
 
-      for (let j = 0; j < results.length; j++) {
-        const result = results[j];
-        if (result.status === "rejected") failed++;
-        else if (result.value === "skipped") skipped++;
-        else if (result.value === "imported") imported++;
-        else failed++;
+      for (const voucher of batch) {
+        try {
+          const result = await importVoucher(voucher);
+          if (result === "skipped") skipped++;
+          else if (result === "imported") imported++;
+          else failed++; // result is an Error object
+        } catch {
+          failed++;
+        }
       }
 
-      // Update progress in DB
+      // Update progress in DB after each batch
       await prisma.importJob.update({
         where: { id: job.id },
         data: {
           processed: imported + skipped,
-          failed: failed
-        }
+          failed: failed,
+        },
       });
     }
 

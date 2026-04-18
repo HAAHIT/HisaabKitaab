@@ -267,7 +267,7 @@ function buildLedgerEntryXml(
     ? `
         <BILLALLOCATIONS.LIST>
           <NAME>${escapeXml(entry.partyName)}</NAME>
-          <BILLTYPE>On Account</BILLTYPE>
+          <BILLTYPE>New Ref</BILLTYPE>
           <AMOUNT>${entry.amount >= 0 ? "" : "-"}${formatAmount(entry.amount)}</AMOUNT>
         </BILLALLOCATIONS.LIST>`
     : "";

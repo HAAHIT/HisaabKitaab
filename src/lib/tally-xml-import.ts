@@ -132,13 +132,23 @@ export type TallyParseResult = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function parseTallyDate(raw: unknown): Date | null {
+/**
+ * Parses a Tally YYYYMMDD date string as IST noon (06:30 UTC).
+ *
+ * Tally dates are calendar dates in IST (UTC+5:30). Storing them as midnight
+ * UTC causes the date to roll back one day when viewed in IST, which breaks
+ * the duplicate-fingerprint check (entryDate.toISOString().slice(0,10)).
+ * Using 06:30 UTC (= 12:00 IST noon) keeps the YYYY-MM-DD portion
+ * identical regardless of server timezone or DST edge cases.
+ */
+export function parseTallyDate(raw: unknown): Date | null {
   const s = String(raw ?? "").trim();
   if (s.length !== 8) return null;
   const year = parseInt(s.slice(0, 4), 10);
   const month = parseInt(s.slice(4, 6), 10) - 1;
   const day = parseInt(s.slice(6, 8), 10);
-  const d = new Date(Date.UTC(year, month, day));
+  // 06:30 UTC = 12:00 noon IST — date string is unambiguous in every timezone
+  const d = new Date(Date.UTC(year, month, day, 6, 30, 0));
   return isNaN(d.getTime()) ? null : d;
 }
 
