@@ -5,6 +5,7 @@ import { logError, logInfo, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { parseTallyXml } from "@/lib/tally-xml-import";
 import { createJournalEntry } from "@/lib/journal";
+import { gzipSync } from "zlib";
 import type { AccountCode } from "@/lib/chart-of-accounts";
 
 // Derive Prisma tx type from the client instance to avoid the
@@ -93,12 +94,16 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // [S-W1] Compress XML before DB storage (~80% size reduction).
+  // Prefix with "gzip:" so the process-import route can detect and decompress.
+  const compressedXml = "gzip:" + gzipSync(Buffer.from(xmlText, "utf-8")).toString("base64");
+
   // Create the tracking job
   const job = await prisma.importJob.create({
     data: {
       tenantId: tid,
       totalItems: vouchers.length + partyMasters.length,
-      xmlData: xmlText,
+      xmlData: compressedXml,
       status: "PENDING",
     }
   });

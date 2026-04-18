@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { parseTallyXml } from "@/lib/tally-xml-import";
 import { createJournalEntry } from "@/lib/journal";
 import { recomputePartyBalance } from "@/lib/party-balance.server";
+import { gunzipSync } from "zlib";
 import type { AccountCode } from "@/lib/chart-of-accounts";
 
 type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
@@ -75,7 +76,14 @@ export async function GET(request: NextRequest) {
     const tid = job.tenantId;
     const actorId = "system"; // Internal cron actor
     
-    const { vouchers, partyMasters } = parseTallyXml(job.xmlData);
+    // [S-W1] Decompress if stored with gzip prefix (backwards-compatible with raw XML)
+    let xmlText = job.xmlData;
+    if (xmlText.startsWith("gzip:")) {
+      const compressed = Buffer.from(xmlText.slice(5), "base64");
+      xmlText = gunzipSync(compressed).toString("utf-8");
+    }
+
+    const { vouchers, partyMasters } = parseTallyXml(xmlText);
 
     let partiesCreated = 0;
     const partyCache = new Map<string, string>();

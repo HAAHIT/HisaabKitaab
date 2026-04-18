@@ -92,8 +92,11 @@ function buildSalesTaxLines(
     ];
   }
 
-  const halfTax = roundTo2(taxAmount / 2);
-  const otherHalf = roundTo2(taxAmount - halfTax);
+  // [G-W1] Pre-round taxAmount to paise to prevent sub-paise drift
+  // when Decimal→Number conversion produces >2 fractional digits.
+  const roundedTax = roundTo2(taxAmount);
+  const halfTax = roundTo2(roundedTax / 2);
+  const otherHalf = roundTo2(roundedTax - halfTax);
 
   return [
     {
