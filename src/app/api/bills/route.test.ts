@@ -163,13 +163,22 @@ describe("Bills API — POST business logic", () => {
     expect((await res.json()).error).toContain("positive total");
   });
 
-  it("rejects non-quick bill missing isInterState field", async () => {
+  it("auto-derives isInterState as false when GSTIN is absent and field is omitted", async () => {
     prismaMock.billTemplate.findFirst.mockResolvedValue({ id: "tmpl-1" });
     prismaMock.party.findFirst.mockResolvedValue({
       id: "party-1", name: "Test Co", type: "CUSTOMER",
       phone: null, address: null, gstin: null,
     });
-    prismaMock.tenant.findUnique.mockResolvedValue({ settings: {} });
+    // Return tenant without GSTIN + billing settings
+    prismaMock.tenant.findUnique
+      .mockResolvedValueOnce({ settings: {} })  // loadBillingSettings
+      .mockResolvedValueOnce({ gstin: null });   // tenant GSTIN lookup (G-C1)
+
+    // Mock the transaction to capture the bill creation
+    prismaMock.$transaction.mockImplementation(async (fn: any) => {
+      // Return a mock bill object
+      return { id: "bill-1", isInterState: false };
+    });
 
     const req = new NextRequest("http://localhost/api/bills", {
       method: "POST",
@@ -187,12 +196,12 @@ describe("Bills API — POST business logic", () => {
         grandTotal: 100,
         subtotal: 100,
         taxAmount: 0,
-        // isInterState intentionally omitted — should be rejected
+        // isInterState intentionally omitted — should auto-derive to false
       }),
     });
 
     const res = await POST(req);
-    expect(res.status).toBe(400);
-    expect((await res.json()).error).toContain("isInterState");
+    // [G-C1] isInterState is no longer required — auto-derived from GSTIN comparison
+    expect(res.status).toBe(201);
   });
 });

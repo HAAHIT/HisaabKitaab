@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { GST_STATE_CODE_SET } from "@/lib/gst-states";
+import { deriveIsInterState } from "@/lib/gst-helpers";
 
 // Derive Prisma query types from the client instance to avoid the
 // @prisma/client → .prisma/client re-export resolution failure
@@ -437,6 +438,12 @@ export async function POST(request: NextRequest) {
 
     const billingSettings = await loadBillingSettings(tenantId);
     const prefix = billingSettings.billPrefix;
+
+    // Load tenant GSTIN for inter-state auto-detection (G-C1)
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { gstin: true },
+    });
     
     const resolvedGrandTotal =
       typeof grandTotal === "number" && Number.isFinite(grandTotal)
@@ -444,7 +451,7 @@ export async function POST(request: NextRequest) {
         : 0;
     const billStatus = status === "FINAL" ? "FINAL" : "DRAFT";
     if (!isQuickBill) {
-      if (typeof body.isInterState !== "boolean") {
+      if (body.isInterState !== undefined && typeof body.isInterState !== "boolean") {
         return NextResponse.json(
           { error: "isInterState must be a boolean" },
           { status: 400 }
@@ -458,7 +465,9 @@ export async function POST(request: NextRequest) {
         );
       }
     }
-    const isInterState = body.isInterState === true;
+    // [G-C1] Auto-derive from GSTIN state codes; manual override is fallback only
+    const effectiveGstin = gstin || party.gstin;
+    const isInterState = deriveIsInterState(effectiveGstin, tenant?.gstin, body.isInterState);
     const normalizedPaymentMode = normalizePaymentMode(body.paymentMode);
     const now = new Date();
     const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;

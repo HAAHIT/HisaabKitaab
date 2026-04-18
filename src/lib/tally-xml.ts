@@ -374,13 +374,24 @@ function buildVoucherXml(voucher: TallyVoucher): string {
         <ISREVERSECHARGE>Yes</ISREVERSECHARGE>`
     : "";
 
+  // [W-X1] PARTYLEDGERNAME — helps Tally link voucher to party for Outstanding/Receivables reports.
+  // Derived from the first ledger entry that has a partyName.
+  const partyLedgerEntry = isGstEligible
+    ? voucher.ledgerEntries.find((e) => e.partyName)
+    : undefined;
+  const partyLedgerNameTag = partyLedgerEntry?.partyName
+    ? `
+        <PARTYLEDGERNAME>${escapeXml(partyLedgerEntry.partyName)}</PARTYLEDGERNAME>`
+    : "";
+
   return `
     <TALLYMESSAGE xmlns:UDF="TallyUDF">
       <VOUCHER VCHTYPE="${escapeXml(voucher.voucherType)}" ACTION="Create" OBJVIEW="Accounting Voucher View">${guidTag}
         <DATE>${formatTallyDate(voucher.date)}</DATE>
+        <EFFECTIVEDATE>${formatTallyDate(voucher.date)}</EFFECTIVEDATE>
         <VOUCHERTYPENAME>${escapeXml(voucher.voucherType)}</VOUCHERTYPENAME>
         <VOUCHERTYPEORIGNAME>${escapeXml(voucher.voucherType)}</VOUCHERTYPEORIGNAME>
-        <VOUCHERNUMBER>${escapeXml(voucher.reference)}</VOUCHERNUMBER>
+        <VOUCHERNUMBER>${escapeXml(voucher.reference)}</VOUCHERNUMBER>${partyLedgerNameTag}
         <NARRATION>${escapeXml(voucher.narration)}</NARRATION>${placeOfSupplyTag}${reverseChargeTag}${ledgerLines}
       </VOUCHER>
     </TALLYMESSAGE>`;

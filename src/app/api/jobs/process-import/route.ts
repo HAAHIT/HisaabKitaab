@@ -83,13 +83,19 @@ export async function GET(request: NextRequest) {
     for (const pm of partyMasters) {
       const upserted = await prisma.party.upsert({
         where: { tenantId_name: { tenantId: tid, name: pm.name } },
-        update: {}, 
+        // [W-X3] Fill in GSTIN/address only when existing record has null values
+        update: {
+          ...(pm.gstin ? { gstin: { set: pm.gstin } } : {}),
+          ...(pm.address ? { address: { set: pm.address } } : {}),
+        },
         create: {
           tenantId: tid,
           name: pm.name,
           type: pm.group === "Sundry Debtors" ? "CUSTOMER" : "VENDOR",
           openingBalance: pm.openingBalance,
           currentBalance: pm.openingBalance,
+          gstin: pm.gstin,
+          address: pm.address,
           createdBy: actorId,
         },
         select: { id: true, createdAt: true, updatedAt: true },

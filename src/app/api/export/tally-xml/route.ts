@@ -269,32 +269,62 @@ export async function GET(request: NextRequest) {
         },
       });
 
-      const vouchers: TallyVoucher[] = entries.map((entry: (typeof entries)[number]) => ({
-        date: entry.entryDate,
-        voucherType: resolveExportVoucherType(entry.voucherType, entry.narration),
-        reference:
-          entry.bill?.billNumber ?? entry.purchaseId ?? entry.paymentId ?? entry.id,
-        narration: entry.narration,
-        ledgerEntries: entry.lines.map((line) =>
-          journalLineToTallyEntry({
-            ...line,
-            debit: line.debit.toNumber(),
-            credit: line.credit.toNumber(),
-          })
-        ),
-        guid: entry.id,
-        placeOfSupply: entry.bill?.placeOfSupply ?? null,
-        taxPercent: entry.bill?.taxPercent.toNumber() ?? null,
-        isInterState: entry.bill?.isInterState ?? false,
-        // [Task 3b] Real cess amount replaces the hardcoded 0
-        cessAmount: entry.bill?.cessAmount.toNumber() ?? 0,
-        // [Task 3c] Per-line (HSN, rate) pairs for GSTR-1 Table 12 compliance.
-        // Falls back to legacy flat hsnCodes when rows lack _taxPercent.
-        hsnRatePairs: extractHsnRatePairs(entry.bill?.rows, entry.bill?.taxPercent.toNumber(), entry.bill?.hsnCode),
-        hsnCodes: extractHsnCodes(entry.bill?.rows, entry.bill?.hsnCode),
-        gstin: entry.bill?.gstin ?? null,
-        isReverseCharge: entry.isReverseCharge,
-      }));
+      // [G-W2] Resolve purchase bills for GST metadata.
+      // `purchaseId` is a plain string (not a Prisma relation), so we batch-query.
+      const purchaseIds = entries
+        .filter((e: (typeof entries)[number]) => !e.bill && e.purchaseId)
+        .map((e: (typeof entries)[number]) => e.purchaseId as string);
+      const purchaseBillMap = new Map<string, (typeof entries)[number]["bill"]>();
+      if (purchaseIds.length > 0) {
+        const purchaseBills = await prisma.bill.findMany({
+          where: { id: { in: purchaseIds }, tenantId },
+          select: {
+            id: true,
+            billNumber: true,
+            taxPercent: true,
+            isInterState: true,
+            placeOfSupply: true,
+            hsnCode: true,
+            rows: true,
+            cessAmount: true,
+            gstin: true,
+          },
+        });
+        for (const pb of purchaseBills) {
+          purchaseBillMap.set(pb.id, pb);
+        }
+      }
+
+      const vouchers: TallyVoucher[] = entries.map((entry: (typeof entries)[number]) => {
+        // Use direct bill relation for sales, or secondary lookup for purchases
+        const billData = entry.bill ?? (entry.purchaseId ? purchaseBillMap.get(entry.purchaseId) : null) ?? null;
+        return {
+          date: entry.entryDate,
+          voucherType: resolveExportVoucherType(entry.voucherType, entry.narration),
+          reference:
+            billData?.billNumber ?? entry.purchaseId ?? entry.paymentId ?? entry.id,
+          narration: entry.narration,
+          ledgerEntries: entry.lines.map((line) =>
+            journalLineToTallyEntry({
+              ...line,
+              debit: line.debit.toNumber(),
+              credit: line.credit.toNumber(),
+            })
+          ),
+          guid: entry.id,
+          placeOfSupply: billData?.placeOfSupply ?? null,
+          taxPercent: billData?.taxPercent.toNumber() ?? null,
+          isInterState: billData?.isInterState ?? false,
+          // [Task 3b] Real cess amount replaces the hardcoded 0
+          cessAmount: billData?.cessAmount.toNumber() ?? 0,
+          // [Task 3c] Per-line (HSN, rate) pairs for GSTR-1 Table 12 compliance.
+          // Falls back to legacy flat hsnCodes when rows lack _taxPercent.
+          hsnRatePairs: extractHsnRatePairs(billData?.rows, billData?.taxPercent.toNumber(), billData?.hsnCode),
+          hsnCodes: extractHsnCodes(billData?.rows, billData?.hsnCode),
+          gstin: billData?.gstin ?? null,
+          isReverseCharge: entry.isReverseCharge,
+        };
+      });
 
       // [FIX-P2] Count vouchers with tax > 0% but no HSN code (either format).
       // These will produce incomplete GSTR-1 Table 12 entries in Tally.

@@ -136,6 +136,10 @@ export type ParsedPartyMaster = {
   name: string;
   group: "Sundry Debtors" | "Sundry Creditors";
   openingBalance: number;
+  /** [W-X3] GSTIN extracted from Tally's <PARTYGSTIN> tag. Null when absent. */
+  gstin: string | null;
+  /** [W-X3] Address extracted from Tally's <ADDRESS.LIST> tag. Null when absent. */
+  address: string | null;
 };
 
 export type TallyParseResult = {
@@ -262,10 +266,31 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       if (!name) continue;
       if (parent !== "Sundry Debtors" && parent !== "Sundry Creditors") continue;
       const openingBalance = parseAmount(ledger["OPENINGBALANCE"]);
+
+      // [W-X3] Extract GSTIN from <PARTYGSTIN> tag (native Tally exports)
+      const rawGstin = ledger["PARTYGSTIN"];
+      const gstin = typeof rawGstin === "string" && rawGstin.trim().length >= 15
+        ? rawGstin.trim()
+        : null;
+
+      // [W-X3] Extract address from <ADDRESS.LIST> → <ADDRESS> (may be string or array)
+      let address: string | null = null;
+      const addrList = ledger["ADDRESS.LIST"] as Record<string, unknown> | undefined;
+      if (addrList) {
+        const addrVal = addrList["ADDRESS"];
+        if (typeof addrVal === "string") {
+          address = addrVal.trim() || null;
+        } else if (Array.isArray(addrVal)) {
+          address = addrVal.map(String).join(", ").trim() || null;
+        }
+      }
+
       partyMasters.push({
         name,
         group: parent as "Sundry Debtors" | "Sundry Creditors",
         openingBalance,
+        gstin,
+        address,
       });
       continue;
     }

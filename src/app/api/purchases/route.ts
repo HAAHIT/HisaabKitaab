@@ -5,6 +5,7 @@ import {
   getPostedBillBalanceDelta,
   getPaymentBalanceDelta,
 } from "@/lib/accounting";
+import { deriveIsInterState } from "@/lib/gst-helpers";
 import {
   journalForPaymentMade,
   journalForPurchaseBill,
@@ -126,7 +127,16 @@ export async function POST(request: NextRequest) {
 
     const resolvedGrandTotal = typeof grandTotal === "number" && Number.isFinite(grandTotal) ? grandTotal : 0;
     const billStatus = status === "FINAL" ? "FINAL" : "DRAFT";
-    const isInterState = body.isInterState === true;
+
+    // Load tenant GSTIN for inter-state auto-detection (G-C1)
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { gstin: true },
+    });
+
+    // [G-C1] Auto-derive from GSTIN state codes; manual override is fallback only
+    const effectiveGstin = gstin || party.gstin;
+    const isInterState = deriveIsInterState(effectiveGstin, tenant?.gstin, body.isInterState);
     const now = new Date();
     
     // Use provided templateId or fallback to __PURCHASE_BILL__
