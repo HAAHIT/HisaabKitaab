@@ -19,7 +19,8 @@ type VoucherType =
   | "PAYMENT"
   | "JOURNAL"
   | "CREDIT_NOTE"
-  | "DEBIT_NOTE";
+  | "DEBIT_NOTE"
+  | "CONTRA";
 
 export function resolveImportVoucherType(
   originalTypeName: string,
@@ -32,6 +33,8 @@ export function resolveImportVoucherType(
     originalTypeName === "Debit Note"
   )
     return "DEBIT_NOTE";
+  // [X4] Preserve Contra voucher type instead of collapsing to JOURNAL
+  if (originalTypeName === "Contra") return "CONTRA";
   return baseType as VoucherType;
 }
 
@@ -141,18 +144,23 @@ export async function GET(request: NextRequest) {
       return upserted.id;
     }
 
+    // [S2] Batch party pre-resolution — chunks of 25 to reduce lock contention
+    // compared to the previous Promise.all that fired all upserts in parallel.
     const allPartyNames = [
       ...new Set(
         vouchers
           .flatMap((v) => v.lines.map((l) => l.partyName))
           .filter((n): n is string => !!n)
       ),
-    ];
-    await Promise.all(
-      allPartyNames
-        .filter((name) => !partyCache.has(name))
-        .map((name) => resolvePartyId(name, "SUNDRY_DEBTORS"))
-    );
+    ].filter((name) => !partyCache.has(name));
+
+    const PARTY_BATCH = 25;
+    for (let i = 0; i < allPartyNames.length; i += PARTY_BATCH) {
+      const batch = allPartyNames.slice(i, i + PARTY_BATCH);
+      await Promise.all(
+        batch.map((name) => resolvePartyId(name, "SUNDRY_DEBTORS"))
+      );
+    }
 
     let imported = 0;
     let skipped = 0;
@@ -163,22 +171,27 @@ export async function GET(request: NextRequest) {
 
     let duplicateFingerprints = new Set<string>();
     if (vouchersWithoutRemoteId.length > 0) {
+      // [S3] DB-side duplicate check: query only fingerprint strings instead of
+      // loading entire JournalEntry rows into memory. Uses raw SQL for
+      // string concatenation to keep the comparison server-side.
       const dates = vouchersWithoutRemoteId.map((v) => v.entryDate.getTime());
       const rangeMin = new Date(Math.min(...dates));
       const rangeMax = new Date(Math.max(...dates));
-      const existingEntries = await prisma.journalEntry.findMany({
-        where: {
-          tenantId: tid,
-          entryDate: { gte: rangeMin, lte: rangeMax },
-          remoteId: null, 
-        },
-        select: { voucherType: true, entryDate: true, narration: true, totalDebit: true },
-      });
+      const existingFingerprints: { fp: string }[] = await prisma.$queryRaw`
+        SELECT CONCAT(
+          "voucherType", '|',
+          TO_CHAR("entryDate", 'YYYY-MM-DD'), '|',
+          COALESCE("narration", ''), '|',
+          "totalDebit"::text
+        ) as fp
+        FROM "JournalEntry"
+        WHERE "tenantId" = ${tid}
+          AND "entryDate" >= ${rangeMin}
+          AND "entryDate" <= ${rangeMax}
+          AND "remoteId" IS NULL
+      `;
       duplicateFingerprints = new Set(
-        existingEntries.map(
-          (e: (typeof existingEntries)[number]) =>
-            `${e.voucherType}|${e.entryDate.toISOString().slice(0, 10)}|${e.narration}|${e.totalDebit.toString()}`
-        )
+        existingFingerprints.map((r) => r.fp)
       );
     }
 
@@ -249,6 +262,7 @@ export async function GET(request: NextRequest) {
                 placeOfSupply: voucher.placeOfSupply ?? null,
                 taxPercent: voucher.taxPercent ?? null,
                 hsnCodes: voucher.hsnCodes ?? [],
+                isInterState: voucher.isInterState ?? null,
               }),
             },
           });
@@ -297,7 +311,10 @@ export async function GET(request: NextRequest) {
       data: {
         status: "COMPLETED",
         processed: imported + skipped,
-        failed: failed
+        failed: failed,
+        // [S1] Clear raw XML to prevent storage bloat (up to 5MB per job).
+        // All relevant data is already persisted in JournalEntries + AuditLog.
+        xmlData: "",
       }
     });
 

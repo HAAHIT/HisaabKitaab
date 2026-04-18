@@ -388,6 +388,7 @@ enum VoucherType {
   JOURNAL
   CREDIT_NOTE // GST Credit Note — reversal of a FINAL sales bill (GSTR-1 Table 9B)
   DEBIT_NOTE // GST Debit Note — Purchase Return under IGST Act (GSTR-3B Table 4)
+  CONTRA // Bank-to-cash transfers (native Tally type) [X4]
 }
 
 enum MediaAssetKind {

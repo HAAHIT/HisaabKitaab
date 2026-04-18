@@ -76,8 +76,8 @@ describe("resolveImportVoucherType — Credit Note / Debit Note mapping", () => 
     expect(resolveImportVoucherType("Receipt", "RECEIPT")).toBe("RECEIPT");
   });
 
-  it("returns baseType for unknown originalTypeName", () => {
-    expect(resolveImportVoucherType("Contra", "JOURNAL")).toBe("JOURNAL");
+  it("maps 'Contra' → CONTRA (X4: preserved native Tally type)", () => {
+    expect(resolveImportVoucherType("Contra", "JOURNAL")).toBe("CONTRA");
   });
 });
 

@@ -124,6 +124,12 @@ export type ParsedVoucher = {
   taxPercent: number | null;
   /** HSN/SAC codes extracted from GSTDETAILS.LIST HSNCODE tags. */
   hsnCodes: string[];
+  /**
+   * [G2] True if ledger entries contain IGST-related accounts (indicating inter-state supply).
+   * Determined by scanning ledger names for "IGST" vs "CGST"/"SGST" keywords.
+   * Null when no GST ledger entries are present (e.g. exempt supplies).
+   */
+  isInterState: boolean | null;
 };
 
 export type ParsedPartyMaster = {
@@ -382,6 +388,13 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       }
     }
 
+    // [G2] Determine isInterState from ledger names.
+    // IGST ledger entries indicate inter-state; CGST/SGST indicate intra-state.
+    const ledgerNames = lines.map((l) => l.ledgerName.toUpperCase());
+    const hasIgst = ledgerNames.some((n) => n.includes("IGST"));
+    const hasCgstSgst = ledgerNames.some((n) => n.includes("CGST") || n.includes("SGST"));
+    const isInterState = hasIgst ? true : hasCgstSgst ? false : null;
+
     vouchers.push({
       voucherType,
       originalTypeName: typeName,
@@ -394,6 +407,7 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       placeOfSupply,
       taxPercent: parsedTaxPercent,
       hsnCodes: parsedHsnCodes,
+      isInterState,
     });
   }
 

@@ -102,9 +102,12 @@ export interface TallyVoucher {
   /**
    * Customer GSTIN from the linked Bill (if any). Used to determine SOURCEOFDETAILS:
    *   "Autofill"      = registered party (GSTIN present) — Tally auto-populates GST return data
-   *   "NotApplicable" = B2C / unregistered / composite — no GSTIN lookup
+   *   "NotApplicable" = B2C / unregistered — no GSTIN lookup
+   *   "Composite"     = Composition Dealer (Section 10 of CGST Act)
    */
   gstin?: string | null;
+  /** True for Composition Dealers under Section 10 of CGST Act */
+  isCompositionDealer?: boolean;
 }
 
 export interface TallyPartyMaster {
@@ -128,6 +131,7 @@ const VOUCHER_TYPE_MAP: Record<string, TallyVoucherType> = {
   JOURNAL: "Journal",
   CREDIT_NOTE: "Sales Return",
   DEBIT_NOTE: "Purchase Return", // GST Debit Note — GSTR-3B Table 4
+  CONTRA: "Contra", // [X4] Bank-to-cash transfers — native Tally type
 };
 
 export function dbVoucherTypeToTally(voucherType: string): TallyVoucherType {
@@ -233,14 +237,20 @@ function buildGstDetailsXml(
   taxPercent: number,
   cessAmount: number,
   hsnCode?: string,
-  gstin?: string | null
+  gstin?: string | null,
+  isCompositionDealer?: boolean
 ): string {
   const hsnTag = hsnCode
     ? `
           <HSNCODE>${escapeXml(hsnCode)}</HSNCODE>`
     : "";
 
-  const sourceOfDetails = gstin ? "Autofill" : "NotApplicable";
+  // [G5] SOURCEOFDETAILS: Composition Dealer → "Composite"; GSTIN present → "Autofill"; else → "NotApplicable"
+  const sourceOfDetails = isCompositionDealer
+    ? "Composite"
+    : gstin
+      ? "Autofill"
+      : "NotApplicable";
 
   return `
         <GSTDETAILS.LIST>
@@ -263,6 +273,7 @@ function buildLedgerEntryXml(
     hsnRatePairs: Array<{ hsnCode: string; taxPercent: number }>;
     hsnCodes: string[];
     gstin?: string | null;
+    isCompositionDealer?: boolean;
   }
 ): string {
   const billAllocations = entry.partyName
@@ -293,15 +304,15 @@ function buildLedgerEntryXml(
           return true;
         })
         .map(({ hsnCode, taxPercent }) =>
-          buildGstDetailsXml(taxPercent, cess, hsnCode, gstContext.gstin)
+          buildGstDetailsXml(taxPercent, cess, hsnCode, gstContext.gstin, gstContext.isCompositionDealer)
         )
         .join("");
     } else if (gstContext.hsnCodes.length > 0) {
       gstDetails = gstContext.hsnCodes
-        .map((code) => buildGstDetailsXml(gstContext.taxPercent, cess, code, gstContext.gstin))
+        .map((code) => buildGstDetailsXml(gstContext.taxPercent, cess, code, gstContext.gstin, gstContext.isCompositionDealer))
         .join("");
     } else {
-      gstDetails = buildGstDetailsXml(gstContext.taxPercent, cess, undefined, gstContext.gstin);
+      gstDetails = buildGstDetailsXml(gstContext.taxPercent, cess, undefined, gstContext.gstin, gstContext.isCompositionDealer);
     }
   }
 
@@ -327,6 +338,7 @@ function buildVoucherXml(voucher: TallyVoucher): string {
           hsnRatePairs: voucher.hsnRatePairs ?? [],
           hsnCodes: voucher.hsnCodes ?? [],
           gstin: voucher.gstin,
+          isCompositionDealer: voucher.isCompositionDealer,
         }
       : undefined;
 
@@ -367,6 +379,7 @@ function buildVoucherXml(voucher: TallyVoucher): string {
       <VOUCHER VCHTYPE="${escapeXml(voucher.voucherType)}" ACTION="Create" OBJVIEW="Accounting Voucher View">${guidTag}
         <DATE>${formatTallyDate(voucher.date)}</DATE>
         <VOUCHERTYPENAME>${escapeXml(voucher.voucherType)}</VOUCHERTYPENAME>
+        <VOUCHERTYPEORIGNAME>${escapeXml(voucher.voucherType)}</VOUCHERTYPEORIGNAME>
         <VOUCHERNUMBER>${escapeXml(voucher.reference)}</VOUCHERNUMBER>
         <NARRATION>${escapeXml(voucher.narration)}</NARRATION>${placeOfSupplyTag}${reverseChargeTag}${ledgerLines}
       </VOUCHER>
@@ -395,6 +408,7 @@ function buildPartyMasterXml(party: TallyPartyMaster): string {
   return `
     <TALLYMESSAGE xmlns:UDF="TallyUDF">
       <LEDGER NAME="${escapeXml(party.name)}" ACTION="Alter">
+        <MASTERID>${escapeXml(party.name)}</MASTERID>
         <NAME>${escapeXml(party.name)}</NAME>
         <PARENT>${escapeXml(party.group)}</PARENT>
         ${openingBalanceFormatted}

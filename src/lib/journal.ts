@@ -7,7 +7,7 @@ import {
 import { roundTo2 } from "@/lib/journal-reporting";
 
 type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
-type VoucherType = "SALES" | "PURCHASE" | "RECEIPT" | "PAYMENT" | "JOURNAL" | "CREDIT_NOTE" | "DEBIT_NOTE";
+type VoucherType = "SALES" | "PURCHASE" | "RECEIPT" | "PAYMENT" | "JOURNAL" | "CREDIT_NOTE" | "DEBIT_NOTE" | "CONTRA";
 
 interface JournalLineInput {
   accountCode: AccountCode;
