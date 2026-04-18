@@ -492,6 +492,60 @@ export async function PATCH(
         data: updateData as BillUpdateData,
       });
 
+      // ── [CRITICAL] MCA GSR 247(E) — Audit trail for bill PATCH ────────────
+      // Every field mutation and status transition must be logged.
+      // Without this, statutory auditors will find bill changes with no trail.
+      const changedFields = Object.keys(updateData);
+      if (changedFields.length > 0) {
+        // Log status change as a dedicated entry (most audited field)
+        if (updateData.status && updateData.status !== existing.status) {
+          await tx.auditLog.create({
+            data: {
+              tenantId,
+              entityType: "Bill",
+              entityId: updatedBill.id,
+              userId: userId || updatedBill.createdBy,
+              action: "UPDATE",
+              fieldName: "status",
+              oldValue: JSON.stringify(existing.status),
+              newValue: JSON.stringify(updateData.status),
+            },
+          });
+        }
+
+        // Log all other field mutations as a single "UPDATE" entry with field list
+        const nonStatusFields = changedFields.filter((f) => f !== "status");
+        if (nonStatusFields.length > 0) {
+          await tx.auditLog.create({
+            data: {
+              tenantId,
+              entityType: "Bill",
+              entityId: updatedBill.id,
+              userId: userId || updatedBill.createdBy,
+              action: "UPDATE",
+              fieldName: nonStatusFields.join(","),
+              oldValue: null, // Bill rows can be large; diff is impractical
+              newValue: JSON.stringify(
+                Object.fromEntries(
+                  nonStatusFields
+                    .filter((f) => f !== "rows") // Exclude large JSON blobs
+                    .map((f) => [f, updateData[f]])
+                )
+              ),
+            },
+          });
+        }
+      }
+
+      // TODO: [CRITICAL] - Tally sync-state divergence risk.
+      // Once the SyncState enum and syncState field are added to JournalEntry
+      // (see hisaabkitaab_market_readiness.md §5.1), uncomment the following:
+      //
+      // await tx.journalEntry.updateMany({
+      //   where: { billId: updatedBill.id, remoteId: { not: null } },
+      //   data: { syncState: "MODIFIED" },
+      // });
+
       if (!finalPartyId) {
         return updatedBill;
       }
