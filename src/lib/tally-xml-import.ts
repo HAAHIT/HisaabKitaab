@@ -9,6 +9,7 @@
 
 import { XMLParser } from "fast-xml-parser";
 import type { AccountCode } from "./chart-of-accounts";
+import { stateNameToGstCode } from "./gst-states";
 
 // ── Ledger name → AccountCode mapping ────────────────────────────────────────
 // Covers HisaabKitaab account names and common Tally short names.
@@ -116,12 +117,29 @@ export type ParsedVoucher = {
    * Null for native Tally XML that does not carry a REMOTEID.
    */
   remoteId: string | null;
+  // ── GST metadata (G1 fix) ───────────────────────────────────────────────────
+  /** 2-digit GST state code reverse-looked up from Tally's state name. Null when absent. */
+  placeOfSupply: string | null;
+  /** First tax rate found in GSTDETAILS.LIST (e.g. 18). Null when absent. */
+  taxPercent: number | null;
+  /** HSN/SAC codes extracted from GSTDETAILS.LIST HSNCODE tags. */
+  hsnCodes: string[];
+  /**
+   * [G2] True if ledger entries contain IGST-related accounts (indicating inter-state supply).
+   * Determined by scanning ledger names for "IGST" vs "CGST"/"SGST" keywords.
+   * Null when no GST ledger entries are present (e.g. exempt supplies).
+   */
+  isInterState: boolean | null;
 };
 
 export type ParsedPartyMaster = {
   name: string;
   group: "Sundry Debtors" | "Sundry Creditors";
   openingBalance: number;
+  /** [W-X3] GSTIN extracted from Tally's <PARTYGSTIN> tag. Null when absent. */
+  gstin: string | null;
+  /** [W-X3] Address extracted from Tally's <ADDRESS.LIST> tag. Null when absent. */
+  address: string | null;
 };
 
 export type TallyParseResult = {
@@ -132,13 +150,23 @@ export type TallyParseResult = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function parseTallyDate(raw: unknown): Date | null {
+/**
+ * Parses a Tally YYYYMMDD date string as IST noon (06:30 UTC).
+ *
+ * Tally dates are calendar dates in IST (UTC+5:30). Storing them as midnight
+ * UTC causes the date to roll back one day when viewed in IST, which breaks
+ * the duplicate-fingerprint check (entryDate.toISOString().slice(0,10)).
+ * Using 06:30 UTC (= 12:00 IST noon) keeps the YYYY-MM-DD portion
+ * identical regardless of server timezone or DST edge cases.
+ */
+export function parseTallyDate(raw: unknown): Date | null {
   const s = String(raw ?? "").trim();
   if (s.length !== 8) return null;
   const year = parseInt(s.slice(0, 4), 10);
   const month = parseInt(s.slice(4, 6), 10) - 1;
   const day = parseInt(s.slice(6, 8), 10);
-  const d = new Date(Date.UTC(year, month, day));
+  // 06:30 UTC = 12:00 noon IST — date string is unambiguous in every timezone
+  const d = new Date(Date.UTC(year, month, day, 6, 30, 0));
   return isNaN(d.getTime()) ? null : d;
 }
 
@@ -238,10 +266,31 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       if (!name) continue;
       if (parent !== "Sundry Debtors" && parent !== "Sundry Creditors") continue;
       const openingBalance = parseAmount(ledger["OPENINGBALANCE"]);
+
+      // [W-X3] Extract GSTIN from <PARTYGSTIN> tag (native Tally exports)
+      const rawGstin = ledger["PARTYGSTIN"];
+      const gstin = typeof rawGstin === "string" && rawGstin.trim().length >= 15
+        ? rawGstin.trim()
+        : null;
+
+      // [W-X3] Extract address from <ADDRESS.LIST> → <ADDRESS> (may be string or array)
+      let address: string | null = null;
+      const addrList = ledger["ADDRESS.LIST"] as Record<string, unknown> | undefined;
+      if (addrList) {
+        const addrVal = addrList["ADDRESS"];
+        if (typeof addrVal === "string") {
+          address = addrVal.trim() || null;
+        } else if (Array.isArray(addrVal)) {
+          address = addrVal.map(String).join(", ").trim() || null;
+        }
+      }
+
       partyMasters.push({
         name,
         group: parent as "Sundry Debtors" | "Sundry Creditors",
         openingBalance,
+        gstin,
+        address,
       });
       continue;
     }
@@ -333,6 +382,44 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
 
     const totalDebit = lines.reduce((s, l) => s + l.debit, 0);
 
+    // ── Extract GST metadata from voucher (G1 fix) ──────────────────────────
+    // PLACEOFSUPPLY: Tally writes the English state name; reverse-lookup to 2-digit code.
+    const rawPlaceOfSupply = String(v["PLACEOFSUPPLY"] ?? "").trim() || null;
+    const placeOfSupply = rawPlaceOfSupply
+      ? stateNameToGstCode(rawPlaceOfSupply) ?? rawPlaceOfSupply // keep raw if unknown
+      : null;
+
+    // GSTDETAILS.LIST: nested inside ALLLEDGERENTRIES.LIST entries.
+    // Extract first TAXRATE and all HSNCODE values.
+    let parsedTaxPercent: number | null = null;
+    const parsedHsnCodes: string[] = [];
+    const seenHsn = new Set<string>();
+    for (const entry of entryList) {
+      const e = entry as Record<string, unknown>;
+      const gstDetails = e["GSTDETAILS.LIST"];
+      if (!gstDetails) continue;
+      const gstList = Array.isArray(gstDetails) ? gstDetails : [gstDetails];
+      for (const gst of gstList) {
+        const g = gst as Record<string, unknown>;
+        if (parsedTaxPercent === null) {
+          const rate = parseFloat(String(g["TAXRATE"] ?? g["BASICTAXRATE"] ?? ""));
+          if (!isNaN(rate) && rate > 0) parsedTaxPercent = rate;
+        }
+        const hsn = String(g["HSNCODE"] ?? "").trim();
+        if (hsn && !seenHsn.has(hsn)) {
+          seenHsn.add(hsn);
+          parsedHsnCodes.push(hsn);
+        }
+      }
+    }
+
+    // [G2] Determine isInterState from ledger names.
+    // IGST ledger entries indicate inter-state; CGST/SGST indicate intra-state.
+    const ledgerNames = lines.map((l) => l.ledgerName.toUpperCase());
+    const hasIgst = ledgerNames.some((n) => n.includes("IGST"));
+    const hasCgstSgst = ledgerNames.some((n) => n.includes("CGST") || n.includes("SGST"));
+    const isInterState = hasIgst ? true : hasCgstSgst ? false : null;
+
     vouchers.push({
       voucherType,
       originalTypeName: typeName,
@@ -342,6 +429,10 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       lines,
       totalDebit,
       remoteId,
+      placeOfSupply,
+      taxPercent: parsedTaxPercent,
+      hsnCodes: parsedHsnCodes,
+      isInterState,
     });
   }
 

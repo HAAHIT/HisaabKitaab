@@ -87,6 +87,7 @@ export default function NewBillPage() {
   const [taxPercent, setTaxPercent] = useState(18);
   const [isInterState, setIsInterState] = useState(false);
   const [placeOfSupply, setPlaceOfSupply] = useState("");
+  const [hsnCode, setHsnCode] = useState("");
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("");
   const [didAutoFocusRow, setDidAutoFocusRow] = useState(false);
@@ -264,10 +265,13 @@ export default function NewBillPage() {
     if (!selectedParty) {
       formErrors.partyId = true;
     }
+    if (status === "FINAL" && !placeOfSupply) {
+      formErrors.placeOfSupply = true;
+    }
 
     if (Object.keys(formErrors).length > 0) {
       setErrors(formErrors);
-      showToast("Please fill in required fields", "error");
+      showToast("Please fill in required fields (Place of Supply is mandatory for final bills)", "error");
       mainScroll?.scrollTo({ top: 0, behavior: "smooth" });
       window.setTimeout(() => setErrors({}), 3000);
       return;
@@ -300,6 +304,7 @@ export default function NewBillPage() {
           grandTotal,
           isInterState,
           placeOfSupply: placeOfSupply || null,
+          hsnCode: hsnCode.trim() || null,
           notes: notes.trim() || null,
           terms: terms.trim() || null,
           status,
@@ -750,7 +755,12 @@ export default function NewBillPage() {
                         onSelectionChange={(keys) => {
                           const value = Array.from(keys)[0] as string | undefined;
                           setPlaceOfSupply(value ?? "");
+                          if (value) {
+                            setErrors((curr) => ({ ...curr, placeOfSupply: false }));
+                          }
                         }}
+                        isInvalid={Boolean(errors.placeOfSupply)}
+                        errorMessage={errors.placeOfSupply ? "Required for final bills" : undefined}
                       >
                         {Object.entries(GST_STATE_CODES).map(([code, name]) => (
                           <SelectItem key={code} textValue={`${code} - ${name}`}>
@@ -758,6 +768,18 @@ export default function NewBillPage() {
                           </SelectItem>
                         ))}
                       </Select>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="shrink-0 text-sm text-default-500">HSN/SAC Code</span>
+                      <Input
+                        aria-label="HSN/SAC Code"
+                        placeholder="e.g. 9983"
+                        size="sm"
+                        variant="bordered"
+                        value={hsnCode}
+                        onValueChange={setHsnCode}
+                        className="max-w-[200px]"
+                      />
                     </div>
                     <Divider />
                     <div className="flex justify-between">

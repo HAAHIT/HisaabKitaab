@@ -43,6 +43,8 @@ export interface TallyLedgerEntry {
   /** Positive = debit, Negative = credit (Tally convention) */
   amount: number;
   partyName?: string | null;
+  /** Bill/voucher reference — used as <NAME> in BILLALLOCATIONS.LIST for outstanding bill tracking */
+  reference?: string | null;
   /** Set to true for the Sales Account / Purchase Account line — receives GSTDETAILS.LIST */
   isIncomeLedger?: boolean;
 }
@@ -100,15 +102,18 @@ export interface TallyVoucher {
   /**
    * Customer GSTIN from the linked Bill (if any). Used to determine SOURCEOFDETAILS:
    *   "Autofill"      = registered party (GSTIN present) — Tally auto-populates GST return data
-   *   "NotApplicable" = B2C / unregistered / composite — no GSTIN lookup
+   *   "NotApplicable" = B2C / unregistered — no GSTIN lookup
+   *   "Composite"     = Composition Dealer (Section 10 of CGST Act)
    */
   gstin?: string | null;
+  /** True for Composition Dealers under Section 10 of CGST Act */
+  isCompositionDealer?: boolean;
 }
 
 export interface TallyPartyMaster {
   name: string;
-  /** Tally group: "Sundry Debtors" or "Sundry Creditors" */
-  group: "Sundry Debtors" | "Sundry Creditors";
+  /** Tally group: e.g. "Sundry Debtors", "Sundry Creditors", "Sales Accounts" */
+  group: string;
   openingBalance: number;
   phone?: string | null;
   email?: string | null;
@@ -126,6 +131,7 @@ const VOUCHER_TYPE_MAP: Record<string, TallyVoucherType> = {
   JOURNAL: "Journal",
   CREDIT_NOTE: "Sales Return",
   DEBIT_NOTE: "Purchase Return", // GST Debit Note — GSTR-3B Table 4
+  CONTRA: "Contra", // [X4] Bank-to-cash transfers — native Tally type
 };
 
 export function dbVoucherTypeToTally(voucherType: string): TallyVoucherType {
@@ -209,8 +215,14 @@ export function journalLineToTallyEntry(line: {
   const isIncomeLedger =
     line.accountName === "Sales Account" ||
     line.accountName === "Purchase Account";
+
+  let ledgerName = line.accountName;
+  if (line.partyName && (line.accountName === "Sundry Debtors" || line.accountName === "Sundry Creditors")) {
+    ledgerName = line.partyName;
+  }
+
   return {
-    ledgerName: line.accountName,
+    ledgerName,
     amount,
     partyName: line.partyName,
     isIncomeLedger,
@@ -231,14 +243,20 @@ function buildGstDetailsXml(
   taxPercent: number,
   cessAmount: number,
   hsnCode?: string,
-  gstin?: string | null
+  gstin?: string | null,
+  isCompositionDealer?: boolean
 ): string {
   const hsnTag = hsnCode
     ? `
           <HSNCODE>${escapeXml(hsnCode)}</HSNCODE>`
     : "";
 
-  const sourceOfDetails = gstin ? "Autofill" : "NotApplicable";
+  // [G5] SOURCEOFDETAILS: Composition Dealer → "Composite"; GSTIN present → "Autofill"; else → "NotApplicable"
+  const sourceOfDetails = isCompositionDealer
+    ? "Composite"
+    : gstin
+      ? "Autofill"
+      : "NotApplicable";
 
   return `
         <GSTDETAILS.LIST>
@@ -255,19 +273,22 @@ function buildGstDetailsXml(
 
 function buildLedgerEntryXml(
   entry: TallyLedgerEntry,
+  voucherType: TallyVoucherType,
   gstContext?: {
     taxPercent: number;
     cessAmount: number;
     hsnRatePairs: Array<{ hsnCode: string; taxPercent: number }>;
     hsnCodes: string[];
     gstin?: string | null;
+    isCompositionDealer?: boolean;
   }
 ): string {
+  const isSettlement = (voucherType === "Receipt" || voucherType === "Payment") && entry.reference;
   const billAllocations = entry.partyName
     ? `
         <BILLALLOCATIONS.LIST>
-          <NAME>${escapeXml(entry.partyName)}</NAME>
-          <BILLTYPE>On Account</BILLTYPE>
+          <NAME>${escapeXml(entry.reference ?? entry.partyName)}</NAME>
+          <BILLTYPE>${isSettlement ? "Against Ref" : "New Ref"}</BILLTYPE>
           <AMOUNT>${entry.amount >= 0 ? "" : "-"}${formatAmount(entry.amount)}</AMOUNT>
         </BILLALLOCATIONS.LIST>`
     : "";
@@ -291,15 +312,15 @@ function buildLedgerEntryXml(
           return true;
         })
         .map(({ hsnCode, taxPercent }) =>
-          buildGstDetailsXml(taxPercent, cess, hsnCode, gstContext.gstin)
+          buildGstDetailsXml(taxPercent, cess, hsnCode, gstContext.gstin, gstContext.isCompositionDealer)
         )
         .join("");
     } else if (gstContext.hsnCodes.length > 0) {
       gstDetails = gstContext.hsnCodes
-        .map((code) => buildGstDetailsXml(gstContext.taxPercent, cess, code, gstContext.gstin))
+        .map((code) => buildGstDetailsXml(gstContext.taxPercent, cess, code, gstContext.gstin, gstContext.isCompositionDealer))
         .join("");
     } else {
-      gstDetails = buildGstDetailsXml(gstContext.taxPercent, cess, undefined, gstContext.gstin);
+      gstDetails = buildGstDetailsXml(gstContext.taxPercent, cess, undefined, gstContext.gstin, gstContext.isCompositionDealer);
     }
   }
 
@@ -313,8 +334,11 @@ function buildLedgerEntryXml(
 
 function buildVoucherXml(voucher: TallyVoucher): string {
   // Build GST context from voucher-level fields (populated from Bill when available)
+  // [Fix P1] Discard GST info for non-taxable voucher types like Journal/Contra/Payment
+  const isGstEligible = ["Sales", "Purchase", "Sales Return", "Purchase Return"].includes(voucher.voucherType);
+
   const gstContext =
-    voucher.taxPercent != null && voucher.taxPercent > 0
+    isGstEligible && voucher.taxPercent != null && voucher.taxPercent > 0
       ? {
           taxPercent: voucher.taxPercent,
           cessAmount: voucher.cessAmount ?? 0,
@@ -322,11 +346,18 @@ function buildVoucherXml(voucher: TallyVoucher): string {
           hsnRatePairs: voucher.hsnRatePairs ?? [],
           hsnCodes: voucher.hsnCodes ?? [],
           gstin: voucher.gstin,
+          isCompositionDealer: voucher.isCompositionDealer,
         }
       : undefined;
 
   const ledgerLines = voucher.ledgerEntries
-    .map((entry) => buildLedgerEntryXml(entry, gstContext))
+    .map((entry) =>
+      buildLedgerEntryXml(
+        { ...entry, reference: entry.partyName ? (entry.reference ?? voucher.reference) : undefined },
+        voucher.voucherType,
+        gstContext
+      )
+    )
     .join("");
 
   // GUID prevents duplicate imports on re-import (TallyPrime idempotency).
@@ -352,12 +383,24 @@ function buildVoucherXml(voucher: TallyVoucher): string {
         <ISREVERSECHARGE>Yes</ISREVERSECHARGE>`
     : "";
 
+  // [W-X1] PARTYLEDGERNAME — helps Tally link voucher to party for Outstanding/Receivables reports.
+  // Derived from the first ledger entry that has a partyName.
+  const partyLedgerEntry = isGstEligible
+    ? voucher.ledgerEntries.find((e) => e.partyName)
+    : undefined;
+  const partyLedgerNameTag = partyLedgerEntry?.partyName
+    ? `
+        <PARTYLEDGERNAME>${escapeXml(partyLedgerEntry.partyName)}</PARTYLEDGERNAME>`
+    : "";
+
   return `
     <TALLYMESSAGE xmlns:UDF="TallyUDF">
-      <VOUCHER VCHTYPE="${escapeXml(voucher.voucherType)}" ACTION="Create" OBJVIEW="Accounting Voucher View">${guidTag}
+      <VOUCHER VCHTYPE="${escapeXml(voucher.voucherType)}" ACTION="Create" OBJVIEW="Accounting Voucher View">
         <DATE>${formatTallyDate(voucher.date)}</DATE>
+        <EFFECTIVEDATE>${formatTallyDate(voucher.date)}</EFFECTIVEDATE>${guidTag}
         <VOUCHERTYPENAME>${escapeXml(voucher.voucherType)}</VOUCHERTYPENAME>
-        <VOUCHERNUMBER>${escapeXml(voucher.reference)}</VOUCHERNUMBER>
+        <VOUCHERTYPEORIGNAME>${escapeXml(voucher.voucherType)}</VOUCHERTYPEORIGNAME>
+        <VOUCHERNUMBER>${escapeXml(voucher.reference)}</VOUCHERNUMBER>${partyLedgerNameTag}
         <NARRATION>${escapeXml(voucher.narration)}</NARRATION>${placeOfSupplyTag}${reverseChargeTag}${ledgerLines}
       </VOUCHER>
     </TALLYMESSAGE>`;
@@ -385,6 +428,7 @@ function buildPartyMasterXml(party: TallyPartyMaster): string {
   return `
     <TALLYMESSAGE xmlns:UDF="TallyUDF">
       <LEDGER NAME="${escapeXml(party.name)}" ACTION="Alter">
+        <MASTERID>${escapeXml(party.name)}</MASTERID>
         <NAME>${escapeXml(party.name)}</NAME>
         <PARENT>${escapeXml(party.group)}</PARENT>
         ${openingBalanceFormatted}

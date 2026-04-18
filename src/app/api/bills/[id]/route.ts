@@ -35,6 +35,7 @@ const ALLOWED_BILL_PATCH_KEYS = new Set([
   "grandTotal",
   "status",
   "isInterState",
+  "hsnCode",
 ]);
 
 const ALLOWED_BILL_PATCH_STATUSES = new Set(["DRAFT", "FINAL"]);
@@ -196,6 +197,7 @@ export async function PATCH(
         createdBy: true,
         rows: true,        // needed for HSN validation gate
         placeOfSupply: true, // needed for placeOfSupply validation gate
+        hsnCode: true,
       },
     });
 
@@ -308,6 +310,11 @@ export async function PATCH(
       const pos = body.placeOfSupply;
       updateData.placeOfSupply =
         typeof pos === "string" && pos ? pos : null;
+    }
+
+    if (hasOwn(body, "hsnCode")) {
+      const hsn = body.hsnCode;
+      updateData.hsnCode = typeof hsn === "string" && hsn.trim() ? hsn.trim() : null;
     }
 
     let nextPartyId = existing.partyId;
@@ -466,7 +473,9 @@ export async function PATCH(
             typeof (row as Record<string, unknown>)["_hsnCode"] === "string" &&
             ((row as Record<string, unknown>)["_hsnCode"] as string).trim() !== ""
         );
-      if (!hasHsn) {
+      const hasFallbackHsn = hasOwn(updateData, "hsnCode") ? !!updateData.hsnCode : !!existing.hsnCode;
+      
+      if (!hasHsn && !hasFallbackHsn) {
         return NextResponse.json(
           {
             error:
@@ -481,6 +490,58 @@ export async function PATCH(
       const updatedBill = await tx.bill.update({
         where: { id },
         data: updateData as BillUpdateData,
+      });
+
+      // ── [CRITICAL] MCA GSR 247(E) — Audit trail for bill PATCH ────────────
+      // Every field mutation and status transition must be logged.
+      // Without this, statutory auditors will find bill changes with no trail.
+      const changedFields = Object.keys(updateData);
+      if (changedFields.length > 0) {
+        // Log status change as a dedicated entry (most audited field)
+        if (updateData.status && updateData.status !== existing.status) {
+          await tx.auditLog.create({
+            data: {
+              tenantId,
+              entityType: "Bill",
+              entityId: updatedBill.id,
+              userId: userId || updatedBill.createdBy,
+              action: "UPDATE",
+              fieldName: "status",
+              oldValue: JSON.stringify(existing.status),
+              newValue: JSON.stringify(updateData.status),
+            },
+          });
+        }
+
+        // Log all other field mutations as a single "UPDATE" entry with field list
+        const nonStatusFields = changedFields.filter((f) => f !== "status");
+        if (nonStatusFields.length > 0) {
+          await tx.auditLog.create({
+            data: {
+              tenantId,
+              entityType: "Bill",
+              entityId: updatedBill.id,
+              userId: userId || updatedBill.createdBy,
+              action: "UPDATE",
+              fieldName: nonStatusFields.join(","),
+              oldValue: null, // Bill rows can be large; diff is impractical
+              newValue: JSON.stringify(
+                Object.fromEntries(
+                  nonStatusFields
+                    .filter((f) => f !== "rows") // Exclude large JSON blobs
+                    .map((f) => [f, updateData[f]])
+                )
+              ),
+            },
+          });
+        }
+      }
+
+      // [CRITICAL] Tally sync-state — flag linked imported vouchers as MODIFIED
+      // so the next XML export warns CAs of data divergence.
+      await tx.journalEntry.updateMany({
+        where: { billId: updatedBill.id, remoteId: { not: null } },
+        data: { syncState: "MODIFIED" },
       });
 
       if (!finalPartyId) {
@@ -610,6 +671,16 @@ export async function DELETE(
           oldValue: existing.status,
           newValue: "CANCELLED",
         },
+      });
+
+      // TODO: [CRITICAL] - Tally sync-state divergence on bill cancellation
+      // [CRITICAL] Tally sync-state — flag original Tally-imported vouchers as MODIFIED
+      // so the next XML re-export warns CAs of the cancellation-induced data divergence.
+      // Without this, cancelled bills show syncState=SYNCED, creating a false impression
+      // that the voucher is unchanged in the cloud.
+      await tx.journalEntry.updateMany({
+        where: { billId: existing.id, remoteId: { not: null } },
+        data: { syncState: "MODIFIED" },
       });
 
       if (!existing.partyId) {

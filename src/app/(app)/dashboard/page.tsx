@@ -171,7 +171,7 @@ export default function DashboardPage() {
   }
 
   const s = data?.summary;
-  const billTotal = data?.billStats?.reduce((acc, b) => acc + (b._sum.grandTotal || 0), 0) || 0;
+  const billTotal = data?.billStats?.reduce((acc, b) => acc + Number(b._sum.grandTotal || 0), 0) || 0;
   const billCount = data?.billStats?.reduce((acc, b) => acc + b._count, 0) || 0;
 
   return (
@@ -189,7 +189,7 @@ export default function DashboardPage() {
             <Button size="sm" variant="flat" onPress={() => setBannerDismissed(true)}>
               ✕
             </Button>
-            <Button size="sm" color="primary" onPress={promptInstall}>
+            <Button size="sm" color="primary" variant="flat" className="hover:scale-105 transition-all" onPress={promptInstall}>
               Install
             </Button>
           </div>
@@ -203,7 +203,7 @@ export default function DashboardPage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <Card shadow="sm" isPressable onPress={() => router.push("/parties")} className="hover:shadow-md transition">
+        <Card shadow="none" isPressable onPress={() => router.push("/parties")} className="glass-card hover:scale-105 transition-all">
           <CardBody className="p-5">
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 rounded-xl bg-danger/10 flex items-center justify-center">
@@ -215,7 +215,7 @@ export default function DashboardPage() {
           </CardBody>
         </Card>
 
-        <Card shadow="sm" isPressable onPress={() => router.push("/parties")} className="hover:shadow-md transition">
+        <Card shadow="none" isPressable onPress={() => router.push("/parties")} className="glass-card hover:scale-105 transition-all">
           <CardBody className="p-5">
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 rounded-xl bg-warning/10 flex items-center justify-center">
@@ -227,7 +227,7 @@ export default function DashboardPage() {
           </CardBody>
         </Card>
 
-        <Card shadow="sm" isPressable onPress={() => router.push("/payments")} className="hover:shadow-md transition">
+        <Card shadow="none" isPressable onPress={() => router.push("/payments")} className="glass-card hover:scale-105 transition-all">
           <CardBody className="p-5">
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 rounded-xl bg-success/10 flex items-center justify-center">
@@ -239,7 +239,7 @@ export default function DashboardPage() {
           </CardBody>
         </Card>
 
-        <Card shadow="sm" isPressable onPress={() => router.push("/bills")} className="hover:shadow-md transition">
+        <Card shadow="none" isPressable onPress={() => router.push("/bills")} className="glass-card hover:scale-105 transition-all">
           <CardBody className="p-5">
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -256,7 +256,7 @@ export default function DashboardPage() {
       {/* Inner row */}
       <div className="grid lg:grid-cols-2 gap-6 mb-6">
         {/* Cash Flow Chart */}
-        <Card shadow="sm">
+        <Card shadow="none" className="glass-card">
           <CardBody className="p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold">{t("dash.cashFlow")}</h3>
@@ -282,7 +282,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* Recent Payments */}
-        <Card shadow="sm">
+        <Card shadow="none" className="glass-card">
           <CardBody className="p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold">{t("dash.recentPayments")}</h3>
@@ -333,7 +333,7 @@ export default function DashboardPage() {
         )}
 
         {/* Bill Stats */}
-        <Card shadow="sm">
+        <Card shadow="none" className="glass-card">
           <CardBody className="p-6">
             <h3 className="font-semibold mb-4">{t("dash.billSummary")}</h3>
             <div className="flex flex-wrap gap-3">

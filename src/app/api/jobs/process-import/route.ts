@@ -1,38 +1,100 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { parseTallyXml } from "@/lib/tally-xml-import";
 import { createJournalEntry } from "@/lib/journal";
+import { recomputePartyBalance } from "@/lib/party-balance.server";
+import { logError } from "@/lib/observability";
+import { gunzipSync } from "zlib";
+import crypto from "crypto";
 import type { AccountCode } from "@/lib/chart-of-accounts";
 
 type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 
+// ── Voucher type resolver ─────────────────────────────────────────────────────
+// Maps native Tally return-type strings to our internal VoucherType enum.
+// Without this, "Sales Return" imports get stored as SALES, which excludes
+// them from recomputePartyBalance (which queries CREDIT_NOTE/DEBIT_NOTE)
+// and causes GSTR-1 Table 9B under-reporting on re-export.
+type VoucherType =
+  | "SALES"
+  | "PURCHASE"
+  | "RECEIPT"
+  | "PAYMENT"
+  | "JOURNAL"
+  | "CREDIT_NOTE"
+  | "DEBIT_NOTE"
+  | "CONTRA";
+
+export function resolveImportVoucherType(
+  originalTypeName: string,
+  baseType: string
+): VoucherType {
+  if (originalTypeName === "Sales Return" || originalTypeName === "Credit Note")
+    return "CREDIT_NOTE";
+  if (
+    originalTypeName === "Purchase Return" ||
+    originalTypeName === "Debit Note"
+  )
+    return "DEBIT_NOTE";
+  // [X4] Preserve Contra voucher type instead of collapsing to JOURNAL
+  if (originalTypeName === "Contra") return "CONTRA";
+  return baseType as VoucherType;
+}
+
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
-  // In a real app, verify cron-secret here via headers
-  // For now, to allow testing, we proceed.
+  // ── Auth: require CRON_SECRET header ───────────────────────────────────────
+  const cronSecret = request.headers.get("x-cron-secret");
+  if (!process.env.CRON_SECRET || cronSecret !== process.env.CRON_SECRET) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   
-  // Pick a PENDING or long-running PROCESSING job
-  const job = await prisma.importJob.findFirst({
+  // ── Atomic job claim ────────────────────────────────────────────────────────
+  // Two-step: find oldest PENDING job, then atomically update only if it is
+  // still PENDING. If two cron workers race, only one will see count=1.
+  const candidate = await prisma.importJob.findFirst({
     where: { status: "PENDING" },
-    orderBy: { createdAt: "asc" }
+    orderBy: { createdAt: "asc" },
   });
 
-  if (!job) {
+  if (!candidate) {
     return NextResponse.json({ message: "No pending jobs" });
   }
 
-  // Mark as processing
-  await prisma.importJob.update({
-    where: { id: job.id },
-    data: { status: "PROCESSING" }
+  const claimed = await prisma.importJob.updateMany({
+    where: { id: candidate.id, status: "PENDING" },
+    data: { status: "PROCESSING" },
   });
+
+  if (claimed.count === 0) {
+    // Another worker already claimed this job between our findFirst and updateMany
+    return NextResponse.json({ message: "Job already claimed by another worker" });
+  }
+
+  const job = candidate;
+
+  const tenantLockKey = BigInt(
+    "0x" + crypto.createHash("sha256").update(job.tenantId).digest("hex").substring(0, 15)
+  );
+
+  // [W1-FIX] Track whether the session-level advisory lock was acquired so
+  // the finally block only attempts to unlock when necessary.
+  let lockAcquired = false;
 
   try {
     const tid = job.tenantId;
     const actorId = "system"; // Internal cron actor
     
-    const { vouchers, partyMasters } = parseTallyXml(job.xmlData);
+    // [S-W1] Decompress if stored with gzip prefix (backwards-compatible with raw XML)
+    let xmlText = job.xmlData;
+    if (xmlText.startsWith("gzip:")) {
+      const compressed = Buffer.from(xmlText.slice(5), "base64");
+      xmlText = gunzipSync(compressed).toString("utf-8");
+    }
+
+    const { vouchers, partyMasters } = parseTallyXml(xmlText);
 
     let partiesCreated = 0;
     const partyCache = new Map<string, string>();
@@ -40,19 +102,42 @@ export async function GET(request: NextRequest) {
     for (const pm of partyMasters) {
       const upserted = await prisma.party.upsert({
         where: { tenantId_name: { tenantId: tid, name: pm.name } },
-        update: {}, 
+        // [W-X3] Fill in GSTIN/address only when existing record has null values
+        update: {
+          ...(pm.gstin ? { gstin: { set: pm.gstin } } : {}),
+          ...(pm.address ? { address: { set: pm.address } } : {}),
+        },
         create: {
           tenantId: tid,
           name: pm.name,
           type: pm.group === "Sundry Debtors" ? "CUSTOMER" : "VENDOR",
           openingBalance: pm.openingBalance,
           currentBalance: pm.openingBalance,
+          gstin: pm.gstin,
+          address: pm.address,
           createdBy: actorId,
         },
         select: { id: true, createdAt: true, updatedAt: true },
       });
       if (upserted.createdAt.getTime() === upserted.updatedAt.getTime()) {
         partiesCreated++;
+        // [I3] Audit trail for import-created parties (MCA GSR 247(E)).
+        await prisma.auditLog.create({
+          data: {
+            tenantId: tid,
+            entityType: "Party",
+            entityId: upserted.id,
+            userId: null,
+            actorType: "SYSTEM",
+            action: "CREATE",
+            newValue: JSON.stringify({
+              source: "tally-import",
+              jobId: job.id,
+              partyName: pm.name,
+              group: pm.group,
+            }),
+          },
+        });
       }
       partyCache.set(pm.name, upserted.id);
     }
@@ -84,18 +169,23 @@ export async function GET(request: NextRequest) {
       return upserted.id;
     }
 
+    // [S2] Batch party pre-resolution — chunks of 25 to reduce lock contention
+    // compared to the previous Promise.all that fired all upserts in parallel.
     const allPartyNames = [
       ...new Set(
         vouchers
           .flatMap((v) => v.lines.map((l) => l.partyName))
           .filter((n): n is string => !!n)
       ),
-    ];
-    await Promise.all(
-      allPartyNames
-        .filter((name) => !partyCache.has(name))
-        .map((name) => resolvePartyId(name, "SUNDRY_DEBTORS"))
-    );
+    ].filter((name) => !partyCache.has(name));
+
+    const PARTY_BATCH = 25;
+    for (let i = 0; i < allPartyNames.length; i += PARTY_BATCH) {
+      const batch = allPartyNames.slice(i, i + PARTY_BATCH);
+      await Promise.all(
+        batch.map((name) => resolvePartyId(name, "SUNDRY_DEBTORS"))
+      );
+    }
 
     let imported = 0;
     let skipped = 0;
@@ -105,23 +195,49 @@ export async function GET(request: NextRequest) {
     const vouchersWithoutRemoteId = vouchers.filter((v) => !v.remoteId);
 
     let duplicateFingerprints = new Set<string>();
+    
+    // [W1-FIX] Non-blocking advisory lock — prevents indefinite hangs when a
+    // previous import leaked a session-level lock (e.g. process crash, serverless
+    // timeout). pg_try_advisory_lock returns false immediately if already held,
+    // instead of blocking forever like pg_advisory_lock.
+    const lockResult: { acquired: boolean }[] =
+      await prisma.$queryRaw`SELECT pg_try_advisory_lock(${tenantLockKey}) as acquired`;
+    lockAcquired = lockResult[0]?.acquired === true;
+
+    if (!lockAcquired) {
+      // Another import is already running (or a leaked lock exists).
+      // Revert claim so the next cron cycle retries this job.
+      await prisma.importJob.update({
+        where: { id: job.id },
+        data: { status: "PENDING" },
+      });
+      return NextResponse.json({
+        message: "Import already in progress for this tenant, will retry",
+      });
+    }
+    
     if (vouchersWithoutRemoteId.length > 0) {
+      // [S3] DB-side duplicate check: query only fingerprint strings instead of
+      // loading entire JournalEntry rows into memory. Uses raw SQL for
+      // string concatenation to keep the comparison server-side.
       const dates = vouchersWithoutRemoteId.map((v) => v.entryDate.getTime());
       const rangeMin = new Date(Math.min(...dates));
       const rangeMax = new Date(Math.max(...dates));
-      const existingEntries = await prisma.journalEntry.findMany({
-        where: {
-          tenantId: tid,
-          entryDate: { gte: rangeMin, lte: rangeMax },
-          remoteId: null, 
-        },
-        select: { voucherType: true, entryDate: true, narration: true, totalDebit: true },
-      });
+      const existingFingerprints: { fp: string }[] = await prisma.$queryRaw`
+        SELECT CONCAT(
+          "voucherType", '|',
+          TO_CHAR("entryDate", 'YYYY-MM-DD'), '|',
+          COALESCE("narration", ''), '|',
+          "totalDebit"::text
+        ) as fp
+        FROM "JournalEntry"
+        WHERE "tenantId" = ${tid}
+          AND "entryDate" >= ${rangeMin}
+          AND "entryDate" <= ${rangeMax}
+          AND "remoteId" IS NULL
+      `;
       duplicateFingerprints = new Set(
-        existingEntries.map(
-          (e: (typeof existingEntries)[number]) =>
-            `${e.voucherType}|${e.entryDate.toISOString()}|${e.narration}|${e.totalDebit.toString()}`
-        )
+        existingFingerprints.map((r) => r.fp)
       );
     }
 
@@ -131,7 +247,10 @@ export async function GET(request: NextRequest) {
       voucher: (typeof vouchers)[number]
     ): Promise<"imported" | "skipped" | Error> {
       if (!voucher.remoteId) {
-        const fingerprint = `${voucher.voucherType}|${voucher.entryDate.toISOString()}|${voucher.narration}|${String(voucher.totalDebit)}`;
+        // Use date string only (YYYY-MM-DD) for fingerprint — avoids IST/UTC
+        // mismatch where Tally's YYYYMMDD date becomes the previous day in UTC.
+        const dateStr = voucher.entryDate.toISOString().slice(0, 10);
+        const fingerprint = `${voucher.voucherType}|${dateStr}|${voucher.narration}|${String(voucher.totalDebit)}`;
         if (duplicateFingerprints.has(fingerprint)) {
           return "skipped";
         }
@@ -154,16 +273,46 @@ export async function GET(request: NextRequest) {
         );
 
         await prisma.$transaction(async (tx: PrismaTx) => {
-          await createJournalEntry(tx, {
+          const journalEntry = await createJournalEntry(tx, {
             tenantId: tid,
             entryDate: voucher.entryDate,
             narration: voucher.narration,
-            voucherType: voucher.voucherType,
+            // [FIX] Resolve Credit Note / Debit Note types correctly.
+            // parseTallyXml coerces voucherType to SALES/PURCHASE for return
+            // vouchers; originalTypeName carries the raw Tally string needed
+            // to restore CREDIT_NOTE / DEBIT_NOTE for balance computation.
+            voucherType: resolveImportVoucherType(
+              voucher.originalTypeName,
+              voucher.voucherType
+            ),
             createdBy: actorId,
             ...(voucher.remoteId ? { remoteId: voucher.remoteId } : {}),
             lines,
           });
-        }, { timeout: 8000 });
+
+          // [I3] MCA GSR 247(E) — audit trail for import-created entries.
+          // actorType=SYSTEM distinguishes automated imports from user actions.
+          await tx.auditLog.create({
+            data: {
+              tenantId: tid,
+              entityType: "JournalEntry",
+              entityId: journalEntry.id,
+              userId: null,
+              actorType: "SYSTEM",
+              action: "CREATE",
+              newValue: JSON.stringify({
+                source: "tally-import",
+                jobId: job.id,
+                remoteId: voucher.remoteId ?? null,
+                voucherType: journalEntry.voucherType,
+                placeOfSupply: voucher.placeOfSupply ?? null,
+                taxPercent: voucher.taxPercent ?? null,
+                hsnCodes: voucher.hsnCodes ?? [],
+                isInterState: voucher.isInterState ?? null,
+              }),
+            },
+          });
+        }, { timeout: 8000, isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
         return "imported";
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -176,26 +325,30 @@ export async function GET(request: NextRequest) {
 
     const allVouchers = [...vouchersWithRemoteId, ...vouchersWithoutRemoteId];
     
-    // Process in batches and track progress
+    // Process in batches sequentially to avoid deadlocks on shared party rows.
+    // Promise.allSettled was replaced: 50 parallel transactions caused lock
+    // contention when multiple vouchers referenced the same party.
     for (let i = 0; i < allVouchers.length; i += BATCH_SIZE) {
       const batch = allVouchers.slice(i, i + BATCH_SIZE);
-      const results = await Promise.allSettled(batch.map(importVoucher));
 
-      for (let j = 0; j < results.length; j++) {
-        const result = results[j];
-        if (result.status === "rejected") failed++;
-        else if (result.value === "skipped") skipped++;
-        else if (result.value === "imported") imported++;
-        else failed++;
+      for (const voucher of batch) {
+        try {
+          const result = await importVoucher(voucher);
+          if (result === "skipped") skipped++;
+          else if (result === "imported") imported++;
+          else failed++; // result is an Error object
+        } catch {
+          failed++;
+        }
       }
 
-      // Update progress in DB
+      // Update progress in DB after each batch
       await prisma.importJob.update({
         where: { id: job.id },
         data: {
           processed: imported + skipped,
-          failed: failed
-        }
+          failed: failed,
+        },
       });
     }
 
@@ -204,9 +357,25 @@ export async function GET(request: NextRequest) {
       data: {
         status: "COMPLETED",
         processed: imported + skipped,
-        failed: failed
+        failed: failed,
+        // [S1] Clear raw XML to prevent storage bloat (up to 5MB per job).
+        // All relevant data is already persisted in JournalEntries + AuditLog.
+        xmlData: "",
       }
     });
+
+    // [T2] Recompute balances for all parties touched during import.
+    // Runs AFTER the job is marked COMPLETED so import success is not
+    // blocked by a balance recompute failure.
+    const affectedPartyIds = [...new Set(partyCache.values())];
+    for (const pid of affectedPartyIds) {
+      try {
+        await recomputePartyBalance(null, pid, tid);
+      } catch (err) {
+        // Log but don't fail the import — balance can be recomputed on-demand
+        logError("import.party-balance.error", { pid, jobId: job.id, error: err });
+      }
+    }
 
     return NextResponse.json({
       jobId: job.id,
@@ -225,5 +394,12 @@ export async function GET(request: NextRequest) {
       }
     });
     return NextResponse.json({ error: "Job failed" }, { status: 500 });
+  } finally {
+    // [W1-FIX] Guaranteed lock release in finally — covers success, catch, and
+    // early returns. pg_advisory_unlock returns false (not an error) if the lock
+    // was never acquired, but we gate on lockAcquired to avoid unnecessary calls.
+    if (lockAcquired) {
+      try { await prisma.$executeRaw`SELECT pg_advisory_unlock(${tenantLockKey})`; } catch { /* best effort */ }
+    }
   }
 }

@@ -88,17 +88,18 @@ model AuthThrottle {
  * Indexed for tenant-scoped audit queries and date-range exports.
  */
 model AuditLog {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   tenantId   String
-  entityType String // "Bill" | "Payment" | "Party" | "User"
-  entityId   String // PK of the changed record
-  userId     String // actor who triggered the change
-  action     String // "CREATE" | "UPDATE" | "DELETE"
-  fieldName  String? // null for whole-record events (CREATE / DELETE)
-  oldValue   String? // JSON-serialised previous value
-  newValue   String? // JSON-serialised next value
-  createdAt  DateTime @default(now())
-  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+  entityType String    // "Bill" | "Payment" | "Party" | "JournalEntry"
+  entityId   String    // PK of the changed record
+  userId     String?   // actor who triggered the change — null for system/cron actors
+  actorType  ActorType @default(USER) // distinguishes human vs automated actions
+  action     String    // "CREATE" | "UPDATE" | "DELETE"
+  fieldName  String?   // null for whole-record events (CREATE / DELETE)
+  oldValue   String?   // JSON-serialised previous value
+  newValue   String?   // JSON-serialised next value
+  createdAt  DateTime  @default(now())
+  tenant     Tenant    @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, entityType, entityId])
   @@index([tenantId, createdAt])
@@ -154,6 +155,7 @@ model Bill {
   cessAmount      Decimal        @default(0) @db.Decimal(19, 4)  // GST Cess amount charged on this bill
   grandTotal      Decimal        @db.Decimal(19, 4) // [B3] Float → Decimal
   placeOfSupply   String? // [B1] GSTR-1 mandatory field
+  hsnCode         String?        // [ADDED] Fallback HSN wrapper for older bills
   status          BillStatus     @default(DRAFT)
   createdBy       String
   createdAt       DateTime       @default(now())
@@ -237,6 +239,8 @@ model JournalEntry {
   billId          String?
   purchaseId      String?
   paymentId       String?
+  // [CRITICAL-1] Tracks whether this entry was modified in the cloud post-import
+  syncState       SyncState     @default(SYNCED)
   isBalanced      Boolean       @default(false)
   totalDebit      Decimal       @default(0) @db.Decimal(19, 4) // [B4] Float → Decimal for precision
   totalCredit     Decimal       @default(0) @db.Decimal(19, 4) // [B4] Float → Decimal for precision
@@ -356,6 +360,12 @@ enum BillStatus {
   CANCELLED
 }
 
+enum SyncState {
+  SYNCED
+  MODIFIED
+  PENDING
+}
+
 enum PartyType {
   VENDOR
   CUSTOMER
@@ -386,11 +396,17 @@ enum VoucherType {
   JOURNAL
   CREDIT_NOTE // GST Credit Note — reversal of a FINAL sales bill (GSTR-1 Table 9B)
   DEBIT_NOTE // GST Debit Note — Purchase Return under IGST Act (GSTR-3B Table 4)
+  CONTRA // Bank-to-cash transfers (native Tally type) [X4]
 }
 
 enum MediaAssetKind {
   COMPANY_LOGO
   MEASUREMENT_PHOTO
+}
+
+enum ActorType {
+  USER   // Human user via UI or API
+  SYSTEM // Automated: cron jobs, Tally imports, background tasks
 }
 
 enum MeasurementStatus {

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { GST_STATE_CODE_SET } from "@/lib/gst-states";
+import { deriveIsInterState } from "@/lib/gst-helpers";
 
 // Derive Prisma query types from the client instance to avoid the
 // @prisma/client → .prisma/client re-export resolution failure
@@ -115,6 +116,7 @@ const CreateBillSchema = z.object({
   status: z.string().optional(),
   isInterState: z.boolean().optional(),
   paymentMode: z.string().optional(),
+  hsnCode: z.string().nullish(),
 }).superRefine((data, ctx) => {
   // [P0] FINAL bills must always declare place of supply for GSTR-1 compliance.
   // Not limited to B2B — even B2C inter-state supplies require placeOfSupply.
@@ -139,7 +141,8 @@ const CreateBillSchema = z.object({
         typeof row === "object" &&
         typeof (row as Record<string, unknown>)["_hsnCode"] === "string" &&
         ((row as Record<string, unknown>)["_hsnCode"] as string).trim() !== ""
-    )
+    ) &&
+    !(typeof data.hsnCode === "string" && data.hsnCode.trim() !== "")
   ) {
     ctx.addIssue({
       code: "custom",
@@ -352,6 +355,7 @@ export async function POST(request: NextRequest) {
       taxAmount,
       grandTotal,
       status,
+      hsnCode,
     } = body;
 
     let finalTemplateId = templateId;
@@ -434,6 +438,12 @@ export async function POST(request: NextRequest) {
 
     const billingSettings = await loadBillingSettings(tenantId);
     const prefix = billingSettings.billPrefix;
+
+    // Load tenant GSTIN for inter-state auto-detection (G-C1)
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { gstin: true },
+    });
     
     const resolvedGrandTotal =
       typeof grandTotal === "number" && Number.isFinite(grandTotal)
@@ -441,7 +451,7 @@ export async function POST(request: NextRequest) {
         : 0;
     const billStatus = status === "FINAL" ? "FINAL" : "DRAFT";
     if (!isQuickBill) {
-      if (typeof body.isInterState !== "boolean") {
+      if (body.isInterState !== undefined && typeof body.isInterState !== "boolean") {
         return NextResponse.json(
           { error: "isInterState must be a boolean" },
           { status: 400 }
@@ -455,7 +465,9 @@ export async function POST(request: NextRequest) {
         );
       }
     }
-    const isInterState = body.isInterState === true;
+    // [G-C1] Auto-derive from GSTIN state codes; manual override is fallback only
+    const effectiveGstin = gstin || party.gstin;
+    const isInterState = deriveIsInterState(effectiveGstin, tenant?.gstin, body.isInterState);
     const normalizedPaymentMode = normalizePaymentMode(body.paymentMode);
     const now = new Date();
     const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -492,6 +504,7 @@ export async function POST(request: NextRequest) {
 
     const bill = await prisma.$transaction(async (tx: PrismaTx) => {
       const lockKey = generateLockKey(tenantId);
+      await tx.$executeRaw`SET LOCAL lock_timeout = '5s'`;
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
 
       const existingCount = await tx.bill.count({
@@ -522,6 +535,7 @@ export async function POST(request: NextRequest) {
           status: billStatus,
           isInterState,
           placeOfSupply: body.placeOfSupply ?? null,  // [B1] GSTR-1 mandatory field
+          hsnCode: hsnCode ?? null, // Fallback HSN Code
           createdBy: userId!,
           isDeleted: false,
         },

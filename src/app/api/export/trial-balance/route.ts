@@ -60,24 +60,31 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const matchingJournals = await prisma.journalEntry.findMany({
-    where: {
-      tenantId,
-      entryDate: {
-        gte: fromDate,
-        lte: toDate,
-      },
-    },
-    select: { id: true },
-  });
+  const { journalIds, lines } = await prisma.$transaction(
+    async (tx: any) => {
+      const matchingJournals = await tx.journalEntry.findMany({
+        where: {
+          tenantId,
+          entryDate: {
+            gte: fromDate,
+            lte: toDate,
+          },
+        },
+        select: { id: true },
+      });
 
-  const journalIds = matchingJournals.map(j => j.id);
+      const ids = matchingJournals.map((j: any) => j.id);
 
-  const lines = await prisma.journalLine.findMany({
-    where: {
-      journalId: { in: journalIds },
+      const journalLines = await tx.journalLine.findMany({
+        where: {
+          journalId: { in: ids },
+        },
+      });
+
+      return { journalIds: ids, lines: journalLines };
     },
-  });
+    { isolationLevel: "RepeatableRead" }
+  );
 
   const aggregateMap: Record<string, { 
     accountCode: string; 

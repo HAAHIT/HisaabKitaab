@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { resolveReadTenant } from "@/lib/api-tenant";
 import { parseIndianDateRange } from "@/lib/journal-reporting";
 import { logError, getRequestId } from "@/lib/observability";
+import { CHART_OF_ACCOUNTS } from "@/lib/chart-of-accounts";
 import {
   buildTallyVoucherXml,
   buildTallyPartyMasterXml,
@@ -23,9 +24,10 @@ export const runtime = "nodejs";
  * template columns.  This is an optional additive key — absent on
  * existing bills created before the convention was introduced.
  */
-function extractHsnCodes(rows: unknown): string[] {
-  if (!Array.isArray(rows)) return [];
+function extractHsnCodes(rows: unknown, billLevelHsn?: string | null): string[] {
+  if (!Array.isArray(rows)) return billLevelHsn ? [billLevelHsn.trim()] : [];
   const codes = new Set<string>();
+  if (billLevelHsn) codes.add(billLevelHsn.trim());
   for (const row of rows) {
     if (row && typeof row === "object") {
       const hsnCode = (row as Record<string, unknown>)["_hsnCode"];
@@ -53,9 +55,15 @@ function extractHsnCodes(rows: unknown): string[] {
  */
 function extractHsnRatePairs(
   rows: unknown,
-  billLevelTaxPercent?: number | null
+  billLevelTaxPercent?: number | null,
+  billLevelHsn?: string | null
 ): Array<{ hsnCode: string; taxPercent: number }> {
-  if (!Array.isArray(rows)) return [];
+  if (!Array.isArray(rows)) {
+    if (billLevelHsn && typeof billLevelTaxPercent === "number" && Number.isFinite(billLevelTaxPercent)) {
+      return [{ hsnCode: billLevelHsn.trim(), taxPercent: billLevelTaxPercent }];
+    }
+    return [];
+  }
   const pairs: Array<{ hsnCode: string; taxPercent: number }> = [];
   let hasPerLineRate = false;
 
@@ -63,8 +71,10 @@ function extractHsnRatePairs(
     if (!row || typeof row !== "object") continue;
     const r = row as Record<string, unknown>;
 
-    const hsnCode =
+    let hsnCode =
       typeof r["_hsnCode"] === "string" ? r["_hsnCode"].trim() : null;
+    
+    if (!hsnCode && billLevelHsn) hsnCode = billLevelHsn.trim();
     if (!hsnCode) continue;
 
     // Per-line rate is present only when the UI writes _taxPercent per row
@@ -80,7 +90,12 @@ function extractHsnRatePairs(
 
   // If no row had an explicit _taxPercent we return empty, which signals the
   // caller to use the simpler extractHsnCodes path (backwards-compatible).
-  if (!hasPerLineRate) return [];
+  if (!hasPerLineRate) {
+    if (billLevelHsn && typeof billLevelTaxPercent === "number" && Number.isFinite(billLevelTaxPercent) && pairs.length === 0) {
+      return [{ hsnCode: billLevelHsn.trim(), taxPercent: billLevelTaxPercent }];
+    }
+    return [];
+  }
   return pairs;
 }
 
@@ -165,7 +180,7 @@ export async function GET(request: NextRequest) {
     let xml = "";
 
     // ── Party masters ────────────────────────────────────────────────────────
-    let fetchedParties: TallyPartyMaster[] = [];
+    let allMastersToExport: TallyPartyMaster[] = [];
 
     if (type === "masters" || type === "all") {
       const parties = await prisma.party.findMany({
@@ -182,7 +197,7 @@ export async function GET(request: NextRequest) {
         orderBy: { name: "asc" },
       });
 
-      fetchedParties = parties.map((p: (typeof parties)[number]) => ({
+      const fetchedParties = parties.map((p: (typeof parties)[number]) => ({
         name: p.name,
         group: p.type === "CUSTOMER" ? "Sundry Debtors" : "Sundry Creditors",
         openingBalance: p.openingBalance.toNumber(),
@@ -192,8 +207,16 @@ export async function GET(request: NextRequest) {
         gstin: p.gstin,
       }));
 
+      const standardLedgers: TallyPartyMaster[] = Object.values(CHART_OF_ACCOUNTS).map(acc => ({
+        name: acc.name,
+        group: acc.tallyGroup,
+        openingBalance: 0,
+      }));
+
+      allMastersToExport = [...standardLedgers, ...fetchedParties];
+
       if (type === "masters") {
-        xml = buildTallyPartyMasterXml(fetchedParties, companyName);
+        xml = buildTallyPartyMasterXml(allMastersToExport, companyName);
         return xmlResponse(xml, `tally_masters_${from}_to_${to}.xml`);
       }
     }
@@ -242,9 +265,11 @@ export async function GET(request: NextRequest) {
           // Only SALES and CREDIT_NOTE entries have a billId; others get null.
           bill: {
             select: {
+              billNumber: true,
               taxPercent: true,
               isInterState: true,
               placeOfSupply: true,
+              hsnCode: true,
               rows: true,
               cessAmount: true,  // [Task 3b] Cess amount for tobacco/luxury goods
               gstin: true, // [P1] Used to emit SOURCEOFDETAILS=Autofill for registered parties
@@ -253,32 +278,92 @@ export async function GET(request: NextRequest) {
         },
       });
 
-      const vouchers: TallyVoucher[] = entries.map((entry: (typeof entries)[number]) => ({
-        date: entry.entryDate,
-        voucherType: resolveExportVoucherType(entry.voucherType, entry.narration),
-        reference:
-          entry.billId ?? entry.purchaseId ?? entry.paymentId ?? entry.id,
-        narration: entry.narration,
-        ledgerEntries: entry.lines.map((line) =>
-          journalLineToTallyEntry({
-            ...line,
-            debit: line.debit.toNumber(),
-            credit: line.credit.toNumber(),
-          })
-        ),
-        guid: entry.id,
-        placeOfSupply: entry.bill?.placeOfSupply ?? null,
-        taxPercent: entry.bill?.taxPercent.toNumber() ?? null,
-        isInterState: entry.bill?.isInterState ?? false,
-        // [Task 3b] Real cess amount replaces the hardcoded 0
-        cessAmount: entry.bill?.cessAmount.toNumber() ?? 0,
-        // [Task 3c] Per-line (HSN, rate) pairs for GSTR-1 Table 12 compliance.
-        // Falls back to legacy flat hsnCodes when rows lack _taxPercent.
-        hsnRatePairs: extractHsnRatePairs(entry.bill?.rows, entry.bill?.taxPercent.toNumber()),
-        hsnCodes: extractHsnCodes(entry.bill?.rows),
-        gstin: entry.bill?.gstin ?? null,
-        isReverseCharge: entry.isReverseCharge,
-      }));
+      // [G-W2] Resolve purchase bills for GST metadata.
+      // `purchaseId` is a plain string (not a Prisma relation), so we batch-query.
+      const purchaseIds = entries
+        .filter((e: (typeof entries)[number]) => !e.bill && e.purchaseId)
+        .map((e: (typeof entries)[number]) => e.purchaseId as string);
+      const purchaseBillMap = new Map<string, (typeof entries)[number]["bill"]>();
+      if (purchaseIds.length > 0) {
+        const purchaseBills = await prisma.bill.findMany({
+          where: { id: { in: purchaseIds }, tenantId },
+          select: {
+            id: true,
+            billNumber: true,
+            taxPercent: true,
+            isInterState: true,
+            placeOfSupply: true,
+            hsnCode: true,
+            rows: true,
+            cessAmount: true,
+            gstin: true,
+          },
+        });
+        for (const pb of purchaseBills) {
+          purchaseBillMap.set(pb.id, pb);
+        }
+      }
+
+      // [W2-FIX] Resolve linked bill numbers for payment/receipt vouchers so
+      // BILLALLOCATIONS.LIST emits <NAME>{billNumber}</NAME> instead of <NAME>{paymentId}</NAME>.
+      // Without this, Tally cannot auto-match receipts to outstanding bills.
+      const paymentEntryIds = entries
+        .filter((e: (typeof entries)[number]) => e.paymentId && !e.billId)
+        .map((e: (typeof entries)[number]) => e.paymentId as string);
+      const paymentBillRefMap = new Map<string, string>();
+      if (paymentEntryIds.length > 0) {
+        const linkedPayments = await prisma.payment.findMany({
+          where: { id: { in: paymentEntryIds }, tenantId },
+          select: {
+            id: true,
+            linkedBill: { select: { billNumber: true } },
+          },
+        });
+        for (const p of linkedPayments) {
+          if (p.linkedBill?.billNumber) {
+            paymentBillRefMap.set(p.id, p.linkedBill.billNumber);
+          }
+        }
+      }
+
+      const vouchers: TallyVoucher[] = entries.map((entry: (typeof entries)[number]) => {
+        // Use direct bill relation for sales, or secondary lookup for purchases
+        const billData = entry.bill ?? (entry.purchaseId ? purchaseBillMap.get(entry.purchaseId) : null) ?? null;
+        // [W2-FIX] For payment entries, resolve the linked bill number for settlement matching
+        const linkedBillRef = entry.paymentId ? paymentBillRefMap.get(entry.paymentId) ?? null : null;
+        return {
+          date: entry.entryDate,
+          voucherType: resolveExportVoucherType(entry.voucherType, entry.narration),
+          reference:
+            billData?.billNumber ?? entry.purchaseId ?? entry.paymentId ?? entry.id,
+          narration: entry.narration,
+          ledgerEntries: entry.lines.map((line) => {
+            const tallyEntry = journalLineToTallyEntry({
+              ...line,
+              debit: line.debit.toNumber(),
+              credit: line.credit.toNumber(),
+            });
+            // Set reference to the linked bill number on the party ledger entry
+            // so Tally emits <BILLTYPE>Against Ref</BILLTYPE> with the correct bill name
+            if (linkedBillRef && tallyEntry.partyName) {
+              tallyEntry.reference = linkedBillRef;
+            }
+            return tallyEntry;
+          }),
+          guid: entry.id,
+          placeOfSupply: billData?.placeOfSupply ?? null,
+          taxPercent: billData?.taxPercent.toNumber() ?? null,
+          isInterState: billData?.isInterState ?? false,
+          // [Task 3b] Real cess amount replaces the hardcoded 0
+          cessAmount: billData?.cessAmount.toNumber() ?? 0,
+          // [Task 3c] Per-line (HSN, rate) pairs for GSTR-1 Table 12 compliance.
+          // Falls back to legacy flat hsnCodes when rows lack _taxPercent.
+          hsnRatePairs: extractHsnRatePairs(billData?.rows, billData?.taxPercent.toNumber(), billData?.hsnCode),
+          hsnCodes: extractHsnCodes(billData?.rows, billData?.hsnCode),
+          gstin: billData?.gstin ?? null,
+          isReverseCharge: entry.isReverseCharge,
+        };
+      });
 
       // [FIX-P2] Count vouchers with tax > 0% but no HSN code (either format).
       // These will produce incomplete GSTR-1 Table 12 entries in Tally.
@@ -306,7 +391,7 @@ export async function GET(request: NextRequest) {
       }
 
       // For "all" — append vouchers after masters
-      let combinedXml = buildCombinedXml(fetchedParties, vouchers, companyName, from, to);
+      let combinedXml = buildCombinedXml(allMastersToExport, vouchers, companyName, from, to);
       if (hsnWarningComment) {
         combinedXml = combinedXml.replace(
           '<?xml version="1.0" encoding="UTF-8"?>',

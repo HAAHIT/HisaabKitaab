@@ -7,7 +7,7 @@ import {
 import { roundTo2 } from "@/lib/journal-reporting";
 
 type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
-type VoucherType = "SALES" | "PURCHASE" | "RECEIPT" | "PAYMENT" | "JOURNAL" | "CREDIT_NOTE" | "DEBIT_NOTE";
+type VoucherType = "SALES" | "PURCHASE" | "RECEIPT" | "PAYMENT" | "JOURNAL" | "CREDIT_NOTE" | "DEBIT_NOTE" | "CONTRA";
 
 interface JournalLineInput {
   accountCode: AccountCode;
@@ -92,8 +92,10 @@ function buildSalesTaxLines(
     ];
   }
 
-  const halfTax = roundTo2(taxAmount / 2);
-  const otherHalf = roundTo2(taxAmount - halfTax);
+  // TODO: [CRITICAL] - GST amounts (IGST/CGST/SGST) must be rounded to the "Nearest Rupee" (Math.round) per Section 170 of the CGST Act.
+  const roundedTax = Math.round(taxAmount);
+  const halfTax = Math.round(roundedTax / 2);
+  const otherHalf = roundedTax - halfTax;
 
   return [
     {
