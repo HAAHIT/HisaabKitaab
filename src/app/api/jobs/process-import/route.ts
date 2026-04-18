@@ -185,6 +185,13 @@ export async function GET(request: NextRequest) {
     const vouchersWithoutRemoteId = vouchers.filter((v) => !v.remoteId);
 
     let duplicateFingerprints = new Set<string>();
+    
+    // [W-1] Acquire tenant-level advisory lock BEFORE fingerprint query
+    // to prevent concurrent imports from producing false-negative matches.
+    const tenantLockKey = BigInt("0x" + require("crypto").createHash("sha256")
+      .update(tid).digest("hex").substring(0, 15));
+    await prisma.$executeRaw`SELECT pg_advisory_lock(${tenantLockKey})`;
+    
     if (vouchersWithoutRemoteId.length > 0) {
       // [S3] DB-side duplicate check: query only fingerprint strings instead of
       // loading entire JournalEntry rows into memory. Uses raw SQL for
@@ -320,6 +327,9 @@ export async function GET(request: NextRequest) {
         },
       });
     }
+
+    // Release the tenant advisory lock after all imports
+    await prisma.$executeRaw`SELECT pg_advisory_unlock(${tenantLockKey})`;
 
     await prisma.importJob.update({
       where: { id: job.id },

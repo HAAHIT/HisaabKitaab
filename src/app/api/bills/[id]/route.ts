@@ -537,14 +537,12 @@ export async function PATCH(
         }
       }
 
-      // TODO: [CRITICAL] - Tally sync-state divergence risk.
-      // Once the SyncState enum and syncState field are added to JournalEntry
-      // (see hisaabkitaab_market_readiness.md §5.1), uncomment the following:
-      //
-      // await tx.journalEntry.updateMany({
-      //   where: { billId: updatedBill.id, remoteId: { not: null } },
-      //   data: { syncState: "MODIFIED" },
-      // });
+      // [CRITICAL] Tally sync-state — flag linked imported vouchers as MODIFIED
+      // so the next XML export warns CAs of data divergence.
+      await tx.journalEntry.updateMany({
+        where: { billId: updatedBill.id, remoteId: { not: null } },
+        data: { syncState: "MODIFIED" },
+      });
 
       if (!finalPartyId) {
         return updatedBill;

@@ -239,6 +239,8 @@ model JournalEntry {
   billId          String?
   purchaseId      String?
   paymentId       String?
+  // [CRITICAL-1] Tracks whether this entry was modified in the cloud post-import
+  syncState       SyncState     @default(SYNCED)
   isBalanced      Boolean       @default(false)
   totalDebit      Decimal       @default(0) @db.Decimal(19, 4) // [B4] Float → Decimal for precision
   totalCredit     Decimal       @default(0) @db.Decimal(19, 4) // [B4] Float → Decimal for precision
@@ -356,6 +358,12 @@ enum BillStatus {
   DRAFT
   FINAL
   CANCELLED
+}
+
+enum SyncState {
+  SYNCED
+  MODIFIED
+  PENDING
 }
 
 enum PartyType {
