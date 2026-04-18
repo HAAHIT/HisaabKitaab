@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { parseTallyXml } from "@/lib/tally-xml-import";
 import { createJournalEntry } from "@/lib/journal";
+import { recomputePartyBalance } from "@/lib/party-balance.server";
 import type { AccountCode } from "@/lib/chart-of-accounts";
 
 type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
@@ -92,6 +93,23 @@ export async function GET(request: NextRequest) {
       });
       if (upserted.createdAt.getTime() === upserted.updatedAt.getTime()) {
         partiesCreated++;
+        // [I3] Audit trail for import-created parties (MCA GSR 247(E)).
+        await prisma.auditLog.create({
+          data: {
+            tenantId: tid,
+            entityType: "Party",
+            entityId: upserted.id,
+            userId: null,
+            actorType: "SYSTEM",
+            action: "CREATE",
+            newValue: JSON.stringify({
+              source: "tally-import",
+              jobId: job.id,
+              partyName: pm.name,
+              group: pm.group,
+            }),
+          },
+        });
       }
       partyCache.set(pm.name, upserted.id);
     }
@@ -159,7 +177,7 @@ export async function GET(request: NextRequest) {
       duplicateFingerprints = new Set(
         existingEntries.map(
           (e: (typeof existingEntries)[number]) =>
-            `${e.voucherType}|${e.entryDate.toISOString()}|${e.narration}|${e.totalDebit.toString()}`
+            `${e.voucherType}|${e.entryDate.toISOString().slice(0, 10)}|${e.narration}|${e.totalDebit.toString()}`
         )
       );
     }
@@ -196,7 +214,7 @@ export async function GET(request: NextRequest) {
         );
 
         await prisma.$transaction(async (tx: PrismaTx) => {
-          await createJournalEntry(tx, {
+          const journalEntry = await createJournalEntry(tx, {
             tenantId: tid,
             entryDate: voucher.entryDate,
             narration: voucher.narration,
@@ -211,6 +229,28 @@ export async function GET(request: NextRequest) {
             createdBy: actorId,
             ...(voucher.remoteId ? { remoteId: voucher.remoteId } : {}),
             lines,
+          });
+
+          // [I3] MCA GSR 247(E) — audit trail for import-created entries.
+          // actorType=SYSTEM distinguishes automated imports from user actions.
+          await tx.auditLog.create({
+            data: {
+              tenantId: tid,
+              entityType: "JournalEntry",
+              entityId: journalEntry.id,
+              userId: null,
+              actorType: "SYSTEM",
+              action: "CREATE",
+              newValue: JSON.stringify({
+                source: "tally-import",
+                jobId: job.id,
+                remoteId: voucher.remoteId ?? null,
+                voucherType: journalEntry.voucherType,
+                placeOfSupply: voucher.placeOfSupply ?? null,
+                taxPercent: voucher.taxPercent ?? null,
+                hsnCodes: voucher.hsnCodes ?? [],
+              }),
+            },
           });
         }, { timeout: 8000 });
         return "imported";
@@ -260,6 +300,19 @@ export async function GET(request: NextRequest) {
         failed: failed
       }
     });
+
+    // [T2] Recompute balances for all parties touched during import.
+    // Runs AFTER the job is marked COMPLETED so import success is not
+    // blocked by a balance recompute failure.
+    const affectedPartyIds = [...new Set(partyCache.values())];
+    for (const pid of affectedPartyIds) {
+      try {
+        await recomputePartyBalance(null, pid, tid);
+      } catch (err) {
+        // Log but don't fail the import — balance can be recomputed on-demand
+        console.error(`[T2] Failed to recompute balance for party ${pid}:`, err);
+      }
+    }
 
     return NextResponse.json({
       jobId: job.id,

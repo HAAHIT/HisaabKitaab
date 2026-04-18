@@ -88,17 +88,18 @@ model AuthThrottle {
  * Indexed for tenant-scoped audit queries and date-range exports.
  */
 model AuditLog {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   tenantId   String
-  entityType String // "Bill" | "Payment" | "Party" | "User"
-  entityId   String // PK of the changed record
-  userId     String // actor who triggered the change
-  action     String // "CREATE" | "UPDATE" | "DELETE"
-  fieldName  String? // null for whole-record events (CREATE / DELETE)
-  oldValue   String? // JSON-serialised previous value
-  newValue   String? // JSON-serialised next value
-  createdAt  DateTime @default(now())
-  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+  entityType String    // "Bill" | "Payment" | "Party" | "JournalEntry"
+  entityId   String    // PK of the changed record
+  userId     String?   // actor who triggered the change — null for system/cron actors
+  actorType  ActorType @default(USER) // distinguishes human vs automated actions
+  action     String    // "CREATE" | "UPDATE" | "DELETE"
+  fieldName  String?   // null for whole-record events (CREATE / DELETE)
+  oldValue   String?   // JSON-serialised previous value
+  newValue   String?   // JSON-serialised next value
+  createdAt  DateTime  @default(now())
+  tenant     Tenant    @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, entityType, entityId])
   @@index([tenantId, createdAt])
@@ -392,6 +393,11 @@ enum VoucherType {
 enum MediaAssetKind {
   COMPANY_LOGO
   MEASUREMENT_PHOTO
+}
+
+enum ActorType {
+  USER   // Human user via UI or API
+  SYSTEM // Automated: cron jobs, Tally imports, background tasks
 }
 
 enum MeasurementStatus {

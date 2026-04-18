@@ -9,6 +9,7 @@
 
 import { XMLParser } from "fast-xml-parser";
 import type { AccountCode } from "./chart-of-accounts";
+import { stateNameToGstCode } from "./gst-states";
 
 // ── Ledger name → AccountCode mapping ────────────────────────────────────────
 // Covers HisaabKitaab account names and common Tally short names.
@@ -116,6 +117,13 @@ export type ParsedVoucher = {
    * Null for native Tally XML that does not carry a REMOTEID.
    */
   remoteId: string | null;
+  // ── GST metadata (G1 fix) ───────────────────────────────────────────────────
+  /** 2-digit GST state code reverse-looked up from Tally's state name. Null when absent. */
+  placeOfSupply: string | null;
+  /** First tax rate found in GSTDETAILS.LIST (e.g. 18). Null when absent. */
+  taxPercent: number | null;
+  /** HSN/SAC codes extracted from GSTDETAILS.LIST HSNCODE tags. */
+  hsnCodes: string[];
 };
 
 export type ParsedPartyMaster = {
@@ -343,6 +351,37 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
 
     const totalDebit = lines.reduce((s, l) => s + l.debit, 0);
 
+    // ── Extract GST metadata from voucher (G1 fix) ──────────────────────────
+    // PLACEOFSUPPLY: Tally writes the English state name; reverse-lookup to 2-digit code.
+    const rawPlaceOfSupply = String(v["PLACEOFSUPPLY"] ?? "").trim() || null;
+    const placeOfSupply = rawPlaceOfSupply
+      ? stateNameToGstCode(rawPlaceOfSupply) ?? rawPlaceOfSupply // keep raw if unknown
+      : null;
+
+    // GSTDETAILS.LIST: nested inside ALLLEDGERENTRIES.LIST entries.
+    // Extract first TAXRATE and all HSNCODE values.
+    let parsedTaxPercent: number | null = null;
+    const parsedHsnCodes: string[] = [];
+    const seenHsn = new Set<string>();
+    for (const entry of entryList) {
+      const e = entry as Record<string, unknown>;
+      const gstDetails = e["GSTDETAILS.LIST"];
+      if (!gstDetails) continue;
+      const gstList = Array.isArray(gstDetails) ? gstDetails : [gstDetails];
+      for (const gst of gstList) {
+        const g = gst as Record<string, unknown>;
+        if (parsedTaxPercent === null) {
+          const rate = parseFloat(String(g["TAXRATE"] ?? g["BASICTAXRATE"] ?? ""));
+          if (!isNaN(rate) && rate > 0) parsedTaxPercent = rate;
+        }
+        const hsn = String(g["HSNCODE"] ?? "").trim();
+        if (hsn && !seenHsn.has(hsn)) {
+          seenHsn.add(hsn);
+          parsedHsnCodes.push(hsn);
+        }
+      }
+    }
+
     vouchers.push({
       voucherType,
       originalTypeName: typeName,
@@ -352,6 +391,9 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       lines,
       totalDebit,
       remoteId,
+      placeOfSupply,
+      taxPercent: parsedTaxPercent,
+      hsnCodes: parsedHsnCodes,
     });
   }
 

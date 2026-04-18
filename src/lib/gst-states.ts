@@ -78,3 +78,33 @@ export function gstCodeToStateName(code: string): string | null {
 export function isValidGstStateCode(code: string): boolean {
   return GST_STATE_CODE_SET.has(code);
 }
+
+// ── Reverse lookup: state name → 2-digit code ─────────────────────────────────
+// Lazy-initialised on first call. Lowercase keys for case-insensitive matching.
+
+let _nameToCodeMap: Map<string, string> | null = null;
+
+function getNameToCodeMap(): Map<string, string> {
+  if (!_nameToCodeMap) {
+    _nameToCodeMap = new Map<string, string>();
+    for (const [code, name] of Object.entries(GST_STATE_CODES)) {
+      const key = name.toLowerCase();
+      // First code wins — for merged UTs (25/26) the first entry is kept
+      if (!_nameToCodeMap.has(key)) {
+        _nameToCodeMap.set(key, code);
+      }
+    }
+  }
+  return _nameToCodeMap;
+}
+
+/**
+ * Returns the 2-digit GST state code for an English state/UT name.
+ * Case-insensitive. Returns null if the name is not recognised.
+ *
+ * Used by the Tally XML import parser to convert `<PLACEOFSUPPLY>Maharashtra</PLACEOFSUPPLY>`
+ * back to the 2-digit code stored in the DB.
+ */
+export function stateNameToGstCode(name: string): string | null {
+  return getNameToCodeMap().get(name.toLowerCase()) ?? null;
+}

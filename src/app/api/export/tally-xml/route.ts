@@ -256,6 +256,7 @@ export async function GET(request: NextRequest) {
           // Only SALES and CREDIT_NOTE entries have a billId; others get null.
           bill: {
             select: {
+              billNumber: true,
               taxPercent: true,
               isInterState: true,
               placeOfSupply: true,
@@ -272,7 +273,7 @@ export async function GET(request: NextRequest) {
         date: entry.entryDate,
         voucherType: resolveExportVoucherType(entry.voucherType, entry.narration),
         reference:
-          entry.billId ?? entry.purchaseId ?? entry.paymentId ?? entry.id,
+          entry.bill?.billNumber ?? entry.purchaseId ?? entry.paymentId ?? entry.id,
         narration: entry.narration,
         ledgerEntries: entry.lines.map((line) =>
           journalLineToTallyEntry({

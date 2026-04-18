@@ -5,6 +5,11 @@ export function roundTo2(value: number) {
   return Math.round(value * 100) / 100;
 }
 
+/** Nearest-Rupee rounding for GSTR-3B filing-level totals (per Tally convention). */
+export function roundToRupee(value: number): number {
+  return Math.round(value);
+}
+
 export function escapeCsv(value: string | number) {
   const text = String(value);
   if (text.includes(",") || text.includes('"') || text.includes("\n")) {

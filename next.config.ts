@@ -2,6 +2,13 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // [I4] Limit API request body to 10 MB to prevent oversized Tally XML
+  // uploads from exhausting Node.js heap. Default is ~4 MB.
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "10mb",
+    },
+  },
   async headers() {
     return [
       {

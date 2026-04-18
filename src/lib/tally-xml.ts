@@ -43,6 +43,8 @@ export interface TallyLedgerEntry {
   /** Positive = debit, Negative = credit (Tally convention) */
   amount: number;
   partyName?: string | null;
+  /** Bill/voucher reference — used as <NAME> in BILLALLOCATIONS.LIST for outstanding bill tracking */
+  reference?: string | null;
   /** Set to true for the Sales Account / Purchase Account line — receives GSTDETAILS.LIST */
   isIncomeLedger?: boolean;
 }
@@ -266,7 +268,7 @@ function buildLedgerEntryXml(
   const billAllocations = entry.partyName
     ? `
         <BILLALLOCATIONS.LIST>
-          <NAME>${escapeXml(entry.partyName)}</NAME>
+          <NAME>${escapeXml(entry.reference ?? entry.partyName)}</NAME>
           <BILLTYPE>New Ref</BILLTYPE>
           <AMOUNT>${entry.amount >= 0 ? "" : "-"}${formatAmount(entry.amount)}</AMOUNT>
         </BILLALLOCATIONS.LIST>`
@@ -314,7 +316,7 @@ function buildLedgerEntryXml(
 function buildVoucherXml(voucher: TallyVoucher): string {
   // Build GST context from voucher-level fields (populated from Bill when available)
   // [Fix P1] Discard GST info for non-taxable voucher types like Journal/Contra/Payment
-  const isGstEligible = ["Sales", "Purchase", "Credit Note", "Debit Note"].includes(voucher.voucherType);
+  const isGstEligible = ["Sales", "Purchase", "Sales Return", "Purchase Return"].includes(voucher.voucherType);
 
   const gstContext =
     isGstEligible && voucher.taxPercent != null && voucher.taxPercent > 0
@@ -329,7 +331,12 @@ function buildVoucherXml(voucher: TallyVoucher): string {
       : undefined;
 
   const ledgerLines = voucher.ledgerEntries
-    .map((entry) => buildLedgerEntryXml(entry, gstContext))
+    .map((entry) =>
+      buildLedgerEntryXml(
+        { ...entry, reference: entry.partyName ? (entry.reference ?? voucher.reference) : undefined },
+        gstContext
+      )
+    )
     .join("");
 
   // GUID prevents duplicate imports on re-import (TallyPrime idempotency).
