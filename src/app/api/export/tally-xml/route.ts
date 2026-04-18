@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { resolveReadTenant } from "@/lib/api-tenant";
 import { parseIndianDateRange } from "@/lib/journal-reporting";
 import { logError, getRequestId } from "@/lib/observability";
+import { CHART_OF_ACCOUNTS } from "@/lib/chart-of-accounts";
 import {
   buildTallyVoucherXml,
   buildTallyPartyMasterXml,
@@ -179,7 +180,7 @@ export async function GET(request: NextRequest) {
     let xml = "";
 
     // ── Party masters ────────────────────────────────────────────────────────
-    let fetchedParties: TallyPartyMaster[] = [];
+    let allMastersToExport: TallyPartyMaster[] = [];
 
     if (type === "masters" || type === "all") {
       const parties = await prisma.party.findMany({
@@ -196,7 +197,7 @@ export async function GET(request: NextRequest) {
         orderBy: { name: "asc" },
       });
 
-      fetchedParties = parties.map((p: (typeof parties)[number]) => ({
+      const fetchedParties = parties.map((p: (typeof parties)[number]) => ({
         name: p.name,
         group: p.type === "CUSTOMER" ? "Sundry Debtors" : "Sundry Creditors",
         openingBalance: p.openingBalance.toNumber(),
@@ -206,8 +207,16 @@ export async function GET(request: NextRequest) {
         gstin: p.gstin,
       }));
 
+      const standardLedgers: TallyPartyMaster[] = Object.values(CHART_OF_ACCOUNTS).map(acc => ({
+        name: acc.name,
+        group: acc.tallyGroup,
+        openingBalance: 0,
+      }));
+
+      allMastersToExport = [...standardLedgers, ...fetchedParties];
+
       if (type === "masters") {
-        xml = buildTallyPartyMasterXml(fetchedParties, companyName);
+        xml = buildTallyPartyMasterXml(allMastersToExport, companyName);
         return xmlResponse(xml, `tally_masters_${from}_to_${to}.xml`);
       }
     }
@@ -382,7 +391,7 @@ export async function GET(request: NextRequest) {
       }
 
       // For "all" — append vouchers after masters
-      let combinedXml = buildCombinedXml(fetchedParties, vouchers, companyName, from, to);
+      let combinedXml = buildCombinedXml(allMastersToExport, vouchers, companyName, from, to);
       if (hsnWarningComment) {
         combinedXml = combinedXml.replace(
           '<?xml version="1.0" encoding="UTF-8"?>',

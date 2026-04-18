@@ -112,8 +112,8 @@ export interface TallyVoucher {
 
 export interface TallyPartyMaster {
   name: string;
-  /** Tally group: "Sundry Debtors" or "Sundry Creditors" */
-  group: "Sundry Debtors" | "Sundry Creditors";
+  /** Tally group: e.g. "Sundry Debtors", "Sundry Creditors", "Sales Accounts" */
+  group: string;
   openingBalance: number;
   phone?: string | null;
   email?: string | null;
@@ -215,8 +215,14 @@ export function journalLineToTallyEntry(line: {
   const isIncomeLedger =
     line.accountName === "Sales Account" ||
     line.accountName === "Purchase Account";
+
+  let ledgerName = line.accountName;
+  if (line.partyName && (line.accountName === "Sundry Debtors" || line.accountName === "Sundry Creditors")) {
+    ledgerName = line.partyName;
+  }
+
   return {
-    ledgerName: line.accountName,
+    ledgerName,
     amount,
     partyName: line.partyName,
     isIncomeLedger,
@@ -389,9 +395,9 @@ function buildVoucherXml(voucher: TallyVoucher): string {
 
   return `
     <TALLYMESSAGE xmlns:UDF="TallyUDF">
-      <VOUCHER VCHTYPE="${escapeXml(voucher.voucherType)}" ACTION="Create" OBJVIEW="Accounting Voucher View">${guidTag}
+      <VOUCHER VCHTYPE="${escapeXml(voucher.voucherType)}" ACTION="Create" OBJVIEW="Accounting Voucher View">
         <DATE>${formatTallyDate(voucher.date)}</DATE>
-        <EFFECTIVEDATE>${formatTallyDate(voucher.date)}</EFFECTIVEDATE>
+        <EFFECTIVEDATE>${formatTallyDate(voucher.date)}</EFFECTIVEDATE>${guidTag}
         <VOUCHERTYPENAME>${escapeXml(voucher.voucherType)}</VOUCHERTYPENAME>
         <VOUCHERTYPEORIGNAME>${escapeXml(voucher.voucherType)}</VOUCHERTYPEORIGNAME>
         <VOUCHERNUMBER>${escapeXml(voucher.reference)}</VOUCHERNUMBER>${partyLedgerNameTag}
