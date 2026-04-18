@@ -189,7 +189,7 @@ export default function DashboardPage() {
             <Button size="sm" variant="flat" onPress={() => setBannerDismissed(true)}>
               ✕
             </Button>
-            <Button size="sm" color="primary" onPress={promptInstall}>
+            <Button size="sm" color="default" variant="flat" className="bg-teal-400 text-white hover:scale-105 transition-all" onPress={promptInstall}>
               Install
             </Button>
           </div>
@@ -203,7 +203,7 @@ export default function DashboardPage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <Card shadow="sm" isPressable onPress={() => router.push("/parties")} className="hover:shadow-md transition">
+        <Card shadow="none" isPressable onPress={() => router.push("/parties")} className="bg-white/70 backdrop-blur-md border border-white/20 shadow-[0_4px_30px_rgba(0,0,0,0.1)] hover:scale-105 transition-all">
           <CardBody className="p-5">
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 rounded-xl bg-danger/10 flex items-center justify-center">
@@ -215,7 +215,7 @@ export default function DashboardPage() {
           </CardBody>
         </Card>
 
-        <Card shadow="sm" isPressable onPress={() => router.push("/parties")} className="hover:shadow-md transition">
+        <Card shadow="none" isPressable onPress={() => router.push("/parties")} className="bg-white/70 backdrop-blur-md border border-white/20 shadow-[0_4px_30px_rgba(0,0,0,0.1)] hover:scale-105 transition-all">
           <CardBody className="p-5">
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 rounded-xl bg-warning/10 flex items-center justify-center">
@@ -227,7 +227,7 @@ export default function DashboardPage() {
           </CardBody>
         </Card>
 
-        <Card shadow="sm" isPressable onPress={() => router.push("/payments")} className="hover:shadow-md transition">
+        <Card shadow="none" isPressable onPress={() => router.push("/payments")} className="bg-white/70 backdrop-blur-md border border-white/20 shadow-[0_4px_30px_rgba(0,0,0,0.1)] hover:scale-105 transition-all">
           <CardBody className="p-5">
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 rounded-xl bg-success/10 flex items-center justify-center">
@@ -239,15 +239,15 @@ export default function DashboardPage() {
           </CardBody>
         </Card>
 
-        <Card shadow="sm" isPressable onPress={() => router.push("/bills")} className="hover:shadow-md transition">
+        <Card shadow="none" isPressable onPress={() => router.push("/bills")} className="bg-white/70 backdrop-blur-md border border-white/20 shadow-[0_4px_30px_rgba(0,0,0,0.1)] hover:scale-105 transition-all">
           <CardBody className="p-5">
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+              <div className="w-10 h-10 rounded-xl bg-teal-400/10 flex items-center justify-center">
+                <svg className="w-5 h-5 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
               </div>
               <span className="text-sm text-default-500">{t("dash.totalBills")}</span>
             </div>
-            <p className="text-2xl font-bold text-primary">{formatCurrency(billTotal)}</p>
+            <p className="text-2xl font-bold text-teal-400">{formatCurrency(billTotal)}</p>
             <p className="text-xs text-default-400 mt-1">{billCount} {t("dash.billsCount")}</p>
           </CardBody>
         </Card>
@@ -256,7 +256,7 @@ export default function DashboardPage() {
       {/* Inner row */}
       <div className="grid lg:grid-cols-2 gap-6 mb-6">
         {/* Cash Flow Chart */}
-        <Card shadow="sm">
+        <Card shadow="none" className="bg-white/70 backdrop-blur-md border border-white/20 shadow-[0_4px_30px_rgba(0,0,0,0.1)]">
           <CardBody className="p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold">{t("dash.cashFlow")}</h3>
@@ -282,11 +282,11 @@ export default function DashboardPage() {
         </Card>
 
         {/* Recent Payments */}
-        <Card shadow="sm">
+        <Card shadow="none" className="bg-white/70 backdrop-blur-md border border-white/20 shadow-[0_4px_30px_rgba(0,0,0,0.1)]">
           <CardBody className="p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold">{t("dash.recentPayments")}</h3>
-              <button onClick={() => router.push("/payments")} className="text-xs text-primary hover:underline">{t("dash.viewAll")} →</button>
+              <button onClick={() => router.push("/payments")} className="text-xs text-teal-400 hover:underline">{t("dash.viewAll")} →</button>
             </div>
             {data?.recentPayments && data.recentPayments.length > 0 ? (
               <div className="space-y-3">
@@ -333,7 +333,7 @@ export default function DashboardPage() {
         )}
 
         {/* Bill Stats */}
-        <Card shadow="sm">
+        <Card shadow="none" className="bg-white/70 backdrop-blur-md border border-white/20 shadow-[0_4px_30px_rgba(0,0,0,0.1)]">
           <CardBody className="p-6">
             <h3 className="font-semibold mb-4">{t("dash.billSummary")}</h3>
             <div className="flex flex-wrap gap-3">

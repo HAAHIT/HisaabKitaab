@@ -267,6 +267,7 @@ function buildGstDetailsXml(
 
 function buildLedgerEntryXml(
   entry: TallyLedgerEntry,
+  voucherType: TallyVoucherType,
   gstContext?: {
     taxPercent: number;
     cessAmount: number;
@@ -276,11 +277,12 @@ function buildLedgerEntryXml(
     isCompositionDealer?: boolean;
   }
 ): string {
+  const isSettlement = (voucherType === "Receipt" || voucherType === "Payment") && entry.reference;
   const billAllocations = entry.partyName
     ? `
         <BILLALLOCATIONS.LIST>
           <NAME>${escapeXml(entry.reference ?? entry.partyName)}</NAME>
-          <BILLTYPE>New Ref</BILLTYPE>
+          <BILLTYPE>${isSettlement ? "Against Ref" : "New Ref"}</BILLTYPE>
           <AMOUNT>${entry.amount >= 0 ? "" : "-"}${formatAmount(entry.amount)}</AMOUNT>
         </BILLALLOCATIONS.LIST>`
     : "";
@@ -346,6 +348,7 @@ function buildVoucherXml(voucher: TallyVoucher): string {
     .map((entry) =>
       buildLedgerEntryXml(
         { ...entry, reference: entry.partyName ? (entry.reference ?? voucher.reference) : undefined },
+        voucher.voucherType,
         gstContext
       )
     )

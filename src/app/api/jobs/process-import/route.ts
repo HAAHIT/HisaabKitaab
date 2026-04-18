@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { parseTallyXml } from "@/lib/tally-xml-import";
 import { createJournalEntry } from "@/lib/journal";
@@ -280,7 +281,7 @@ export async function GET(request: NextRequest) {
               }),
             },
           });
-        }, { timeout: 8000 });
+        }, { timeout: 8000, isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
         return "imported";
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);

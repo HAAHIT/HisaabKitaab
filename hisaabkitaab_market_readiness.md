@@ -279,7 +279,7 @@ interface GstTaxBreakdown {
 
 1. ✅ Add `syncState` field to `JournalEntry` — closes the Tally bi-directional safety gap
 2. ✅ Add audit logging to bill PATCH handler — achieves full MCA compliance
-3. 🔲 Emit `<BILLTYPE>Against Ref</BILLTYPE>` for payment settlement vouchers
-4. 🔲 Add PostgreSQL trigger to make AuditLog physically immutable
-5. 🔲 Implement glassmorphism dashboard with curated turquoise palette
-6. 🔲 Add isolation-level guard to fingerprint duplicate check
+3. ✅ Emit `<BILLTYPE>Against Ref</BILLTYPE>` for payment settlement vouchers
+4. ✅ Add PostgreSQL trigger to make AuditLog physically immutable
+5. ✅ Implement glassmorphism dashboard with curated turquoise palette
+6. ✅ Add isolation-level guard to fingerprint duplicate check
