@@ -186,7 +186,7 @@ export async function GET(request: NextRequest) {
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantResolution = resolveReadTenant(request);
+  const tenantResolution = await resolveReadTenant(request);
   if (!tenantResolution.ok) {
     return tenantResolution.response;
   }
@@ -201,9 +201,9 @@ export async function GET(request: NextRequest) {
     const from = searchParams.get("from");
     const to = searchParams.get("to");
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1);
-    const limit = Math.max(1, parseInt(searchParams.get("limit") || "20", 10) || 20);
+    const limit = Math.min(Math.max(1, parseInt(searchParams.get("limit") || "20", 10) || 20), 100);
 
-    const where: any = { isDeleted: false, tenantId };
+    const where: BillWhere = { isDeleted: false, tenantId };
 
     if (partyType === "VENDOR") {
       // Purchases always have a vendor linked in this system
@@ -218,7 +218,7 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       // If search is present, we need to be careful with existing OR
-      const searchOR = [
+      const searchOR: BillWhere[] = [
         { billNumber: { contains: search, mode: "insensitive" } },
         { customerName: { contains: search, mode: "insensitive" } },
         { party: { name: { contains: search, mode: "insensitive" } } },
@@ -237,7 +237,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (status && status !== "ALL") {
-      where.status = status;
+      where.status = status as import("@prisma/client").BillStatus;
     }
 
     if (partyId) {
@@ -633,10 +633,22 @@ export async function POST(request: NextRequest) {
       }
 
       return createdBill;
-    });
+    }, { isolationLevel: "RepeatableRead" });
 
     return NextResponse.json({ bill }, { status: 201 });
-  } catch (error) {
+  } catch (error: unknown) {
+    // [LB-3] Handle bill number uniqueness collision gracefully
+    // Uses duck-typing instead of Prisma namespace import (Prisma v7 bundler compat)
+    if (
+      error instanceof Error &&
+      "code" in error &&
+      (error as { code: string }).code === "P2002"
+    ) {
+      return NextResponse.json(
+        { error: "Bill number conflict — please retry. If this persists, contact support." },
+        { status: 409 }
+      );
+    }
     logError("bills.create.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Internal server error" },

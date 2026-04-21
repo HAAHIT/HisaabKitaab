@@ -11,6 +11,7 @@ import {
   DropdownItem,
   Tooltip,
 } from "@heroui/react";
+import { motion } from "framer-motion";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 import BottomSheet from "./BottomSheet";
 import { QuickBillSheet } from "@/components/bills/QuickBillSheet";
@@ -284,7 +285,9 @@ export default function AppShell({
               placement="right"
               isDisabled={!sidebarCollapsed}
             >
-              <button
+              <motion.button
+                whileHover={{ scale: 1.02, x: 4 }}
+                whileTap={{ scale: 0.96 }}
                 onClick={openQuickBill}
                 className="mb-3 flex w-full items-center gap-3 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-3 text-white shadow-lg shadow-blue-500/20 transition hover:shadow-xl hover:shadow-blue-500/25"
               >
@@ -301,7 +304,7 @@ export default function AppShell({
                 {!sidebarCollapsed && (
                   <span className="truncate font-semibold">{t("bills.quickBill")}</span>
                 )}
-              </button>
+              </motion.button>
             </Tooltip>
           )}
 
@@ -313,7 +316,9 @@ export default function AppShell({
               placement="right"
               isDisabled={!sidebarCollapsed}
             >
-              <button
+              <motion.button
+                whileHover={{ scale: 1.02, x: 2 }}
+                whileTap={{ scale: 0.96 }}
                 onClick={() => router.push(item.href)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group ${
                   isActive(item.href)
@@ -331,7 +336,7 @@ export default function AppShell({
                 {!sidebarCollapsed && (
                   <span className="truncate">{t(item.translationKey)}</span>
                 )}
-              </button>
+              </motion.button>
             </Tooltip>
             );
           })}

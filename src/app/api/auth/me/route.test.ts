@@ -8,6 +8,7 @@ const prismaMock = vi.hoisted(() => ({
 }));
 
 const getSessionMock = vi.hoisted(() => vi.fn());
+const resolveVerifiedTenantIdMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/prisma", () => ({
   prisma: prismaMock,
@@ -15,6 +16,11 @@ vi.mock("@/lib/prisma", () => ({
 
 vi.mock("@/lib/auth", () => ({
   getSession: getSessionMock,
+}));
+
+// [LB-1] resolveReadTenant now verifies JWT via session-server
+vi.mock("@/lib/session-server", () => ({
+  resolveVerifiedTenantId: resolveVerifiedTenantIdMock,
 }));
 
 import { GET } from "./route";
@@ -25,6 +31,8 @@ describe("GET /api/auth/me tenant isolation", () => {
   });
 
   it("scopes user lookup by tenantId", async () => {
+    // [LB-1] Mock JWT-verified tenant resolution
+    resolveVerifiedTenantIdMock.mockResolvedValue("tenant-a");
     getSessionMock.mockResolvedValue({
       userId: "user-1",
       tenantId: "tenant-a",
@@ -61,6 +69,8 @@ describe("GET /api/auth/me tenant isolation", () => {
   });
 
   it("rejects request when session tenant and request tenant mismatch", async () => {
+    // [LB-1] Mock JWT returning null (failed verification)
+    resolveVerifiedTenantIdMock.mockResolvedValue(null);
     getSessionMock.mockResolvedValue({
       userId: "user-1",
       tenantId: "tenant-b",
@@ -75,7 +85,8 @@ describe("GET /api/auth/me tenant isolation", () => {
     });
 
     const response = await GET(request);
-    expect(response.status).toBe(401);
+    // [LB-1] resolveReadTenant now returns 500 (tenant context missing) when JWT fails
+    expect(response.status).toBe(500);
     expect(prismaMock.user.findFirst).not.toHaveBeenCalled();
   });
 });

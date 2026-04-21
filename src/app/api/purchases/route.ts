@@ -213,9 +213,10 @@ export async function POST(request: NextRequest) {
       }
 
       if (billStatus === "FINAL") {
-        const cgst = isInterState ? 0 : roundTo2(taxAmount / 2);
-        const sgst = isInterState ? 0 : roundTo2(taxAmount - cgst);
-        const igst = isInterState ? taxAmount : 0;
+        const roundedTax = Math.round(taxAmount);
+        const cgst = isInterState ? 0 : Math.round(roundedTax / 2);
+        const sgst = isInterState ? 0 : roundedTax - cgst;
+        const igst = isInterState ? roundedTax : 0;
 
         await journalForPurchaseBill(tx, tenantId, {
           id: createdBill.id,
@@ -233,7 +234,7 @@ export async function POST(request: NextRequest) {
       }
 
       return createdBill;
-    });
+    }, { isolationLevel: "RepeatableRead" });
 
     return NextResponse.json({ bill: purchaseBill }, { status: 201 });
   } catch (error) {

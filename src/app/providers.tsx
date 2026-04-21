@@ -5,6 +5,8 @@ import { useEffect } from "react";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import type { Language } from "@/lib/i18n/translations";
 
+import { ThemeProvider } from "next-themes";
+
 export function Providers({
   children,
   initialLanguage,
@@ -34,7 +36,9 @@ export function Providers({
 
   return (
     <LanguageProvider key={initialLanguage} initialLanguage={initialLanguage}>
-      <HeroUIProvider>{children}</HeroUIProvider>
+      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+        <HeroUIProvider>{children}</HeroUIProvider>
+      </ThemeProvider>
     </LanguageProvider>
   );
 }

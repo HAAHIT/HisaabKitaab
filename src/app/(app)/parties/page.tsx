@@ -1,7 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getBalanceStatusLabel, type SupportedPartyType } from "@/lib/accounting";
+import {
+  getBalanceStatusLabel,
+  getPartyBalanceColor,
+  formatPartyBalance,
+  type SupportedPartyType,
+} from "@/lib/accounting";
 import {
   Button,
   Card,
@@ -14,6 +19,8 @@ import {
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Users } from "@/components/ui/icons";
 
 interface Party {
   id: string;
@@ -28,29 +35,8 @@ interface Party {
   _count?: { payments: number };
 }
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(Math.abs(value));
-}
-
 function roundBalance(value: number) {
   return Math.round(value * 100) / 100;
-}
-
-function formatAbsCurrency(value: number) {
-  const v = roundBalance(value);
-  if (v === 0) return "₹0";
-  return `+${formatCurrency(v)}`;
-}
-
-function getBalanceColor(partyType: string, balance: number) {
-  const v = roundBalance(balance);
-  if (v === 0) return "text-default-400";
-  if (v > 0) return "text-warning";
-  return partyType === "CUSTOMER" ? "text-success" : "text-danger";
 }
 
 async function readError(response: Response) {
@@ -303,24 +289,14 @@ export default function PartiesPage() {
             ))}
           </div>
         ) : parties.length === 0 ? (
-          <Card shadow="sm">
-            <CardBody className="flex flex-col items-center justify-center py-16">
-              <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-secondary/10">
-                <svg className="h-10 w-10 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                  />
-                </svg>
-              </div>
-              <p className="text-lg font-medium text-default-600">{t("parties.empty")}</p>
-              <Button color="primary" variant="flat" size="sm" className="mt-3" onPress={openCreate}>
-                {t("parties.addFirst")}
-              </Button>
-            </CardBody>
-          </Card>
+          <EmptyState
+            icon={Users}
+            title={t("parties.empty")}
+            description={search || typeFilter !== "ALL" ? "Try adjusting your search criteria." : "No parties found. Add your first customer or vendor to get started."}
+            actionLabel={!search && typeFilter === "ALL" ? t("parties.addFirst") : undefined}
+            onAction={!search && typeFilter === "ALL" ? openCreate : undefined}
+            className="mt-8"
+          />
         ) : (
           <div className="space-y-3">
             {parties.map((party) => (
@@ -348,8 +324,8 @@ export default function PartiesPage() {
 
                     <div className="flex items-center gap-3">
                       <div className="text-right">
-                        <p className={`text-lg font-bold ${getBalanceColor(party.type, party.currentBalance)}`}>
-                          {formatAbsCurrency(party.currentBalance)}
+                        <p className={`text-lg font-bold ${getPartyBalanceColor(party.type as SupportedPartyType, party.currentBalance)}`}>
+                          {formatPartyBalance(party.currentBalance)}
                         </p>
                         <p className="text-xs text-default-400">
                           {getBalanceStatusLabel(
@@ -416,8 +392,7 @@ export default function PartiesPage() {
         <>
           <div className="fixed inset-0 z-50 bg-black/40" onClick={() => setShowPanel(false)} />
           <div
-            className="fixed bottom-0 right-0 top-0 z-50 w-full max-w-md overflow-y-auto bg-background shadow-2xl"
-            style={{ animation: "slideInRight 0.3s ease-out" }}
+            className="fixed bottom-0 right-0 top-0 z-50 w-full max-w-md overflow-y-auto bg-background shadow-2xl animate-[slideInRight_0.3s_ease-out]"
           >
             <div className="p-6">
               <div className="mb-6 flex items-center justify-between">

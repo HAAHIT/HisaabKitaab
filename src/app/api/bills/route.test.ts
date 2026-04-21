@@ -33,6 +33,7 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 import { GET, POST } from "./route";
+import { buildMockBill, buildMockParty, buildMockTenant } from "@/__tests__/fixtures/factories";
 
 // ── Authorization guards ───────────────────────────────────────────────────
 
@@ -76,16 +77,7 @@ describe("Bills API — GET success path", () => {
 
   it("returns paginated bill list with correct metadata", async () => {
     prismaMock.bill.findMany.mockResolvedValue([
-      {
-        id: "bill-1",
-        billNumber: "BILL-202401-001",
-        partyId: "party-1",
-        party: { id: "party-1", name: "Acme", type: "CUSTOMER" },
-        customerName: "Acme",
-        grandTotal: 1180,
-        status: "FINAL",
-        createdAt: new Date("2024-01-15"),
-      },
+      buildMockBill()
     ]);
     prismaMock.bill.count.mockResolvedValue(1);
 
@@ -108,15 +100,17 @@ describe("Bills API — GET success path", () => {
     prismaMock.bill.findMany.mockResolvedValue([]);
     prismaMock.bill.count.mockResolvedValue(0);
 
+    // [LB-1] tenantId is now resolved from JWT, not x-tenant-id header
+    // resolveVerifiedTenantId is mocked globally to return "test-tenant"
     const req = new NextRequest("http://localhost/api/bills", {
-      headers: { "x-user-role": "STAFF", "x-tenant-id": "tenant-xyz" },
+      headers: { "x-user-role": "STAFF" },
     });
 
     await GET(req);
 
     expect(prismaMock.bill.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ tenantId: "tenant-xyz", isDeleted: false }),
+        where: expect.objectContaining({ tenantId: "test-tenant", isDeleted: false }),
       })
     );
   });
@@ -129,11 +123,8 @@ describe("Bills API — POST business logic", () => {
 
   it("rejects FINAL bill with zero grand total", async () => {
     prismaMock.billTemplate.findFirst.mockResolvedValue({ id: "tmpl-1" });
-    prismaMock.party.findFirst.mockResolvedValue({
-      id: "party-1", name: "Test Co", type: "CUSTOMER",
-      phone: null, address: null, gstin: null,
-    });
-    prismaMock.tenant.findUnique.mockResolvedValue({ settings: {} });
+    prismaMock.party.findFirst.mockResolvedValue(buildMockParty());
+    prismaMock.tenant.findUnique.mockResolvedValue(buildMockTenant());
 
     const req = new NextRequest("http://localhost/api/bills", {
       method: "POST",
@@ -165,14 +156,11 @@ describe("Bills API — POST business logic", () => {
 
   it("auto-derives isInterState as false when GSTIN is absent and field is omitted", async () => {
     prismaMock.billTemplate.findFirst.mockResolvedValue({ id: "tmpl-1" });
-    prismaMock.party.findFirst.mockResolvedValue({
-      id: "party-1", name: "Test Co", type: "CUSTOMER",
-      phone: null, address: null, gstin: null,
-    });
+    prismaMock.party.findFirst.mockResolvedValue(buildMockParty());
     // Return tenant without GSTIN + billing settings
     prismaMock.tenant.findUnique
-      .mockResolvedValueOnce({ settings: {} })  // loadBillingSettings
-      .mockResolvedValueOnce({ gstin: null });   // tenant GSTIN lookup (G-C1)
+      .mockResolvedValueOnce(buildMockTenant())  // loadBillingSettings
+      .mockResolvedValueOnce(buildMockTenant());   // tenant GSTIN lookup (G-C1)
 
     // Mock the transaction to capture the bill creation
     prismaMock.$transaction.mockImplementation(async (fn: any) => {

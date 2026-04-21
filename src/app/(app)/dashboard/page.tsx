@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Card,
   CardBody,
@@ -9,12 +9,15 @@ import {
   Button,
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useInstallPrompt } from "@/hooks/useInstallPrompt";
 import {
   ONBOARDING_DISMISSED_KEY,
   SetupWizard,
 } from "@/components/onboarding/SetupWizard";
+import { EmptyState } from "@/components/ui/empty-state";
+import { TrendingUp, Receipt, Wallet } from "@/components/ui/icons";
 
 interface DashboardData {
   summary: {
@@ -47,7 +50,7 @@ function CashFlowBar({ data }: { data: DashboardData["cashFlow"] }) {
     <div className="flex items-end gap-2 h-40">
       {data.map((d) => (
         <div key={d.month} className="flex-1 flex flex-col items-center gap-1">
-          <div className="flex gap-[2px] w-full justify-center items-end" style={{ height: "120px" }}>
+          <div className="flex gap-[2px] w-full justify-center items-end h-[120px]">
             <div
               className="w-3 bg-gradient-to-t from-green-500 to-emerald-400 rounded-t"
               style={{ height: `${(d.received / maxVal) * 100}%`, minHeight: d.received > 0 ? "4px" : "0" }}
@@ -75,18 +78,47 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingReady, setOnboardingReady] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchDashboard = useCallback(async () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    setError(null);
+
     try {
-      const res = await fetch("/api/dashboard");
-      const d = await res.json();
-      setData(d);
-    } catch { /* ignore */ } finally { setLoading(false); }
+      const res = await fetch("/api/dashboard", { signal: controller.signal });
+      if (res.ok) {
+        const d = await res.json();
+        setData(d);
+      } else {
+        throw new Error("Failed to load dashboard data");
+      }
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') return;
+      console.warn("Dashboard fetch failed:", err);
+      setError("Network connection interrupted");
+    } finally {
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
+    }
   }, []);
 
-  useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
+  useEffect(() => {
+    fetchDashboard();
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [fetchDashboard]);
 
   useEffect(() => {
+    const controller = new AbortController();
     let isMounted = true;
 
     async function checkOnboarding() {
@@ -104,8 +136,8 @@ export default function DashboardPage() {
         }
 
         const [partiesRes, templatesRes] = await Promise.all([
-          fetch("/api/parties?limit=1"),
-          fetch("/api/templates?limit=1"),
+          fetch("/api/parties?limit=1", { signal: controller.signal }),
+          fetch("/api/templates?limit=1", { signal: controller.signal }),
         ]);
 
         if (!partiesRes.ok || !templatesRes.ok) {
@@ -121,16 +153,15 @@ export default function DashboardPage() {
           templatesRes.json().catch(() => ({ templates: [] })),
         ]);
 
-        if (!isMounted) {
-          return;
-        }
+        if (!isMounted) return;
 
         const noParties = !partiesData.parties?.length;
         const noTemplates = !templatesData.templates?.length;
 
         setShowOnboarding(noParties && noTemplates);
         setOnboardingReady(true);
-      } catch {
+      } catch (err: any) {
+        if (err.name === 'AbortError') return;
         if (isMounted) {
           setShowOnboarding(false);
           setOnboardingReady(true);
@@ -142,6 +173,7 @@ export default function DashboardPage() {
 
     return () => {
       isMounted = false;
+      controller.abort();
     };
   }, []);
 
@@ -155,6 +187,33 @@ export default function DashboardPage() {
           <Skeleton className="h-64 rounded-xl" />
           <Skeleton className="h-64 rounded-xl" />
         </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 lg:p-16 text-center space-y-4">
+        <div className="w-16 h-16 rounded-full bg-danger/10 flex items-center justify-center text-danger">
+          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+        </div>
+        <div>
+          <h2 className="text-xl font-bold">{error}</h2>
+          <p className="text-default-500 mt-1 max-w-sm mx-auto">
+            The data fetch was interrupted. Please click the button below to reload your dashboard.
+          </p>
+        </div>
+        <Button 
+          color="primary" 
+          variant="flat" 
+          onPress={() => {
+            setLoading(true);
+            fetchDashboard();
+          }}
+          className="mt-4 font-medium"
+        >
+          Try Again
+        </Button>
       </div>
     );
   }
@@ -175,7 +234,12 @@ export default function DashboardPage() {
   const billCount = data?.billStats?.reduce((acc, b) => acc + b._count, 0) || 0;
 
   return (
-    <div className="p-4 lg:p-8 animate-fade-in">
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: "easeOut" }}
+      className="p-4 lg:p-8"
+    >
       {canInstall && !bannerDismissed && (
         <div className="mx-4 mt-4 mb-6 p-3 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
@@ -274,9 +338,12 @@ export default function DashboardPage() {
             {data?.cashFlow && data.cashFlow.length > 0 ? (
               <CashFlowBar data={data.cashFlow} />
             ) : (
-              <div className="h-40 flex items-center justify-center text-default-400 text-sm">
-                {t("dash.noPaymentData")}
-              </div>
+              <EmptyState 
+                icon={TrendingUp} 
+                title={t("dash.noPaymentData")} 
+                description="Record payments or expenses to visualize your monthly cash trajectory here." 
+                className="py-10 border-none shadow-none bg-transparent" 
+              />
             )}
           </CardBody>
         </Card>
@@ -305,9 +372,12 @@ export default function DashboardPage() {
                 ))}
               </div>
             ) : (
-              <div className="h-40 flex items-center justify-center text-default-400 text-sm">
-                {t("dash.noPayments")}
-              </div>
+              <EmptyState 
+                icon={Wallet} 
+                title={t("dash.noPayments")} 
+                description="No recent payments have been tracked. They will appear here." 
+                className="py-10 border-none shadow-none bg-transparent" 
+              />
             )}
           </CardBody>
         </Card>
@@ -349,12 +419,19 @@ export default function DashboardPage() {
                 </div>
               ))}
               {(!data?.billStats || data.billStats.length === 0) && (
-                <p className="text-sm text-default-400">{t("dash.noBills")}</p>
+                <div className="w-full pb-0">
+                  <EmptyState 
+                    icon={Receipt} 
+                    title={t("dash.noBills")} 
+                    description="You haven't generated any bills yet. Your bill summaries will appear here." 
+                    className="py-10 border-none shadow-none bg-transparent" 
+                  />
+                </div>
               )}
             </div>
           </CardBody>
         </Card>
       </div>
-    </div>
+    </motion.div>
   );
 }

@@ -70,7 +70,7 @@ export default function UserManagementPage() {
   function generatePassword() {
     const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$";
     let pw = "";
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 16; i++) {
       pw += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     setFormPassword(pw);
@@ -103,7 +103,7 @@ export default function UserManagementPage() {
       showToast(t("users.nameRequiredPhone"), "error");
       return;
     }
-    if (!editingUser && (!formPassword || formPassword.length < 6)) {
+    if (!editingUser && (!formPassword || formPassword.length < 12)) {
       showToast(t("users.passwordMin"), "error");
       return;
     }

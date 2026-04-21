@@ -104,7 +104,7 @@ export default async function LoginPage({
               <span className="text-sm font-medium text-gray-600 dark:text-zinc-300">
                 {t("login.credentialLabel")}
               </span>
-              <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white dark:border-zinc-700 dark:bg-zinc-800 px-4 py-3 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
+              <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white dark:border-zinc-700 dark:bg-zinc-800 px-4 py-3 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20">
                 <svg
                   className="h-5 w-5 shrink-0 text-gray-400 dark:text-zinc-500"
                   fill="none"
@@ -133,7 +133,7 @@ export default async function LoginPage({
               <span className="text-sm font-medium text-gray-600 dark:text-zinc-300">
                 {t("login.passwordLabel")}
               </span>
-              <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white dark:border-zinc-700 dark:bg-zinc-800 px-4 py-3 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
+              <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white dark:border-zinc-700 dark:bg-zinc-800 px-4 py-3 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20">
                 <svg
                   className="h-5 w-5 shrink-0 text-gray-400 dark:text-zinc-500"
                   fill="none"
@@ -203,14 +203,15 @@ export default async function LoginPage({
               </div>
             </label>
 
-            {errorMessage && (
+            <div id="login-error-container" className={errorMessage ? "block" : "hidden"}>
               <p
+                id="login-error-text"
                 className="rounded-xl border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger"
                 aria-live="polite"
               >
-                {errorMessage}
+                {errorMessage || ""}
               </p>
-            )}
+            </div>
 
             <button
               id="login-button"
@@ -232,19 +233,22 @@ export default async function LoginPage({
               {t("login.forgotPassword")}
             </button>
           </form>
+
+          <div className="mt-6 text-center text-sm text-gray-500 dark:text-zinc-400">
+            {t("login.noAccount")}{" "}
+            <a
+              href="/register"
+              className="relative z-50 font-semibold text-primary transition hover:underline"
+            >
+              {t("login.signUp")}
+            </a>
+          </div>
         </div>
       </div>
 
       <dialog
         id="forgot-password-dialog"
-        className="w-[calc(100vw-2rem)] max-w-md rounded-3xl border border-white/60 bg-white p-0 text-left text-foreground shadow-2xl shadow-blue-950/15 backdrop:bg-black/35 dark:border-zinc-800 dark:bg-zinc-900"
-        style={{
-          position: "fixed",
-          left: "50%",
-          top: "50%",
-          transform: "translate(-50%, -50%)",
-          margin: 0,
-        }}
+        className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 m-0 w-[calc(100vw-2rem)] max-w-md rounded-3xl border border-white/60 bg-white p-0 text-left text-foreground shadow-2xl shadow-blue-950/15 backdrop:bg-black/35 dark:border-zinc-800 dark:bg-zinc-900"
       >
         <div className="border-b border-gray-100 px-6 py-4 dark:border-zinc-800">
           <h2 className="text-lg font-semibold text-foreground">
@@ -277,12 +281,67 @@ export default async function LoginPage({
               const loginBtn = document.getElementById("login-button");
               const loginSpinner = document.getElementById("login-spinner");
               const loginLabel = document.getElementById("login-label");
+              const defaultLabel = loginLabel ? loginLabel.textContent : "Sign in";
+              const errorContainer = document.getElementById("login-error-container");
+              const errorText = document.getElementById("login-error-text");
+
               if (form && loginBtn && loginSpinner && loginLabel) {
-                form.addEventListener("submit", () => {
+                form.addEventListener("submit", async (e) => {
+                  e.preventDefault();
+                  
+                  // Clear previous errors
+                  if (errorContainer && errorText) {
+                    errorContainer.classList.remove("block");
+                    errorContainer.classList.add("hidden");
+                    errorText.textContent = "";
+                  }
+
+                  // Set loading state
                   loginBtn.setAttribute("disabled", "true");
                   loginSpinner.classList.remove("hidden");
                   loginSpinner.classList.add("flex");
                   loginLabel.textContent = "Signing in\u2026";
+
+                  try {
+                    const formData = new FormData(form);
+                    const data = Object.fromEntries(formData.entries());
+
+                    const res = await fetch("/api/auth/login", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(data),
+                    });
+
+                    const json = await res.json();
+                    
+                    if (!res.ok) {
+                      throw new Error(json.error || "An unexpected error occurred");
+                    }
+
+                    // Success - redirect to dashboard natively
+                    window.location.href = json.redirectTo || "/dashboard";
+                    
+                  } catch (err) {
+                    // Show error gracefully without URL refresh
+                    if (errorContainer && errorText) {
+                      errorText.textContent = err.message;
+                      errorContainer.classList.remove("hidden");
+                      errorContainer.classList.add("block");
+                      
+                      // Clean up URL if it previously had an error
+                      const url = new URL(window.location.href);
+                      if (url.searchParams.has("error")) {
+                        url.searchParams.delete("error");
+                        window.history.replaceState({}, document.title, url.toString());
+                      }
+                    }
+                  } finally {
+                    // Reset UI State if error (if success, page will navigate away)
+                    loginBtn.removeAttribute("disabled");
+                    loginSpinner.classList.add("hidden");
+                    loginSpinner.classList.remove("flex");
+                    loginLabel.textContent = defaultLabel;
+                  }
                 });
               }
 

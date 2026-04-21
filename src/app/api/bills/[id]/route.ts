@@ -102,7 +102,7 @@ export async function GET(
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantResolution = resolveReadTenant(request);
+  const tenantResolution = await resolveReadTenant(request);
   if (!tenantResolution.ok) {
     return tenantResolution.response;
   }
@@ -599,7 +599,7 @@ export async function PATCH(
       }
 
       return updatedBill;
-    });
+    }, { isolationLevel: "RepeatableRead" });
 
     return NextResponse.json({ bill });
   } catch (error) {
@@ -673,7 +673,6 @@ export async function DELETE(
         },
       });
 
-      // TODO: [CRITICAL] - Tally sync-state divergence on bill cancellation
       // [CRITICAL] Tally sync-state — flag original Tally-imported vouchers as MODIFIED
       // so the next XML re-export warns CAs of the cancellation-induced data divergence.
       // Without this, cancelled bills show syncState=SYNCED, creating a false impression
@@ -735,7 +734,7 @@ export async function DELETE(
           isInterState: existing.isInterState,
         });
       }
-    });
+    }, { isolationLevel: "RepeatableRead" });
 
     return NextResponse.json({ success: true });
   } catch (error) {

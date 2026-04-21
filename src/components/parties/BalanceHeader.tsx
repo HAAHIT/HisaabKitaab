@@ -2,7 +2,7 @@
 
 import { Button, Chip } from "@heroui/react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { type SupportedPartyType } from "@/lib/accounting";
+import { getBalanceStatusLabel, getPartyBalanceColor, formatPartyBalance, type SupportedPartyType } from "@/lib/accounting";
 
 interface BalanceHeaderProps {
   partyName: string;
@@ -11,17 +11,7 @@ interface BalanceHeaderProps {
   partyPhone: string | null;
 }
 
-function formatAbsCurrency(value: number) {
-  const v = Math.round(value * 100) / 100;
-  const formatted = new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(Math.abs(v));
 
-  if (v === 0) return formatted;
-  return `+${formatted}`;
-}
 
 function getBalanceLabel(
   partyType: SupportedPartyType,
@@ -39,19 +29,7 @@ function getBalanceLabel(
   return partyType === "CUSTOMER" ? t("khata.toReceive") : t("khata.toPay");
 }
 
-/**
- * Maps the raw stored balance to a display color based on semantic meaning:
- * - "to receive" (customer, balance < 0) → success (green) — money coming in
- * - "to pay"     (vendor, balance < 0)   → danger  (red)  — money going out
- * - "advance"    (balance > 0)            → warning        — overpayment / credit on account
- * - settled      (balance = 0)            → default
- */
-function getBalanceColor(partyType: SupportedPartyType, balance: number) {
-  const v = Math.round(balance * 100) / 100;
-  if (v === 0) return "text-default-400";
-  if (v > 0) return "text-warning";
-  return partyType === "CUSTOMER" ? "text-success" : "text-danger";
-}
+
 
 export default function BalanceHeader({
   partyName,
@@ -85,8 +63,8 @@ export default function BalanceHeader({
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-default-400">
               {t("khata.currentBalance")}
             </p>
-            <p className={`text-3xl font-black ${getBalanceColor(partyType, roundedBalance)}`}>
-              {formatAbsCurrency(roundedBalance)}
+            <p className={`text-3xl font-black ${getPartyBalanceColor(partyType, roundedBalance)}`}>
+              {formatPartyBalance(roundedBalance)}
             </p>
             <p className="text-sm text-default-500">{balanceLabel}</p>
           </div>

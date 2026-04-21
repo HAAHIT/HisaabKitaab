@@ -1,52 +1,24 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useTheme } from "next-themes";
+import { useEffect, useState } from "react";
 import { Button } from "@heroui/react";
 
-type Theme = "light" | "dark";
-
-function getInitialTheme(): Theme {
-  if (typeof window === "undefined") {
-    return "light";
-  }
-
-  const stored = localStorage.getItem("theme");
-  if (stored === "light" || stored === "dark") {
-    return stored;
-  }
-
-  return window.matchMedia("(prefers-color-scheme: dark)").matches
-    ? "dark"
-    : "light";
-}
-
-function subscribeNoop() {
-  return () => undefined;
-}
-
 export function ThemeSwitcher() {
-  const [theme, setTheme] = useState<Theme>(getInitialTheme);
-  const hydrated = useSyncExternalStore(
-    subscribeNoop,
-    () => true,
-    () => false
-  );
+  const [mounted, setMounted] = useState(false);
+  const { theme, setTheme } = useTheme();
 
+  // useEffect only runs on the client, so now we can safely show the UI
   useEffect(() => {
-    if (!hydrated) {
-      return;
-    }
+    setMounted(true);
+  }, []);
 
-    localStorage.setItem("theme", theme);
-    document.documentElement.classList.toggle("dark", theme === "dark");
-  }, [hydrated, theme]);
-
-  if (!hydrated) {
+  if (!mounted) {
     return <div className="w-10 h-10" />;
   }
 
   function toggleTheme() {
-    setTheme((currentTheme) => (currentTheme === "light" ? "dark" : "light"));
+    setTheme(theme === "light" ? "dark" : "light");
   }
 
   return (

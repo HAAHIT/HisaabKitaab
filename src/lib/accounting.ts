@@ -1,3 +1,5 @@
+import { roundTo2 } from "./journal-reporting";
+
 export type SupportedPartyType = "CUSTOMER" | "VENDOR";
 export type SupportedPayDirection = "INCOMING" | "OUTGOING";
 export type SupportedBillStatus = "DRAFT" | "FINAL" | "CANCELLED";
@@ -184,6 +186,25 @@ export function getBalanceStatusLabel(
   return partyType === "CUSTOMER" ? "to receive" : "to pay";
 }
 
+export function getPartyBalanceColor(partyType: SupportedPartyType, balance: number) {
+  const v = Math.round(balance * 100) / 100;
+  if (v === 0) return "text-default-400";
+  if (v > 0) return "text-warning";
+  return partyType === "CUSTOMER" ? "text-success" : "text-danger";
+}
+
+export function formatPartyBalance(balance: number) {
+  const v = Math.round(balance * 100) / 100;
+  const formatted = new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(Math.abs(v));
+
+  if (v === 0) return formatted;
+  return v > 0 ? `+${formatted}` : formatted;
+}
+
 function getBillLedgerDescription(
   partyType: SupportedPartyType,
   billNumber: string
@@ -252,7 +273,7 @@ export function buildPartyLedger({
         partyType,
         transaction.bill.grandTotal
       );
-      runningBalance += delta;
+      runningBalance = roundTo2(runningBalance + delta);
       const entryAmounts = getLedgerAmountsForBalanceDelta(partyType, delta);
 
       ledger.push({
@@ -274,7 +295,7 @@ export function buildPartyLedger({
         transaction.payment.direction,
         transaction.payment.amount
       );
-      runningBalance += delta;
+      runningBalance = roundTo2(runningBalance + delta);
       const entryAmounts = getLedgerAmountsForBalanceDelta(partyType, delta);
 
       ledger.push({
@@ -297,7 +318,7 @@ export function buildPartyLedger({
         transaction.note.voucherType === "DEBIT_NOTE"
           ? transaction.note.debit - transaction.note.credit
           : transaction.note.credit - transaction.note.debit;
-      runningBalance += delta;
+      runningBalance = roundTo2(runningBalance + delta);
 
       ledger.push({
         id: transaction.note.id,

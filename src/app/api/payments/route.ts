@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantResolution = resolveReadTenant(request);
+  const tenantResolution = await resolveReadTenant(request);
   if (!tenantResolution.ok) {
     return tenantResolution.response;
   }
@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
   const from = searchParams.get("from");
   const to = searchParams.get("to");
   const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1);
-  const limit = Math.max(1, parseInt(searchParams.get("limit") || "20", 10) || 20);
+  const limit = Math.min(Math.max(1, parseInt(searchParams.get("limit") || "20", 10) || 20), 100);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: any = { isDeleted: false, tenantId };
@@ -182,6 +182,8 @@ export async function POST(request: NextRequest) {
     const payment = await prisma.$transaction(async (tx) => {
       // [T-W2] Acquire advisory lock to prevent concurrent balance mutations
       const lockKey = generateLockKey(tenantId);
+      // [FF-10] Prevent indefinite blocking from hung transactions
+      await tx.$executeRaw`SET LOCAL lock_timeout = '5s'`;
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
 
       let resolvedPartyId = partyId as string | null;
@@ -310,7 +312,7 @@ export async function POST(request: NextRequest) {
       });
 
       return newPayment;
-    });
+    }, { isolationLevel: "RepeatableRead" });
 
     return NextResponse.json({ payment }, { status: 201 });
   } catch (error) {
@@ -351,6 +353,8 @@ export async function PATCH(request: NextRequest) {
     const result = await prisma.$transaction(async (tx) => {
       // [T-W2] Acquire advisory lock to prevent concurrent balance mutations
       const lockKey = generateLockKey(tenantId);
+      // [FF-10] Prevent indefinite blocking from hung transactions
+      await tx.$executeRaw`SET LOCAL lock_timeout = '5s'`;
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
 
       const payment = await tx.payment.findFirst({
@@ -425,7 +429,7 @@ export async function PATCH(request: NextRequest) {
       });
 
       return updated;
-    });
+    }, { isolationLevel: "RepeatableRead" });
 
     return NextResponse.json({ payment: result });
   } catch (error) {

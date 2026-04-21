@@ -14,7 +14,7 @@ import {
   logInfo,
   logWarn,
 } from "@/lib/observability";
-import { resolveReadTenant } from "@/lib/api-tenant";
+import { resolvePublicTenant } from "@/lib/api-tenant";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const { credential, password } = await readLoginRequestBody(request);
-    const tenantResolution = resolveReadTenant(request);
+    const tenantResolution = await resolvePublicTenant(request);
     if (!tenantResolution.ok) {
       logError("auth.login.tenant_missing", {
         requestId,
@@ -145,7 +145,6 @@ export async function POST(request: NextRequest) {
 
     const user = await prisma.user.findFirst({
       where: {
-        tenantId,
         isActive: true,
         OR: [
           { email: { equals: credential, mode: "insensitive" } },
@@ -226,6 +225,7 @@ export async function POST(request: NextRequest) {
     }
 
     return jsonWithRequestId(requestId, {
+      redirectTo: getPostLoginUrl(request, user.role),
       user: {
         id: user.id,
         tenantId: user.tenantId,

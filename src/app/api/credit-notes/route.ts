@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantResolution = resolveReadTenant(request);
+  const tenantResolution = await resolveReadTenant(request);
   if (!tenantResolution.ok) {
     return tenantResolution.response;
   }
@@ -162,6 +162,8 @@ export async function POST(request: NextRequest) {
 
     const note = await prisma.$transaction(async (tx: PrismaTx) => {
       const lockKey = generateLockKey(tenantId);
+      // [LB-1] Prevent indefinite blocking from hung transactions
+      await tx.$executeRaw`SET LOCAL lock_timeout = '5s'`;
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
 
       // We simply create a JournalEntry for the note, no Bill entity is stored for notes in this logic.
@@ -224,6 +226,18 @@ export async function POST(request: NextRequest) {
                },
             },
          });
+
+         // [LB-2] MCA GSR 247(E) — audit trail for Credit Note creation
+         await tx.auditLog.create({
+           data: {
+             tenantId,
+             entityType: "JournalEntry",
+             entityId: entry.id,
+             userId: userId!,
+             action: "CREATE",
+           },
+         });
+
          return entry;
       } else {
          // DEBIT_NOTE (Purchase Return)
@@ -264,21 +278,38 @@ export async function POST(request: NextRequest) {
                         debit: 0,
                         credit: subtotal,
                      },
-                     // Simplifying taxes for debit note to IGST_INPUT / etc. for now if tax > 0
-                     ...(taxAmount > 0 ? [{
-                        accountCode: (isInterState ? "IGST_INPUT" : "CGST_INPUT") as string,
-                        accountName: "Tax Input",
-                        tallyGroup: "Duties & Taxes",
-                        debit: 0,
-                        credit: taxAmount,
-                     }] : [])
+                     // [LB-3] Proper CGST+SGST split for intra-state debit notes
+                     ...(taxAmount > 0
+                       ? (isInterState
+                           ? [{ accountCode: "IGST_INPUT", accountName: "IGST Input", tallyGroup: "Duties & Taxes", debit: 0, credit: taxAmount }]
+                           : (() => {
+                               const half = Math.round((taxAmount / 2) * 100) / 100;
+                               const other = Math.round((taxAmount - half) * 100) / 100;
+                               return [
+                                 { accountCode: "CGST_INPUT", accountName: "CGST Input", tallyGroup: "Duties & Taxes", debit: 0, credit: half },
+                                 { accountCode: "SGST_INPUT", accountName: "SGST Input", tallyGroup: "Duties & Taxes", debit: 0, credit: other },
+                               ];
+                             })())
+                       : [])
                   ]
                }
             }
          });
+
+         // [LB-2] MCA GSR 247(E) — audit trail for Debit Note creation
+         await tx.auditLog.create({
+           data: {
+             tenantId,
+             entityType: "JournalEntry",
+             entityId: entry.id,
+             userId: userId!,
+             action: "CREATE",
+           },
+         });
+
          return entry;
       }
-    });
+    }, { isolationLevel: "RepeatableRead" });
 
     return NextResponse.json({ note }, { status: 201 });
   } catch (error) {

@@ -16,7 +16,7 @@ import {
 // GET /api/settings - Get company settings from Tenant record
 export async function GET(request: NextRequest) {
   try {
-    const tenantResolution = resolveReadTenant(request);
+    const tenantResolution = await resolveReadTenant(request);
     if (!tenantResolution.ok) {
       return tenantResolution.response;
     }
