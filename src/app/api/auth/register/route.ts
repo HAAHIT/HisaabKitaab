@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { hashPassword, createSession } from "@/lib/auth";
+import { hashPassword } from "@/lib/auth";
 import { logError, getRequestId } from "@/lib/observability";
 
 function normalizeOptionalString(value: unknown) {
@@ -91,7 +91,8 @@ export async function POST(request: NextRequest) {
           name: companyName,
           slug,
           settings: {
-             companyName,
+            companyName,
+            onboardingComplete: false,
           },
         },
       });
@@ -109,16 +110,6 @@ export async function POST(request: NextRequest) {
       });
 
       return { tenant: newTenant, user: newUser };
-    });
-
-    // Sign the user in automatically
-    await createSession({
-      userId: user.id,
-      tenantId: tenant.id,
-      name: user.name,
-      role: user.role,
-      email: user.email || undefined,
-      phone: user.phone || undefined,
     });
 
     return NextResponse.json({ success: true }, { status: 201 });

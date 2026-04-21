@@ -30,15 +30,28 @@ export async function GET(request: NextRequest) {
   }
   const tenantId = tenantResolution.tenantId;
 
-  const items = await prisma.itemCatalog.findMany({
-    where: {
-      tenantId,
-      isActive: true,
-    },
-    orderBy: { name: "asc" },
-  });
+  const { searchParams } = new URL(request.url);
+  const search = searchParams.get("search") || "";
+  const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
+  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10)));
 
-  return NextResponse.json({ items });
+  const where = {
+    tenantId,
+    isActive: true,
+    ...(search ? { name: { contains: search, mode: "insensitive" as const } } : {}),
+  };
+
+  const [items, total] = await prisma.$transaction([
+    prisma.itemCatalog.findMany({
+      where,
+      orderBy: { name: "asc" },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.itemCatalog.count({ where }),
+  ]);
+
+  return NextResponse.json({ items, total, page, totalPages: Math.ceil(total / limit) });
 }
 
 export async function POST(request: NextRequest) {

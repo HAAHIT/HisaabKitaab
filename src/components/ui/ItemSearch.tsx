@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Autocomplete, AutocompleteItem, Button } from "@heroui/react";
 import { useRouter } from "next/navigation";
 
@@ -38,26 +38,43 @@ export function ItemSearch({
 }: ItemSearchProps) {
   const router = useRouter();
   const [items, setItems] = useState<ItemOption[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const selectedItemRef = useRef<ItemOption | null>(null);
 
-  useEffect(() => {
-    async function fetchItems() {
-      setIsLoading(true);
-      try {
-        const response = await fetch("/api/items");
-        if (response.ok) {
-          const data = await response.json();
-          setItems(data.items || []);
+  async function fetchItems(search: string) {
+    setIsLoading(true);
+    try {
+      const params = new URLSearchParams({ limit: "20" });
+      if (search) params.set("search", search);
+      const response = await fetch(`/api/items?${params}`);
+      if (response.ok) {
+        const data = await response.json();
+        const results = (data.items || []) as ItemOption[];
+        // Keep the currently selected item in the list even if not in search results
+        if (selectedItemRef.current && !results.some((i) => i.id === selectedItemRef.current!.id)) {
+          setItems([selectedItemRef.current, ...results]);
+        } else {
+          setItems(results);
         }
-      } catch {
-        // silently fail
-      } finally {
-        setIsLoading(false);
       }
+    } finally {
+      setIsLoading(false);
     }
+  }
 
-    fetchItems();
+  // Load initial items on mount
+  useEffect(() => {
+    fetchItems("");
   }, []);
+
+  function handleInputChange(val: string) {
+    onInputChange?.(val);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      fetchItems(val);
+    }, 300);
+  }
 
   const selectedKey = value || undefined;
 
@@ -70,15 +87,17 @@ export function ItemSearch({
       isLoading={isLoading}
       selectedKey={selectedKey}
       inputValue={inputValue}
-      onInputChange={onInputChange}
+      onInputChange={handleInputChange}
       allowsCustomValue={allowsCustomValue}
       onSelectionChange={(key) => {
         if (!key) {
+          selectedItemRef.current = null;
           onChange(null);
           return;
         }
 
         const selected = items.find((item) => item.id === String(key));
+        selectedItemRef.current = selected ?? null;
         onChange(selected || null);
       }}
       autoFocus={autoFocus}

@@ -145,3 +145,43 @@ dialog[open] {
     padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px) + 1rem);
   }
 }
+
+/* ── Autofill Override ───────────────────────────────── */
+/* Browsers (Chrome/Safari) inject a blue-gray background for autofilled
+   inputs that overrides bg-white. The only reliable fix is an inset
+   box-shadow that "paints over" the autofill background. */
+
+/* Default: white background for light-mode inputs */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px white inset !important;
+  -webkit-text-fill-color: rgb(17 24 39) !important; /* gray-900 */
+  caret-color: rgb(17 24 39);
+}
+
+/* Dark-mode inputs (e.g. zinc-800 backgrounds) */
+.dark input:-webkit-autofill,
+.dark input:-webkit-autofill:hover,
+.dark input:-webkit-autofill:focus,
+.dark input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px rgb(39 39 42) inset !important; /* zinc-800 */
+  -webkit-text-fill-color: rgb(244 244 245) !important; /* zinc-100 */
+  caret-color: rgb(244 244 245);
+}
+
+/* Auth pages use an explicitly white card even when dark class is on root.
+   Higher specificity (.dark .auth-form input) overrides the dark rule above. */
+.auth-form input:-webkit-autofill,
+.auth-form input:-webkit-autofill:hover,
+.auth-form input:-webkit-autofill:focus,
+.auth-form input:-webkit-autofill:active,
+.dark .auth-form input:-webkit-autofill,
+.dark .auth-form input:-webkit-autofill:hover,
+.dark .auth-form input:-webkit-autofill:focus,
+.dark .auth-form input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px white inset !important;
+  -webkit-text-fill-color: rgb(17 24 39) !important; /* gray-900 */
+  caret-color: rgb(17 24 39);
+}

@@ -46,6 +46,8 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const search = searchParams.get("search") || "";
   const type = searchParams.get("type") || "";
+  const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
+  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10)));
 
   const where: Prisma.PartyWhereInput = { isActive: true, isDeleted: false, tenantId };
 
@@ -60,15 +62,20 @@ export async function GET(request: NextRequest) {
     where.type = type as PartyType;
   }
 
-  const parties = await prisma.party.findMany({
-    where,
-    orderBy: { name: "asc" },
-    include: {
-      _count: { select: { payments: true } },
-    },
-  });
+  const [parties, total] = await prisma.$transaction([
+    prisma.party.findMany({
+      where,
+      orderBy: { name: "asc" },
+      skip: (page - 1) * limit,
+      take: limit,
+      include: {
+        _count: { select: { payments: true } },
+      },
+    }),
+    prisma.party.count({ where }),
+  ]);
 
-  return NextResponse.json({ parties });
+  return NextResponse.json({ parties, total, page, totalPages: Math.ceil(total / limit) });
 }
 
 // POST /api/parties — Create a new party

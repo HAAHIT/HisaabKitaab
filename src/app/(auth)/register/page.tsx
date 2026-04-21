@@ -69,8 +69,7 @@ export default function RegisterPage() {
           throw new Error(data.error || t("register.error"));
         }
 
-        router.push("/");
-        router.refresh();
+        router.push("/login?registered=1");
       } catch (err) {
         setErrorMessage(
           err instanceof Error ? err.message : t("login.serverError")
@@ -123,7 +122,7 @@ export default function RegisterPage() {
             </a>
           </div>
 
-          <form onSubmit={onSubmit} className="flex flex-col gap-4">
+          <form onSubmit={onSubmit} className="auth-form flex flex-col gap-4">
             
             <label htmlFor="company-input" className="space-y-1.5">
               <span className="text-sm font-medium text-gray-600 dark:text-zinc-300">
@@ -135,7 +134,7 @@ export default function RegisterPage() {
                   name="companyName"
                   type="text"
                   required
-                  className="w-full bg-transparent text-base outline-none placeholder:text-gray-400 dark:placeholder:text-zinc-500"
+                  className="w-full bg-transparent text-base text-gray-900 outline-none placeholder:text-gray-400 dark:placeholder:text-zinc-500"
                   placeholder={t("register.companyNamePlaceholder")}
                 />
               </div>
@@ -152,7 +151,7 @@ export default function RegisterPage() {
                   type="text"
                   required
                   autoComplete="name"
-                  className="w-full bg-transparent text-base outline-none placeholder:text-gray-400 dark:placeholder:text-zinc-500"
+                  className="w-full bg-transparent text-base text-gray-900 outline-none placeholder:text-gray-400 dark:placeholder:text-zinc-500"
                   placeholder={t("register.namePlaceholder")}
                 />
               </div>
@@ -168,7 +167,7 @@ export default function RegisterPage() {
                   name="credential"
                   type="text"
                   required
-                  className="w-full bg-transparent text-base outline-none placeholder:text-gray-400 dark:placeholder:text-zinc-500"
+                  className="w-full bg-transparent text-base text-gray-900 outline-none placeholder:text-gray-400 dark:placeholder:text-zinc-500"
                   placeholder={t("login.credentialPlaceholder")}
                 />
               </div>
@@ -185,7 +184,7 @@ export default function RegisterPage() {
                   type={showPassword ? "text" : "password"}
                   required
                   minLength={12}
-                  className="w-full bg-transparent text-base outline-none placeholder:text-gray-400 dark:placeholder:text-zinc-500"
+                  className="w-full bg-transparent text-base text-gray-900 outline-none placeholder:text-gray-400 dark:placeholder:text-zinc-500"
                   placeholder={t("login.passwordPlaceholder")}
                 />
                 <button

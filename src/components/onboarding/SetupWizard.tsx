@@ -61,8 +61,13 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
     [t]
   );
 
-  function dismiss() {
+  async function dismiss() {
     window.localStorage.setItem(ONBOARDING_DISMISSED_KEY, "1");
+    await fetch("/api/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ onboardingComplete: true }),
+    }).catch(() => undefined);
     onComplete();
   }
 
@@ -71,20 +76,19 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
     setError(null);
 
     try {
-      if (businessName.trim() || businessPhone.trim() || businessGstin.trim()) {
-        const settingsResponse = await fetch("/api/settings", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            companyName: businessName.trim() || undefined,
-            companyPhone: businessPhone.trim() || undefined,
-            companyGstin: businessGstin.trim() || undefined,
-          }),
-        });
+      const settingsResponse = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyName: businessName.trim() || undefined,
+          companyPhone: businessPhone.trim() || undefined,
+          companyGstin: businessGstin.trim() || undefined,
+          onboardingComplete: true,
+        }),
+      });
 
-        if (!settingsResponse.ok) {
-          throw new Error(await readError(settingsResponse));
-        }
+      if (!settingsResponse.ok) {
+        throw new Error(await readError(settingsResponse));
       }
 
       const templateResponse = await fetch("/api/templates", {
@@ -147,7 +151,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
         <CardBody className="gap-6 p-0">
           <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-6 text-white">
             <p className="text-sm font-medium uppercase tracking-[0.25em] text-white/70">
-              DoorCraft Pro
+              HisaabKitaab
             </p>
             <h1 className="mt-2 text-3xl font-bold">{t("onboarding.title")}</h1>
             <p className="mt-2 text-sm text-white/80">{t("onboarding.subtitle")}</p>

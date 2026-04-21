@@ -71,7 +71,6 @@ export default function NewBillPage() {
   const { t } = useLanguage();
 
   const [templates, setTemplates] = useState<Template[]>([]);
-  const [parties, setParties] = useState<PartyOption[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingAs, setSavingAs] = useState<"DRAFT" | "FINAL" | null>(null);
@@ -94,20 +93,17 @@ export default function NewBillPage() {
   const fetchFormData = useCallback(async () => {
     setLoading(true);
     try {
-      const [templatesResponse, partiesResponse, settingsResponse] = await Promise.all([
+      const [templatesResponse, settingsResponse] = await Promise.all([
         fetch("/api/templates"),
-        fetch("/api/parties"),
         fetch("/api/settings"),
       ]);
 
-      const [templatesData, partiesData, settingsData] = await Promise.all([
+      const [templatesData, settingsData] = await Promise.all([
         templatesResponse.json().catch(() => ({ templates: [] })),
-        partiesResponse.json().catch(() => ({ parties: [] })),
         settingsResponse.json().catch(() => ({ settings: null })),
       ]);
 
       setTemplates(templatesData.templates || []);
-      setParties((partiesData.parties || []) as PartyOption[]);
 
       if (settingsData.settings) {
         setTerms(settingsData.settings.defaultTerms || "");
@@ -123,12 +119,22 @@ export default function NewBillPage() {
     fetchFormData();
   }, [fetchFormData]);
 
+  const [preselectedParty, setPreselectedParty] = useState<PartyOption | null>(null);
+
   useEffect(() => {
-    if (preselectedPartyId && parties.length > 0 && !selectedParty) {
-      const party = parties.find((p) => p.id === preselectedPartyId);
-      if (party) setSelectedParty(party);
-    }
-  }, [preselectedPartyId, parties, selectedParty]);
+    if (!preselectedPartyId || selectedParty) return;
+    fetch(`/api/parties/${preselectedPartyId}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.party) {
+          const p = data.party as PartyOption;
+          setPreselectedParty(p);
+          setSelectedParty(p);
+        }
+      })
+      .catch(() => {/* silently ignore — user can search manually */});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preselectedPartyId]);
 
   function showToast(message: string, type: "success" | "error") {
     setToast({ message, type });
@@ -488,6 +494,7 @@ export default function NewBillPage() {
                   placeholder={t("bills.selectCustomer")}
                   autoFocus={!selectedParty}
                   isInvalid={Boolean(errors.partyId)}
+                  initialParty={preselectedParty}
                 />
 
                 {selectedParty && (

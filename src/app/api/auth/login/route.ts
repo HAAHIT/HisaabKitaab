@@ -220,12 +220,14 @@ export async function POST(request: NextRequest) {
       role: user.role,
     });
 
+    const postLoginUrl = getPostLoginUrl(request, user.role);
+
     if (formSubmission) {
-      return redirectWithRequestId(requestId, getPostLoginUrl(request, user.role));
+      return redirectWithRequestId(requestId, postLoginUrl);
     }
 
     return jsonWithRequestId(requestId, {
-      redirectTo: getPostLoginUrl(request, user.role),
+      redirectTo: postLoginUrl,
       user: {
         id: user.id,
         tenantId: user.tenantId,
