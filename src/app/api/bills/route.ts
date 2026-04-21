@@ -203,7 +203,7 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1);
     const limit = Math.min(Math.max(1, parseInt(searchParams.get("limit") || "20", 10) || 20), 100);
 
-    const where: any = { isDeleted: false, tenantId };
+    const where: BillWhere = { isDeleted: false, tenantId };
 
     if (partyType === "VENDOR") {
       // Purchases always have a vendor linked in this system
@@ -218,7 +218,7 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       // If search is present, we need to be careful with existing OR
-      const searchOR = [
+      const searchOR: BillWhere[] = [
         { billNumber: { contains: search, mode: "insensitive" } },
         { customerName: { contains: search, mode: "insensitive" } },
         { party: { name: { contains: search, mode: "insensitive" } } },
@@ -237,7 +237,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (status && status !== "ALL") {
-      where.status = status;
+      where.status = status as import("@prisma/client").BillStatus;
     }
 
     if (partyId) {
