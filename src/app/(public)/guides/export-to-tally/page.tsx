@@ -169,6 +169,10 @@ export default function ExportToTallyGuide() {
           >
             Go to Dashboard
           </Link>
+          <p className="mt-8 text-xs text-slate-400 leading-relaxed max-w-2xl mx-auto">
+            *Tally and TallyPrime are registered trademarks of Tally Solutions Pvt. Ltd. <br />
+            HisaabKitaab is an independent product and is not affiliated with, endorsed by, or sponsored by Tally Solutions.
+          </p>
         </div>
       </article>
     </div>
