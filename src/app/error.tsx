@@ -43,7 +43,12 @@ export default function RootError({
               Something went wrong
             </h2>
             <p className="mt-2 text-sm text-default-500">
-              {error.message || "An unexpected error occurred. Please reload the page."}
+              An unexpected error occurred. Please reload the page.
+              {error.digest && (
+                <span className="mt-1 block text-xs text-default-400">
+                  Ref: {error.digest}
+                </span>
+              )}
             </p>
           </div>
           <Button
