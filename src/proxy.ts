@@ -71,6 +71,23 @@ export async function proxy(request: NextRequest) {
     );
   }
 
+  const token = request.cookies.get("hisaabkitaab-session")?.value;
+  const isAuthPage = pathname === "/login" || pathname === "/register";
+
+  if (isAuthPage && token) {
+    try {
+      const { payload } = await jwtVerify(token, jwtSecret);
+      const role = payload.role as string;
+      const redirectPath = role === "CUSTOMER" ? "/measurements/upload" : "/dashboard";
+      return redirectWithRequestId(new URL(redirectPath, request.url));
+    } catch {
+      // Invalid token, remove it and let them see the login page
+      const response = nextWithRequestHeaders();
+      response.cookies.delete("hisaabkitaab-session");
+      return response;
+    }
+  }
+
   if (
     isPublicPath(pathname) ||
     pathname.startsWith("/_next") ||
@@ -79,8 +96,6 @@ export async function proxy(request: NextRequest) {
   ) {
     return nextWithRequestHeaders();
   }
-
-  const token = request.cookies.get("hisaabkitaab-session")?.value;
 
   if (!token) {
     const loginUrl = new URL("/login", request.url);
