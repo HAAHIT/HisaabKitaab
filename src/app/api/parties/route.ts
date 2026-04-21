@@ -149,7 +149,7 @@ export async function POST(request: NextRequest) {
       });
 
       return p;
-    });
+    }, { isolationLevel: "RepeatableRead" });
 
     return NextResponse.json({ party }, { status: 201 });
   } catch (error) {

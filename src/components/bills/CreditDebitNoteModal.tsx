@@ -81,7 +81,18 @@ export function CreditDebitNoteModal({ isOpen, onOpenChange, onSuccess, noteType
   }
 
   return (
-    <Modal isOpen={isOpen} onOpenChange={onOpenChange} size="2xl" backdrop="blur">
+    <Modal 
+      isOpen={isOpen} 
+      onOpenChange={onOpenChange} 
+      size="2xl" 
+      backdrop="blur"
+      motionProps={{
+        variants: {
+          enter: { y: 0, opacity: 1, scale: 1, transition: { duration: 0.3, ease: "easeOut" } },
+          exit: { y: -20, opacity: 0, scale: 0.95, transition: { duration: 0.2, ease: "easeIn" } },
+        }
+      }}
+    >
       <ModalContent>
         {(onClose) => (
           <>

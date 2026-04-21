@@ -278,7 +278,7 @@ export async function POST(request: NextRequest) {
          });
          return entry;
       }
-    });
+    }, { isolationLevel: "RepeatableRead" });
 
     return NextResponse.json({ note }, { status: 201 });
   } catch (error) {

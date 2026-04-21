@@ -13,40 +13,17 @@ import {
   type TallyPartyMaster,
 } from "@/lib/tally-xml";
 import { parseTallyXml } from "@/lib/tally-xml-import";
+import { buildMockTallySalesVoucher } from "@/__tests__/fixtures/factories";
 
 const COMPANY = "TestCo";
 
-// ── Helper: builds a minimal Sales voucher ────────────────────────────────────
-
-function makeSalesVoucher(overrides?: Partial<TallyVoucher>): TallyVoucher {
-  return {
-    date: new Date("2025-04-01T06:30:00.000Z"), // IST noon
-    voucherType: "Sales",
-    reference: "INV-001",
-    narration: "Sale to Test Party",
-    ledgerEntries: [
-      { ledgerName: "Sundry Debtors", amount: 11800, partyName: "Test Party" },
-      { ledgerName: "Sales Account", amount: -10000, isIncomeLedger: true },
-      { ledgerName: "CGST Output", amount: -900 },
-      { ledgerName: "SGST Output", amount: -900 },
-    ],
-    guid: "test-guid-001",
-    placeOfSupply: "27",
-    taxPercent: 18,
-    isInterState: false,
-    cessAmount: 0,
-    hsnRatePairs: [{ hsnCode: "6204", taxPercent: 18 }],
-    hsnCodes: ["6204"],
-    gstin: "27AABCU9603R1ZM",
-    ...overrides,
-  };
-}
+// Removed makeSalesVoucher as it is now in fixtures
 
 // ── Sales voucher round-trip ──────────────────────────────────────────────────
 
 describe("Sales voucher round-trip", () => {
   it("serializes and re-parses a Sales voucher", () => {
-    const voucher = makeSalesVoucher();
+    const voucher = buildMockTallySalesVoucher();
     const xml = buildTallyVoucherXml([voucher], COMPANY);
     const result = parseTallyXml(xml);
 
@@ -66,7 +43,7 @@ describe("Sales voucher round-trip", () => {
 
 describe("Sales Return (Credit Note) round-trip — C1/W1 guard", () => {
   it("emits <GSTDETAILS.LIST> on Sales Return vouchers", () => {
-    const voucher = makeSalesVoucher({
+    const voucher = buildMockTallySalesVoucher({
       voucherType: "Credit Note",
       reference: "CN-001",
       narration: "Reversal of Sales Bill INV-001",
@@ -85,7 +62,7 @@ describe("Sales Return (Credit Note) round-trip — C1/W1 guard", () => {
   });
 
   it("emits <GSTDETAILS.LIST> on Purchase Return vouchers", () => {
-    const voucher = makeSalesVoucher({
+    const voucher = buildMockTallySalesVoucher({
       voucherType: "Debit Note",
       reference: "DN-001",
       narration: "Purchase return to Vendor",
@@ -98,7 +75,7 @@ describe("Sales Return (Credit Note) round-trip — C1/W1 guard", () => {
   });
 
   it("does NOT emit <GSTDETAILS.LIST> on Journal vouchers", () => {
-    const voucher = makeSalesVoucher({
+    const voucher = buildMockTallySalesVoucher({
       voucherType: "Journal",
       reference: "JV-001",
       narration: "Manual adjustment",
@@ -128,8 +105,8 @@ describe("Combined export (masters + vouchers) round-trip", () => {
       },
     ];
     const vouchers = [
-      makeSalesVoucher(),
-      makeSalesVoucher({
+      buildMockTallySalesVoucher(),
+      buildMockTallySalesVoucher({
         voucherType: "Credit Note",
         reference: "CN-002",
         guid: "test-guid-cn-002",
@@ -178,7 +155,7 @@ describe("Fingerprint date format consistency — W4 guard", () => {
 
 describe("GST metadata round-trip — G1d guard", () => {
   it("placeOfSupply, taxPercent, and hsnCodes survive export → import", () => {
-    const voucher = makeSalesVoucher({
+    const voucher = buildMockTallySalesVoucher({
       placeOfSupply: "27",
       taxPercent: 18,
       hsnRatePairs: [{ hsnCode: "6204", taxPercent: 18 }],
@@ -201,7 +178,7 @@ describe("GST metadata round-trip — G1d guard", () => {
 
 describe("BILLALLOCATIONS.LIST NAME — X2 fix", () => {
   it("emits bill reference in <NAME>, not party name", () => {
-    const voucher = makeSalesVoucher({
+    const voucher = buildMockTallySalesVoucher({
       reference: "INV-001",
       ledgerEntries: [
         { ledgerName: "Sundry Debtors", amount: 11800, partyName: "Test Party" },
@@ -217,7 +194,7 @@ describe("BILLALLOCATIONS.LIST NAME — X2 fix", () => {
   });
 
   it("falls back to partyName when reference is not set on the entry", () => {
-    const voucher = makeSalesVoucher({
+    const voucher = buildMockTallySalesVoucher({
       reference: "INV-002",
       ledgerEntries: [
         { ledgerName: "Sundry Debtors", amount: 11800, partyName: "Fallback Party" },

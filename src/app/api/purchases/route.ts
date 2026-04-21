@@ -234,7 +234,7 @@ export async function POST(request: NextRequest) {
       }
 
       return createdBill;
-    });
+    }, { isolationLevel: "RepeatableRead" });
 
     return NextResponse.json({ bill: purchaseBill }, { status: 201 });
   } catch (error) {

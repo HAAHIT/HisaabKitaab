@@ -9,12 +9,15 @@ import {
   Button,
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useInstallPrompt } from "@/hooks/useInstallPrompt";
 import {
   ONBOARDING_DISMISSED_KEY,
   SetupWizard,
 } from "@/components/onboarding/SetupWizard";
+import { EmptyState } from "@/components/ui/empty-state";
+import { TrendingUp, Receipt, Wallet } from "@/components/ui/icons";
 
 interface DashboardData {
   summary: {
@@ -175,7 +178,12 @@ export default function DashboardPage() {
   const billCount = data?.billStats?.reduce((acc, b) => acc + b._count, 0) || 0;
 
   return (
-    <div className="p-4 lg:p-8 animate-fade-in">
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: "easeOut" }}
+      className="p-4 lg:p-8"
+    >
       {canInstall && !bannerDismissed && (
         <div className="mx-4 mt-4 mb-6 p-3 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
@@ -274,9 +282,12 @@ export default function DashboardPage() {
             {data?.cashFlow && data.cashFlow.length > 0 ? (
               <CashFlowBar data={data.cashFlow} />
             ) : (
-              <div className="h-40 flex items-center justify-center text-default-400 text-sm">
-                {t("dash.noPaymentData")}
-              </div>
+              <EmptyState 
+                icon={TrendingUp} 
+                title={t("dash.noPaymentData")} 
+                description="Record payments or expenses to visualize your monthly cash trajectory here." 
+                className="py-10 border-none shadow-none bg-transparent" 
+              />
             )}
           </CardBody>
         </Card>
@@ -305,9 +316,12 @@ export default function DashboardPage() {
                 ))}
               </div>
             ) : (
-              <div className="h-40 flex items-center justify-center text-default-400 text-sm">
-                {t("dash.noPayments")}
-              </div>
+              <EmptyState 
+                icon={Wallet} 
+                title={t("dash.noPayments")} 
+                description="No recent payments have been tracked. They will appear here." 
+                className="py-10 border-none shadow-none bg-transparent" 
+              />
             )}
           </CardBody>
         </Card>
@@ -349,12 +363,19 @@ export default function DashboardPage() {
                 </div>
               ))}
               {(!data?.billStats || data.billStats.length === 0) && (
-                <p className="text-sm text-default-400">{t("dash.noBills")}</p>
+                <div className="w-full pb-0">
+                  <EmptyState 
+                    icon={Receipt} 
+                    title={t("dash.noBills")} 
+                    description="You haven't generated any bills yet. Your bill summaries will appear here." 
+                    className="py-10 border-none shadow-none bg-transparent" 
+                  />
+                </div>
               )}
             </div>
           </CardBody>
         </Card>
       </div>
-    </div>
+    </motion.div>
   );
 }

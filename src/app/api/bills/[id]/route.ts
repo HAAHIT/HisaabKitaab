@@ -599,7 +599,7 @@ export async function PATCH(
       }
 
       return updatedBill;
-    });
+    }, { isolationLevel: "RepeatableRead" });
 
     return NextResponse.json({ bill });
   } catch (error) {
@@ -734,7 +734,7 @@ export async function DELETE(
           isInterState: existing.isInterState,
         });
       }
-    });
+    }, { isolationLevel: "RepeatableRead" });
 
     return NextResponse.json({ success: true });
   } catch (error) {

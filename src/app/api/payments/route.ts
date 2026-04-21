@@ -312,7 +312,7 @@ export async function POST(request: NextRequest) {
       });
 
       return newPayment;
-    });
+    }, { isolationLevel: "RepeatableRead" });
 
     return NextResponse.json({ payment }, { status: 201 });
   } catch (error) {
@@ -429,7 +429,7 @@ export async function PATCH(request: NextRequest) {
       });
 
       return updated;
-    });
+    }, { isolationLevel: "RepeatableRead" });
 
     return NextResponse.json({ payment: result });
   } catch (error) {

@@ -633,7 +633,7 @@ export async function POST(request: NextRequest) {
       }
 
       return createdBill;
-    });
+    }, { isolationLevel: "RepeatableRead" });
 
     return NextResponse.json({ bill }, { status: 201 });
   } catch (error: unknown) {

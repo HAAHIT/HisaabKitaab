@@ -14,6 +14,8 @@ import {
 } from "@heroui/react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Activity } from "@/components/ui/icons";
 
 interface TransactionsClientProps {
   initialTransactions: any[];
@@ -154,7 +156,14 @@ export default function TransactionsClient({ initialTransactions }: Transactions
               <TableColumn align="end" className="text-right">DEBIT</TableColumn>
               <TableColumn align="end" className="text-right">CREDIT</TableColumn>
             </TableHeader>
-            <TableBody emptyContent="No transactions found for the selected filters">
+            <TableBody emptyContent={
+              <EmptyState 
+                icon={Activity} 
+                title="No transactions found" 
+                description="Your transaction records will appear here. Adjust filters if needed." 
+                className="py-10 border-none shadow-none bg-transparent flex items-center justify-center mx-auto" 
+              />
+            }>
               {initialTransactions.flatMap((tx: any) => (
                 tx.lines.map((line: any, idx: number) => (
                   <TableRow key={`${tx.id}-${idx}`} className="border-b border-divider/50 hover:bg-default-50/50 transition-colors">

@@ -72,7 +72,18 @@ export function QuickAddPartyModal({ isOpen, onOpenChange, onSuccess, initialTyp
   }
 
   return (
-    <Modal isOpen={isOpen} onOpenChange={onOpenChange} size="md" backdrop="blur">
+    <Modal 
+      isOpen={isOpen} 
+      onOpenChange={onOpenChange} 
+      size="md" 
+      backdrop="blur"
+      motionProps={{
+        variants: {
+          enter: { y: 0, opacity: 1, scale: 1, transition: { duration: 0.3, ease: "easeOut" } },
+          exit: { y: -20, opacity: 0, scale: 0.95, transition: { duration: 0.2, ease: "easeIn" } },
+        }
+      }}
+    >
       <ModalContent>
         {(onClose) => (
           <>
