@@ -107,7 +107,16 @@ export default async function PartyProfilePage({
   return (
     <PartyProfileClient
       partyId={party.id}
-      party={{ ...party, openingBalance: party.openingBalance.toNumber() }}
+      party={{
+        name: party.name,
+        type: party.type as "CUSTOMER" | "VENDOR",
+        phone: party.phone,
+        email: party.email,
+        address: party.address,
+        gstin: party.gstin,
+        openingBalance: party.openingBalance.toNumber(),
+        createdAt: party.createdAt,
+      }}
       ledger={ledger}
       measurements={measurements}
       calculatedCurrent={calculatedCurrent}
