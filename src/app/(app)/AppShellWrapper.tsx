@@ -26,5 +26,12 @@ export default function AppShellWrapper({
     }
   }, []);
 
+  // Force full reload on browser back/forward to bust Next.js router cache
+  useEffect(() => {
+    const reload = () => window.location.reload();
+    window.addEventListener("popstate", reload);
+    return () => window.removeEventListener("popstate", reload);
+  }, []);
+
   return <AppShell user={user}>{children}</AppShell>;
 }

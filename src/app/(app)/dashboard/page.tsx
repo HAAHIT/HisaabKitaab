@@ -79,6 +79,7 @@ export default function DashboardPage() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingReady, setOnboardingReady] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchDashboard = useCallback(async () => {
     if (abortControllerRef.current) {
@@ -86,17 +87,21 @@ export default function DashboardPage() {
     }
     const controller = new AbortController();
     abortControllerRef.current = controller;
+    setError(null);
 
     try {
       const res = await fetch("/api/dashboard", { signal: controller.signal });
       if (res.ok) {
         const d = await res.json();
         setData(d);
+      } else {
+        throw new Error("Failed to load dashboard data");
       }
-    } catch (err: any) { 
-      if (err.name === 'AbortError') return;
-      /* ignore */ 
-    } finally { 
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') return;
+      console.warn("Dashboard fetch failed:", err);
+      setError("Network connection interrupted");
+    } finally {
       if (!controller.signal.aborted) {
         setLoading(false);
       }
@@ -182,6 +187,33 @@ export default function DashboardPage() {
           <Skeleton className="h-64 rounded-xl" />
           <Skeleton className="h-64 rounded-xl" />
         </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 lg:p-16 text-center space-y-4">
+        <div className="w-16 h-16 rounded-full bg-danger/10 flex items-center justify-center text-danger">
+          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+        </div>
+        <div>
+          <h2 className="text-xl font-bold">{error}</h2>
+          <p className="text-default-500 mt-1 max-w-sm mx-auto">
+            The data fetch was interrupted. Please click the button below to reload your dashboard.
+          </p>
+        </div>
+        <Button 
+          color="primary" 
+          variant="flat" 
+          onPress={() => {
+            setLoading(true);
+            fetchDashboard();
+          }}
+          className="mt-4 font-medium"
+        >
+          Try Again
+        </Button>
       </div>
     );
   }
