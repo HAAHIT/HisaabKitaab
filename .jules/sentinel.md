@@ -1,4 +1,4 @@
-## 2024-XX-XX - Open Redirect via Forward-Backslash Path Normalization
-**Vulnerability:** Open Redirect
-**Learning:** Browsers and URL parsers normalize paths starting with `/\` (slash-backslash) into `//` (protocol-relative). Checking only for `//` is insufficient.
-**Prevention:** Explicitly block paths starting with `/\` when validating relative redirect URLs.
+## 2024-05-18 - Replaced Math.random with crypto.getRandomValues
+**Vulnerability:** Weak pseudo-random number generator (Math.random) was used to generate sensitive data (passwords).
+**Learning:** Math.random is predictable and should never be used for security-critical random generation.
+**Prevention:** Always use the Web Crypto API (`crypto.getRandomValues()`) for generating secure tokens, passwords, or other sensitive random values.
