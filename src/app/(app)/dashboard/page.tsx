@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Card,
   CardBody,
@@ -78,18 +78,42 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingReady, setOnboardingReady] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const fetchDashboard = useCallback(async () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
-      const res = await fetch("/api/dashboard");
-      const d = await res.json();
-      setData(d);
-    } catch { /* ignore */ } finally { setLoading(false); }
+      const res = await fetch("/api/dashboard", { signal: controller.signal });
+      if (res.ok) {
+        const d = await res.json();
+        setData(d);
+      }
+    } catch (err: any) { 
+      if (err.name === 'AbortError') return;
+      /* ignore */ 
+    } finally { 
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
+    }
   }, []);
 
-  useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
+  useEffect(() => {
+    fetchDashboard();
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [fetchDashboard]);
 
   useEffect(() => {
+    const controller = new AbortController();
     let isMounted = true;
 
     async function checkOnboarding() {
@@ -107,8 +131,8 @@ export default function DashboardPage() {
         }
 
         const [partiesRes, templatesRes] = await Promise.all([
-          fetch("/api/parties?limit=1"),
-          fetch("/api/templates?limit=1"),
+          fetch("/api/parties?limit=1", { signal: controller.signal }),
+          fetch("/api/templates?limit=1", { signal: controller.signal }),
         ]);
 
         if (!partiesRes.ok || !templatesRes.ok) {
@@ -124,16 +148,15 @@ export default function DashboardPage() {
           templatesRes.json().catch(() => ({ templates: [] })),
         ]);
 
-        if (!isMounted) {
-          return;
-        }
+        if (!isMounted) return;
 
         const noParties = !partiesData.parties?.length;
         const noTemplates = !templatesData.templates?.length;
 
         setShowOnboarding(noParties && noTemplates);
         setOnboardingReady(true);
-      } catch {
+      } catch (err: any) {
+        if (err.name === 'AbortError') return;
         if (isMounted) {
           setShowOnboarding(false);
           setOnboardingReady(true);
@@ -145,6 +168,7 @@ export default function DashboardPage() {
 
     return () => {
       isMounted = false;
+      controller.abort();
     };
   }, []);
 
