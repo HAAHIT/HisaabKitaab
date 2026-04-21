@@ -13,6 +13,7 @@ import {
   SelectItem,
   Checkbox,
 } from "@heroui/react";
+import { motion } from "framer-motion";
 import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
 import { GST_STATE_CODES } from "@/lib/gst-states";
 
@@ -109,7 +110,12 @@ export function CreditDebitNoteModal({ isOpen, onOpenChange, onSuccess, noteType
                 </div>
               )}
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.98, filter: "blur(4px)" }}
+                animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+                transition={{ duration: 0.3 }}
+                className="grid grid-cols-1 md:grid-cols-2 gap-4"
+              >
                 <div className="flex flex-col gap-2">
                   <label className="text-sm font-medium">{isCredit ? "Customer" : "Vendor"} *</label>
                   <PartySearch
@@ -175,7 +181,7 @@ export function CreditDebitNoteModal({ isOpen, onOpenChange, onSuccess, noteType
                   onValueChange={(v) => setTaxAmount(Number(v))}
                   description={isInterState ? "Will be logged as IGST" : "Will be split CGST/SGST"}
                 />
-              </div>
+              </motion.div>
 
               <div className="flex justify-between items-center mt-4 p-4 rounded-xl bg-default-100/50">
                 <Checkbox isSelected={isInterState} onValueChange={setIsInterState}>

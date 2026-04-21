@@ -145,7 +145,6 @@ export async function POST(request: NextRequest) {
 
     const user = await prisma.user.findFirst({
       where: {
-        tenantId,
         isActive: true,
         OR: [
           { email: { equals: credential, mode: "insensitive" } },

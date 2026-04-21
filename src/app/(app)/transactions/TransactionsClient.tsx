@@ -161,7 +161,7 @@ export default function TransactionsClient({ initialTransactions }: Transactions
                 icon={Activity} 
                 title="No transactions found" 
                 description="Your transaction records will appear here. Adjust filters if needed." 
-                className="py-10 border-none shadow-none bg-transparent flex items-center justify-center mx-auto" 
+                className="py-10 flex items-center justify-center mx-auto" 
               />
             }>
               {initialTransactions.flatMap((tx: any) => (

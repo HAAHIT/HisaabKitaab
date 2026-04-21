@@ -292,9 +292,9 @@ export default function PartiesPage() {
           <EmptyState
             icon={Users}
             title={t("parties.empty")}
-            description=""
-            actionLabel={t("parties.addFirst")}
-            onAction={openCreate}
+            description={search || typeFilter !== "ALL" ? "Try adjusting your search criteria." : "No parties found. Add your first customer or vendor to get started."}
+            actionLabel={!search && typeFilter === "ALL" ? t("parties.addFirst") : undefined}
+            onAction={!search && typeFilter === "ALL" ? openCreate : undefined}
             className="mt-8"
           />
         ) : (

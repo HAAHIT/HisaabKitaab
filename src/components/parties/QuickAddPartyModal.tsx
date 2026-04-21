@@ -12,6 +12,7 @@ import {
   Select,
   SelectItem,
 } from "@heroui/react";
+import { motion } from "framer-motion";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 interface Props {
@@ -94,7 +95,12 @@ export function QuickAddPartyModal({ isOpen, onOpenChange, onSuccess, initialTyp
                   {error}
                 </div>
               )}
-              <div className="flex flex-col gap-4">
+              <motion.div 
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+                className="flex flex-col gap-4"
+              >
                 <Input
                   label="Party Name *"
                   autoFocus
@@ -126,7 +132,7 @@ export function QuickAddPartyModal({ isOpen, onOpenChange, onSuccess, initialTyp
                   <SelectItem key="CUSTOMER">{t("parties.customerType")}</SelectItem>
                   <SelectItem key="VENDOR">{t("parties.vendorType")}</SelectItem>
                 </Select>
-              </div>
+              </motion.div>
             </ModalBody>
             <ModalFooter>
               <Button color="danger" variant="light" onPress={onClose}>

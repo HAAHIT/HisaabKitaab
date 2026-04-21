@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PrismaClient } from "@prisma/client";
 import { findUniqueCustomerPartyIdForUser } from "./party-relations";
+import { createMockUser, createMockParty } from "@/lib/testing/fixtures";
 
 type PartyRelationClient = Pick<PrismaClient, "party" | "user">;
 
@@ -10,10 +11,10 @@ describe("findUniqueCustomerPartyIdForUser", () => {
   });
 
   it("scopes user lookup by tenantId", async () => {
-    const userFindFirst = vi.fn().mockResolvedValue({
+    const userFindFirst = vi.fn().mockResolvedValue(createMockUser({
       phone: null,
       email: null,
-    });
+    }));
     const partyFindMany = vi.fn().mockResolvedValue([]);
 
     const prisma = {
@@ -39,13 +40,13 @@ describe("findUniqueCustomerPartyIdForUser", () => {
   });
 
   it("returns the matching party when exactly one phone match exists", async () => {
-    const userFindFirst = vi.fn().mockResolvedValue({
+    const userFindFirst = vi.fn().mockResolvedValue(createMockUser({
       phone: "9999999999",
       email: "owner@example.com",
-    });
+    }));
     const partyFindMany = vi
       .fn()
-      .mockResolvedValueOnce([{ id: "party-1" }]);
+      .mockResolvedValueOnce([createMockParty()]);
 
     const prisma = {
       user: { findFirst: userFindFirst },

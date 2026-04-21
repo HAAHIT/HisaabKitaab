@@ -7,10 +7,12 @@ import { TENANT_HEADER } from "@/lib/tenant";
 const PUBLIC_PATHS = [
   "/login",
   "/api/auth/login",
+  "/register",
+  "/api/auth/register",
   "/api/preferences/language",
   "/api/health",
   "/api/bills/*/public",
-  "/guides/*",
+  "/guides",
 ];
 
 function isPublicPath(pathname: string) {

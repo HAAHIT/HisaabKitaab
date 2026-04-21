@@ -232,6 +232,16 @@ export default async function LoginPage({
               {t("login.forgotPassword")}
             </button>
           </form>
+
+          <div className="mt-6 text-center text-sm text-gray-500 dark:text-zinc-400">
+            {t("login.noAccount")}{" "}
+            <a
+              href="/register"
+              className="relative z-50 font-semibold text-primary transition hover:underline"
+            >
+              {t("login.signUp")}
+            </a>
+          </div>
         </div>
       </div>
 

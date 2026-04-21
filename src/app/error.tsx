@@ -17,7 +17,7 @@ export default function RootError({
   return (
     <div className="flex justify-center mt-20 p-4">
       <Card
-        className="w-full max-w-sm border border-danger-200/50 bg-content1/50 backdrop-blur-md shadow-lg"
+        className="w-full max-w-sm border border-danger-200/50 bg-background/50 backdrop-blur-xl backdrop-saturate-150 shadow-[0_8px_30px_rgb(0,0,0,0.04)]"
         shadow="none"
       >
         <CardBody className="flex flex-col items-center gap-6 p-8 text-center">

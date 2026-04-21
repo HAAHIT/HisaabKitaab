@@ -36,6 +36,8 @@ import { PATCH as patchParty } from "./parties/[id]/route";
 import { PATCH as patchSettings } from "./settings/route";
 import { PATCH as patchUser } from "./users/[id]/route";
 
+import { createMockBill } from "@/lib/testing/fixtures";
+
 function buildRequest(
   url: string,
   method: "POST" | "PATCH",
@@ -95,13 +97,9 @@ describe("tenant isolation for critical mutations", () => {
   it("rejects payment creation when linked bill belongs to a different tenant", async () => {
     const txMock = {
       bill: {
-        findUnique: vi.fn().mockResolvedValue({
-          id: "bill-1",
+        findUnique: vi.fn().mockResolvedValue(createMockBill({
           tenantId: "tenant-b",
-          partyId: "party-1",
-          status: "FINAL",
-          party: { id: "party-1", type: "CUSTOMER" },
-        }),
+        })),
       },
       party: {
         findFirst: vi.fn(),
