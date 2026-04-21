@@ -161,7 +161,6 @@ export async function PATCH(
       },
     });
 
-    // TODO: [CRITICAL] - MCA GSR 247(E) audit trail for party UPDATE
     // [MCA GSR 247(E)] Append-only edit log — mandatory since April 1 2023.
     // Captures field-level changes for statutory audit compliance.
     const changedFields = Object.keys(body);
@@ -236,7 +235,6 @@ export async function DELETE(
       },
     });
 
-    // TODO: [CRITICAL] - MCA GSR 247(E) audit trail for party DELETE
     // [MCA GSR 247(E)] Append-only edit log — mandatory since April 1 2023.
     // Records the soft-deletion actor for statutory audit compliance.
     await prisma.auditLog.create({

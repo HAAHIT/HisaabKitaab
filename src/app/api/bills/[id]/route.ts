@@ -673,7 +673,6 @@ export async function DELETE(
         },
       });
 
-      // TODO: [CRITICAL] - Tally sync-state divergence on bill cancellation
       // [CRITICAL] Tally sync-state — flag original Tally-imported vouchers as MODIFIED
       // so the next XML re-export warns CAs of the cancellation-induced data divergence.
       // Without this, cancelled bills show syncState=SYNCED, creating a false impression

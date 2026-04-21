@@ -81,8 +81,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Failed to read uploaded file" }, { status: 400 });
   }
 
-  // TODO: [CRITICAL] - Moving synchronous 5MB XML parsing out of HTTP thread to prevent Node event loop timeouts.
-
   // [S-W1] Compress XML before DB storage (~80% size reduction).
   // Prefix with "gzip:" so the process-import route can detect and decompress.
   const compressedXml = "gzip:" + gzipSync(Buffer.from(xmlText, "utf-8")).toString("base64");

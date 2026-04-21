@@ -83,16 +83,17 @@ function buildSalesTaxLines(
   }
 
   if (isInterState) {
+    const roundedIgst = Math.round(taxAmount);
     return [
       {
         accountCode: "IGST_OUTPUT" as const,
-        debit: direction === "DEBIT" ? taxAmount : 0,
-        credit: direction === "CREDIT" ? taxAmount : 0,
+        debit: direction === "DEBIT" ? roundedIgst : 0,
+        credit: direction === "CREDIT" ? roundedIgst : 0,
       },
     ];
   }
 
-  // TODO: [CRITICAL] - GST amounts (IGST/CGST/SGST) must be rounded to the "Nearest Rupee" (Math.round) per Section 170 of the CGST Act.
+  // [Section 170 CGST Act] GST amounts must be rounded to the "Nearest Rupee"
   const roundedTax = Math.round(taxAmount);
   const halfTax = Math.round(roundedTax / 2);
   const otherHalf = roundedTax - halfTax;
