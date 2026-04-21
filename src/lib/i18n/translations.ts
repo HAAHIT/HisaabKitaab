@@ -360,7 +360,7 @@ export const translations = {
     "users.edit": "Edit User",
     "users.createTitle": "Add New User",
     "users.nameRequiredPhone": "Name and phone are required",
-    "users.passwordMin": "Password must be at least 6 characters",
+    "users.passwordMin": "Password must be at least 12 characters",
     "users.fetchFailed": "Failed to fetch users",
     "users.saveFailed": "Failed to save",
     "users.deactivateConfirm":
@@ -827,7 +827,7 @@ export const translations = {
     "users.edit": "यूज़र संपादित करें",
     "users.createTitle": "नया यूज़र जोड़ें",
     "users.nameRequiredPhone": "नाम और फोन आवश्यक हैं",
-    "users.passwordMin": "पासवर्ड कम से कम 6 अक्षरों का होना चाहिए",
+    "users.passwordMin": "पासवर्ड कम से कम 12 अक्षरों का होना चाहिए",
     "users.fetchFailed": "यूज़र लोड नहीं हुए",
     "users.saveFailed": "सेव नहीं हुआ",
     "users.deactivateConfirm":

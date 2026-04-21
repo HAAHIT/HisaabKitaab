@@ -60,3 +60,26 @@ export async function resolveWriteTenant(
     tenantId,
   };
 }
+
+/**
+ * Resolves tenant for public/unauthenticated operations where a JWT is not available.
+ * Relies on the x-tenant-id header (set by proxy) or default environment variables.
+ */
+export function resolvePublicTenant(
+  request: NextRequest
+): TenantResolution {
+  const { resolveTenantIdFromRequest } = require("@/lib/tenant");
+  const tenantId = resolveTenantIdFromRequest(request);
+  
+  if (!tenantId) {
+    return {
+      ok: false,
+      response: tenantMissingResponse(),
+    };
+  }
+
+  return {
+    ok: true,
+    tenantId,
+  };
+}

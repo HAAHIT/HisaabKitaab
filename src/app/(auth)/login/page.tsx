@@ -104,7 +104,7 @@ export default async function LoginPage({
               <span className="text-sm font-medium text-gray-600 dark:text-zinc-300">
                 {t("login.credentialLabel")}
               </span>
-              <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white dark:border-zinc-700 dark:bg-zinc-800 px-4 py-3 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
+              <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white dark:border-zinc-700 dark:bg-zinc-800 px-4 py-3 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20">
                 <svg
                   className="h-5 w-5 shrink-0 text-gray-400 dark:text-zinc-500"
                   fill="none"
@@ -133,7 +133,7 @@ export default async function LoginPage({
               <span className="text-sm font-medium text-gray-600 dark:text-zinc-300">
                 {t("login.passwordLabel")}
               </span>
-              <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white dark:border-zinc-700 dark:bg-zinc-800 px-4 py-3 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
+              <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white dark:border-zinc-700 dark:bg-zinc-800 px-4 py-3 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20">
                 <svg
                   className="h-5 w-5 shrink-0 text-gray-400 dark:text-zinc-500"
                   fill="none"

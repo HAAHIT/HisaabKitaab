@@ -10,6 +10,7 @@ const PUBLIC_PATHS = [
   "/api/preferences/language",
   "/api/health",
   "/api/bills/*/public",
+  "/guides/*",
 ];
 
 function isPublicPath(pathname: string) {
