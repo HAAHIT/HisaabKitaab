@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { Card, CardBody, Button } from "@heroui/react";
 
 export default function RootError({
   error,
@@ -14,17 +15,47 @@ export default function RootError({
   }, [error]);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4 text-center">
-      <h2 className="text-xl font-semibold">Something went wrong</h2>
-      <p className="max-w-md text-sm text-gray-500">
-        {error.message || "An unexpected error occurred. Please reload the page."}
-      </p>
-      <button
-        className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700"
-        onClick={reset}
+    <div className="flex justify-center mt-20 p-4">
+      <Card
+        className="w-full max-w-sm border border-danger-200/50 bg-content1/50 backdrop-blur-md shadow-lg"
+        shadow="none"
       >
-        Try again
-      </button>
+        <CardBody className="flex flex-col items-center gap-6 p-8 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-danger/10 text-danger shadow-inner">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-danger">
+              Something went wrong
+            </h2>
+            <p className="mt-2 text-sm text-default-500">
+              {error.message || "An unexpected error occurred. Please reload the page."}
+            </p>
+          </div>
+          <Button
+            color="primary"
+            variant="shadow"
+            className="w-full"
+            onPress={reset}
+          >
+            Try again
+          </Button>
+        </CardBody>
+      </Card>
     </div>
   );
 }

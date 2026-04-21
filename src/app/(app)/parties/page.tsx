@@ -19,6 +19,8 @@ import {
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Users } from "@/components/ui/icons";
 
 interface Party {
   id: string;
@@ -287,24 +289,14 @@ export default function PartiesPage() {
             ))}
           </div>
         ) : parties.length === 0 ? (
-          <Card shadow="sm">
-            <CardBody className="flex flex-col items-center justify-center py-16">
-              <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-secondary/10">
-                <svg className="h-10 w-10 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                  />
-                </svg>
-              </div>
-              <p className="text-lg font-medium text-default-600">{t("parties.empty")}</p>
-              <Button color="primary" variant="flat" size="sm" className="mt-3" onPress={openCreate}>
-                {t("parties.addFirst")}
-              </Button>
-            </CardBody>
-          </Card>
+          <EmptyState
+            icon={Users}
+            title={t("parties.empty")}
+            description=""
+            actionLabel={t("parties.addFirst")}
+            onAction={openCreate}
+            className="mt-8"
+          />
         ) : (
           <div className="space-y-3">
             {parties.map((party) => (
