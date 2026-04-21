@@ -78,6 +78,7 @@ export function PartySearch({
         variant="bordered"
         items={parties}
         isLoading={isLoading}
+        popoverProps={{ className: isOpen ? "hidden" : "" }}
         selectedKey={selectedKey}
         onSelectionChange={(key) => {
           if (!key) {
@@ -98,7 +99,12 @@ export function PartySearch({
                 size="sm"
                 color="primary"
                 variant="flat"
-                onPress={onOpen}
+                onPress={() => {
+                  if (document.activeElement instanceof HTMLElement) {
+                    document.activeElement.blur();
+                  }
+                  onOpen();
+                }}
               >
                 + Add New Party
               </Button>

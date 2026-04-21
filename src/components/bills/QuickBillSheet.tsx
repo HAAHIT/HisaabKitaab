@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Button, ButtonGroup, Input } from "@heroui/react";
 import BottomSheet from "@/components/ui/BottomSheet";
 import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
+import { ItemSearch, type ItemOption } from "@/components/ui/ItemSearch";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 const QUICK_BILL_PAYMENT_MODES = [
@@ -45,10 +46,13 @@ export function QuickBillSheet({
 }: QuickBillSheetProps) {
   const { t } = useLanguage();
   const [selectedParty, setSelectedParty] = useState<PartyOption | null>(null);
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [paymentMode, setPaymentMode] = useState<QuickBillPaymentMode>("CASH");
   const [recordPayment, setRecordPayment] = useState(true);
+  const [taxPercent, setTaxPercent] = useState<number>(0);
+  const [hsnCode, setHsnCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -97,6 +101,24 @@ export function QuickBillSheet({
     setError(null);
   }
 
+  function handleItemChange(item: ItemOption | null) {
+    if (item) {
+      setSelectedItemId(item.id);
+      setDescription(item.name);
+      setHsnCode(item.hsnCode);
+      setTaxPercent(item.taxRate || 0);
+      // Auto fill amount if empty
+      if (!amount || amount === "0") {
+        setAmount(String(item.rate));
+      }
+    } else {
+      setSelectedItemId(null);
+      setHsnCode(null);
+      setTaxPercent(0);
+    }
+    setError(null);
+  }
+
   async function handleSubmit() {
     if (!selectedParty) {
       setError("Please select a party.");
@@ -123,11 +145,20 @@ export function QuickBillSheet({
           customerPhone: selectedParty.phone || null,
           customerAddress: selectedParty.address || null,
           gstin: selectedParty.gstin || null,
-          rows: [{ desc: description || "Quick Bill", amt: parsedAmount }],
+          rows: [
+            { 
+              itemId: selectedItemId || null,
+              desc: description || "Quick Bill", 
+              amt: parsedAmount,
+              qty: 1,
+              rate: parsedAmount
+            }
+          ],
           subtotal: parsedAmount,
-          taxPercent: 0,
-          taxAmount: 0,
+          taxPercent: taxPercent,
+          taxAmount: 0, // API will back-calculate if template is __QUICK_BILL__
           grandTotal: parsedAmount,
+          hsnCode: hsnCode,
           status: "FINAL",
           ...(recordPayment ? { paymentMode } : {}),
         }),
@@ -145,10 +176,13 @@ export function QuickBillSheet({
       // Delay state reset to avoid flickering during close animation
       setTimeout(() => {
         setSelectedParty(null);
+        setSelectedItemId(null);
         setAmount("");
         setDescription("");
         setPaymentMode("CASH");
         setRecordPayment(true);
+        setTaxPercent(0);
+        setHsnCode(null);
       }, 300);
     } catch (submitError) {
       setError(
@@ -194,13 +228,13 @@ export function QuickBillSheet({
             isInvalid={Boolean(error) && !amount}
             className="w-36 shrink-0"
           />
-          <Input
-            label={t("bills.quickDescription")}
-            placeholder="e.g. Hardware supplies"
-            value={description}
-            onValueChange={setDescription}
-            variant="bordered"
+          <ItemSearch
             className="flex-1"
+            value={selectedItemId}
+            inputValue={description}
+            onInputChange={setDescription}
+            onChange={handleItemChange}
+            placeholder={t("bills.quickDescription")}
           />
         </div>
 

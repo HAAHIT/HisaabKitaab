@@ -462,16 +462,20 @@ export async function PATCH(
 
     // [P0] Block FINAL transition if tax > 0 but no HSN code present in rows.
     // Without HSN, GSTR-1 Table 12 (HSN-wise summary) will be incomplete.
-    if (finalStatus === "FINAL" && nextTaxPercent > 0) {
+    if (finalStatus === "FINAL" && nextTaxAmount > 0) {
       const rowsToCheck = (updateData.rows ?? existing.rows) as unknown[];
       const hasHsn =
         Array.isArray(rowsToCheck) &&
         rowsToCheck.some(
-          (row) =>
-            row &&
-            typeof row === "object" &&
-            typeof (row as Record<string, unknown>)["_hsnCode"] === "string" &&
-            ((row as Record<string, unknown>)["_hsnCode"] as string).trim() !== ""
+          (row) => {
+            if (!row || typeof row !== "object") return false;
+            // Check if ANY value contains an HSN code (either col_hsn, _hsnCode, or any key containing 'hsn')
+            return Object.entries(row).some(([key, val]) => 
+              (key === "col_hsn" || key === "_hsnCode" || key.toLowerCase().includes("hsn")) && 
+              typeof val === "string" && 
+              val.trim() !== ""
+            );
+          }
         );
       const hasFallbackHsn = hasOwn(updateData, "hsnCode") ? !!updateData.hsnCode : !!existing.hsnCode;
       

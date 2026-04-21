@@ -137,14 +137,18 @@ const CreateBillSchema = z.object({
   // Without HSN, GSTR-1 Table 12 (HSN-wise summary) will be incomplete.
   if (
     data.status === "FINAL" &&
-    (data.taxPercent ?? 0) > 0 &&
+    (data.taxAmount ?? 0) > 0 &&
     Array.isArray(data.rows) &&
     !data.rows.some(
-      (row) =>
-        row &&
-        typeof row === "object" &&
-        typeof (row as Record<string, unknown>)["_hsnCode"] === "string" &&
-        ((row as Record<string, unknown>)["_hsnCode"] as string).trim() !== ""
+      (row) => {
+        if (!row || typeof row !== "object") return false;
+        // Check if ANY value contains an HSN code (either col_hsn, _hsnCode, or any key containing 'hsn')
+        return Object.entries(row).some(([key, val]) => 
+          (key === "col_hsn" || key === "_hsnCode" || key.toLowerCase().includes("hsn")) && 
+          typeof val === "string" && 
+          val.trim() !== ""
+        );
+      }
     ) &&
     !(typeof data.hsnCode === "string" && data.hsnCode.trim() !== "")
   ) {

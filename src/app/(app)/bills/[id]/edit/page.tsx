@@ -14,6 +14,8 @@ import {
   Textarea,
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
+import { PartySearch } from "@/components/ui/PartySearch";
+import { ItemSearch } from "@/components/ui/ItemSearch";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { evaluateRow, type ColumnDef } from "@/lib/formula";
 import { GST_STATE_CODES } from "@/lib/gst-states";
@@ -114,10 +116,8 @@ export default function EditBillPage({
   const [customerAddress, setCustomerAddress] = useState("");
   const [gstin, setGstin] = useState("");
   const [rows, setRows] = useState<Record<string, string | number>[]>([]);
-  const [taxPercent, setTaxPercent] = useState(18);
   const [isInterState, setIsInterState] = useState(false);
   const [placeOfSupply, setPlaceOfSupply] = useState("");
-  const [hsnCode, setHsnCode] = useState("");
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("");
 
@@ -154,8 +154,6 @@ export default function EditBillPage({
       setRows(Array.isArray(nextBill.rows) ? nextBill.rows : []);
       setNotes(nextBill.notes || "");
       setTerms(nextBill.terms || "");
-      setTaxPercent(nextBill.taxPercent);
-      setHsnCode(nextBill.hsnCode || "");
       setIsInterState(nextBill.isInterState === true);
       setPlaceOfSupply(nextBill.placeOfSupply || "");
 
@@ -249,23 +247,31 @@ export default function EditBillPage({
       return { subtotal: 0, taxAmount: 0, grandTotal: 0 };
     }
 
-    const nextSubtotal = rows.reduce((sum, row) => {
-      const value =
-        typeof row[lastValueColumn.id] === "number"
-          ? (row[lastValueColumn.id] as number)
-          : 0;
-      return sum + value;
-    }, 0);
+    let nextGrandTotal = 0;
+    let nextTaxAmount = 0;
 
-    const nextTaxAmount = Math.round(((nextSubtotal * taxPercent) / 100) * 100) / 100;
-    const nextGrandTotal = Math.round((nextSubtotal + nextTaxAmount) * 100) / 100;
+    rows.forEach(row => {
+      const amountCol = selectedTemplate.columns.find(c => c.id === "col_amount" || c.name.toLowerCase() === "total" || c.name.toLowerCase() === "amount") || lastValueColumn;
+      if (typeof row[amountCol.id] === "number") {
+        nextGrandTotal += row[amountCol.id] as number;
+      }
+
+      const taxAmountCol = selectedTemplate.columns.find(c => c.id === "col_tax_amount" || c.name.toLowerCase() === "tax amount" || c.name.toLowerCase() === "gst amount");
+      if (taxAmountCol && typeof row[taxAmountCol.id] === "number") {
+        nextTaxAmount += row[taxAmountCol.id] as number;
+      }
+    });
+
+    nextGrandTotal = Math.round(nextGrandTotal * 100) / 100;
+    nextTaxAmount = Math.round(nextTaxAmount * 100) / 100;
+    const nextSubtotal = Math.round((nextGrandTotal - nextTaxAmount) * 100) / 100;
 
     return {
       subtotal: nextSubtotal,
       taxAmount: nextTaxAmount,
       grandTotal: nextGrandTotal,
     };
-  }, [rows, selectedTemplate, taxPercent]);
+  }, [rows, selectedTemplate]);
 
   async function handleSave(status: "DRAFT" | "FINAL") {
     const mainScroll = document.querySelector("main");
@@ -311,12 +317,12 @@ export default function EditBillPage({
           rows,
           notes: notes.trim() || null,
           terms: terms.trim() || null,
-          taxPercent,
+          taxPercent: 0,
           subtotal,
           taxAmount,
           grandTotal,
           isInterState,
-          hsnCode: hsnCode.trim() || null,
+          hsnCode: null,
           placeOfSupply: placeOfSupply.trim() || null,
           status,
         }),
@@ -554,6 +560,58 @@ export default function EditBillPage({
                               ? formatColumnValue(column.name, row[column.id] as number)
                               : "-"}
                           </span>
+                        ) : column.type === "text" && (column.name.toLowerCase().includes("item") || column.name.toLowerCase().includes("desc") || column.name.toLowerCase().includes("product")) ? (
+                          <ItemSearch
+                            value={null}
+                            inputValue={String(row[column.id] || "")}
+                            onInputChange={(value) => updateCell(rowIndex, column.id, value)}
+                            onChange={(item) => {
+                              if (item) {
+                                setRows((currentRows) => {
+                                  const nextRows = [...currentRows];
+                                  const newRow = { ...nextRows[rowIndex] };
+                                  newRow[column.id] = item.name;
+                                    if (selectedTemplate) {
+                                      // 1. Rate Mapping
+                                      const rateCol = selectedTemplate.columns.find(c => 
+                                        c.id === "col_rate" || 
+                                        (c.type === "number" && (c.name.toLowerCase() === "rate" || c.name.toLowerCase() === "price" || c.name.toLowerCase().includes("rate")))
+                                      );
+                                      if (rateCol && item.rate != null) {
+                                        newRow[rateCol.id] = item.rate;
+                                      }
+
+                                      // 2. Tax % Mapping
+                                      const taxCol = selectedTemplate.columns.find(c => 
+                                        c.id === "col_tax_percent" || 
+                                        (c.type === "number" && (c.name.toLowerCase().includes("tax %") || c.name.toLowerCase().includes("gst %") || c.name.toLowerCase() === "tax percent"))
+                                      );
+                                      if (taxCol && item.taxRate != null) {
+                                        newRow[taxCol.id] = item.taxRate;
+                                      }
+                                      
+                                      // 3. HSN Code Mapping
+                                      const hsnCol = selectedTemplate.columns.find(c => 
+                                        c.id === "col_hsn" || 
+                                        (c.type === "text" && (c.name.toLowerCase().includes("hsn") || c.name.toLowerCase().includes("sac")))
+                                      );
+                                      if (hsnCol && item.hsnCode) {
+                                        newRow[hsnCol.id] = item.hsnCode;
+                                      }
+
+                                      nextRows[rowIndex] = evaluateRow(newRow, selectedTemplate.columns);
+                                    } else {
+                                    nextRows[rowIndex] = newRow;
+                                  }
+                                  return nextRows;
+                                });
+                              } else {
+                                updateCell(rowIndex, column.id, "");
+                              }
+                            }}
+                            className="min-w-[200px]"
+                            placeholder={column.name}
+                          />
                         ) : column.type === "number" ? (
                           <Input
                             type="number"
@@ -665,17 +723,7 @@ export default function EditBillPage({
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-default-500">Tax</span>
-                    <Input
-                      type="number"
-                      aria-label="Tax percentage"
-                      value={String(taxPercent)}
-                      onValueChange={(value) => setTaxPercent(Number.parseFloat(value) || 0)}
-                      variant="bordered"
-                      size="sm"
-                      className="w-20"
-                      endContent={<span className="text-sm text-default-400">%</span>}
-                    />
+                    <span className="text-default-500">Total Tax</span>
                   </div>
                   <span className="font-medium">{formatCurrency(taxAmount)}</span>
                 </div>
@@ -690,18 +738,6 @@ export default function EditBillPage({
                     />
                     <span className="text-xs text-default-500">Inter-state (IGST)</span>
                   </label>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="shrink-0 text-sm text-default-500">HSN/SAC Code</span>
-                  <Input
-                    aria-label="HSN/SAC Code"
-                    placeholder="e.g. 9983"
-                    size="sm"
-                    variant="bordered"
-                    value={hsnCode}
-                    onValueChange={setHsnCode}
-                    className="max-w-[200px]"
-                  />
                 </div>
                 <Divider />
                 <div className="flex justify-between">
