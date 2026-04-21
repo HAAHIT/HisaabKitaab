@@ -19,6 +19,7 @@ import {
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
+import { BillSearch, type BillOption } from "@/components/ui/BillSearch";
 
 function formatSignedBalance(value: number) {
   const v = Math.round(value * 100) / 100;
@@ -34,12 +35,7 @@ function getBalanceBannerClass(partyType: SupportedPartyType, balance: number) {
   return partyType === "CUSTOMER" ? "bg-success/10 text-success" : "bg-danger/10 text-danger";
 }
 
-interface BillOption {
-  id: string;
-  billNumber: string;
-  grandTotal: number;
-  customerName: string;
-}
+
 
 function sanitizeAmountInput(value: string) {
   const normalized = value.replace(/[^\d.]/g, "");
@@ -63,7 +59,6 @@ export default function RecordPaymentPage() {
   const router = useRouter();
   const [selectedParty, setSelectedParty] = useState<PartyOption | null>(null);
   const [saving, setSaving] = useState(false);
-  const [billsLoading, setBillsLoading] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error";
@@ -71,7 +66,8 @@ export default function RecordPaymentPage() {
 
   const partyId = selectedParty?.id ?? "";
   const [billId, setBillId] = useState("");
-  const [bills, setBills] = useState<BillOption[]>([]);
+  const [selectedBill, setSelectedBill] = useState<BillOption | null>(null);
+
   const [amount, setAmount] = useState("");
   const [direction, setDirection] = useState("INCOMING");
   const [mode, setMode] = useState("CASH");
@@ -79,33 +75,14 @@ export default function RecordPaymentPage() {
   const [notes, setNotes] = useState("");
   const [paymentStatus, setPaymentStatus] = useState("COMPLETED");
 
-  useEffect(() => {
-    if (!partyId) {
-      setBills([]);
-      setBillId("");
-      return;
-    }
 
-    setBillsLoading(true);
-    fetch(`/api/bills?status=FINAL&partyId=${partyId}&limit=100`)
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error(await readError(response));
-        }
-
-        return response.json();
-      })
-      .then((data) => setBills((data.bills || []) as BillOption[]))
-      .catch(() => setBills([]))
-      .finally(() => setBillsLoading(false));
-  }, [partyId]);
 
   function showToast(message: string, type: "success" | "error") {
     setToast({ message, type });
     window.setTimeout(() => setToast(null), 3000);
   }
 
-  const selectedBill = bills.find((bill) => bill.id === billId);
+  const selectedBillDisplay = selectedBill;
 
   async function handleSave() {
     if (!partyId) {
@@ -326,44 +303,28 @@ export default function RecordPaymentPage() {
             </div>
           )}
 
-          <Select
-            label="Linked Bill"
-            placeholder={selectedParty ? "Optional: settle against a bill" : "Select a party first"}
-            selectedKeys={billId ? new Set([billId]) : new Set([])}
-            onSelectionChange={(keys) => {
-              const value = Array.from(keys)[0] as string;
-              if (value) {
-                setBillId(value);
+          <BillSearch
+            value={billId}
+            onChange={(bill) => {
+              if (bill) {
+                setBillId(bill.id);
+                setSelectedBill(bill);
                 if (selectedParty) {
                   setDirection(getSettlementDirectionForParty(selectedParty.type as SupportedPartyType));
                 }
               } else {
                 setBillId("");
+                setSelectedBill(null);
               }
             }}
-            variant="bordered"
+            partyId={partyId}
             isDisabled={!selectedParty}
-            isLoading={billsLoading}
             description="When linked, the server validates that the payment settles the selected bill."
-          >
-            {bills.map((bill) => (
-              <SelectItem key={bill.id} textValue={bill.billNumber}>
-                <div className="flex w-full items-center justify-between gap-3">
-                  <div className="flex flex-col">
-                    <span>{bill.billNumber}</span>
-                    <span className="text-xs text-default-400">{bill.customerName}</span>
-                  </div>
-                  <span className="text-xs text-default-400">
-                    INR {bill.grandTotal.toLocaleString("en-IN")}
-                  </span>
-                </div>
-              </SelectItem>
-            ))}
-          </Select>
+          />
 
-          {selectedBill && (
+          {selectedBillDisplay && (
             <div className="rounded-lg bg-primary/5 px-3 py-2 text-sm text-primary">
-              Linked to bill <strong>{selectedBill.billNumber}</strong>. Settlement direction is{" "}
+              Linked to bill <strong>{selectedBillDisplay.billNumber}</strong>. Settlement direction is{" "}
               <strong>{selectedParty?.type === "CUSTOMER" ? "Received" : "Paid"}</strong>.
             </div>
           )}

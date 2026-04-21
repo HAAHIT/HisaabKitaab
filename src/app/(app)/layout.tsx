@@ -19,7 +19,9 @@ export default async function AppLayout({
   });
 
   const settings = tenant?.settings as Record<string, unknown> | null;
-  const showOnboarding = !settings?.onboardingComplete;
+  // Only show wizard when onboardingComplete is explicitly false (set at registration).
+  // Legacy tenants without this key should NOT see the wizard.
+  const showOnboarding = settings?.onboardingComplete === false;
 
   return (
     <AppShellWrapper user={session} showOnboarding={showOnboarding}>

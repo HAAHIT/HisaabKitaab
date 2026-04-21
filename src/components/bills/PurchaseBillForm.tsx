@@ -16,6 +16,7 @@ import {
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
+import { StateSearch } from "@/components/ui/StateSearch";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { evaluateRow, type ColumnDef } from "@/lib/formula";
 import { GST_STATE_CODES } from "@/lib/gst-states";
@@ -417,9 +418,12 @@ export function PurchaseBillForm() {
                   </div>
                   <div className="flex items-center justify-between gap-3 pt-1">
                     <span className={`text-sm ${errors.placeOfSupply ? 'text-danger font-medium' : 'text-default-500'}`}>Place of Supply *</span>
-                    <Select aria-label="POS" placeholder="Select" size="sm" variant="bordered" className="max-w-[180px]" selectedKeys={placeOfSupply ? [placeOfSupply] : []} onSelectionChange={(k) => setPlaceOfSupply(Array.from(k)[0] as string)} isInvalid={errors.placeOfSupply}>
-                      {Object.entries(GST_STATE_CODES).map(([c, n]) => <SelectItem key={c} textValue={`${c} - ${n}`}>{c} - {n}</SelectItem>)}
-                    </Select>
+                    <StateSearch
+                      value={placeOfSupply}
+                      onChange={(code) => setPlaceOfSupply(code)}
+                      isInvalid={errors.placeOfSupply}
+                      className="max-w-[180px]"
+                    />
                   </div>
                   <Divider />
                   <div className="flex justify-between items-center pt-1">

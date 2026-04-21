@@ -14,11 +14,13 @@ import {
   Textarea,
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
-import { PartySearch } from "@/components/ui/PartySearch";
+import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
 import { ItemSearch } from "@/components/ui/ItemSearch";
+import { StateSearch } from "@/components/ui/StateSearch";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { evaluateRow, type ColumnDef } from "@/lib/formula";
 import { GST_STATE_CODES } from "@/lib/gst-states";
+import { extractGstinStateCode } from "@/lib/gst-helpers";
 
 interface Template {
   id: string;
@@ -26,14 +28,7 @@ interface Template {
   columns: ColumnDef[];
 }
 
-interface PartyOption {
-  id: string;
-  name: string;
-  type: "CUSTOMER" | "VENDOR";
-  phone: string | null;
-  address: string | null;
-  gstin: string | null;
-}
+// PartyOption is now imported from PartySearch component
 
 interface BillResponse {
   id: string;
@@ -99,7 +94,7 @@ export default function EditBillPage({
   const router = useRouter();
   const { t } = useLanguage();
 
-  const [parties, setParties] = useState<PartyOption[]>([]);
+  const [selectedParty, setSelectedParty] = useState<PartyOption | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [bill, setBill] = useState<BillResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -110,7 +105,7 @@ export default function EditBillPage({
     type: "success" | "error";
   } | null>(null);
 
-  const [partyId, setPartyId] = useState("");
+  // partyId is derived from selectedParty
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
@@ -120,33 +115,37 @@ export default function EditBillPage({
   const [placeOfSupply, setPlaceOfSupply] = useState("");
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("");
+  const [tenantGstin, setTenantGstin] = useState<string | null>(null);
 
   const fetchFormData = useCallback(async () => {
     setLoading(true);
     try {
-      const [billResponse, templatesResponse, partiesResponse] = await Promise.all([
+      const [billResponse, templatesResponse, partiesResponse, settingsResponse] = await Promise.all([
         fetch(`/api/bills/${id}`),
         fetch("/api/templates"),
         fetch("/api/parties"),
+        fetch("/api/settings"),
       ]);
 
       if (!billResponse.ok) {
         throw new Error(await readError(billResponse));
       }
 
-      const [billData, templatesData, partiesData] = await Promise.all([
+      const [billData, templatesData, partiesData, settingsData] = await Promise.all([
         billResponse.json(),
         templatesResponse.json().catch(() => ({ templates: [] })),
         partiesResponse.json().catch(() => ({ parties: [] })),
+        settingsResponse.json().catch(() => ({ settings: null })),
       ]);
+
+      if (settingsData.settings?.companyGstin) {
+        setTenantGstin(settingsData.settings.companyGstin);
+      }
 
       const nextBill = billData.bill as BillResponse;
       const nextTemplates = (templatesData.templates || []) as Template[];
-      const nextParties = (partiesData.parties || []) as PartyOption[];
 
       setBill(nextBill);
-      setParties(nextParties);
-      setPartyId(nextBill.partyId || "");
       setCustomerName(nextBill.customerName);
       setCustomerPhone(nextBill.customerPhone || "");
       setCustomerAddress(nextBill.customerAddress || "");
@@ -156,6 +155,19 @@ export default function EditBillPage({
       setTerms(nextBill.terms || "");
       setIsInterState(nextBill.isInterState === true);
       setPlaceOfSupply(nextBill.placeOfSupply || "");
+
+      // Pre-seed party from bill data for the PartySearch component
+      if (nextBill.partyId) {
+        setSelectedParty({
+          id: nextBill.partyId,
+          name: nextBill.customerName,
+          phone: nextBill.customerPhone,
+          type: "CUSTOMER",
+          currentBalance: 0,
+          address: nextBill.customerAddress,
+          gstin: nextBill.gstin,
+        });
+      }
 
       const template = nextTemplates.find((item) => item.id === nextBill.templateId) || null;
       setSelectedTemplate(template);
@@ -176,9 +188,8 @@ export default function EditBillPage({
     window.setTimeout(() => setToast(null), 3000);
   }
 
-  function applyPartySnapshot(nextPartyId: string) {
-    setPartyId(nextPartyId);
-    const party = parties.find((item) => item.id === nextPartyId);
+  function applyPartySnapshot(party: PartyOption | null) {
+    setSelectedParty(party);
     if (!party) {
       return;
     }
@@ -191,6 +202,12 @@ export default function EditBillPage({
     if (party.gstin && party.gstin.length >= 2) {
       const code = party.gstin.substring(0, 2);
       if (GST_STATE_CODES[code]) setPlaceOfSupply(code);
+    }
+    // Auto-derive interstate from GSTIN comparison
+    const partyState = extractGstinStateCode(party.gstin);
+    const tenantState = extractGstinStateCode(tenantGstin);
+    if (partyState && tenantState) {
+      setIsInterState(partyState !== tenantState);
     }
     setErrors((currentErrors) => ({
       ...currentErrors,
@@ -283,7 +300,7 @@ export default function EditBillPage({
     }
 
     const formErrors: Record<string, boolean> = {};
-    if (!partyId) {
+    if (!selectedParty) {
       formErrors.partyId = true;
     }
     if (!customerName.trim()) {
@@ -309,7 +326,7 @@ export default function EditBillPage({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          partyId,
+          partyId: selectedParty!.id,
           customerName: customerName.trim(),
           customerPhone: customerPhone.trim() || null,
           customerAddress: customerAddress.trim() || null,
@@ -400,32 +417,13 @@ export default function EditBillPage({
             <h2 className="text-lg font-semibold">Bill To</h2>
           </CardHeader>
           <CardBody className="space-y-4 p-6">
-            <Select
-              label="Party"
-              placeholder="Select customer or vendor"
-              selectedKeys={partyId ? new Set([partyId]) : new Set([])}
-              onSelectionChange={(keys) => {
-                const value = Array.from(keys)[0] as string;
-                if (value) {
-                  applyPartySnapshot(value);
-                }
-              }}
-              variant="bordered"
-              isLoading={loading}
+            <PartySearch
+              value={selectedParty?.id || null}
+              onChange={applyPartySnapshot}
+              placeholder="Search customer or vendor…"
               isInvalid={Boolean(errors.partyId)}
-              errorMessage={errors.partyId ? "Party is required" : undefined}
-            >
-              {parties.map((party) => (
-                <SelectItem key={party.id} textValue={party.name}>
-                  <div className="flex w-full items-center justify-between">
-                    <span>{party.name}</span>
-                    <span className="text-xs capitalize text-default-400">
-                      {party.type.toLowerCase()}
-                    </span>
-                  </div>
-                </SelectItem>
-              ))}
-            </Select>
+              initialParty={selectedParty}
+            />
 
             <div className="grid gap-4 md:grid-cols-2">
               <Input
@@ -481,29 +479,19 @@ export default function EditBillPage({
           <CardHeader className="flex items-center justify-between px-6 pt-6 pb-0">
             <div className="flex gap-4 items-center">
               <h2 className="text-lg font-semibold">Line Items</h2>
-              <Select
-                aria-label="Place of supply"
-                placeholder="Place of Supply (State)"
-                size="sm"
-                variant="bordered"
-                className="w-[200px]"
-                selectedKeys={placeOfSupply ? new Set([placeOfSupply]) : new Set([])}
-                onSelectionChange={(keys) => {
-                  const value = Array.from(keys)[0] as string | undefined;
-                  setPlaceOfSupply(value ?? "");
-                  if (value) {
+              <StateSearch
+                value={placeOfSupply}
+                onChange={(code) => {
+                  setPlaceOfSupply(code);
+                  if (code) {
                     setErrors((curr) => ({ ...curr, placeOfSupply: false }));
                   }
                 }}
                 isInvalid={Boolean(errors.placeOfSupply)}
                 errorMessage={errors.placeOfSupply ? "Required for final bills" : undefined}
-              >
-                {Object.entries(GST_STATE_CODES).map(([code, name]) => (
-                  <SelectItem key={code} textValue={`${code} - ${name}`}>
-                    {code} — {name}
-                  </SelectItem>
-                ))}
-              </Select>
+                className="w-[200px]"
+                placeholder="Place of Supply (State)"
+              />
             </div>
             <Button
               size="sm"
@@ -729,15 +717,28 @@ export default function EditBillPage({
                 </div>
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-default-400">{t("bills.autoTaxNote")}</p>
-                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={isInterState}
-                      onChange={(e) => setIsInterState(e.target.checked)}
-                      className="accent-primary"
-                    />
-                    <span className="text-xs text-default-500">Inter-state (IGST)</span>
-                  </label>
+                  {(() => {
+                        const partyState = extractGstinStateCode(gstin);
+                        const tenantState = extractGstinStateCode(tenantGstin);
+                        const isAutoDetected = !!(partyState && tenantState);
+                        return (
+                          <div className="flex flex-col items-end gap-0.5">
+                            <label className={`flex items-center gap-1.5 select-none ${isAutoDetected ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}>
+                              <input
+                                type="checkbox"
+                                checked={isInterState}
+                                onChange={(e) => setIsInterState(e.target.checked)}
+                                className="accent-primary"
+                                disabled={isAutoDetected}
+                              />
+                              <span className="text-xs text-default-500">Inter-state (IGST)</span>
+                            </label>
+                            {isAutoDetected && (
+                              <span className="text-[10px] text-default-400">Auto-detected from GST Numbers</span>
+                            )}
+                          </div>
+                        );
+                      })()}
                 </div>
                 <Divider />
                 <div className="flex justify-between">

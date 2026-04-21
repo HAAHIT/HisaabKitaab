@@ -16,9 +16,11 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
 import { ItemSearch } from "@/components/ui/ItemSearch";
+import { StateSearch } from "@/components/ui/StateSearch";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { evaluateRow, type ColumnDef } from "@/lib/formula";
 import { GST_STATE_CODES } from "@/lib/gst-states";
+import { extractGstinStateCode } from "@/lib/gst-helpers";
 
 interface Template {
   id: string;
@@ -89,6 +91,7 @@ export default function NewBillPage() {
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("");
   const [didAutoFocusRow, setDidAutoFocusRow] = useState(false);
+  const [tenantGstin, setTenantGstin] = useState<string | null>(null);
 
   const fetchFormData = useCallback(async () => {
     setLoading(true);
@@ -107,6 +110,7 @@ export default function NewBillPage() {
 
       if (settingsData.settings) {
         setTerms(settingsData.settings.defaultTerms || "");
+        setTenantGstin(settingsData.settings.companyGstin || null);
       }
     } catch {
       showToast("Failed to load bill form data", "error");
@@ -488,6 +492,12 @@ export default function NewBillPage() {
                         const code = party.gstin.substring(0, 2);
                         if (GST_STATE_CODES[code]) setPlaceOfSupply(code);
                       }
+                      // Auto-derive interstate from GSTIN comparison
+                      const partyState = extractGstinStateCode(party.gstin);
+                      const tenantState = extractGstinStateCode(tenantGstin);
+                      if (partyState && tenantState) {
+                        setIsInterState(partyState !== tenantState);
+                      }
                     }
                   }}
                   partyType="CUSTOMER"
@@ -789,41 +799,43 @@ export default function NewBillPage() {
                     </div>
                     <div className="flex items-center justify-between">
                       <p className="text-xs text-default-400">{t("bills.autoTaxNote")}</p>
-                      <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={isInterState}
-                          onChange={(e) => setIsInterState(e.target.checked)}
-                          className="accent-primary"
-                        />
-                        <span className="text-xs text-default-500">Inter-state (IGST)</span>
-                      </label>
+                      {(() => {
+                        const partyState = extractGstinStateCode(selectedParty?.gstin);
+                        const tenantState = extractGstinStateCode(tenantGstin);
+                        const isAutoDetected = !!(partyState && tenantState);
+                        return (
+                          <div className="flex flex-col items-end gap-0.5">
+                            <label className={`flex items-center gap-1.5 select-none ${isAutoDetected ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}>
+                              <input
+                                type="checkbox"
+                                checked={isInterState}
+                                onChange={(e) => setIsInterState(e.target.checked)}
+                                className="accent-primary"
+                                disabled={isAutoDetected}
+                              />
+                              <span className="text-xs text-default-500">Inter-state (IGST)</span>
+                            </label>
+                            {isAutoDetected && (
+                              <span className="text-[10px] text-default-400">Auto-detected from GST Numbers</span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                     <div className="flex items-center justify-between gap-3">
                       <span className="shrink-0 text-sm text-default-500">Place of Supply</span>
-                      <Select
-                        aria-label="Place of supply"
-                        placeholder="Select state"
-                        size="sm"
-                        variant="bordered"
-                        className="max-w-[200px]"
-                        selectedKeys={placeOfSupply ? new Set([placeOfSupply]) : new Set([])}
-                        onSelectionChange={(keys) => {
-                          const value = Array.from(keys)[0] as string | undefined;
-                          setPlaceOfSupply(value ?? "");
-                          if (value) {
+                      <StateSearch
+                        value={placeOfSupply}
+                        onChange={(code) => {
+                          setPlaceOfSupply(code);
+                          if (code) {
                             setErrors((curr) => ({ ...curr, placeOfSupply: false }));
                           }
                         }}
                         isInvalid={Boolean(errors.placeOfSupply)}
                         errorMessage={errors.placeOfSupply ? "Required for final bills" : undefined}
-                      >
-                        {Object.entries(GST_STATE_CODES).map(([code, name]) => (
-                          <SelectItem key={code} textValue={`${code} - ${name}`}>
-                            {code} — {name}
-                          </SelectItem>
-                        ))}
-                      </Select>
+                        className="max-w-[200px]"
+                      />
                     </div>
                     <Divider />
                     <div className="flex justify-between">
