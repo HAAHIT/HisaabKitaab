@@ -1,3 +1,5 @@
+import { roundTo2 } from "./journal-reporting";
+
 export type SupportedPartyType = "CUSTOMER" | "VENDOR";
 export type SupportedPayDirection = "INCOMING" | "OUTGOING";
 export type SupportedBillStatus = "DRAFT" | "FINAL" | "CANCELLED";
@@ -252,7 +254,7 @@ export function buildPartyLedger({
         partyType,
         transaction.bill.grandTotal
       );
-      runningBalance += delta;
+      runningBalance = roundTo2(runningBalance + delta);
       const entryAmounts = getLedgerAmountsForBalanceDelta(partyType, delta);
 
       ledger.push({
@@ -274,7 +276,7 @@ export function buildPartyLedger({
         transaction.payment.direction,
         transaction.payment.amount
       );
-      runningBalance += delta;
+      runningBalance = roundTo2(runningBalance + delta);
       const entryAmounts = getLedgerAmountsForBalanceDelta(partyType, delta);
 
       ledger.push({
@@ -297,7 +299,7 @@ export function buildPartyLedger({
         transaction.note.voucherType === "DEBIT_NOTE"
           ? transaction.note.debit - transaction.note.credit
           : transaction.note.credit - transaction.note.debit;
-      runningBalance += delta;
+      runningBalance = roundTo2(runningBalance + delta);
 
       ledger.push({
         id: transaction.note.id,

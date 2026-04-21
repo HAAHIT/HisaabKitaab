@@ -416,8 +416,7 @@ export default function PartiesPage() {
         <>
           <div className="fixed inset-0 z-50 bg-black/40" onClick={() => setShowPanel(false)} />
           <div
-            className="fixed bottom-0 right-0 top-0 z-50 w-full max-w-md overflow-y-auto bg-background shadow-2xl"
-            style={{ animation: "slideInRight 0.3s ease-out" }}
+            className="fixed bottom-0 right-0 top-0 z-50 w-full max-w-md overflow-y-auto bg-background shadow-2xl animate-[slideInRight_0.3s_ease-out]"
           >
             <div className="p-6">
               <div className="mb-6 flex items-center justify-between">

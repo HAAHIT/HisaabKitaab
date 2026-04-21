@@ -108,15 +108,17 @@ describe("Bills API — GET success path", () => {
     prismaMock.bill.findMany.mockResolvedValue([]);
     prismaMock.bill.count.mockResolvedValue(0);
 
+    // [LB-1] tenantId is now resolved from JWT, not x-tenant-id header
+    // resolveVerifiedTenantId is mocked globally to return "test-tenant"
     const req = new NextRequest("http://localhost/api/bills", {
-      headers: { "x-user-role": "STAFF", "x-tenant-id": "tenant-xyz" },
+      headers: { "x-user-role": "STAFF" },
     });
 
     await GET(req);
 
     expect(prismaMock.bill.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ tenantId: "tenant-xyz", isDeleted: false }),
+        where: expect.objectContaining({ tenantId: "test-tenant", isDeleted: false }),
       })
     );
   });

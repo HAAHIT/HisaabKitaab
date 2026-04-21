@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const { credential, password } = await readLoginRequestBody(request);
-    const tenantResolution = resolveReadTenant(request);
+    const tenantResolution = await resolveReadTenant(request);
     if (!tenantResolution.ok) {
       logError("auth.login.tenant_missing", {
         requestId,

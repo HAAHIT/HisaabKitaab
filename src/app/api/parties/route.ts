@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
   if (!role || role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantResolution = resolveReadTenant(request);
+  const tenantResolution = await resolveReadTenant(request);
   if (!tenantResolution.ok) {
     return tenantResolution.response;
   }

@@ -47,7 +47,7 @@ function CashFlowBar({ data }: { data: DashboardData["cashFlow"] }) {
     <div className="flex items-end gap-2 h-40">
       {data.map((d) => (
         <div key={d.month} className="flex-1 flex flex-col items-center gap-1">
-          <div className="flex gap-[2px] w-full justify-center items-end" style={{ height: "120px" }}>
+          <div className="flex gap-[2px] w-full justify-center items-end h-[120px]">
             <div
               className="w-3 bg-gradient-to-t from-green-500 to-emerald-400 rounded-t"
               style={{ height: `${(d.received / maxVal) * 100}%`, minHeight: d.received > 0 ? "4px" : "0" }}

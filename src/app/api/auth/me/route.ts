@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    const tenantResolution = resolveReadTenant(request);
+    const tenantResolution = await resolveReadTenant(request);
     if (!tenantResolution.ok) {
       return tenantResolution.response;
     }

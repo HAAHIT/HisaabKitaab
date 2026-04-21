@@ -165,7 +165,7 @@ export async function GET(request: NextRequest) {
   if (!role || !userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const tenantResolution = resolveReadTenant(request);
+  const tenantResolution = await resolveReadTenant(request);
   if (!tenantResolution.ok) {
     return tenantResolution.response;
   }
