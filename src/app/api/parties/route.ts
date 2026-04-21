@@ -1,9 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
-import type { PartyType } from "@prisma/client";
+import type { Prisma, PartyType } from "@prisma/client";
 import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
+import { isValidGstinFormat } from "@/lib/gst-helpers";
 
 const VALID_PARTY_TYPES = new Set<PartyType>(["CUSTOMER", "VENDOR"]);
 
@@ -46,8 +47,7 @@ export async function GET(request: NextRequest) {
   const search = searchParams.get("search") || "";
   const type = searchParams.get("type") || "";
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = { isActive: true, isDeleted: false, tenantId };
+  const where: Prisma.PartyWhereInput = { isActive: true, isDeleted: false, tenantId };
 
   if (search) {
     where.OR = [
@@ -56,8 +56,8 @@ export async function GET(request: NextRequest) {
     ];
   }
 
-  if (type && type !== "ALL") {
-    where.type = type;
+  if (type && type !== "ALL" && VALID_PARTY_TYPES.has(type as PartyType)) {
+    where.type = type as PartyType;
   }
 
   const parties = await prisma.party.findMany({
@@ -120,6 +120,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const normalizedGstin = normalizeOptionalString(gstin);
+    if (normalizedGstin && !isValidGstinFormat(normalizedGstin)) {
+      return NextResponse.json(
+        { error: "Invalid GSTIN format. Must be a valid 15-character GSTIN." },
+        { status: 400 }
+      );
+    }
+
     const party = await prisma.$transaction(async (tx) => {
       const p = await tx.party.create({
         data: {
@@ -129,7 +137,7 @@ export async function POST(request: NextRequest) {
           phone: normalizeOptionalString(phone),
           email: normalizeOptionalString(email),
           address: normalizeOptionalString(address),
-          gstin: normalizeOptionalString(gstin),
+          gstin: normalizedGstin,
           openingBalance: normalizedOpeningBalance,
           currentBalance: normalizedOpeningBalance,
           isActive: true,

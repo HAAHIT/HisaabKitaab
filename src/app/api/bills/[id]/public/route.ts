@@ -12,12 +12,19 @@ export async function GET(
   const { id } = await params;
   const tenantId = request.nextUrl.searchParams.get("tenantId")?.trim() || null;
 
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: "tenantId query parameter is required" },
+      { status: 400 }
+    );
+  }
+
   const bill = await prisma.bill.findFirst({
     where: {
       id,
+      tenantId,
       status: "FINAL",
       isDeleted: false,
-      ...(tenantId ? { tenantId } : {}),
     },
     select: {
       billNumber: true,

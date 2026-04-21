@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { hashPassword, createSession } from "@/lib/auth";
+import { logError, getRequestId } from "@/lib/observability";
 
 function normalizeOptionalString(value: unknown) {
   if (value === null || value === undefined) {
@@ -83,7 +84,8 @@ export async function POST(request: NextRequest) {
     const hashedPassword = await hashPassword(password);
 
     // Create Tenant and Admin user inside transaction
-    const { tenant, user } = await prisma.$transaction(async (tx: any) => {
+    type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+    const { tenant, user } = await prisma.$transaction(async (tx: PrismaTx) => {
       const newTenant = await tx.tenant.create({
         data: {
           name: companyName,
@@ -121,7 +123,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true }, { status: 201 });
   } catch (error) {
-    console.error("API error in register POST:", error);
+    logError("auth.register.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

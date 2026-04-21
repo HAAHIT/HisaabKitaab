@@ -18,6 +18,10 @@ export async function POST(request: NextRequest) {
   if (!isAdmin(request)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  const userId = request.headers.get("x-user-id");
+  if (!userId) {
+    return NextResponse.json({ error: "Missing user context" }, { status: 401 });
+  }
   const tenantResolution = await resolveWriteTenant(request);
   if (!tenantResolution.ok) {
     return tenantResolution.response;
@@ -78,6 +82,19 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // [MCA GSR 247(E)] Append-only audit log for logo upload
+    await prisma.auditLog.create({
+      data: {
+        tenantId,
+        entityType: "Tenant",
+        entityId: tenantId,
+        userId,
+        action: "UPDATE",
+        fieldName: "logoUrl",
+        newValue: `/api/assets/${asset.id}`,
+      },
+    });
+
     return NextResponse.json({
       settings: serializeTenantSettings(updatedTenant),
     });
@@ -98,6 +115,10 @@ export async function DELETE(request: NextRequest) {
   if (!isAdmin(request)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  const userId = request.headers.get("x-user-id");
+  if (!userId) {
+    return NextResponse.json({ error: "Missing user context" }, { status: 401 });
+  }
   const tenantResolution = await resolveWriteTenant(request);
   if (!tenantResolution.ok) {
     return tenantResolution.response;
@@ -114,6 +135,20 @@ export async function DELETE(request: NextRequest) {
       where: { id: tenantId },
       data: {
         logoUrl: null,
+      },
+    });
+
+    // [MCA GSR 247(E)] Append-only audit log for logo deletion
+    await prisma.auditLog.create({
+      data: {
+        tenantId,
+        entityType: "Tenant",
+        entityId: tenantId,
+        userId,
+        action: "UPDATE",
+        fieldName: "logoUrl",
+        oldValue: previousTenant?.logoUrl || null,
+        newValue: null,
       },
     });
 

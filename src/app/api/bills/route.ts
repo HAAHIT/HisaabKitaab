@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { GST_STATE_CODE_SET } from "@/lib/gst-states";
-import { deriveIsInterState } from "@/lib/gst-helpers";
+import { deriveIsInterState, VALID_GST_SLABS } from "@/lib/gst-helpers";
 
 // Derive Prisma query types from the client instance to avoid the
 // @prisma/client → .prisma/client re-export resolution failure
@@ -109,7 +109,11 @@ const CreateBillSchema = z.object({
   rows: z.array(z.record(z.string(), z.unknown())).min(1),
   notes: z.string().nullish(),
   terms: z.string().nullish(),
-  taxPercent: z.number().nonnegative().nullish(),
+  // GST 2.0 valid slabs: 0%, 0.25%, 3%, 5%, 18%
+  taxPercent: z.number().nonnegative().refine(
+    (val) => VALID_GST_SLABS.has(val),
+    { message: "Tax rate must be a valid GST slab: 0%, 0.25%, 3%, 5%, or 18%." }
+  ).nullish(),
   subtotal: z.number().nonnegative().default(0),
   taxAmount: z.number().nonnegative().default(0),
   grandTotal: z.number().nonnegative().default(0),
