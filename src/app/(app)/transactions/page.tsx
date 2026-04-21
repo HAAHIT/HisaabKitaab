@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { VoucherType } from "@prisma/client";
+import { tenantScope } from "@/lib/tenant";
 import TransactionsClient from "./TransactionsClient";
 
 export default async function TransactionsPage({
@@ -13,7 +14,7 @@ export default async function TransactionsPage({
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const where: any = {};
+  const where: any = await tenantScope();
   
   if (searchParams.from) {
     const fromDate = new Date(searchParams.from);

@@ -225,6 +225,7 @@ export async function POST(request: NextRequest) {
     }
 
     return jsonWithRequestId(requestId, {
+      redirectTo: getPostLoginUrl(request, user.role),
       user: {
         id: user.id,
         tenantId: user.tenantId,
