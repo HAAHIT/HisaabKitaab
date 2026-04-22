@@ -169,14 +169,27 @@ export function resolveExportVoucherType(
 // ── Date formatting ───────────────────────────────────────────────────────────
 
 function formatTallyDate(date: Date): string {
-  return new Intl.DateTimeFormat("en-CA", {
+  // Use formatToParts to guarantee we get exactly the year, month, and day
+  // without relying on locale-dependent separators (slashes/hyphens) which might
+  // vary between Node.js environments lacking full ICU data.
+  const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: INDIA_TIMEZONE,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  })
-    .format(date)
-    .replace(/-/g, ""); // YYYY-MM-DD → YYYYMMDD
+  }).formatToParts(date);
+
+  const year = parts.find((p) => p.type === "year")?.value;
+  const month = parts.find((p) => p.type === "month")?.value;
+  const day = parts.find((p) => p.type === "day")?.value;
+
+  if (!year || !month || !day) {
+    // Fallback if Intl fails unusually
+    const isoStr = date.toISOString();
+    return isoStr.slice(0, 10).replace(/-/g, "");
+  }
+
+  return `${year}${month}${day}`;
 }
 
 // ── XML escaping ──────────────────────────────────────────────────────────────
