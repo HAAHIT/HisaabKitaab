@@ -87,6 +87,20 @@ const VOUCHER_TYPE_MAP: Record<
   "Debit Note": "PURCHASE",   // alt wording
 };
 
+/**
+ * Heuristic lookup for voucher types with custom names (e.g. "GST Sales").
+ * Maps substring to primary voucher category.
+ */
+const VCH_HEURISTIC: Record<string, "SALES" | "PURCHASE" | "RECEIPT" | "PAYMENT" | "JOURNAL"> = {
+  SALES: "SALES",
+  PURCHASE: "PURCHASE",
+  RECEIPT: "RECEIPT",
+  PAYMENT: "PAYMENT",
+  JOURNAL: "JOURNAL",
+  CONTRA: "JOURNAL",
+  INVOICE: "SALES",
+}
+
 // ── Output types ─────────────────────────────────────────────────────────────
 
 export type ParsedLedgerLine = {
@@ -208,7 +222,14 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       ignoreAttributes: false,
       attributeNamePrefix: "@_",
       isArray: (name: string) =>
-        ["TALLYMESSAGE", "ALLLEDGERENTRIES.LIST", "BILLALLOCATIONS.LIST"].includes(name),
+        [
+          "TALLYMESSAGE",
+          "ALLLEDGERENTRIES.LIST",
+          "LEDGERENTRIES.LIST",
+          "BILLALLOCATIONS.LIST",
+          "ALLINVENTORYENTRIES.LIST",
+          "INVENTORYENTRIES.LIST",
+        ].includes(name),
       parseTagValue: true,
       parseAttributeValue: false,
     });
@@ -305,7 +326,33 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
     const v = msg["VOUCHER"] as Record<string, unknown>;
 
     const typeName = String(v["VOUCHERTYPENAME"] ?? v["@_VCHTYPE"] ?? "").trim();
-    const voucherType = VOUCHER_TYPE_MAP[typeName];
+    // Case-insensitive lookup (native Tally vs HisaabKitaab exports)
+    const upperTypeName = typeName.toUpperCase();
+    let voucherType: "SALES" | "PURCHASE" | "RECEIPT" | "PAYMENT" | "JOURNAL" | undefined = undefined;
+
+    for (const [key, val] of Object.entries(VOUCHER_TYPE_MAP)) {
+      if (key.toUpperCase() === upperTypeName) {
+        voucherType = val;
+        break;
+      }
+    }
+
+    // Heuristic fallback for custom voucher type names
+    if (!voucherType) {
+      for (const [match, val] of Object.entries(VCH_HEURISTIC)) {
+        if (upperTypeName.includes(match)) {
+          voucherType = val;
+          break;
+        }
+      }
+    }
+
+    if (!voucherType) {
+      // Final fallback: check for any Sales/Purchase substrings
+      if (upperTypeName.includes("SALE")) voucherType = "SALES";
+      else if (upperTypeName.includes("PURCHASE")) voucherType = "PURCHASE";
+    }
+
     if (!voucherType) {
       parseErrors.push(
         `Message ${i + 1}: unknown voucher type "${typeName}", skipping`
@@ -334,7 +381,7 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       ? rawRemoteId.replace(/^HisaabKitaab-/i, "")
       : null;
 
-    const rawEntries = v["ALLLEDGERENTRIES.LIST"];
+    const rawEntries = v["ALLLEDGERENTRIES.LIST"] ?? v["LEDGERENTRIES.LIST"];
     const entryList = asArray(rawEntries as Record<string, unknown> | Record<string, unknown>[] | undefined);
 
     const lines: ParsedLedgerLine[] = [];
@@ -426,7 +473,7 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
     const isInterState = hasIgst ? true : hasCgstSgst ? false : null;
 
     // ── Extract Inventory entries (new!) ──────────────────────────────────────
-    const rawInv = v["ALLINVENTORYENTRIES.LIST"];
+    const rawInv = v["ALLINVENTORYENTRIES.LIST"] ?? v["INVENTORYENTRIES.LIST"];
     const invList = asArray(rawInv as Record<string, unknown> | Record<string, unknown>[] | undefined);
     const inventoryRows: Record<string, any>[] = [];
 

@@ -360,7 +360,7 @@ export async function GET(request: NextRequest) {
               voucher.originalTypeName,
               voucher.voucherType
             ),
-            createdBy: actorId,
+            createdBy: actorId ?? "SYSTEM",
             ...(voucher.remoteId ? { remoteId: voucher.remoteId } : {}),
             billId: billId ?? undefined, // Link to the created bill if inventory was present
             lines,
@@ -462,13 +462,16 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (err) {
-    await prisma.importJob.update({
-      where: { id: job.id },
-      data: {
-        status: "FAILED",
-        error: err instanceof Error ? err.message : String(err)
-      }
-    });
+    if (job?.id) {
+      await prisma.importJob.update({
+        where: { id: job.id },
+        data: {
+          status: "FAILED",
+          error: err instanceof Error ? err.message : String(err)
+        }
+      });
+    }
+    logError("import.process.job-failed", { error: err });
     return NextResponse.json({ error: "Job failed" }, { status: 500 });
   } finally {
     // [W1-FIX] Guaranteed lock release in finally — covers success, catch, and

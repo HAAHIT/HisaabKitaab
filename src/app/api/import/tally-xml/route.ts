@@ -87,11 +87,14 @@ export async function POST(request: NextRequest) {
 
   // Determine total items up front so the UI doesn't show "0 of 0"
   let totalItems = 0;
+  let upfrontErrors: string[] = [];
   try {
     const parsed = parseTallyXml(xmlText);
     totalItems = parsed.vouchers.length;
+    upfrontErrors = parsed.parseErrors;
   } catch (err) {
     console.error("Failed to parse Tally XML for total item count", err);
+    upfrontErrors.push(err instanceof Error ? err.message : String(err));
   }
 
   // Create the tracking job
@@ -126,8 +129,8 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     jobId: job.id,
-    message: "Import job queued successfully.",
+    message: totalItems > 0 ? "Import job queued successfully." : "No vouchers detected in XML.",
     totalDetected: totalItems,
-    parseErrors: [],
+    parseErrors: upfrontErrors,
   });
 }
