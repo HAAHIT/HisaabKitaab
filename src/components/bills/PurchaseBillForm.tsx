@@ -20,6 +20,7 @@ import { StateSearch } from "@/components/ui/StateSearch";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { evaluateRow, type ColumnDef } from "@/lib/formula";
 import { GST_STATE_CODES } from "@/lib/gst-states";
+import { extractGstinStateCode } from "@/lib/gst-helpers";
 
 interface Template {
   id: string;
@@ -81,6 +82,7 @@ export function PurchaseBillForm() {
   const [isReverseCharge, setIsReverseCharge] = useState(false);
   const [placeOfSupply, setPlaceOfSupply] = useState("");
   const [notes, setNotes] = useState("");
+  const [tenantGstin, setTenantGstin] = useState<string | null>(null);
 
   const fetchFormData = useCallback(async () => {
     setLoading(true);
@@ -94,6 +96,9 @@ export function PurchaseBillForm() {
       setTemplates(tData.templates || []);
       if (sData.settings) {
          setTaxPercent(sData.settings.defaultTaxPercent || 18);
+         if (sData.settings.companyGstin) {
+           setTenantGstin(sData.settings.companyGstin);
+         }
       }
     } catch {
       showToast("Failed to load form data", "error");
@@ -306,6 +311,15 @@ export function PurchaseBillForm() {
                         const code = party.gstin.substring(0, 2);
                         if (GST_STATE_CODES[code]) setPlaceOfSupply(code);
                       }
+                      // Auto-derive interstate from GSTIN comparison
+                      const partyState = extractGstinStateCode(party?.gstin);
+                      const tenantState = extractGstinStateCode(tenantGstin);
+                      if (partyState && tenantState) {
+                        setIsInterState(partyState !== tenantState);
+                      } else if (partyState) {
+                        // Party GSTIN present but no tenant GSTIN — default to false (intra-state)
+                        setIsInterState(false);
+                      }
                     }}
                     partyType="VENDOR"
                     placeholder="Search Supplier..."
@@ -396,7 +410,26 @@ export function PurchaseBillForm() {
                 <CardBody className="space-y-4 p-6">
                   <Textarea label="Notes" placeholder="Additional notes..." value={notes} onValueChange={setNotes} variant="bordered" minRows={2} />
                   <div className="flex flex-col gap-2">
-                    <Checkbox isSelected={isInterState} onValueChange={setIsInterState}>Inter-State Transaction (IGST)</Checkbox>
+                    {(() => {
+                      const isAutoDetected = !!selectedParty?.gstin;
+                      return (
+                        <div className="flex flex-col gap-0.5">
+                          <label className={`flex items-center gap-2 select-none ${isAutoDetected ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}>
+                            <input
+                              type="checkbox"
+                              checked={isInterState}
+                              onChange={(e) => setIsInterState(e.target.checked)}
+                              className="accent-primary"
+                              disabled={isAutoDetected}
+                            />
+                            <span className="text-sm">Inter-State Transaction (IGST)</span>
+                          </label>
+                          {isAutoDetected && (
+                            <span className="text-[10px] text-default-400 pl-6">Auto-detected from GST Numbers</span>
+                          )}
+                        </div>
+                      );
+                    })()}
                     <Checkbox isSelected={isReverseCharge} onValueChange={setIsReverseCharge} color="warning">Subject to Reverse Charge (RCM)</Checkbox>
                   </div>
                 </CardBody>

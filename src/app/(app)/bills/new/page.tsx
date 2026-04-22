@@ -800,9 +800,7 @@ export default function NewBillPage() {
                     <div className="flex items-center justify-between">
                       <p className="text-xs text-default-400">{t("bills.autoTaxNote")}</p>
                       {(() => {
-                        const partyState = extractGstinStateCode(selectedParty?.gstin);
-                        const tenantState = extractGstinStateCode(tenantGstin);
-                        const isAutoDetected = !!(partyState && tenantState);
+                        const isAutoDetected = !!selectedParty?.gstin;
                         return (
                           <div className="flex flex-col items-end gap-0.5">
                             <label className={`flex items-center gap-1.5 select-none ${isAutoDetected ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}>
