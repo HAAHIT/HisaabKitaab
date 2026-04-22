@@ -130,6 +130,11 @@ export type ParsedVoucher = {
    * Null when no GST ledger entries are present (e.g. exempt supplies).
    */
   isInterState: boolean | null;
+  /**
+   * For Sales/Purchase vouchers, the raw stock-wise rows.
+   * Key names match standard HisaabKitaab template columns (Item, Qty, Rate, Amount).
+   */
+  inventoryRows?: Record<string, any>[];
 };
 
 export type ParsedPartyMaster = {
@@ -420,6 +425,38 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
     const hasCgstSgst = ledgerNames.some((n) => n.includes("CGST") || n.includes("SGST"));
     const isInterState = hasIgst ? true : hasCgstSgst ? false : null;
 
+    // ── Extract Inventory entries (new!) ──────────────────────────────────────
+    const rawInv = v["ALLINVENTORYENTRIES.LIST"];
+    const invList = asArray(rawInv as Record<string, unknown> | Record<string, unknown>[] | undefined);
+    const inventoryRows: Record<string, any>[] = [];
+
+    for (const inv of invList) {
+      const i = inv as Record<string, unknown>;
+      const stockItemName = String(i["STOCKITEMNAME"] ?? "").trim();
+      if (!stockItemName) continue;
+
+      const qtyStr = String(i["BILLEDQTY"] ?? i["ACTUALQTY"] ?? "0").trim();
+      // Split "5 Nos" -> qty: 5, unit: "Nos"
+      const qtyMatch = qtyStr.match(/^([\d.-]+)\s*(.*)$/);
+      const qty = qtyMatch ? parseFloat(qtyMatch[1]) : 0;
+      const unit = qtyMatch ? qtyMatch[2].trim() : "";
+
+      const rateStr = String(i["RATE"] ?? "").trim();
+      const rateMatch = rateStr.match(/^([\d.-]+)/);
+      const rate = rateMatch ? parseFloat(rateMatch[1]) : 0;
+
+      const amount = Math.abs(parseAmount(i["AMOUNT"]));
+
+      // Store in standard column keys
+      inventoryRows.push({
+        Item: stockItemName,
+        Qty: qty,
+        Unit: unit,
+        Rate: rate || (qty !== 0 ? amount / qty : amount),
+        Amount: amount,
+      });
+    }
+
     vouchers.push({
       voucherType,
       originalTypeName: typeName,
@@ -433,6 +470,7 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       taxPercent: parsedTaxPercent,
       hsnCodes: parsedHsnCodes,
       isInterState,
+      inventoryRows: inventoryRows.length > 0 ? inventoryRows : undefined,
     });
   }
 

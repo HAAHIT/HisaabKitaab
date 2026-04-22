@@ -85,26 +85,49 @@ export async function POST(request: NextRequest) {
   // Prefix with "gzip:" so the process-import route can detect and decompress.
   const compressedXml = "gzip:" + gzipSync(Buffer.from(xmlText, "utf-8")).toString("base64");
 
+  // Determine total items up front so the UI doesn't show "0 of 0"
+  let totalItems = 0;
+  try {
+    const parsed = parseTallyXml(xmlText);
+    totalItems = parsed.vouchers.length;
+  } catch (err) {
+    console.error("Failed to parse Tally XML for total item count", err);
+  }
+
   // Create the tracking job
   const job = await prisma.importJob.create({
     data: {
       tenantId: tid,
-      totalItems: 0, // Will be updated by the background job during processing
+      totalItems: totalItems,
       xmlData: compressedXml,
       status: "PENDING",
     }
   });
 
+  // Trigger background job (fire-and-forget for local dev where Vercel cron isn't running)
+  try {
+    const processUrl = new URL("/api/jobs/process-import", request.url);
+    fetch(processUrl.toString(), {
+      method: "GET",
+      headers: {
+        "x-cron-secret": process.env.CRON_SECRET || "",
+      },
+    }).catch((e) => console.error("Fire-and-forget process-import failed:", e));
+  } catch (err) {
+    console.error("Failed to construct process-import URL:", err);
+  }
+
   logInfo("import.tally-xml.queued", {
     requestId: getRequestId(request),
     tenantId: tid,
     jobId: job.id,
+    totalItems,
   });
 
   return NextResponse.json({
     jobId: job.id,
     message: "Import job queued successfully.",
-    totalDetected: "Calculated in background",
+    totalDetected: totalItems,
     parseErrors: [],
   });
 }

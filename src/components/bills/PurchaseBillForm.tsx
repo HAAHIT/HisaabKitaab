@@ -75,7 +75,7 @@ export function PurchaseBillForm() {
   // Form State
   const [selectedParty, setSelectedParty] = useState<PartyOption | null>(null);
   const [supplierInvoiceNo, setSupplierInvoiceNo] = useState("");
-  const [billDate, setBillDate] = useState("");
+  const [billDate, setBillDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [rows, setRows] = useState<Record<string, string | number>[]>([]);
   const [taxPercent, setTaxPercent] = useState(18);
   const [isInterState, setIsInterState] = useState(false);

@@ -92,6 +92,7 @@ export default function NewBillPage() {
   const [terms, setTerms] = useState("");
   const [didAutoFocusRow, setDidAutoFocusRow] = useState(false);
   const [tenantGstin, setTenantGstin] = useState<string | null>(null);
+  const [billDate, setBillDate] = useState(() => new Date().toISOString().slice(0, 10));
 
   const fetchFormData = useCallback(async () => {
     setLoading(true);
@@ -324,6 +325,7 @@ export default function NewBillPage() {
           notes: notes.trim() || null,
           terms: terms.trim() || null,
           status,
+          date: billDate,
         }),
       });
 
@@ -477,8 +479,18 @@ export default function NewBillPage() {
             </div>
 
             <Card shadow="sm" className="mb-6">
-              <CardHeader className="px-6 pt-6 pb-0">
+              <CardHeader className="px-6 pt-6 pb-0 flex justify-between items-center">
                 <h2 className="text-lg font-semibold">{t("bills.billTo")}</h2>
+                <Input
+                  type="date"
+                  aria-label="Bill Date"
+                  size="sm"
+                  variant="flat"
+                  value={billDate}
+                  onValueChange={setBillDate}
+                  className="w-40"
+                  startContent={<span className="text-default-400 text-sm mr-1">Date:</span>}
+                />
               </CardHeader>
               <CardBody className="p-6">
                 <PartySearch

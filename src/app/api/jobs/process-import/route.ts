@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
   if (!process.env.CRON_SECRET || cronSecret !== process.env.CRON_SECRET) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  
+
   // ── Atomic job claim ────────────────────────────────────────────────────────
   // Two-step: find oldest PENDING job, then atomically update only if it is
   // still PENDING. If two cron workers race, only one will see count=1.
@@ -86,12 +86,40 @@ export async function GET(request: NextRequest) {
   try {
     const tid = job.tenantId;
     const actorId = "system"; // Internal cron actor
-    
+
     // [S-W1] Decompress if stored with gzip prefix (backwards-compatible with raw XML)
     let xmlText = job.xmlData;
     if (xmlText.startsWith("gzip:")) {
       const compressed = Buffer.from(xmlText.slice(5), "base64");
       xmlText = gunzipSync(compressed).toString("utf-8");
+    }
+
+    // [P1] Resolve/Create template for Tally imports so inventory rows can be saved.
+    // We use a reserved name to avoid cluttering the user's custom template list.
+    let tallyTemplateId: string | null = null;
+    const existingTallyTemplate = await prisma.billTemplate.findFirst({
+      where: { name: "__TALLY_IMPORT__", tenantId: tid },
+      select: { id: true },
+    });
+    if (existingTallyTemplate) {
+      tallyTemplateId = existingTallyTemplate.id;
+    } else {
+      // If not found, create a minimalist template that includes common Tally columns
+      const fallbackTemplate = await prisma.billTemplate.create({
+        data: {
+          tenantId: tid,
+          name: "__TALLY_IMPORT__",
+          columns: [
+            { id: "Item", name: "Item", type: "text", position: 0 },
+            { id: "Qty", name: "Qty", type: "number", position: 1 },
+            { id: "Unit", name: "Unit", type: "text", position: 2 },
+            { id: "Rate", name: "Rate", type: "number", position: 3 },
+            { id: "Amount", name: "Amount", type: "number", position: 4 },
+          ],
+          createdBy: actorId ?? "SYSTEM",
+        },
+      });
+      tallyTemplateId = fallbackTemplate.id;
     }
 
     const { vouchers, partyMasters } = parseTallyXml(xmlText);
@@ -195,7 +223,7 @@ export async function GET(request: NextRequest) {
     const vouchersWithoutRemoteId = vouchers.filter((v) => !v.remoteId);
 
     let duplicateFingerprints = new Set<string>();
-    
+
     // [W1-FIX] Non-blocking advisory lock — prevents indefinite hangs when a
     // previous import leaked a session-level lock (e.g. process crash, serverless
     // timeout). pg_try_advisory_lock returns false immediately if already held,
@@ -215,7 +243,7 @@ export async function GET(request: NextRequest) {
         message: "Import already in progress for this tenant, will retry",
       });
     }
-    
+
     if (vouchersWithoutRemoteId.length > 0) {
       // [S3] DB-side duplicate check: query only fingerprint strings instead of
       // loading entire JournalEntry rows into memory. Uses raw SQL for
@@ -273,6 +301,53 @@ export async function GET(request: NextRequest) {
         );
 
         await prisma.$transaction(async (tx: PrismaTx) => {
+          // [P1] If voucher has inventory, create a Bill record first.
+          let billId: string | null = null;
+          if (
+            voucher.inventoryRows &&
+            voucher.inventoryRows.length > 0 &&
+            (voucher.voucherType === "SALES" || voucher.voucherType === "PURCHASE") &&
+            tallyTemplateId
+          ) {
+            // Find the party LEDGER line to get the partyId (usually the first line)
+            const partyLine = lines.find((l) => l.partyId);
+            if (partyLine) {
+              const createdBill = await tx.bill.create({
+                data: {
+                  tenantId: tid,
+                  billNumber: voucher.reference || `IMP-${Date.now()}`,
+                  templateId: tallyTemplateId,
+                  partyId: partyLine.partyId!,
+                  customerName: partyLine.partyName ?? "Customer",
+                  rows: voucher.inventoryRows as any,
+                  subtotal: voucher.inventoryRows.reduce((sum, r) => sum + (r.Amount || 0), 0),
+                  taxPercent: voucher.taxPercent ?? 0,
+                  taxAmount: Math.abs(voucher.lines.filter(l => l.accountCode.includes("GST")).reduce((s, l) => s + (l.debit || l.credit), 0)),
+                  grandTotal: Math.abs(partyLine.debit !== 0 ? partyLine.debit : partyLine.credit),
+                  status: "FINAL",
+                  isInterState: voucher.isInterState ?? false,
+                  placeOfSupply: voucher.placeOfSupply,
+                  date: voucher.entryDate,
+                  createdBy: actorId ?? "SYSTEM",
+                },
+              });
+              billId = createdBill.id;
+
+              // Audit the Bill creation
+              await tx.auditLog.create({
+                data: {
+                  tenantId: tid,
+                  entityType: "Bill",
+                  entityId: billId,
+                  userId: null,
+                  actorType: "SYSTEM",
+                  action: "CREATE",
+                  newValue: JSON.stringify({ source: "tally-import-inventory" }),
+                },
+              });
+            }
+          }
+
           const journalEntry = await createJournalEntry(tx, {
             tenantId: tid,
             entryDate: voucher.entryDate,
@@ -287,6 +362,7 @@ export async function GET(request: NextRequest) {
             ),
             createdBy: actorId,
             ...(voucher.remoteId ? { remoteId: voucher.remoteId } : {}),
+            billId: billId ?? undefined, // Link to the created bill if inventory was present
             lines,
           });
 
@@ -324,7 +400,7 @@ export async function GET(request: NextRequest) {
     }
 
     const allVouchers = [...vouchersWithRemoteId, ...vouchersWithoutRemoteId];
-    
+
     // Process in batches sequentially to avoid deadlocks on shared party rows.
     // Promise.allSettled was replaced: 50 parallel transactions caused lock
     // contention when multiple vouchers referenced the same party.

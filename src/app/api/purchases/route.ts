@@ -202,6 +202,7 @@ export async function POST(request: NextRequest) {
           status: billStatus,
           isInterState,
           placeOfSupply: body.placeOfSupply ?? null,
+          date: billDate ? new Date(billDate) : now, // [ADDED] Persist explicitly
           createdBy: userId!,
           isDeleted: false,
         },

@@ -121,6 +121,7 @@ const CreateBillSchema = z.object({
   isInterState: z.boolean().optional(),
   paymentMode: z.string().optional(),
   hsnCode: z.string().nullish(),
+  date: z.string().optional(), // [ADDED] Allow custom issue dates
 }).superRefine((data, ctx) => {
   // [P0] FINAL bills must always declare place of supply for GSTR-1 compliance.
   // Not limited to B2B — even B2C inter-state supplies require placeOfSupply.
@@ -364,6 +365,7 @@ export async function POST(request: NextRequest) {
       grandTotal,
       status,
       hsnCode,
+      date,
     } = body;
 
     let finalTemplateId = templateId;
@@ -477,6 +479,18 @@ export async function POST(request: NextRequest) {
     const effectiveGstin = gstin || party.gstin;
     const isInterState = deriveIsInterState(effectiveGstin, tenant?.gstin, body.isInterState);
     const normalizedPaymentMode = normalizePaymentMode(body.paymentMode);
+    
+    // Use the explicitly provided bill date if present, otherwise default to now
+    let billDateObj = new Date();
+    if (typeof date === "string" && date.trim() !== "") {
+      const parsedDate = new Date(date);
+      if (!Number.isNaN(parsedDate.getTime())) {
+        billDateObj = parsedDate;
+      }
+    }
+
+    // Still use the system's current time for yearMonth formatting and period locking (for sequence generation)
+    // to strictly prevent sequence clashes, but `date` dictates the financial timestamp.
     const now = new Date();
     const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -544,6 +558,7 @@ export async function POST(request: NextRequest) {
           isInterState,
           placeOfSupply: body.placeOfSupply ?? null,  // [B1] GSTR-1 mandatory field
           hsnCode: hsnCode ?? null, // Fallback HSN Code
+          date: billDateObj, // Store custom bill date 
           createdBy: userId!,
           isDeleted: false,
         },
@@ -587,7 +602,7 @@ export async function POST(request: NextRequest) {
           taxAmount: createdBill.taxAmount.toNumber(),
           grandTotal: createdBill.grandTotal.toNumber(),
           createdBy: userId!,
-          entryDate: createdBill.createdAt,
+          entryDate: createdBill.date, // Use the custom bill date for accounting ledgers
           isInterState,
         });
       }
@@ -599,7 +614,7 @@ export async function POST(request: NextRequest) {
             partyId: party.id,
             direction: party.type === "CUSTOMER" ? "INCOMING" : "OUTGOING",
             amount: resolvedGrandTotal,
-            date: now,
+            date: billDateObj, // Payment receives the same backdated date
             mode: normalizedPaymentMode,
             status: "COMPLETED",
             linkedBillId: createdBill.id,
