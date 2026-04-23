@@ -71,7 +71,9 @@ export default function UserManagementPage() {
     const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$";
     let pw = "";
     for (let i = 0; i < 16; i++) {
-      pw += chars.charAt(Math.floor(Math.random() * chars.length));
+      pw += chars.charAt(
+        Math.floor((crypto.getRandomValues(new Uint32Array(1))[0] / 0x100000000) * chars.length)
+      );
     }
     setFormPassword(pw);
   }
