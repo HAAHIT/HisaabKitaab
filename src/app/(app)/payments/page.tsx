@@ -11,6 +11,12 @@ import {
   Select,
   SelectItem,
   Skeleton,
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  useDisclosure,
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -26,6 +32,12 @@ interface Payment {
   party: { name: string; type: string };
   linkedBill: { id: string; billNumber: string } | null;
 }
+
+const TrashIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+  </svg>
+);
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("en-IN", {
@@ -59,6 +71,9 @@ export default function PaymentsListPage() {
     message: string;
     type: "success" | "error";
   } | null>(null);
+  const [paymentToDelete, setPaymentToDelete] = useState<Payment | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const monthlyPaymentGroups = useMemo(() => {
     const monthFormatter = new Intl.DateTimeFormat("en-IN", {
@@ -190,6 +205,28 @@ export default function PaymentsListPage() {
       );
     } finally {
       setMarkingId(null);
+    }
+  }
+
+  async function handleDeletePayment() {
+    if (!paymentToDelete) return;
+    setIsDeleting(true);
+    try {
+      const res = await fetch(`/api/payments/${paymentToDelete.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw res;
+      showToast(t("payments.deletedSuccess") || "Payment deleted", "success");
+      await fetchPayments();
+      setIsDeleteModalOpen(false);
+      setPaymentToDelete(null);
+    } catch (error) {
+      showToast(
+        error instanceof Error ? (error as any).message || "Delete failed" : t("payments.deleteFailed"),
+        "error"
+      );
+    } finally {
+      setIsDeleting(false);
     }
   }
 
@@ -442,6 +479,18 @@ export default function PaymentsListPage() {
                                     {t("payments.markCompleted")}
                                   </Button>
                                 )}
+                                <Button
+                                  isIconOnly
+                                  variant="light"
+                                  color="danger"
+                                  size="sm"
+                                  onPress={() => {
+                                    setPaymentToDelete(payment);
+                                    setIsDeleteModalOpen(true);
+                                  }}
+                                >
+                                  <TrashIcon className="h-4 w-4" />
+                                </Button>
                               </div>
                             </div>
                           </CardBody>
@@ -461,6 +510,51 @@ export default function PaymentsListPage() {
           )}
         </>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onOpenChange={(open) => setIsDeleteModalOpen(open)}
+        backdrop="blur"
+        placement="center"
+        classNames={{
+          backdrop: "bg-black/60",
+        }}
+      >
+        <ModalContent>
+          {(onClose) => (
+            <>
+              <ModalHeader className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-full bg-danger/10">
+                    <TrashIcon className="w-5 h-5 text-danger" />
+                  </div>
+                  <span className="text-xl font-bold">Delete Transaction</span>
+                </div>
+              </ModalHeader>
+              <ModalBody>
+                <p className="text-default-500">
+                  Are you sure you want to delete this transaction for <span className="font-semibold text-foreground">{formatCurrency(paymentToDelete?.amount || 0)}</span>?
+                  This will reverse the balances and this action cannot be undone.
+                </p>
+              </ModalBody>
+              <ModalFooter>
+                <Button variant="flat" onPress={onClose} disabled={isDeleting}>
+                  Cancel
+                </Button>
+                <Button
+                  color="danger"
+                  onPress={handleDeletePayment}
+                  isLoading={isDeleting}
+                  className="font-semibold shadow-lg shadow-danger/20"
+                >
+                  Delete Transaction
+                </Button>
+              </ModalFooter>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
     </div>
   );
 }
