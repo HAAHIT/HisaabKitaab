@@ -44,23 +44,11 @@ export default async function BankLedgerPage({
             status: "COMPLETED",
         },
         include: {
-            party: {
-                select: {
-                    name: true,
-                },
-            },
-            account: {
-                select: {
-                    name: true,
-                }
-            },
-            destinationAccount: {
-                select: {
-                    name: true,
-                }
-            }
+            party: { select: { name: true, type: true } },
+            account: { select: { name: true } },
+            destinationAccount: { select: { name: true } },
         },
-        orderBy: { date: "asc" },
+        orderBy: [{ date: "asc" }, { createdAt: "asc" }],
     });
 
     // Calculate generic ledger running balances
@@ -104,9 +92,14 @@ export default async function BankLedgerPage({
             mode: p.mode,
             amount: amt,
             partyName: displayPartyName,
+            notes: p.notes,
             increase,
             decrease,
             runningBalance: currentRunning,
+            partyId: p.partyId,
+            paymentAccountId: p.accountId,
+            destinationAccountId: p.destinationAccountId,
+            partyType: p.party?.type ?? null,
         };
     });
 

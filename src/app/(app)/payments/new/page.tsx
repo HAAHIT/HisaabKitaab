@@ -476,8 +476,17 @@ export default function RecordPaymentPage() {
                 selectedKeys={new Set([mode])}
                 onSelectionChange={(keys) => {
                   const value = Array.from(keys)[0] as string;
-                  if (value) {
-                    setMode(value);
+                  if (!value) return;
+                  setMode(value);
+                  if (value === "CASH") {
+                    const cashAcc = bankAccounts.find((a) => a.type === "CASH");
+                    if (cashAcc) setAccountId(cashAcc.id);
+                  } else {
+                    const currentAcc = bankAccounts.find((a) => a.id === accountId);
+                    if (currentAcc?.type === "CASH") {
+                      const bankAcc = bankAccounts.find((a) => a.type === "BANK");
+                      if (bankAcc) setAccountId(bankAcc.id);
+                    }
                   }
                 }}
                 variant="bordered"
