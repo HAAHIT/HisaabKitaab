@@ -295,7 +295,7 @@ export async function processImportJob(jobId?: string) {
       const existingFingerprints: { fp: string }[] = await prisma.$queryRaw`
         SELECT CONCAT(
           "voucherType", '|',
-          TO_CHAR("entryDate", 'YYYY-MM-DD'), '|',
+          TO_CHAR("entryDate" AT TIME ZONE 'UTC', 'YYYY-MM-DD'), '|',
           COALESCE("narration", ''), '|',
           "totalDebit"::float8::text
         ) as fp
@@ -362,7 +362,7 @@ export async function processImportJob(jobId?: string) {
               const createdBill = await tx.bill.create({
                 data: {
                   tenantId: tid,
-                  billNumber: voucher.reference || `IMP-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`,  // [FIX] random suffix prevents unique constraint collision
+                  billNumber: voucher.reference ? `TLY-${voucher.voucherType.substring(0, 3)}-${voucher.reference}-${crypto.randomBytes(2).toString('hex')}` : `IMP-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`,
                   templateId: tallyTemplateId,
                   partyId: partyLine.partyId!,
                   customerName: partyLine.partyName ?? "Customer",
