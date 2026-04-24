@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
-import { Autocomplete, AutocompleteItem } from "@heroui/react";
+import { useMemo, useState, useEffect } from "react";
 import { GST_STATE_CODES } from "@/lib/gst-states";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 
 interface StateOption {
   code: string;
@@ -28,7 +28,6 @@ export function StateSearch({
   isInvalid,
   errorMessage,
   size = "sm",
-  className,
   label,
   placeholder = "Type to search state…",
 }: StateSearchProps) {
@@ -40,31 +39,66 @@ export function StateSearch({
     }));
   }, []);
 
+  const [searchTerm, setSearchTerm] = useState("");
+
+  // Initialize search term when value changes externally
+  useEffect(() => {
+    if (value) {
+      const match = stateOptions.find((o) => o.code === value);
+      if (match) {
+        setSearchTerm(match.label);
+      } else {
+        setSearchTerm("");
+      }
+    } else {
+      setSearchTerm("");
+    }
+  }, [value, stateOptions]);
+
+  const filteredOptions = useMemo(() => {
+    if (!searchTerm) return stateOptions;
+    const lower = searchTerm.toLowerCase();
+
+    // If the search term exactly matches the selected label, return all options
+    // so the dropdown doesn't filter out everything else when opened
+    const exactMatch = stateOptions.find(o => o.label === searchTerm);
+    if (exactMatch && value === exactMatch.code) {
+      return stateOptions;
+    }
+
+    return stateOptions.filter(
+      (opt) => opt.name.toLowerCase().includes(lower) || opt.code.includes(lower)
+    );
+  }, [searchTerm, stateOptions, value]);
+
+  function handleInputChange(val: string) {
+    setSearchTerm(val);
+    if (val === "") {
+      onChange("");
+    }
+  }
+
   return (
-    <Autocomplete
-      aria-label={label || "Place of supply"}
+    <SearchableSelect
+      items={filteredOptions}
+      inputValue={searchTerm}
+      onInputChange={handleInputChange}
+      onSelectionChange={(item) => {
+        setSearchTerm(item.label);
+        onChange(item.code);
+      }}
       label={label}
       placeholder={placeholder}
-      size={size}
-      variant="bordered"
-      className={className}
-      defaultItems={stateOptions}
-      selectedKey={value || undefined}
-      onSelectionChange={(key) => {
-        onChange(key ? String(key) : "");
-      }}
       isInvalid={isInvalid}
       errorMessage={errorMessage}
-      allowsCustomValue={false}
-    >
-      {(item) => (
-        <AutocompleteItem key={item.code} textValue={item.label}>
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-xs text-default-400">{item.code}</span>
-            <span>{item.name}</span>
-          </div>
-        </AutocompleteItem>
+      getKey={(item) => item.code}
+      getTextValue={(item) => item.label}
+      renderItem={(item) => (
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-xs text-default-400">{item.code}</span>
+          <span>{item.name}</span>
+        </div>
       )}
-    </Autocomplete>
+    />
   );
 }

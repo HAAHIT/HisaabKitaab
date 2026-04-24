@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Autocomplete, AutocompleteItem } from "@heroui/react";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 
 export interface BillOption {
   id: string;
@@ -32,6 +32,7 @@ export function BillSearch({
   description,
 }: BillSearchProps) {
   const [bills, setBills] = useState<BillOption[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const selectedBillRef = useRef<BillOption | null>(null);
@@ -75,6 +76,7 @@ export function BillSearch({
     if (!partyId) {
       setBills([]);
       selectedBillRef.current = null;
+      setSearchTerm("");
       return;
     }
 
@@ -82,44 +84,65 @@ export function BillSearch({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partyId]);
 
+  useEffect(() => {
+    if (!value) {
+      setSearchTerm("");
+      selectedBillRef.current = null;
+    }
+  }, [value]);
+
   function handleInputChange(val: string) {
+    setSearchTerm(val);
+
+    // Clear selection if deleted
+    if (val === "" && selectedBillRef.current) {
+      selectedBillRef.current = null;
+      onChange(null);
+    }
+
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       fetchBills(val);
     }, 300);
   }
 
+  if (isDisabled || !partyId) {
+    return (
+      <div className="opacity-50 pointer-events-none">
+        <SearchableSelect<BillOption>
+          items={[]}
+          inputValue=""
+          onInputChange={() => { }}
+          onSelectionChange={() => { }}
+          label="Linked Bill"
+          placeholder={partyId ? placeholder : "Select a party first"}
+          getKey={(b) => b.id}
+          getTextValue={(b) => b.billNumber}
+          renderItem={(b) => <></>}
+        />
+        {description && <p className="text-xs text-default-400 mt-1 pl-1">{description}</p>}
+      </div>
+    );
+  }
+
   return (
-    <Autocomplete
-      label="Linked Bill"
-      placeholder={partyId ? placeholder : "Select a party first"}
-      variant="bordered"
-      items={bills}
-      isLoading={isLoading}
-      isDisabled={isDisabled || !partyId}
-      selectedKey={value || undefined}
-      onInputChange={handleInputChange}
-      onSelectionChange={(key) => {
-        if (!key) {
-          selectedBillRef.current = null;
-          onChange(null);
-          return;
-        }
-        const selected = bills.find((b) => b.id === String(key));
-        selectedBillRef.current = selected ?? null;
-        onChange(selected || null);
-      }}
-      description={description}
-      listboxProps={{
-        emptyContent: (
-          <div className="p-4 text-center text-sm text-default-500">
-            No bills found for this party.
-          </div>
-        ),
-      }}
-    >
-      {(bill) => (
-        <AutocompleteItem key={bill.id} textValue={bill.billNumber}>
+    <div className="flex flex-col gap-1 w-full">
+      <SearchableSelect
+        items={bills}
+        inputValue={searchTerm}
+        onInputChange={handleInputChange}
+        onSelectionChange={(bill) => {
+          selectedBillRef.current = bill;
+          setSearchTerm(bill.billNumber);
+          onChange(bill);
+        }}
+        isLoading={isLoading}
+        label="Linked Bill"
+        placeholder={placeholder}
+        emptyContent="No bills found for this party."
+        getKey={(bill) => bill.id}
+        getTextValue={(bill) => bill.billNumber}
+        renderItem={(bill) => (
           <div className="flex w-full items-center justify-between gap-3">
             <div className="flex flex-col">
               <span className="font-semibold">{bill.billNumber}</span>
@@ -131,8 +154,9 @@ export function BillSearch({
               ₹{bill.grandTotal.toLocaleString("en-IN")}
             </span>
           </div>
-        </AutocompleteItem>
-      )}
-    </Autocomplete>
+        )}
+      />
+      {description && <p className="text-xs text-default-400 pl-1">{description}</p>}
+    </div>
   );
 }
