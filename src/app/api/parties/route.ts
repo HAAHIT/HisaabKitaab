@@ -1,9 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
-import type { PartyType } from "@prisma/client";
+import type { Prisma, PartyType } from "@prisma/client";
 import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
+import { isValidGstinFormat } from "@/lib/gst-helpers";
 
 const VALID_PARTY_TYPES = new Set<PartyType>(["CUSTOMER", "VENDOR"]);
 
@@ -45,9 +46,10 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const search = searchParams.get("search") || "";
   const type = searchParams.get("type") || "";
+  const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
+  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10)));
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = { isActive: true, isDeleted: false, tenantId };
+  const where: Prisma.PartyWhereInput = { isActive: true, isDeleted: false, tenantId };
 
   if (search) {
     where.OR = [
@@ -56,19 +58,24 @@ export async function GET(request: NextRequest) {
     ];
   }
 
-  if (type && type !== "ALL") {
-    where.type = type;
+  if (type && type !== "ALL" && VALID_PARTY_TYPES.has(type as PartyType)) {
+    where.type = type as PartyType;
   }
 
-  const parties = await prisma.party.findMany({
-    where,
-    orderBy: { name: "asc" },
-    include: {
-      _count: { select: { payments: true } },
-    },
-  });
+  const [parties, total] = await prisma.$transaction([
+    prisma.party.findMany({
+      where,
+      orderBy: { name: "asc" },
+      skip: (page - 1) * limit,
+      take: limit,
+      include: {
+        _count: { select: { payments: true } },
+      },
+    }),
+    prisma.party.count({ where }),
+  ]);
 
-  return NextResponse.json({ parties });
+  return NextResponse.json({ parties, total, page, totalPages: Math.ceil(total / limit) });
 }
 
 // POST /api/parties — Create a new party
@@ -120,6 +127,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const normalizedGstin = normalizeOptionalString(gstin);
+    if (normalizedGstin && !isValidGstinFormat(normalizedGstin)) {
+      return NextResponse.json(
+        { error: "Invalid GSTIN format. Must be a valid 15-character GSTIN." },
+        { status: 400 }
+      );
+    }
+
     const party = await prisma.$transaction(async (tx) => {
       const p = await tx.party.create({
         data: {
@@ -129,7 +144,7 @@ export async function POST(request: NextRequest) {
           phone: normalizeOptionalString(phone),
           email: normalizeOptionalString(email),
           address: normalizeOptionalString(address),
-          gstin: normalizeOptionalString(gstin),
+          gstin: normalizedGstin,
           openingBalance: normalizedOpeningBalance,
           currentBalance: normalizedOpeningBalance,
           isActive: true,

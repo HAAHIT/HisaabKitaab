@@ -90,14 +90,14 @@ model AuthThrottle {
 model AuditLog {
   id         String    @id @default(cuid())
   tenantId   String
-  entityType String    // "Bill" | "Payment" | "Party" | "JournalEntry"
-  entityId   String    // PK of the changed record
-  userId     String?   // actor who triggered the change — null for system/cron actors
+  entityType String // "Bill" | "Payment" | "Party" | "JournalEntry"
+  entityId   String // PK of the changed record
+  userId     String? // actor who triggered the change — null for system/cron actors
   actorType  ActorType @default(USER) // distinguishes human vs automated actions
-  action     String    // "CREATE" | "UPDATE" | "DELETE"
-  fieldName  String?   // null for whole-record events (CREATE / DELETE)
-  oldValue   String?   // JSON-serialised previous value
-  newValue   String?   // JSON-serialised next value
+  action     String // "CREATE" | "UPDATE" | "DELETE"
+  fieldName  String? // null for whole-record events (CREATE / DELETE)
+  oldValue   String? // JSON-serialised previous value
+  newValue   String? // JSON-serialised next value
   createdAt  DateTime  @default(now())
   tenant     Tenant    @relation(fields: [tenantId], references: [id])
 
@@ -127,8 +127,8 @@ model ItemCatalog {
   hsnCode   String?
   unit      String   @default("pcs")
   rate      Decimal  @default(0) @db.Decimal(19, 4) // [B3] Float → Decimal
-  taxRate   Decimal? @db.Decimal(5, 2)  // [B3] Float → Decimal
-  cessRate  Decimal? @db.Decimal(5, 2)  // GST Cess % (tobacco, aerated drinks, luxury goods)
+  taxRate   Decimal? @db.Decimal(5, 2) // [B3] Float → Decimal
+  cessRate  Decimal? @db.Decimal(5, 2) // GST Cess % (tobacco, aerated drinks, luxury goods)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -151,14 +151,17 @@ model Bill {
   terms           String?
   subtotal        Decimal        @db.Decimal(19, 4) // [B3] Float → Decimal
   taxPercent      Decimal        @default(0) @db.Decimal(5, 2) // [B3] Float → Decimal
-  taxAmount       Decimal        @default(0) @db.Decimal(19, 4)  // [B3] Float → Decimal
-  cessAmount      Decimal        @default(0) @db.Decimal(19, 4)  // GST Cess amount charged on this bill
+  taxAmount       Decimal        @default(0) @db.Decimal(19, 4) // [B3] Float → Decimal
+  cessAmount      Decimal        @default(0) @db.Decimal(19, 4) // GST Cess amount charged on this bill
   grandTotal      Decimal        @db.Decimal(19, 4) // [B3] Float → Decimal
+  roundOff        Decimal        @default(0) @db.Decimal(19, 4) // Round-off adjustment (±₹0.99 max)
   placeOfSupply   String? // [B1] GSTR-1 mandatory field
-  hsnCode         String?        // [ADDED] Fallback HSN wrapper for older bills
+  hsnCode         String? // [ADDED] Fallback HSN wrapper for older bills
+  shippingAddress String? // Ship To address (when different from billing address)
   status          BillStatus     @default(DRAFT)
   createdBy       String
   createdAt       DateTime       @default(now())
+  date            DateTime       @default(now()) // Custom issue date/voucher date
   updatedAt       DateTime       @updatedAt
   isDeleted       Boolean        @default(false)
   partyId         String?
@@ -405,7 +408,7 @@ enum MediaAssetKind {
 }
 
 enum ActorType {
-  USER   // Human user via UI or API
+  USER // Human user via UI or API
   SYSTEM // Automated: cron jobs, Tally imports, background tasks
 }
 
@@ -420,6 +423,7 @@ enum MeasurementStatus {
 model ImportJob {
   id         String    @id @default(cuid())
   tenantId   String
+  createdBy  String?   // User ID of the admin who initiated the import (used for Bill FK)
   status     JobStatus @default(PENDING) // PENDING, PROCESSING, COMPLETED, FAILED
   totalItems Int       @default(0)
   processed  Int       @default(0)

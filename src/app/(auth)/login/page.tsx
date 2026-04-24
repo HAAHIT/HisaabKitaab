@@ -10,6 +10,7 @@ import {
 
 type LoginSearchParams = {
   error?: string | string[] | undefined;
+  registered?: string | string[] | undefined;
 };
 
 function firstValue(value: string | string[] | undefined) {
@@ -48,6 +49,7 @@ export default async function LoginPage({
   const t = (key: TranslationKey) => getTranslation(language, key);
   const params = await searchParams;
   const errorMessage = getErrorMessage(language, firstValue(params.error));
+  const registered = firstValue(params.registered) === "1";
   const nextLanguage = language === "en" ? "hi" : "en";
   const languageSwitchUrl = `/api/preferences/language?lang=${nextLanguage}&returnTo=${encodeURIComponent(
     getSafeReturnPath("/login")
@@ -95,10 +97,16 @@ export default async function LoginPage({
             </a>
           </div>
 
+          {registered && (
+            <div className="mb-4 rounded-xl border border-success/20 bg-success/10 px-4 py-3 text-sm text-success" aria-live="polite">
+              {t("register.success")}
+            </div>
+          )}
+
           <form
             action="/api/auth/login"
             method="post"
-            className="flex flex-col gap-4"
+            className="auth-form flex flex-col gap-4"
           >
             <label htmlFor="credential-input" className="space-y-1.5">
               <span className="text-sm font-medium text-gray-600 dark:text-zinc-300">
@@ -123,7 +131,7 @@ export default async function LoginPage({
                   name="credential"
                   type="text"
                   autoComplete="username"
-                  className="w-full bg-transparent text-base outline-none placeholder:text-gray-400 dark:placeholder:text-zinc-500 [&:-webkit-autofill]:![box-shadow:0_0_0_1000px_white_inset] [&:-webkit-autofill]:![-webkit-text-fill-color:#111827] dark:[&:-webkit-autofill]:![box-shadow:0_0_0_1000px_#3f3f46_inset] dark:[&:-webkit-autofill]:![-webkit-text-fill-color:#f4f4f5]"
+                  className="w-full bg-transparent text-base text-gray-900 outline-none placeholder:text-gray-400 dark:placeholder:text-zinc-500"
                   placeholder={t("login.credentialPlaceholder")}
                 />
               </div>
@@ -152,7 +160,7 @@ export default async function LoginPage({
                   name="password"
                   type="password"
                   autoComplete="current-password"
-                  className="w-full bg-transparent text-base outline-none placeholder:text-gray-400 dark:placeholder:text-zinc-500 [&:-webkit-autofill]:![box-shadow:0_0_0_1000px_white_inset] [&:-webkit-autofill]:![-webkit-text-fill-color:#111827] dark:[&:-webkit-autofill]:![box-shadow:0_0_0_1000px_#3f3f46_inset] dark:[&:-webkit-autofill]:![-webkit-text-fill-color:#f4f4f5]"
+                  className="w-full bg-transparent text-base text-gray-900 outline-none placeholder:text-gray-400 dark:placeholder:text-zinc-500"
                   placeholder={t("login.passwordPlaceholder")}
                 />
                 <button

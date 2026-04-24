@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-// Mock session-server
-vi.mock("@/lib/session-server", () => ({
-  resolveVerifiedTenantId: vi.fn().mockResolvedValue("test-tenant"),
-  resolveWriteTenant: vi.fn().mockResolvedValue({ tenantId: "test-tenant", userId: "user-1", role: "ADMIN" }),
+// Mock api-tenant (resolveWriteTenant is imported from here, not session-server)
+vi.mock("@/lib/api-tenant", () => ({
+  resolveReadTenant: vi.fn().mockResolvedValue({ ok: true, tenantId: "test-tenant" }),
+  resolveWriteTenant: vi.fn().mockResolvedValue({ ok: true, tenantId: "test-tenant" }),
 }));
 
 // Mock rate limiter
@@ -90,6 +90,7 @@ describe("Credit/Debit Notes API", () => {
         reasonForIssuance: "Sales Return",
         originalInvoiceNo: "BILL-001",
         placeOfSupply: "27",
+        hsnCode: "6201",
       }),
     });
 
@@ -100,7 +101,7 @@ describe("Credit/Debit Notes API", () => {
   });
 
   it("rejects missing originalInvoiceRef", async () => {
-     const req = new NextRequest("http://localhost/api/credit-notes", {
+    const req = new NextRequest("http://localhost/api/credit-notes", {
       method: "POST",
       headers: {
         "x-user-role": "ADMIN",

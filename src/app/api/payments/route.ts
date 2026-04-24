@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
   const limit = Math.min(Math.max(1, parseInt(searchParams.get("limit") || "20", 10) || 20), 100);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = { isDeleted: false, tenantId };
+  const where: Prisma.PaymentWhereInput = { isDeleted: false, tenantId };
 
   if (search) {
     where.OR = [

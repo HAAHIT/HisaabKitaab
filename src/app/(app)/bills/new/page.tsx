@@ -15,9 +15,12 @@ import {
 } from "@heroui/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
+import { ItemSearch } from "@/components/ui/ItemSearch";
+import { StateSearch } from "@/components/ui/StateSearch";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { evaluateRow, type ColumnDef } from "@/lib/formula";
 import { GST_STATE_CODES } from "@/lib/gst-states";
+import { extractGstinStateCode } from "@/lib/gst-helpers";
 
 interface Template {
   id: string;
@@ -70,7 +73,6 @@ export default function NewBillPage() {
   const { t } = useLanguage();
 
   const [templates, setTemplates] = useState<Template[]>([]);
-  const [parties, setParties] = useState<PartyOption[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingAs, setSavingAs] = useState<"DRAFT" | "FINAL" | null>(null);
@@ -84,35 +86,35 @@ export default function NewBillPage() {
   const preselectedPartyId = searchParams.get("partyId");
   const [selectedParty, setSelectedParty] = useState<PartyOption | null>(null);
   const [rows, setRows] = useState<Record<string, string | number>[]>([]);
-  const [taxPercent, setTaxPercent] = useState(18);
   const [isInterState, setIsInterState] = useState(false);
   const [placeOfSupply, setPlaceOfSupply] = useState("");
-  const [hsnCode, setHsnCode] = useState("");
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("");
   const [didAutoFocusRow, setDidAutoFocusRow] = useState(false);
+  const [tenantGstin, setTenantGstin] = useState<string | null>(null);
+  const [billDate, setBillDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [enableRoundOff, setEnableRoundOff] = useState(false);
+  const [shippingAddress, setShippingAddress] = useState("");
+  const [showShipTo, setShowShipTo] = useState(false);
 
   const fetchFormData = useCallback(async () => {
     setLoading(true);
     try {
-      const [templatesResponse, partiesResponse, settingsResponse] = await Promise.all([
+      const [templatesResponse, settingsResponse] = await Promise.all([
         fetch("/api/templates"),
-        fetch("/api/parties"),
         fetch("/api/settings"),
       ]);
 
-      const [templatesData, partiesData, settingsData] = await Promise.all([
+      const [templatesData, settingsData] = await Promise.all([
         templatesResponse.json().catch(() => ({ templates: [] })),
-        partiesResponse.json().catch(() => ({ parties: [] })),
         settingsResponse.json().catch(() => ({ settings: null })),
       ]);
 
       setTemplates(templatesData.templates || []);
-      setParties((partiesData.parties || []) as PartyOption[]);
 
       if (settingsData.settings) {
-        setTaxPercent(settingsData.settings.defaultTaxPercent || 18);
         setTerms(settingsData.settings.defaultTerms || "");
+        setTenantGstin(settingsData.settings.companyGstin || null);
       }
     } catch {
       showToast("Failed to load bill form data", "error");
@@ -125,12 +127,22 @@ export default function NewBillPage() {
     fetchFormData();
   }, [fetchFormData]);
 
+  const [preselectedParty, setPreselectedParty] = useState<PartyOption | null>(null);
+
   useEffect(() => {
-    if (preselectedPartyId && parties.length > 0 && !selectedParty) {
-      const party = parties.find((p) => p.id === preselectedPartyId);
-      if (party) setSelectedParty(party);
-    }
-  }, [preselectedPartyId, parties, selectedParty]);
+    if (!preselectedPartyId || selectedParty) return;
+    fetch(`/api/parties/${preselectedPartyId}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.party) {
+          const p = data.party as PartyOption;
+          setPreselectedParty(p);
+          setSelectedParty(p);
+        }
+      })
+      .catch(() => {/* silently ignore — user can search manually */ });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preselectedPartyId]);
 
   function showToast(message: string, type: "success" | "error") {
     setToast({ message, type });
@@ -201,23 +213,41 @@ export default function NewBillPage() {
       return { subtotal: 0, taxAmount: 0, grandTotal: 0 };
     }
 
-    const nextSubtotal = rows.reduce((sum, row) => {
-      const value =
-        typeof row[lastValueColumn.id] === "number"
-          ? (row[lastValueColumn.id] as number)
-          : 0;
-      return sum + value;
-    }, 0);
+    let nextGrandTotal = 0;
+    let nextTaxAmount = 0;
 
-    const nextTaxAmount = Math.round(((nextSubtotal * taxPercent) / 100) * 100) / 100;
-    const nextGrandTotal = Math.round((nextSubtotal + nextTaxAmount) * 100) / 100;
+    rows.forEach(row => {
+      const amountCol = selectedTemplate.columns.find(c => c.id === "col_amount" || c.name.toLowerCase() === "total" || c.name.toLowerCase() === "amount") || lastValueColumn;
+      if (typeof row[amountCol.id] === "number") {
+        nextGrandTotal += row[amountCol.id] as number;
+      }
+
+      const taxAmountCol = selectedTemplate.columns.find(c => c.id === "col_tax_amount" || c.name.toLowerCase() === "tax amount" || c.name.toLowerCase() === "gst amount");
+      if (taxAmountCol && typeof row[taxAmountCol.id] === "number") {
+        nextTaxAmount += row[taxAmountCol.id] as number;
+      }
+    });
+
+    nextGrandTotal = Math.round(nextGrandTotal * 100) / 100;
+    nextTaxAmount = Math.round(nextTaxAmount * 100) / 100;
+    const nextSubtotal = Math.round((nextGrandTotal - nextTaxAmount) * 100) / 100;
 
     return {
       subtotal: nextSubtotal,
       taxAmount: nextTaxAmount,
       grandTotal: nextGrandTotal,
     };
-  }, [rows, selectedTemplate, taxPercent]);
+  }, [rows, selectedTemplate]);
+
+  const roundOff = useMemo(() => {
+    if (!enableRoundOff) return 0;
+    // Clean to 2dp to avoid IEEE 754 noise (e.g. 0.2999999999992724 → 0.30)
+    return Math.round((Math.round(grandTotal) - grandTotal) * 100) / 100;
+  }, [enableRoundOff, grandTotal]);
+
+  const roundedGrandTotal = useMemo(() => {
+    return enableRoundOff ? Math.round(grandTotal) : grandTotal;
+  }, [enableRoundOff, grandTotal]);
 
   const firstEditableColumnId = useMemo(() => {
     if (!selectedTemplate) {
@@ -299,15 +329,18 @@ export default function NewBillPage() {
           gstin: currentParty.gstin || null,
           rows,
           subtotal,
-          taxPercent,
+          taxPercent: 0,
           taxAmount,
-          grandTotal,
+          grandTotal: roundedGrandTotal,
+          roundOff,
           isInterState,
           placeOfSupply: placeOfSupply || null,
-          hsnCode: hsnCode.trim() || null,
+          hsnCode: null,
+          shippingAddress: showShipTo && shippingAddress.trim() ? shippingAddress.trim() : null,
           notes: notes.trim() || null,
           terms: terms.trim() || null,
           status,
+          date: billDate,
         }),
       });
 
@@ -329,9 +362,8 @@ export default function NewBillPage() {
     <>
       {toast && (
         <div
-          className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${
-            toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
-          }`}
+          className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
+            }`}
         >
           {toast.message}
         </div>
@@ -461,8 +493,18 @@ export default function NewBillPage() {
             </div>
 
             <Card shadow="sm" className="mb-6">
-              <CardHeader className="px-6 pt-6 pb-0">
+              <CardHeader className="px-6 pt-6 pb-0 flex justify-between items-center">
                 <h2 className="text-lg font-semibold">{t("bills.billTo")}</h2>
+                <Input
+                  type="date"
+                  aria-label="Bill Date"
+                  size="sm"
+                  variant="flat"
+                  value={billDate}
+                  onValueChange={setBillDate}
+                  className="w-40"
+                  startContent={<span className="text-default-400 text-sm mr-1">Date:</span>}
+                />
               </CardHeader>
               <CardBody className="p-6">
                 <PartySearch
@@ -476,12 +518,19 @@ export default function NewBillPage() {
                         const code = party.gstin.substring(0, 2);
                         if (GST_STATE_CODES[code]) setPlaceOfSupply(code);
                       }
+                      // Auto-derive interstate from GSTIN comparison
+                      const partyState = extractGstinStateCode(party.gstin);
+                      const tenantState = extractGstinStateCode(tenantGstin);
+                      if (partyState && tenantState) {
+                        setIsInterState(partyState !== tenantState);
+                      }
                     }
                   }}
                   partyType="CUSTOMER"
                   placeholder={t("bills.selectCustomer")}
                   autoFocus={!selectedParty}
                   isInvalid={Boolean(errors.partyId)}
+                  initialParty={preselectedParty}
                 />
 
                 {selectedParty && (
@@ -496,7 +545,7 @@ export default function NewBillPage() {
                         {t("common.change")}
                       </Button>
                     </div>
-                    
+
                     <div className="space-y-1 text-sm text-default-500">
                       {selectedParty.phone && (
                         <p className="flex items-center gap-2">
@@ -514,11 +563,10 @@ export default function NewBillPage() {
                         </p>
                       )}
                     </div>
-                    
+
                     {selectedParty.currentBalance !== 0 && (
-                      <div className={`mt-3 pt-3 border-t border-default-200 text-sm font-medium flex items-center gap-2 ${
-                        selectedParty.currentBalance < 0 ? "text-success" : "text-danger"
-                      }`}>
+                      <div className={`mt-3 pt-3 border-t border-default-200 text-sm font-medium flex items-center gap-2 ${selectedParty.currentBalance < 0 ? "text-success" : "text-danger"
+                        }`}>
                         <div className={`w-2 h-2 rounded-full ${selectedParty.currentBalance < 0 ? "bg-success" : "bg-danger"}`} />
                         {selectedParty.currentBalance < 0
                           ? `To Get: ₹${Math.abs(selectedParty.currentBalance).toLocaleString("en-IN")}`
@@ -605,6 +653,59 @@ export default function NewBillPage() {
                                   ? formatColumnValue(column.name, row[column.id] as number)
                                   : "-"}
                               </span>
+                            ) : column.type === "text" && (column.name.toLowerCase().includes("item") || column.name.toLowerCase().includes("desc") || column.name.toLowerCase().includes("product")) ? (
+                              <ItemSearch
+                                value={null}
+                                inputValue={String(row[column.id] || "")}
+                                onInputChange={(value) => updateCell(rowIndex, column.id, value)}
+                                onChange={(item) => {
+                                  if (item) {
+                                    setRows((currentRows) => {
+                                      const nextRows = [...currentRows];
+                                      const newRow = { ...nextRows[rowIndex] };
+                                      newRow[column.id] = item.name;
+
+                                      if (selectedTemplate) {
+                                        // 1. Rate Mapping
+                                        const rateCol = selectedTemplate.columns.find(c =>
+                                          c.id === "col_rate" ||
+                                          (c.type === "number" && (c.name.toLowerCase() === "rate" || c.name.toLowerCase() === "price" || c.name.toLowerCase().includes("rate")))
+                                        );
+                                        if (rateCol && item.rate != null) {
+                                          newRow[rateCol.id] = item.rate;
+                                        }
+
+                                        // 2. Tax % Mapping
+                                        const taxCol = selectedTemplate.columns.find(c =>
+                                          c.id === "col_tax_percent" ||
+                                          (c.type === "number" && (c.name.toLowerCase().includes("tax %") || c.name.toLowerCase().includes("gst %") || c.name.toLowerCase() === "tax percent"))
+                                        );
+                                        if (taxCol && item.taxRate != null) {
+                                          newRow[taxCol.id] = item.taxRate;
+                                        }
+
+                                        // 3. HSN Code Mapping
+                                        const hsnCol = selectedTemplate.columns.find(c =>
+                                          c.id === "col_hsn" ||
+                                          (c.type === "text" && (c.name.toLowerCase().includes("hsn") || c.name.toLowerCase().includes("sac")))
+                                        );
+                                        if (hsnCol && item.hsnCode) {
+                                          newRow[hsnCol.id] = item.hsnCode;
+                                        }
+
+                                        nextRows[rowIndex] = evaluateRow(newRow, selectedTemplate.columns);
+                                      } else {
+                                        nextRows[rowIndex] = newRow;
+                                      }
+                                      return nextRows;
+                                    });
+                                  } else {
+                                    updateCell(rowIndex, column.id, "");
+                                  }
+                                }}
+                                className="min-w-[200px]"
+                                placeholder={column.name}
+                              />
                             ) : column.type === "number" ? (
                               <Input
                                 type="number"
@@ -704,6 +805,29 @@ export default function NewBillPage() {
                     variant="bordered"
                     minRows={3}
                   />
+                  {/* Ship To Address */}
+                  <div>
+                    <label className="flex items-center gap-1.5 select-none cursor-pointer mb-2">
+                      <input
+                        type="checkbox"
+                        checked={showShipTo}
+                        onChange={(e) => setShowShipTo(e.target.checked)}
+                        className="accent-primary"
+                      />
+                      <span className="text-sm text-default-600">Ship to a different address</span>
+                    </label>
+                    {showShipTo && (
+                      <Textarea
+                        label="Shipping Address"
+                        placeholder="Enter shipping / delivery address..."
+                        value={shippingAddress}
+                        onValueChange={setShippingAddress}
+                        variant="bordered"
+                        minRows={2}
+                        className="animate-slide-up"
+                      />
+                    )}
+                  </div>
                 </CardBody>
               </Card>
 
@@ -717,75 +841,71 @@ export default function NewBillPage() {
                     </div>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="text-default-500">Tax</span>
-                        <Input
-                          type="number"
-                          aria-label="Tax percentage"
-                          value={String(taxPercent)}
-                          onValueChange={(value) => setTaxPercent(Number.parseFloat(value) || 0)}
-                          variant="bordered"
-                          size="sm"
-                          className="w-20"
-                          endContent={<span className="text-sm text-default-400">%</span>}
-                        />
+                        <span className="text-default-500">Total Tax</span>
                       </div>
                       <span className="font-medium">{formatCurrency(taxAmount)}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <p className="text-xs text-default-400">{t("bills.autoTaxNote")}</p>
-                      <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={isInterState}
-                          onChange={(e) => setIsInterState(e.target.checked)}
-                          className="accent-primary"
-                        />
-                        <span className="text-xs text-default-500">Inter-state (IGST)</span>
-                      </label>
+                      {(() => {
+                        const isAutoDetected = !!selectedParty?.gstin;
+                        return (
+                          <div className="flex flex-col items-end gap-0.5">
+                            <label className={`flex items-center gap-1.5 select-none ${isAutoDetected ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}>
+                              <input
+                                type="checkbox"
+                                checked={isInterState}
+                                onChange={(e) => setIsInterState(e.target.checked)}
+                                className="accent-primary"
+                                disabled={isAutoDetected}
+                              />
+                              <span className="text-xs text-default-500">Inter-state (IGST)</span>
+                            </label>
+                            {isAutoDetected && (
+                              <span className="text-[10px] text-default-400">Auto-detected from GST Numbers</span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                     <div className="flex items-center justify-between gap-3">
                       <span className="shrink-0 text-sm text-default-500">Place of Supply</span>
-                      <Select
-                        aria-label="Place of supply"
-                        placeholder="Select state"
-                        size="sm"
-                        variant="bordered"
-                        className="max-w-[200px]"
-                        selectedKeys={placeOfSupply ? new Set([placeOfSupply]) : new Set([])}
-                        onSelectionChange={(keys) => {
-                          const value = Array.from(keys)[0] as string | undefined;
-                          setPlaceOfSupply(value ?? "");
-                          if (value) {
+                      <StateSearch
+                        value={placeOfSupply}
+                        onChange={(code) => {
+                          setPlaceOfSupply(code);
+                          if (code) {
                             setErrors((curr) => ({ ...curr, placeOfSupply: false }));
                           }
                         }}
                         isInvalid={Boolean(errors.placeOfSupply)}
                         errorMessage={errors.placeOfSupply ? "Required for final bills" : undefined}
-                      >
-                        {Object.entries(GST_STATE_CODES).map(([code, name]) => (
-                          <SelectItem key={code} textValue={`${code} - ${name}`}>
-                            {code} — {name}
-                          </SelectItem>
-                        ))}
-                      </Select>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="shrink-0 text-sm text-default-500">HSN/SAC Code</span>
-                      <Input
-                        aria-label="HSN/SAC Code"
-                        placeholder="e.g. 9983"
-                        size="sm"
-                        variant="bordered"
-                        value={hsnCode}
-                        onValueChange={setHsnCode}
                         className="max-w-[200px]"
                       />
                     </div>
                     <Divider />
+                    {/* Round-Off Toggle */}
+                    <div className="flex items-center justify-between">
+                      <label className={`flex items-center gap-1.5 select-none ${grandTotal === 0 ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+                        <input
+                          type="checkbox"
+                          checked={enableRoundOff}
+                          onChange={(e) => setEnableRoundOff(e.target.checked)}
+                          className="accent-primary"
+                          disabled={grandTotal === 0}
+                        />
+                        <span className="text-xs text-default-500">Round off to nearest ₹</span>
+                      </label>
+                      {enableRoundOff && roundOff !== 0 && (
+                        <span className={`text-sm font-mono ${roundOff > 0 ? 'text-success' : 'text-danger'}`}>
+                          {roundOff > 0 ? '+' : ''}{formatCurrency(roundOff)}
+                        </span>
+                      )}
+                    </div>
                     <div className="flex justify-between">
                       <span className="text-lg font-bold">Grand Total</span>
                       <span className="text-lg font-bold text-primary">
-                        {formatCurrency(grandTotal)}
+                        {formatCurrency(roundedGrandTotal)}
                       </span>
                     </div>
                   </div>

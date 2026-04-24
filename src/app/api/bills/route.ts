@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { GST_STATE_CODE_SET } from "@/lib/gst-states";
-import { deriveIsInterState } from "@/lib/gst-helpers";
+import { deriveIsInterState, VALID_GST_SLABS } from "@/lib/gst-helpers";
 
 // Derive Prisma query types from the client instance to avoid the
 // @prisma/client → .prisma/client re-export resolution failure
@@ -109,14 +109,21 @@ const CreateBillSchema = z.object({
   rows: z.array(z.record(z.string(), z.unknown())).min(1),
   notes: z.string().nullish(),
   terms: z.string().nullish(),
-  taxPercent: z.number().nonnegative().nullish(),
+  // GST 2.0 valid slabs: 0%, 0.25%, 3%, 5%, 18%
+  taxPercent: z.number().nonnegative().refine(
+    (val) => VALID_GST_SLABS.has(val),
+    { message: "Tax rate must be a valid GST slab: 0%, 0.25%, 3%, 5%, or 18%." }
+  ).nullish(),
   subtotal: z.number().nonnegative().default(0),
   taxAmount: z.number().nonnegative().default(0),
   grandTotal: z.number().nonnegative().default(0),
+  roundOff: z.number().min(-0.99).max(0.99).default(0), // Round-off adjustment (±₹0.99 max)
   status: z.string().optional(),
   isInterState: z.boolean().optional(),
   paymentMode: z.string().optional(),
   hsnCode: z.string().nullish(),
+  shippingAddress: z.string().nullish(), // Ship To address
+  date: z.string().optional(), // [ADDED] Allow custom issue dates
 }).superRefine((data, ctx) => {
   // [P0] FINAL bills must always declare place of supply for GSTR-1 compliance.
   // Not limited to B2B — even B2C inter-state supplies require placeOfSupply.
@@ -133,14 +140,18 @@ const CreateBillSchema = z.object({
   // Without HSN, GSTR-1 Table 12 (HSN-wise summary) will be incomplete.
   if (
     data.status === "FINAL" &&
-    (data.taxPercent ?? 0) > 0 &&
+    (data.taxAmount ?? 0) > 0 &&
     Array.isArray(data.rows) &&
     !data.rows.some(
-      (row) =>
-        row &&
-        typeof row === "object" &&
-        typeof (row as Record<string, unknown>)["_hsnCode"] === "string" &&
-        ((row as Record<string, unknown>)["_hsnCode"] as string).trim() !== ""
+      (row) => {
+        if (!row || typeof row !== "object") return false;
+        // Check if ANY value contains an HSN code (either col_hsn, _hsnCode, or any key containing 'hsn')
+        return Object.entries(row).some(([key, val]) =>
+          (key === "col_hsn" || key === "_hsnCode" || key.toLowerCase().includes("hsn")) &&
+          typeof val === "string" &&
+          val.trim() !== ""
+        );
+      }
     ) &&
     !(typeof data.hsnCode === "string" && data.hsnCode.trim() !== "")
   ) {
@@ -354,8 +365,11 @@ export async function POST(request: NextRequest) {
       subtotal,
       taxAmount,
       grandTotal,
+      roundOff,
       status,
       hsnCode,
+      shippingAddress,
+      date,
     } = body;
 
     let finalTemplateId = templateId;
@@ -444,7 +458,7 @@ export async function POST(request: NextRequest) {
       where: { id: tenantId },
       select: { gstin: true },
     });
-    
+
     const resolvedGrandTotal =
       typeof grandTotal === "number" && Number.isFinite(grandTotal)
         ? grandTotal
@@ -469,11 +483,23 @@ export async function POST(request: NextRequest) {
     const effectiveGstin = gstin || party.gstin;
     const isInterState = deriveIsInterState(effectiveGstin, tenant?.gstin, body.isInterState);
     const normalizedPaymentMode = normalizePaymentMode(body.paymentMode);
+
+    // Use the explicitly provided bill date if present, otherwise default to now
+    let billDateObj = new Date();
+    if (typeof date === "string" && date.trim() !== "") {
+      const parsedDate = new Date(date);
+      if (!Number.isNaN(parsedDate.getTime())) {
+        billDateObj = parsedDate;
+      }
+    }
+
+    // Still use the system's current time for yearMonth formatting and period locking (for sequence generation)
+    // to strictly prevent sequence clashes, but `date` dictates the financial timestamp.
     const now = new Date();
     const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    
+
     const snapshot = buildBillSnapshotFromParty(party, {
       customerName,
       customerPhone,
@@ -532,10 +558,13 @@ export async function POST(request: NextRequest) {
           taxPercent: taxPercent ?? billingSettings.defaultTaxPercent,
           taxAmount: taxAmount || 0,
           grandTotal: resolvedGrandTotal,
+          roundOff: roundOff || 0,
           status: billStatus,
           isInterState,
           placeOfSupply: body.placeOfSupply ?? null,  // [B1] GSTR-1 mandatory field
           hsnCode: hsnCode ?? null, // Fallback HSN Code
+          shippingAddress: shippingAddress ?? null,
+          date: billDateObj, // Store custom bill date 
           createdBy: userId!,
           isDeleted: false,
         },
@@ -578,8 +607,9 @@ export async function POST(request: NextRequest) {
           subtotal: createdBill.subtotal.toNumber(),
           taxAmount: createdBill.taxAmount.toNumber(),
           grandTotal: createdBill.grandTotal.toNumber(),
+          roundOff: roundOff || 0,
           createdBy: userId!,
-          entryDate: createdBill.createdAt,
+          entryDate: createdBill.date, // Use the custom bill date for accounting ledgers
           isInterState,
         });
       }
@@ -591,7 +621,7 @@ export async function POST(request: NextRequest) {
             partyId: party.id,
             direction: party.type === "CUSTOMER" ? "INCOMING" : "OUTGOING",
             amount: resolvedGrandTotal,
-            date: now,
+            date: billDateObj, // Payment receives the same backdated date
             mode: normalizedPaymentMode,
             status: "COMPLETED",
             linkedBillId: createdBill.id,

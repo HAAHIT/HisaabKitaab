@@ -20,6 +20,8 @@ import { useRouter } from "next/navigation";
 import { BillActionBar } from "@/components/bills/BillActionBar";
 import type { ColumnDef } from "@/lib/formula";
 import { shareBill } from "@/lib/share";
+import { numberToIndianWords } from "@/lib/number-to-words";
+import { aggregateTaxByRate } from "@/lib/tax-summary";
 
 interface BillDetail {
   id: string;
@@ -45,8 +47,10 @@ interface BillDetail {
   taxPercent: number;
   taxAmount: number;
   grandTotal: number;
+  roundOff: number;
   placeOfSupply: string | null;
   hsnCode: string | null;
+  shippingAddress: string | null;
   status: string;
   createdAt: string;
   template: {
@@ -94,7 +98,7 @@ function formatColumnValue(colName: string, value: number): string {
     lower.includes("rs");
 
   if (isCurrency) return formatCurrency(value);
-  
+
   return new Intl.NumberFormat("en-IN", {
     maximumFractionDigits: 2,
   }).format(value);
@@ -160,21 +164,22 @@ export default function BillDetailPage({
         status === "CANCELLED"
           ? undefined
           : JSON.stringify({
-              partyId: currentBill.partyId,
-              customerName: currentBill.customerName,
-              customerPhone: currentBill.customerPhone,
-              customerAddress: currentBill.customerAddress,
-              gstin: currentBill.gstin,
-              rows: currentBill.rows,
-              notes: currentBill.notes,
-              terms: currentBill.terms,
-              taxPercent: currentBill.taxPercent,
-              subtotal: currentBill.subtotal,
-              taxAmount: currentBill.taxAmount,
-              grandTotal: currentBill.grandTotal,
-              isInterState: currentBill.isInterState === true,
-              status,
-            });
+            partyId: currentBill.partyId,
+            customerName: currentBill.customerName,
+            customerPhone: currentBill.customerPhone,
+            customerAddress: currentBill.customerAddress,
+            gstin: currentBill.gstin,
+            rows: currentBill.rows,
+            notes: currentBill.notes,
+            terms: currentBill.terms,
+            taxPercent: currentBill.taxPercent,
+            subtotal: currentBill.subtotal,
+            taxAmount: currentBill.taxAmount,
+            grandTotal: currentBill.grandTotal,
+            roundOff: currentBill.roundOff || 0,
+            isInterState: currentBill.isInterState === true,
+            status,
+          });
       const headers: Record<string, string> = {};
       if (body) headers["Content-Type"] = "application/json";
 
@@ -258,11 +263,10 @@ export default function BillDetailPage({
 
       {toast && (
         <div
-          className={`fixed top-4 right-4 z-[100] px-4 py-3 rounded-xl shadow-lg animate-slide-up no-print ${
-            toast.type === "success"
-              ? "bg-success text-white"
-              : "bg-danger text-white"
-          }`}
+          className={`fixed top-4 right-4 z-[100] px-4 py-3 rounded-xl shadow-lg animate-slide-up no-print ${toast.type === "success"
+            ? "bg-success text-white"
+            : "bg-danger text-white"
+            }`}
         >
           {toast.message}
         </div>
@@ -365,7 +369,13 @@ export default function BillDetailPage({
                     <td className="py-3 px-2 text-default-400">{i + 1}</td>
                     {columns.map((col) => (
                       <td key={col.name} className={`py-3 px-2 ${col.type === "number" || col.type === "formula" ? "text-right font-mono" : ""} ${col.type === "formula" ? "text-success font-medium" : ""}`}>
-                        {col.type === "number" || col.type === "formula" ? typeof row[col.id] === "number" ? formatColumnValue(col.name, row[col.id] as number) : row[col.id] || "—" : row[col.id] || "—"}
+                        {(col.type === "number" || col.type === "formula")
+                          ? (() => {
+                            const raw = row[col.id];
+                            const num = typeof raw === "number" ? raw : parseFloat(String(raw));
+                            return !isNaN(num) ? formatColumnValue(col.name, num) : raw || "—";
+                          })()
+                          : row[col.id] || "—"}
                       </td>
                     ))}
                   </tr>
@@ -387,6 +397,14 @@ export default function BillDetailPage({
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between"><span className="text-default-500">Subtotal</span><span className="font-medium">{formatCurrency(bill.subtotal)}</span></div>
                 <div className="flex justify-between"><span className="text-default-500">Tax ({bill.taxPercent}%)</span><span className="font-medium">{formatCurrency(bill.taxAmount)}</span></div>
+                {bill.roundOff !== 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-default-500">Round Off</span>
+                    <span className={`font-medium font-mono ${bill.roundOff > 0 ? 'text-success' : 'text-danger'}`}>
+                      {bill.roundOff > 0 ? '+' : ''}{formatCurrency(bill.roundOff)}
+                    </span>
+                  </div>
+                )}
                 <Divider />
                 <div className="flex justify-between"><span className="text-xl font-bold">Grand Total</span><span className="text-xl font-bold text-primary">{formatCurrency(bill.grandTotal)}</span></div>
               </div>
@@ -437,69 +455,112 @@ export default function BillDetailPage({
         </ModalContent>
       </Modal>
 
-      {/* Print-Only Professional Layout */}
-      <div className="hidden print:block p-0 text-black">
-        {/* Invoice Header */}
-        <div className="flex justify-between items-start border-b-2 border-black pb-8 mb-8">
-          <div className="flex gap-6 items-center">
-            {settings?.companyLogo && (
-              <Image
-                src={settings.companyLogo}
-                alt="Logo"
-                width={96}
-                height={96}
-                unoptimized
-                className="h-24 w-24 object-contain"
-              />
-            )}
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight uppercase">{settings?.companyName || "INVOICE"}</h1>
-              <div className="text-sm mt-2 whitespace-pre-line leading-relaxed opacity-80">
-                {settings?.companyAddress}
-                {settings?.companyPhone && `\nPhone: ${settings.companyPhone}`}
-                {settings?.companyEmail && `\nEmail: ${settings.companyEmail}`}
-                {settings?.companyGstin && `\nGSTIN: ${settings.companyGstin}`}
+      {/* Print-Only Professional Tax Invoice Layout */}
+      <div className="hidden print:block p-0 text-black" style={{ fontSize: '11pt', lineHeight: '1.5' }}>
+        {/* Tax Invoice Title Band */}
+        <div style={{ borderBottom: '3px solid #000', paddingBottom: '16px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            {/* Left: Company Info */}
+            <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+              {settings?.companyLogo && (
+                <Image
+                  src={settings.companyLogo}
+                  alt="Logo"
+                  width={72}
+                  height={72}
+                  unoptimized
+                  style={{ width: '72px', height: '72px', objectFit: 'contain' }}
+                />
+              )}
+              <div>
+                <h1 style={{ fontSize: '20pt', fontWeight: 800, margin: 0, letterSpacing: '-0.5px' }}>
+                  {settings?.companyName || "My Business"}
+                </h1>
+                <div style={{ fontSize: '9pt', color: '#444', marginTop: '4px', lineHeight: '1.6' }}>
+                  {settings?.companyAddress && <div>{settings.companyAddress}</div>}
+                  {settings?.companyPhone && <div>Phone: {settings.companyPhone}</div>}
+                  {settings?.companyEmail && <div>Email: {settings.companyEmail}</div>}
+                  {settings?.companyGstin && (
+                    <div style={{ fontWeight: 700, marginTop: '2px' }}>GSTIN: {settings.companyGstin}</div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-          <div className="text-right">
-            <h2 className="text-4xl font-black text-gray-200 uppercase mb-2">Invoice</h2>
-            <div className="space-y-1">
-              <p className="text-lg font-bold font-mono">{bill.billNumber}</p>
-              <p className="text-sm text-gray-600">
-                Date: {new Date(bill.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" })}
-              </p>
+
+            {/* Right: Invoice Meta */}
+            <div style={{ textAlign: 'right' }}>
+              <div style={{
+                fontSize: '14pt',
+                fontWeight: 800,
+                border: '2px solid #000',
+                padding: '4px 16px',
+                display: 'inline-block',
+                marginBottom: '8px',
+                letterSpacing: '2px',
+              }}>
+                {bill.party?.type === "VENDOR" ? "PURCHASE BILL" : "TAX INVOICE"}
+              </div>
+              <div style={{ fontSize: '9pt', lineHeight: '1.8' }}>
+                <div><strong>Invoice No:</strong> <span style={{ fontFamily: 'monospace' }}>{bill.billNumber}</span></div>
+                <div><strong>Date:</strong> {new Date(bill.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</div>
+                <div><strong>Status:</strong> <span style={{ textTransform: 'uppercase' }}>{bill.status}</span></div>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Client Section */}
-        <div className="grid grid-cols-2 gap-12 mb-10">
-          <div>
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Bill To</h3>
-            <div className="space-y-1">
-              <p className="text-xl font-bold">{bill.customerName}</p>
-              <div className="text-sm text-gray-600 whitespace-pre-line leading-relaxed">
-                {bill.customerAddress}
-                {bill.customerPhone && `\nPhone: ${bill.customerPhone}`}
-                {bill.gstin && `\nGSTIN: ${bill.gstin}`}
-                {bill.placeOfSupply && `\nPlace of Supply: ${bill.placeOfSupply} ${bill.isInterState ? "(Inter-State)" : ""}`}
-                {bill.hsnCode && `\nHSN/SAC: ${bill.hsnCode}`}
-              </div>
+        {/* Bill To / Supply Details / Ship To */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: '24px',
+          marginBottom: '16px',
+          fontSize: '9pt',
+        }}>
+          <div style={{ border: '1px solid #ccc', padding: '12px', borderRadius: '4px' }}>
+            <div style={{ fontSize: '8pt', fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '6px' }}>
+              {bill.party?.type === "VENDOR" ? "Supplier Details" : "Bill To"}
             </div>
+            <div style={{ fontSize: '12pt', fontWeight: 700, marginBottom: '4px' }}>{bill.customerName}</div>
+            {bill.customerAddress && <div style={{ color: '#444' }}>{bill.customerAddress}</div>}
+            {bill.customerPhone && <div style={{ color: '#444' }}>Phone: {bill.customerPhone}</div>}
+            {bill.gstin && <div style={{ fontWeight: 600, marginTop: '4px' }}>GSTIN: <span style={{ fontFamily: 'monospace' }}>{bill.gstin}</span></div>}
           </div>
-          <div className="text-right">
-            {/* Optional extra info like Due Date could go here */}
+          <div style={{ border: '1px solid #ccc', padding: '12px', borderRadius: '4px' }}>
+            <div style={{ fontSize: '8pt', fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '6px' }}>
+              Supply Details
+            </div>
+            {bill.placeOfSupply && (
+              <div>
+                <strong>Place of Supply:</strong> {bill.placeOfSupply}
+                {bill.isInterState && <span style={{ color: '#c00', fontWeight: 600, marginLeft: '8px' }}>(Inter-State)</span>}
+              </div>
+            )}
+            {bill.hsnCode && <div><strong>HSN/SAC Code:</strong> <span style={{ fontFamily: 'monospace' }}>{bill.hsnCode}</span></div>}
+            <div><strong>Supply Type:</strong> {bill.isInterState ? "Inter-State (IGST)" : "Intra-State (CGST + SGST)"}</div>
           </div>
+          {bill.shippingAddress && (
+            <div style={{ border: '1px solid #ccc', padding: '12px', borderRadius: '4px', gridColumn: '1 / -1' }}>
+              <div style={{ fontSize: '8pt', fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '6px' }}>
+                Ship To
+              </div>
+              <div style={{ color: '#444', whiteSpace: 'pre-line' }}>{bill.shippingAddress}</div>
+            </div>
+          )}
         </div>
 
         {/* Line Items Table */}
-        <table className="w-full mb-10 border-collapse">
+        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '16px', fontSize: '9pt' }}>
           <thead>
-            <tr className="bg-gray-100 text-gray-700">
-              <th className="py-3 px-4 text-left font-bold text-xs uppercase border border-gray-200">#</th>
+            <tr style={{ backgroundColor: '#f5f5f5' }}>
+              <th style={{ border: '1px solid #999', padding: '8px 6px', textAlign: 'center', fontWeight: 700, width: '36px' }}>#</th>
               {columns.map(col => (
-                <th key={col.id} className={`py-3 px-4 font-bold text-xs uppercase border border-gray-200 ${col.type === "number" || col.type === "formula" ? "text-right" : "text-left"}`}>
+                <th key={col.id} style={{
+                  border: '1px solid #999',
+                  padding: '8px 6px',
+                  fontWeight: 700,
+                  textAlign: col.type === "number" || col.type === "formula" ? 'right' : 'left',
+                }}>
                   {col.name}
                 </th>
               ))}
@@ -508,11 +569,20 @@ export default function BillDetailPage({
           <tbody>
             {bill.rows.map((row, i) => (
               <tr key={i}>
-                <td className="py-3 px-4 border border-gray-100 text-sm text-gray-500">{i + 1}</td>
+                <td style={{ border: '1px solid #ccc', padding: '7px 6px', textAlign: 'center', color: '#666' }}>{i + 1}</td>
                 {columns.map(col => (
-                  <td key={col.id} className={`py-3 px-4 border border-gray-100 text-sm ${col.type === "number" || col.type === "formula" ? "text-right font-mono" : ""}`}>
-                    {col.type === "number" || col.type === "formula" 
-                      ? typeof row[col.id] === "number" ? formatColumnValue(col.name, row[col.id] as number) : row[col.id] || "—"
+                  <td key={col.id} style={{
+                    border: '1px solid #ccc',
+                    padding: '7px 6px',
+                    textAlign: col.type === "number" || col.type === "formula" ? 'right' : 'left',
+                    fontFamily: col.type === "number" || col.type === "formula" ? 'monospace' : 'inherit',
+                  }}>
+                    {col.type === "number" || col.type === "formula"
+                      ? (() => {
+                        const raw = row[col.id];
+                        const num = typeof raw === "number" ? raw : parseFloat(String(raw));
+                        return !isNaN(num) ? formatColumnValue(col.name, num) : raw || "—";
+                      })()
                       : row[col.id] || "—"}
                   </td>
                 ))}
@@ -521,48 +591,155 @@ export default function BillDetailPage({
           </tbody>
         </table>
 
-        {/* Totals & Notes */}
-        <div className="grid grid-cols-2 gap-12 pt-4">
-          <div className="space-y-6">
+        {/* Totals + Notes Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+          {/* Left: Notes & Terms */}
+          <div style={{ fontSize: '8pt' }}>
             {bill.notes && (
-              <div>
-                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 font-mono">Invoice Notes</h4>
-                <p className="text-sm text-gray-600 italic whitespace-pre-line">{bill.notes}</p>
+              <div style={{ marginBottom: '12px' }}>
+                <div style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#888', marginBottom: '4px', fontSize: '7pt' }}>Notes</div>
+                <div style={{ color: '#444', whiteSpace: 'pre-line', fontStyle: 'italic' }}>{bill.notes}</div>
               </div>
             )}
             {bill.terms && (
               <div>
-                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Terms & Conditions</h4>
-                <p className="text-[10px] text-gray-500 leading-relaxed whitespace-pre-line">{bill.terms}</p>
+                <div style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#888', marginBottom: '4px', fontSize: '7pt' }}>Terms & Conditions</div>
+                <div style={{ color: '#555', whiteSpace: 'pre-line' }}>{bill.terms}</div>
               </div>
             )}
-          </div>
-          <div>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center px-4 py-2 border-b border-gray-100 italic">
-                <span className="text-sm text-gray-600">Subtotal</span>
-                <span className="text-sm font-medium">{formatCurrency(bill.subtotal)}</span>
-              </div>
-              <div className="flex justify-between items-center px-4 py-2 border-b border-gray-100">
-                <span className="text-sm text-gray-600">Tax ({bill.taxPercent}%)</span>
-                <span className="text-sm font-medium">{formatCurrency(bill.taxAmount)}</span>
-              </div>
-              <div className="flex justify-between items-center px-4 py-4 bg-gray-900 text-white rounded-lg shadow-xl translate-x-1 shadow-gray-200">
-                <span className="text-lg font-bold tracking-tight px-2">Grand Total</span>
-                <span className="text-2xl font-black px-2">{formatCurrency(bill.grandTotal)}</span>
+
+            {/* Amount in Words */}
+            <div style={{ marginTop: '16px', borderTop: '1px solid #ddd', paddingTop: '8px' }}>
+              <div style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#888', marginBottom: '4px', fontSize: '7pt' }}>Amount in Words</div>
+              <div style={{ fontWeight: 600, fontStyle: 'italic', fontSize: '9pt' }}>
+                {numberToIndianWords(bill.grandTotal)}
               </div>
             </div>
-            
-            <div className="mt-12 text-center border-t border-gray-100 pt-8">
-              <div className="w-32 h-12 border-b border-gray-300 mx-auto mb-2 opacity-30"></div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Authorized Signature</p>
+          </div>
+
+          {/* Right: Financial Summary */}
+          <div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9pt' }}>
+              <tbody>
+                <tr>
+                  <td style={{ padding: '6px 8px', borderBottom: '1px solid #eee' }}>Subtotal</td>
+                  <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', borderBottom: '1px solid #eee' }}>{formatCurrency(bill.subtotal)}</td>
+                </tr>
+                {(() => {
+                  const slabs = aggregateTaxByRate(
+                    bill.rows,
+                    columns,
+                    bill.isInterState === true,
+                    { subtotal: bill.subtotal, taxAmount: bill.taxAmount, taxPercent: bill.taxPercent, hsnCode: bill.hsnCode }
+                  );
+                  if (bill.taxAmount === 0) {
+                    return (
+                      <tr>
+                        <td style={{ padding: '6px 8px', borderBottom: '1px solid #eee', color: '#444' }}>Tax</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', borderBottom: '1px solid #eee' }}>{formatCurrency(0)}</td>
+                      </tr>
+                    );
+                  }
+                  if (slabs.length === 1) {
+                    // Single-slab: show traditional CGST/SGST or IGST rows
+                    const slab = slabs[0];
+                    if (bill.isInterState) {
+                      return (
+                        <tr>
+                          <td style={{ padding: '6px 8px', borderBottom: '1px solid #eee', color: '#444' }}>
+                            IGST ({slab.rate}%)
+                          </td>
+                          <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', borderBottom: '1px solid #eee' }}>
+                            {formatCurrency(slab.igst)}
+                          </td>
+                        </tr>
+                      );
+                    }
+                    return (
+                      <>
+                        <tr>
+                          <td style={{ padding: '6px 8px', borderBottom: '1px solid #eee', color: '#444' }}>
+                            CGST ({(slab.rate / 2).toFixed(1)}%)
+                          </td>
+                          <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', borderBottom: '1px solid #eee' }}>
+                            {formatCurrency(slab.cgst)}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td style={{ padding: '6px 8px', borderBottom: '1px solid #eee', color: '#444' }}>
+                            SGST ({(slab.rate / 2).toFixed(1)}%)
+                          </td>
+                          <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', borderBottom: '1px solid #eee' }}>
+                            {formatCurrency(slab.sgst)}
+                          </td>
+                        </tr>
+                      </>
+                    );
+                  }
+                  // Multi-slab: show per-slab breakdown
+                  return (
+                    <>
+                      {slabs.map((slab, idx) => (
+                        <tr key={idx}>
+                          <td style={{ padding: '6px 8px', borderBottom: '1px solid #eee', color: '#444' }}>
+                            {bill.isInterState
+                              ? `IGST @${slab.rate}%`
+                              : `GST @${slab.rate}% (${(slab.rate / 2).toFixed(1)}+${(slab.rate / 2).toFixed(1)})`}
+                            {slab.hsnCode !== '—' && (
+                              <span style={{ fontSize: '7pt', color: '#888', marginLeft: '4px' }}>[{slab.hsnCode}]</span>
+                            )}
+                          </td>
+                          <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', borderBottom: '1px solid #eee' }}>
+                            {formatCurrency(slab.totalTax)}
+                          </td>
+                        </tr>
+                      ))}
+                    </>
+                  );
+                })()}
+                {bill.roundOff !== 0 && (
+                  <tr>
+                    <td style={{ padding: '6px 8px', borderBottom: '1px solid #eee', color: '#444' }}>
+                      Round Off
+                    </td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', borderBottom: '1px solid #eee' }}>
+                      {bill.roundOff > 0 ? '+' : ''}{formatCurrency(bill.roundOff)}
+                    </td>
+                  </tr>
+                )}
+                <tr style={{ fontWeight: 800 }}>
+                  <td style={{ padding: '10px 8px', borderTop: '2px solid #000', fontSize: '12pt' }}>Grand Total</td>
+                  <td style={{ padding: '10px 8px', textAlign: 'right', fontFamily: 'monospace', borderTop: '2px solid #000', fontSize: '12pt' }}>
+                    {formatCurrency(bill.grandTotal)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            {/* Authorized Signature */}
+            <div style={{ marginTop: '40px', textAlign: 'right', paddingRight: '8px' }}>
+              <div style={{ borderBottom: '1px solid #999', width: '180px', marginLeft: 'auto', marginBottom: '6px', height: '40px' }}></div>
+              <div style={{ fontSize: '8pt', fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                Authorized Signatory
+              </div>
+              <div style={{ fontSize: '7pt', color: '#999', marginTop: '2px' }}>
+                {settings?.companyName || ""}
+              </div>
             </div>
           </div>
         </div>
 
         {/* Print Footer */}
-        <div className="fixed bottom-0 left-0 right-0 border-t border-gray-100 pt-4 flex justify-between items-center text-[8px] text-gray-400 uppercase tracking-widest font-mono">
-          <div>Generated by HisaabKitaab CMS</div>
+        <div style={{
+          marginTop: '32px',
+          borderTop: '1px solid #ccc',
+          paddingTop: '8px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          fontSize: '7pt',
+          color: '#aaa',
+        }}>
+          <div>Generated by HisaabKitaab • This is a computer-generated document</div>
           <div>Page 1 of 1</div>
         </div>
       </div>

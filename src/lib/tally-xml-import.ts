@@ -87,12 +87,26 @@ const VOUCHER_TYPE_MAP: Record<
   "Debit Note": "PURCHASE",   // alt wording
 };
 
+/**
+ * Heuristic lookup for voucher types with custom names (e.g. "GST Sales").
+ * Maps substring to primary voucher category.
+ */
+const VCH_HEURISTIC: Record<string, "SALES" | "PURCHASE" | "RECEIPT" | "PAYMENT" | "JOURNAL"> = {
+  SALES: "SALES",
+  PURCHASE: "PURCHASE",
+  RECEIPT: "RECEIPT",
+  PAYMENT: "PAYMENT",
+  JOURNAL: "JOURNAL",
+  CONTRA: "JOURNAL",
+  INVOICE: "SALES",
+}
+
 // ── Output types ─────────────────────────────────────────────────────────────
 
 export type ParsedLedgerLine = {
   ledgerName: string;
   accountCode: AccountCode;
-  /** Party name from BILLALLOCATIONS.LIST or the ledger name itself (for unknown ledgers) */
+  /** Party name from PARTYLEDGERNAME or the ledger name itself (for native Tally exports) */
   partyName: string | null;
   debit: number;
   credit: number;
@@ -130,6 +144,11 @@ export type ParsedVoucher = {
    * Null when no GST ledger entries are present (e.g. exempt supplies).
    */
   isInterState: boolean | null;
+  /**
+   * For Sales/Purchase vouchers, the raw stock-wise rows.
+   * Key names match standard HisaabKitaab template columns (Item, Qty, Rate, Amount).
+   */
+  inventoryRows?: Record<string, any>[];
 };
 
 export type ParsedPartyMaster = {
@@ -176,7 +195,7 @@ function parseAmount(raw: unknown): number {
   return isNaN(n) ? 0 : n;
 }
 
-function extractBillAllocPartyName(entry: Record<string, unknown>): string | null {
+function extractBillAllocationName(entry: Record<string, unknown>): string | null {
   const alloc = entry["BILLALLOCATIONS.LIST"];
   if (!alloc) return null;
   const first = Array.isArray(alloc) ? alloc[0] : alloc;
@@ -188,6 +207,10 @@ function extractBillAllocPartyName(entry: Record<string, unknown>): string | nul
 function asArray<T>(value: T | T[] | undefined | null): T[] {
   if (!value) return [];
   return Array.isArray(value) ? value : [value];
+}
+
+function isPartyAccountCode(accountCode: AccountCode): boolean {
+  return accountCode === "SUNDRY_DEBTORS" || accountCode === "SUNDRY_CREDITORS";
 }
 
 // ── Main parser ───────────────────────────────────────────────────────────────
@@ -203,7 +226,14 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       ignoreAttributes: false,
       attributeNamePrefix: "@_",
       isArray: (name: string) =>
-        ["TALLYMESSAGE", "ALLLEDGERENTRIES.LIST", "BILLALLOCATIONS.LIST"].includes(name),
+        [
+          "TALLYMESSAGE",
+          "ALLLEDGERENTRIES.LIST",
+          "LEDGERENTRIES.LIST",
+          "BILLALLOCATIONS.LIST",
+          "ALLINVENTORYENTRIES.LIST",
+          "INVENTORYENTRIES.LIST",
+        ].includes(name),
       parseTagValue: true,
       parseAttributeValue: false,
     });
@@ -219,16 +249,38 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
   }
 
   // Navigate to TALLYMESSAGE array.
-  // A combined Tally export (masters + vouchers) contains TWO <IMPORTDATA> blocks
-  // inside one <BODY>.  fast-xml-parser returns IMPORTDATA as either a single object
-  // or an array depending on the document — always normalise with asArray().
+  // Importable HisaabKitaab XML uses BODY > IMPORTDATA > REQUESTDATA.
+  // Native Tally exports commonly use BODY > DATA > TALLYMESSAGE, and some
+  // exports wrap LEDGER/VOUCHER nodes directly in BODY > DATA > COLLECTION.
   const messageCollections: unknown[][] = [];
   try {
+    const collectMessages = (container: Record<string, unknown> | undefined) => {
+      if (!container) return;
+
+      const raw = container["TALLYMESSAGE"];
+      if (raw) {
+        messageCollections.push(asArray(raw));
+      }
+
+      const collection = container["COLLECTION"] as Record<string, unknown> | undefined;
+      if (!collection) return;
+
+      const collectionMessages: unknown[] = [
+        ...asArray(collection["LEDGER"] as unknown).map((ledger) => ({ LEDGER: ledger })),
+        ...asArray(collection["VOUCHER"] as unknown).map((voucher) => ({ VOUCHER: voucher })),
+      ];
+      if (collectionMessages.length > 0) {
+        messageCollections.push(collectionMessages);
+      }
+    };
+
     // fast-xml-parser may produce an array of ENVELOPEs for concatenated XML declarations
     const envelopes = asArray(parsed["ENVELOPE"]);
     for (const env of envelopes) {
       const envelope = env as Record<string, unknown>;
       const body = envelope?.["BODY"] as Record<string, unknown> | undefined;
+      collectMessages(body);
+
       // Use asArray — combined exports have multiple IMPORTDATA siblings
       const importDataBlocks = asArray(
         body?.["IMPORTDATA"] as Record<string, unknown> | Record<string, unknown>[] | undefined
@@ -237,10 +289,14 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
         const requestData = (importData as Record<string, unknown>)?.["REQUESTDATA"] as
           | Record<string, unknown>
           | undefined;
-        const raw = requestData?.["TALLYMESSAGE"];
-        if (raw) {
-          messageCollections.push(asArray(raw));
-        }
+        collectMessages(requestData);
+      }
+
+      const dataBlocks = asArray(
+        body?.["DATA"] as Record<string, unknown> | Record<string, unknown>[] | undefined
+      );
+      for (const data of dataBlocks) {
+        collectMessages(data as Record<string, unknown>);
       }
     }
   } catch {
@@ -300,7 +356,33 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
     const v = msg["VOUCHER"] as Record<string, unknown>;
 
     const typeName = String(v["VOUCHERTYPENAME"] ?? v["@_VCHTYPE"] ?? "").trim();
-    const voucherType = VOUCHER_TYPE_MAP[typeName];
+    // Case-insensitive lookup (native Tally vs HisaabKitaab exports)
+    const upperTypeName = typeName.toUpperCase();
+    let voucherType: "SALES" | "PURCHASE" | "RECEIPT" | "PAYMENT" | "JOURNAL" | undefined = undefined;
+
+    for (const [key, val] of Object.entries(VOUCHER_TYPE_MAP)) {
+      if (key.toUpperCase() === upperTypeName) {
+        voucherType = val;
+        break;
+      }
+    }
+
+    // Heuristic fallback for custom voucher type names
+    if (!voucherType) {
+      for (const [match, val] of Object.entries(VCH_HEURISTIC)) {
+        if (upperTypeName.includes(match)) {
+          voucherType = val;
+          break;
+        }
+      }
+    }
+
+    if (!voucherType) {
+      // Final fallback: check for any Sales/Purchase substrings
+      if (upperTypeName.includes("SALE")) voucherType = "SALES";
+      else if (upperTypeName.includes("PURCHASE")) voucherType = "PURCHASE";
+    }
+
     if (!voucherType) {
       parseErrors.push(
         `Message ${i + 1}: unknown voucher type "${typeName}", skipping`
@@ -318,6 +400,11 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
 
     const reference = String(v["VOUCHERNUMBER"] ?? "").trim();
     const narration = String(v["NARRATION"] ?? "").trim();
+    const partyLedgerName =
+      String(v["PARTYLEDGERNAME"] ?? "").trim() ||
+      String(v["BASICBUYERNAME"] ?? "").trim() ||
+      String(v["BASICBASEPARTYNAME"] ?? "").trim() ||
+      null;
 
     // Extract Tally's REMOTEID / GUID for idempotent re-import.
     // HisaabKitaab exports prefix the journal entry ID with "HisaabKitaab-";
@@ -329,7 +416,7 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       ? rawRemoteId.replace(/^HisaabKitaab-/i, "")
       : null;
 
-    const rawEntries = v["ALLLEDGERENTRIES.LIST"];
+    const rawEntries = v["ALLLEDGERENTRIES.LIST"] ?? v["LEDGERENTRIES.LIST"];
     const entryList = asArray(rawEntries as Record<string, unknown> | Record<string, unknown>[] | undefined);
 
     const lines: ParsedLedgerLine[] = [];
@@ -363,12 +450,17 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       const accountCode: AccountCode =
         resolvedCode ?? FALLBACK_BY_VOUCHER[voucherType] ?? "SUNDRY_DEBTORS";
 
-      // partyName: from BILLALLOCATIONS if present, otherwise the ledger name itself
-      // (for real Tally exports where party name IS the ledger name)
-      const billAllocName = extractBillAllocPartyName(e);
+      // BILLALLOCATIONS.LIST > NAME is the bill/outstanding reference in Tally,
+      // not reliably the party name. Prefer PARTYLEDGERNAME for generic party
+      // ledgers, and use the ledger name itself for native exports where the
+      // party ledger is named directly.
+      const billAllocName = extractBillAllocationName(e);
       const partyName =
-        billAllocName ??
-        (resolvedCode === undefined ? ledgerName : null);
+        resolvedCode === undefined
+          ? ledgerName
+          : isPartyAccountCode(accountCode)
+            ? partyLedgerName ?? (billAllocName && billAllocName !== reference ? billAllocName : null)
+            : null;
 
       lines.push({ ledgerName, accountCode, partyName, debit, credit });
     }
@@ -420,6 +512,38 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
     const hasCgstSgst = ledgerNames.some((n) => n.includes("CGST") || n.includes("SGST"));
     const isInterState = hasIgst ? true : hasCgstSgst ? false : null;
 
+    // ── Extract Inventory entries (new!) ──────────────────────────────────────
+    const rawInv = v["ALLINVENTORYENTRIES.LIST"] ?? v["INVENTORYENTRIES.LIST"];
+    const invList = asArray(rawInv as Record<string, unknown> | Record<string, unknown>[] | undefined);
+    const inventoryRows: Record<string, any>[] = [];
+
+    for (const inv of invList) {
+      const i = inv as Record<string, unknown>;
+      const stockItemName = String(i["STOCKITEMNAME"] ?? "").trim();
+      if (!stockItemName) continue;
+
+      const qtyStr = String(i["BILLEDQTY"] ?? i["ACTUALQTY"] ?? "0").trim();
+      // Split "5 Nos" -> qty: 5, unit: "Nos"
+      const qtyMatch = qtyStr.match(/^([\d.-]+)\s*(.*)$/);
+      const qty = qtyMatch ? parseFloat(qtyMatch[1]) : 0;
+      const unit = qtyMatch ? qtyMatch[2].trim() : "";
+
+      const rateStr = String(i["RATE"] ?? "").trim();
+      const rateMatch = rateStr.match(/^([\d.-]+)/);
+      const rate = rateMatch ? parseFloat(rateMatch[1]) : 0;
+
+      const amount = Math.abs(parseAmount(i["AMOUNT"]));
+
+      // Store in standard column keys
+      inventoryRows.push({
+        Item: stockItemName,
+        Qty: qty,
+        Unit: unit,
+        Rate: rate || (qty !== 0 ? amount / qty : amount),
+        Amount: amount,
+      });
+    }
+
     vouchers.push({
       voucherType,
       originalTypeName: typeName,
@@ -433,6 +557,7 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       taxPercent: parsedTaxPercent,
       hsnCodes: parsedHsnCodes,
       isInterState,
+      inventoryRows: inventoryRows.length > 0 ? inventoryRows : undefined,
     });
   }
 

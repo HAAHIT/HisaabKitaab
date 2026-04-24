@@ -13,6 +13,7 @@ import {
   CardBody,
   Chip,
   Input,
+  Pagination,
   Select,
   SelectItem,
   Skeleton,
@@ -51,6 +52,8 @@ export default function PartiesPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("ALL");
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [showPanel, setShowPanel] = useState(false);
   const [editingParty, setEditingParty] = useState<Party | null>(null);
   const [saving, setSaving] = useState(false);
@@ -70,13 +73,9 @@ export default function PartiesPage() {
   const fetchParties = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (search) {
-        params.set("search", search);
-      }
-      if (typeFilter !== "ALL") {
-        params.set("type", typeFilter);
-      }
+      const params = new URLSearchParams({ page: String(page), limit: "20" });
+      if (search) params.set("search", search);
+      if (typeFilter !== "ALL") params.set("type", typeFilter);
 
       const response = await fetch(`/api/parties?${params.toString()}`);
       if (!response.ok) {
@@ -85,6 +84,7 @@ export default function PartiesPage() {
 
       const data = await response.json();
       setParties((data.parties || []) as Party[]);
+      setTotalPages(data.totalPages ?? 1);
     } catch (error) {
       setParties([]);
       setToast({
@@ -94,7 +94,7 @@ export default function PartiesPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, t, typeFilter]);
+  }, [page, search, t, typeFilter]);
 
   const typeOptions = [
     { key: "ALL", label: t("parties.filter.all") },
@@ -105,6 +105,11 @@ export default function PartiesPage() {
   useEffect(() => {
     fetchParties();
   }, [fetchParties]);
+
+  // Reset to page 1 when search or filter changes
+  useEffect(() => {
+    setPage(1);
+  }, [search, typeFilter]);
 
   function showToast(message: string, type: "success" | "error") {
     setToast({ message, type });
@@ -298,7 +303,7 @@ export default function PartiesPage() {
             className="mt-8"
           />
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-3" key={page}>
             {parties.map((party) => (
               <Card key={party.id} shadow="sm" className="transition hover:shadow-md">
                 <CardBody className="p-4">
@@ -384,6 +389,17 @@ export default function PartiesPage() {
                 </CardBody>
               </Card>
             ))}
+          </div>
+        )}
+        {totalPages > 1 && !loading && (
+          <div className="mt-4 flex justify-center">
+            <Pagination
+              total={totalPages}
+              page={page}
+              onChange={setPage}
+              showControls
+              size="sm"
+            />
           </div>
         )}
       </div>

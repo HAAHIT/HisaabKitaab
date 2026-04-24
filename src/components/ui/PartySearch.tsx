@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Autocomplete, AutocompleteItem, Button, useDisclosure } from "@heroui/react";
-import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getBalanceStatusLabel } from "@/lib/accounting";
 import { QuickAddPartyModal } from "@/components/parties/QuickAddPartyModal";
@@ -24,6 +23,8 @@ interface PartySearchProps {
   placeholder?: string;
   autoFocus?: boolean;
   isInvalid?: boolean;
+  /** Pre-seed the list with this party (e.g. for preselection from URL param) */
+  initialParty?: PartyOption | null;
 }
 
 function formatSignedBalance(value: number) {
@@ -42,32 +43,51 @@ export function PartySearch({
   placeholder,
   autoFocus,
   isInvalid,
+  initialParty,
 }: PartySearchProps) {
   const { t } = useLanguage();
-  const router = useRouter();
-  const [parties, setParties] = useState<PartyOption[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [parties, setParties] = useState<PartyOption[]>(
+    initialParty ? [initialParty] : []
+  );
+  const [isLoading, setIsLoading] = useState(false);
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const selectedPartyRef = useRef<PartyOption | null>(initialParty ?? null);
 
-  useEffect(() => {
-    async function fetchParties() {
-      setIsLoading(true);
-      try {
-        const url = partyType ? `/api/parties?type=${partyType}` : "/api/parties";
-        const response = await fetch(url);
-        if (response.ok) {
-          const data = await response.json();
-          setParties(data.parties || []);
+  async function fetchParties(search: string) {
+    setIsLoading(true);
+    try {
+      const params = new URLSearchParams({ limit: "20" });
+      if (partyType) params.set("type", partyType);
+      if (search) params.set("search", search);
+      const response = await fetch(`/api/parties?${params}`);
+      if (response.ok) {
+        const data = await response.json();
+        const results = (data.parties || []) as PartyOption[];
+        // Always keep the currently selected party in the list
+        if (selectedPartyRef.current && !results.some((p) => p.id === selectedPartyRef.current!.id)) {
+          setParties([selectedPartyRef.current, ...results]);
+        } else {
+          setParties(results);
         }
-      } catch {
-        // silently fail — parties list will remain empty
-      } finally {
-        setIsLoading(false);
       }
+    } finally {
+      setIsLoading(false);
     }
+  }
 
-    fetchParties();
+  // Load initial list on mount
+  useEffect(() => {
+    fetchParties("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partyType]);
+
+  function handleInputChange(val: string) {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      fetchParties(val);
+    }, 300);
+  }
 
   const selectedKey = value || undefined;
 
@@ -79,13 +99,16 @@ export function PartySearch({
         items={parties}
         isLoading={isLoading}
         selectedKey={selectedKey}
+        onInputChange={handleInputChange}
         onSelectionChange={(key) => {
           if (!key) {
+            selectedPartyRef.current = null;
             onChange(null);
             return;
           }
 
           const selected = parties.find((party) => party.id === String(key));
+          selectedPartyRef.current = selected ?? null;
           onChange(selected || null);
         }}
         autoFocus={autoFocus}
@@ -98,7 +121,12 @@ export function PartySearch({
                 size="sm"
                 color="primary"
                 variant="flat"
-                onPress={onOpen}
+                onPress={() => {
+                  if (document.activeElement instanceof HTMLElement) {
+                    document.activeElement.blur();
+                  }
+                  onOpen();
+                }}
               >
                 + Add New Party
               </Button>
@@ -142,6 +170,7 @@ export function PartySearch({
         onOpenChange={onOpenChange}
         initialType={partyType || "CUSTOMER"}
         onSuccess={(newParty) => {
+          selectedPartyRef.current = newParty;
           setParties((prev) => [...prev, newParty]);
           onChange(newParty);
         }}

@@ -3,6 +3,7 @@ import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 import { NextRequest, NextResponse } from "next/server";
 import type { PartyType } from "@prisma/client";
+import { isValidGstinFormat } from "@/lib/gst-helpers";
 
 const VALID_PARTY_TYPES = new Set<PartyType>(["CUSTOMER", "VENDOR"]);
 
@@ -149,6 +150,14 @@ export async function PATCH(
       }
     }
 
+    const normalizedGstin = normalizeOptionalString(body.gstin);
+    if (normalizedGstin && !isValidGstinFormat(normalizedGstin)) {
+      return NextResponse.json(
+        { error: "Invalid GSTIN format. Must be a valid 15-character GSTIN." },
+        { status: 400 }
+      );
+    }
+
     const party = await prisma.party.update({
       where: { id },
       data: {
@@ -156,7 +165,7 @@ export async function PATCH(
         phone: normalizeOptionalString(body.phone),
         email: normalizeOptionalString(body.email),
         address: normalizeOptionalString(body.address),
-        gstin: normalizeOptionalString(body.gstin),
+        gstin: normalizedGstin,
         type: nextType,
       },
     });

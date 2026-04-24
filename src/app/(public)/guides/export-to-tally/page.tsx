@@ -104,6 +104,92 @@ export default function ExportToTallyGuide() {
           </div>
 
           <h2 className="text-2xl font-bold text-slate-800 mb-6 mt-12">
+            The Accounting Rule for Sales
+          </h2>
+          <p className="text-slate-600 mb-4">
+            In Tally, a Sales Voucher follows the standard rules of double-entry bookkeeping, but how it appears in the XML or the &quot;As Invoice&quot; mode can be confusing.
+          </p>
+          <p className="text-slate-600 mb-6">
+            Since Sales is an Income account, the rule of &quot;Credit all Incomes and Gains&quot; applies:
+          </p>
+          <ul className="list-disc pl-6 space-y-2 text-slate-600 mb-8">
+            <li><strong>Sales Account:</strong> Always CREDIT.</li>
+            <li><strong>Customer/Party Account:</strong> Always DEBIT (because they are receiving the goods and becoming a debtor).</li>
+          </ul>
+
+          <h2 className="text-2xl font-bold text-slate-800 mb-4 mt-8">
+            How it looks in Tally XML
+          </h2>
+          <p className="text-slate-600 mb-6">
+            When you are constructing a Sales Voucher in XML, you must specify the &quot;Entry Side&quot; using the <code className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-sm">&lt;ISDEEMEDPOSITIVE&gt;</code> tag. Tally uses this tag instead of the words &quot;Debit&quot; or &quot;Credit.&quot;
+          </p>
+
+          <div className="overflow-x-auto mb-8">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="py-3 px-4 font-semibold text-slate-800">Ledger Type</th>
+                  <th className="py-3 px-4 font-semibold text-slate-800">Side</th>
+                  <th className="py-3 px-4 font-semibold text-slate-800">ISDEEMEDPOSITIVE Value</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-600">
+                <tr>
+                  <td className="py-3 px-4">Customer / Cash</td>
+                  <td className="py-3 px-4">Debit</td>
+                  <td className="py-3 px-4"><span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-800">Yes</span></td>
+                </tr>
+                <tr>
+                  <td className="py-3 px-4">Sales Ledger</td>
+                  <td className="py-3 px-4">Credit</td>
+                  <td className="py-3 px-4"><span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">No</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div className="bg-slate-800 rounded-xl overflow-hidden mb-12 shadow-sm">
+            <div className="px-4 py-2 bg-slate-900 border-b border-slate-700/50 flex items-center">
+              <span className="text-xs font-mono text-slate-400">XML Example snippet</span>
+            </div>
+            <pre className="p-4 text-sm text-slate-300 font-mono overflow-x-auto">
+              <code>{`<ALLLEDGERENTRIES.LIST>
+  <LEDGERNAME>Customer Name</LEDGERNAME>
+  <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE> 
+  <AMOUNT>-5000.00</AMOUNT>
+</ALLLEDGERENTRIES.LIST>
+
+<ALLLEDGERENTRIES.LIST>
+  <LEDGERNAME>Sales Account</LEDGERNAME>
+  <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+  <AMOUNT>5000.00</AMOUNT>
+</ALLLEDGERENTRIES.LIST>`}</code>
+            </pre>
+          </div>
+
+          <h2 className="text-2xl font-bold text-slate-800 mb-4 mt-12">
+            The &quot;Amount&quot; Sign Trap
+          </h2>
+          <p className="text-slate-600 mb-4">
+            This is where most developers get stuck: In Tally&apos;s internal logic, Debits are typically represented as <strong>Negative</strong> numbers (e.g., -5000) while Credits are represented as <strong>Positive</strong> numbers (e.g., 5000).
+          </p>
+          <div className="bg-amber-50 border-l-4 border-amber-500 p-4 mb-10 rounded-r-lg">
+            <div className="flex">
+              <div className="flex-shrink-0 text-amber-500">
+                <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-amber-800 uppercase tracking-wider">Important Note on Balance Mismatches</h3>
+                <div className="mt-2 text-sm text-amber-700">
+                  <p>If you are getting a &quot;Balance Mismatch&quot; error, check if your Customer Amount is negative and your Sales Amount is positive.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <h2 className="text-2xl font-bold text-slate-800 mb-6 mt-12">
             Step-by-Step Export Process
           </h2>
 

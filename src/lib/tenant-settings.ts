@@ -120,11 +120,12 @@ export function mergeTenantSettings(
     upiId: string | null;
     businessType: BusinessType;
     taxRegistrationType: TaxRegistrationType;
+    onboardingComplete: boolean;
   }>
 ) {
   const existing = getFlatTenantSettings(currentSettings);
 
-  return {
+  const result: Record<string, unknown> = {
     ...existing,
     companyName: nextSettings.companyName ?? normalizeString(existing.companyName),
     companyPhone:
@@ -148,4 +149,10 @@ export function mergeTenantSettings(
       nextSettings.taxRegistrationType ??
       normalizeTaxRegistrationType(existing.taxRegistrationType),
   };
+
+  if (nextSettings.onboardingComplete !== undefined) {
+    result.onboardingComplete = nextSettings.onboardingComplete;
+  }
+
+  return result;
 }

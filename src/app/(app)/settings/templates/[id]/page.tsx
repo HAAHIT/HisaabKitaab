@@ -319,6 +319,7 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
                       variant="bordered"
                       size="sm"
                       isRequired
+                      isDisabled={col.isSystem}
                     />
                     <Select
                       label="Type"
@@ -330,6 +331,7 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
                       }}
                       variant="bordered"
                       size="sm"
+                      isDisabled={col.isSystem}
                     >
                       {COLUMN_TYPES.map((t) => (
                         <SelectItem key={t.key} textValue={t.label}>{t.label}</SelectItem>
@@ -344,7 +346,7 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
                     color="danger"
                     aria-label={`Remove column ${index + 1}`}
                     onPress={() => removeColumn(index)}
-                    isDisabled={columns.length === 1}
+                    isDisabled={columns.length === 1 || col.isSystem}
                     className="mt-1 md:mt-0"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

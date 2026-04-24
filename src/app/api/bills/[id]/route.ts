@@ -33,9 +33,11 @@ const ALLOWED_BILL_PATCH_KEYS = new Set([
   "subtotal",
   "taxAmount",
   "grandTotal",
+  "roundOff",
   "status",
   "isInterState",
   "hsnCode",
+  "shippingAddress",
 ]);
 
 const ALLOWED_BILL_PATCH_STATUSES = new Set(["DRAFT", "FINAL"]);
@@ -115,7 +117,17 @@ export async function GET(
     return NextResponse.json({ error: "Bill not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ bill });
+  // Prisma Decimal fields don't serialize to JSON correctly — convert to plain numbers
+  const serializedBill = {
+    ...bill,
+    subtotal: bill.subtotal?.toNumber() ?? 0,
+    taxPercent: bill.taxPercent?.toNumber() ?? 0,
+    taxAmount: bill.taxAmount?.toNumber() ?? 0,
+    grandTotal: bill.grandTotal?.toNumber() ?? 0,
+    roundOff: bill.roundOff?.toNumber() ?? 0,
+  };
+
+  return NextResponse.json({ bill: serializedBill });
 }
 
 // PATCH /api/bills/[id] - Update a draft bill
@@ -317,6 +329,19 @@ export async function PATCH(
       updateData.hsnCode = typeof hsn === "string" && hsn.trim() ? hsn.trim() : null;
     }
 
+    // Round-off: clamp to ±0.99
+    if (hasOwn(body, "roundOff")) {
+      const ro = parseOptionalNumber(body.roundOff);
+      if (ro !== undefined && Math.abs(ro) <= 0.99) {
+        updateData.roundOff = ro;
+      }
+    }
+
+    // Shipping address
+    if (hasOwn(body, "shippingAddress")) {
+      updateData.shippingAddress = normalizeOptionalString(body.shippingAddress);
+    }
+
     let nextPartyId = existing.partyId;
     if (hasOwn(body, "partyId")) {
       if (body.partyId === "" || body.partyId === null) {
@@ -462,19 +487,23 @@ export async function PATCH(
 
     // [P0] Block FINAL transition if tax > 0 but no HSN code present in rows.
     // Without HSN, GSTR-1 Table 12 (HSN-wise summary) will be incomplete.
-    if (finalStatus === "FINAL" && nextTaxPercent > 0) {
+    if (finalStatus === "FINAL" && nextTaxAmount > 0) {
       const rowsToCheck = (updateData.rows ?? existing.rows) as unknown[];
       const hasHsn =
         Array.isArray(rowsToCheck) &&
         rowsToCheck.some(
-          (row) =>
-            row &&
-            typeof row === "object" &&
-            typeof (row as Record<string, unknown>)["_hsnCode"] === "string" &&
-            ((row as Record<string, unknown>)["_hsnCode"] as string).trim() !== ""
+          (row) => {
+            if (!row || typeof row !== "object") return false;
+            // Check if ANY value contains an HSN code (either col_hsn, _hsnCode, or any key containing 'hsn')
+            return Object.entries(row).some(([key, val]) =>
+              (key === "col_hsn" || key === "_hsnCode" || key.toLowerCase().includes("hsn")) &&
+              typeof val === "string" &&
+              val.trim() !== ""
+            );
+          }
         );
       const hasFallbackHsn = hasOwn(updateData, "hsnCode") ? !!updateData.hsnCode : !!existing.hsnCode;
-      
+
       if (!hasHsn && !hasFallbackHsn) {
         return NextResponse.json(
           {
@@ -584,6 +613,7 @@ export async function PATCH(
       }
 
       if (existing.status !== "FINAL" && finalStatus === "FINAL") {
+        const nextRoundOff = (updateData.roundOff as number | undefined) ?? 0;
         await journalForSalesBill(tx, tenantId, {
           id: updatedBill.id,
           billNumber: updatedBill.billNumber,
@@ -592,6 +622,7 @@ export async function PATCH(
           subtotal: nextSubtotal,
           taxAmount: nextTaxAmount,
           grandTotal: nextGrandTotal,
+          roundOff: nextRoundOff,
           createdBy: userId || updatedBill.createdBy,
           entryDate: updatedBill.updatedAt,
           isInterState,

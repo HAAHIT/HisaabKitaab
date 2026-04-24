@@ -6,6 +6,7 @@ import {
   Card,
   CardBody,
   Input,
+  Pagination,
   Select,
   SelectItem,
   Skeleton,
@@ -58,6 +59,9 @@ export default function ItemCatalogPage() {
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [toast, setToast] = useState<{
     type: "success" | "error";
     message: string;
@@ -71,12 +75,15 @@ export default function ItemCatalogPage() {
   const fetchItems = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch("/api/items");
+      const params = new URLSearchParams({ page: String(page), limit: "20" });
+      if (search) params.set("search", search);
+      const response = await fetch(`/api/items?${params}`);
       const payload = await response.json().catch(() => ({ items: [] }));
       if (!response.ok) {
         throw new Error(payload?.error || "Failed to load items");
       }
       setItems(payload.items || []);
+      setTotalPages(payload.totalPages ?? 1);
     } catch (error) {
       showToast(
         error instanceof Error ? error.message : "Failed to load items",
@@ -85,11 +92,16 @@ export default function ItemCatalogPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, search]);
 
   useEffect(() => {
     fetchItems();
   }, [fetchItems]);
+
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
 
   function showToast(message: string, type: "success" | "error") {
     setToast({ message, type });
@@ -284,6 +296,20 @@ export default function ItemCatalogPage() {
 
       <Card shadow="sm">
         <CardBody className="p-6">
+          <div className="mb-4">
+            <Input
+              aria-label="Search items"
+              placeholder="Search items..."
+              value={search}
+              onValueChange={setSearch}
+              variant="bordered"
+              startContent={
+                <svg className="h-4 w-4 text-default-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} />
+                </svg>
+              }
+            />
+          </div>
           {loading ? (
             <div className="space-y-3">
               {[1, 2, 3].map((index) => (
@@ -292,7 +318,7 @@ export default function ItemCatalogPage() {
             </div>
           ) : items.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-divider px-6 py-12 text-center">
-              <p className="text-lg font-medium text-default-700">{t("items.empty")}</p>
+              <p className="text-lg font-medium text-default-700">{search ? "No items match your search." : t("items.empty")}</p>
               <p className="mt-1 text-sm text-default-400">{t("items.emptyHint")}</p>
             </div>
           ) : (
@@ -352,6 +378,17 @@ export default function ItemCatalogPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+          {totalPages > 1 && (
+            <div className="mt-4 flex justify-center">
+              <Pagination
+                total={totalPages}
+                page={page}
+                onChange={setPage}
+                showControls
+                size="sm"
+              />
             </div>
           )}
         </CardBody>

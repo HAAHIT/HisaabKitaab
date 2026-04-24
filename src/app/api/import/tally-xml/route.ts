@@ -4,13 +4,8 @@ import { resolveWriteTenant } from "@/lib/api-tenant";
 import { logError, logInfo, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { parseTallyXml } from "@/lib/tally-xml-import";
-import { createJournalEntry } from "@/lib/journal";
+import { processImportJob } from "@/app/api/jobs/process-import/route";
 import { gzipSync } from "zlib";
-import type { AccountCode } from "@/lib/chart-of-accounts";
-
-// Derive Prisma tx type from the client instance to avoid the
-// @prisma/client → .prisma/client re-export failure under Prisma v7.
-type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 
 export const runtime = "nodejs";
 
@@ -55,7 +50,6 @@ export async function POST(request: NextRequest) {
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const actorId: string = userId;
   const tid: string = tenantId;
 
   let xmlText: string;
@@ -85,11 +79,24 @@ export async function POST(request: NextRequest) {
   // Prefix with "gzip:" so the process-import route can detect and decompress.
   const compressedXml = "gzip:" + gzipSync(Buffer.from(xmlText, "utf-8")).toString("base64");
 
+  // Determine total items up front so the UI doesn't show "0 of 0"
+  let totalItems = 0;
+  let upfrontErrors: string[] = [];
+  try {
+    const parsed = parseTallyXml(xmlText);
+    totalItems = parsed.vouchers.length;
+    upfrontErrors = parsed.parseErrors;
+  } catch (err) {
+    console.error("Failed to parse Tally XML for total item count", err);
+    upfrontErrors.push(err instanceof Error ? err.message : String(err));
+  }
+
   // Create the tracking job
   const job = await prisma.importJob.create({
     data: {
       tenantId: tid,
-      totalItems: 0, // Will be updated by the background job during processing
+      createdBy: userId,
+      totalItems: totalItems,
       xmlData: compressedXml,
       status: "PENDING",
     }
@@ -99,12 +106,37 @@ export async function POST(request: NextRequest) {
     requestId: getRequestId(request),
     tenantId: tid,
     jobId: job.id,
+    totalItems,
   });
+
+  const processResponse = await processImportJob(job.id);
+  const processPayload = await processResponse.json().catch(() => null);
+
+  if (!processResponse.ok) {
+    return NextResponse.json(
+      {
+        jobId: job.id,
+        error: processPayload?.error || "Import job failed.",
+        parseErrors: upfrontErrors,
+      },
+      { status: processResponse.status }
+    );
+  }
+
+  if (processPayload && typeof processPayload.imported === "number") {
+    return NextResponse.json({
+      ...processPayload,
+      totalDetected: processPayload.totalItems ?? totalItems,
+      parseErrors: Array.from(new Set([...upfrontErrors, ...(processPayload.parseErrors ?? [])])),
+      importErrors: [],
+    });
+  }
 
   return NextResponse.json({
     jobId: job.id,
-    message: "Import job queued successfully.",
-    totalDetected: "Calculated in background",
-    parseErrors: [],
+    status: processPayload?.status ?? "PENDING",
+    message: processPayload?.message ?? "Import job queued successfully.",
+    totalDetected: totalItems,
+    parseErrors: upfrontErrors,
   });
 }

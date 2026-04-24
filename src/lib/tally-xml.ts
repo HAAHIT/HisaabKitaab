@@ -49,6 +49,15 @@ export interface TallyLedgerEntry {
   isIncomeLedger?: boolean;
 }
 
+export interface TallyInventoryEntry {
+  stockItemName: string;
+  qty: number;
+  unit: string;
+  rate: number;
+  /** Signs: for Sales items, this should be positive (Tally ISDEEMEDPOSITIVE=No convention) */
+  amount: number;
+}
+
 export interface TallyVoucher {
   date: Date;
   voucherType: TallyVoucherType;
@@ -56,6 +65,8 @@ export interface TallyVoucher {
   reference: string;
   narration: string;
   ledgerEntries: TallyLedgerEntry[];
+  /** Optional inventory items for Sales/Purchase invoices */
+  inventoryEntries?: TallyInventoryEntry[];
   /**
    * Stable unique ID for this voucher — used as <GUID> and <REMOTEID>.
    * Prevents duplicate entries on Tally re-import.  Pass journal entry ID.
@@ -169,14 +180,27 @@ export function resolveExportVoucherType(
 // ── Date formatting ───────────────────────────────────────────────────────────
 
 function formatTallyDate(date: Date): string {
-  return new Intl.DateTimeFormat("en-CA", {
+  // Use formatToParts to guarantee we get exactly the year, month, and day
+  // without relying on locale-dependent separators (slashes/hyphens) which might
+  // vary between Node.js environments lacking full ICU data.
+  const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: INDIA_TIMEZONE,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  })
-    .format(date)
-    .replace(/-/g, ""); // YYYY-MM-DD → YYYYMMDD
+  }).formatToParts(date);
+
+  const year = parts.find((p) => p.type === "year")?.value;
+  const month = parts.find((p) => p.type === "month")?.value;
+  const day = parts.find((p) => p.type === "day")?.value;
+
+  if (!year || !month || !day) {
+    // Fallback if Intl fails unusually
+    const isoStr = date.toISOString();
+    return isoStr.slice(0, 10).replace(/-/g, "");
+  }
+
+  return `${year}${month}${day}`;
 }
 
 // ── XML escaping ──────────────────────────────────────────────────────────────
@@ -288,8 +312,8 @@ function buildLedgerEntryXml(
     ? `
         <BILLALLOCATIONS.LIST>
           <NAME>${escapeXml(entry.reference ?? entry.partyName)}</NAME>
-          <BILLTYPE>${isSettlement ? "Against Ref" : "New Ref"}</BILLTYPE>
-          <AMOUNT>${entry.amount >= 0 ? "" : "-"}${formatAmount(entry.amount)}</AMOUNT>
+          <BILLTYPE>${isSettlement ? "Against Ref" : "On Account"}</BILLTYPE>
+          <AMOUNT>${entry.amount >= 0 ? "-" : ""}${formatAmount(entry.amount)}</AMOUNT>
         </BILLALLOCATIONS.LIST>`
     : "";
 
@@ -328,8 +352,23 @@ function buildLedgerEntryXml(
       <ALLLEDGERENTRIES.LIST>
         <LEDGERNAME>${escapeXml(entry.ledgerName)}</LEDGERNAME>
         <ISDEEMEDPOSITIVE>${entry.amount >= 0 ? "Yes" : "No"}</ISDEEMEDPOSITIVE>
-        <AMOUNT>${entry.amount >= 0 ? "" : "-"}${formatAmount(entry.amount)}</AMOUNT>${billAllocations}${gstDetails}
+        <AMOUNT>${entry.amount >= 0 ? "-" : ""}${formatAmount(entry.amount)}</AMOUNT>${billAllocations}${gstDetails}
       </ALLLEDGERENTRIES.LIST>`;
+}
+
+function buildInventoryEntryXml(entry: TallyInventoryEntry): string {
+  // Signs: for Sales items, this should be positive (Tally ISDEEMEDPOSITIVE=No convention)
+  // for Purchase items, it's negative.
+  // [W-X1] ISDEEMEDPOSITIVE=No/Yes must correctly match Amount sign for balance.
+  return `
+      <ALLINVENTORYENTRIES.LIST>
+        <STOCKITEMNAME>${escapeXml(entry.stockItemName)}</STOCKITEMNAME>
+        <ISDEEMEDPOSITIVE>${entry.amount >= 0 ? "No" : "Yes"}</ISDEEMEDPOSITIVE>
+        <AMOUNT>${formatAmount(entry.amount)}</AMOUNT>
+        <ACTUALQTY>${entry.qty} ${escapeXml(entry.unit)}</ACTUALQTY>
+        <BILLEDQTY>${entry.qty} ${escapeXml(entry.unit)}</BILLEDQTY>
+        <RATE>${formatAmount(entry.rate)}/${escapeXml(entry.unit)}</RATE>
+      </ALLINVENTORYENTRIES.LIST>`;
 }
 
 function buildVoucherXml(voucher: TallyVoucher): string {
@@ -393,15 +432,22 @@ function buildVoucherXml(voucher: TallyVoucher): string {
         <PARTYLEDGERNAME>${escapeXml(partyLedgerEntry.partyName)}</PARTYLEDGERNAME>`
     : "";
 
+  const hasInventory = !!(voucher.inventoryEntries && voucher.inventoryEntries.length > 0);
+  const objView = hasInventory ? "Invoice Voucher View" : "Accounting Voucher View";
+  const inventoryLines = hasInventory
+    ? voucher.inventoryEntries!.map(buildInventoryEntryXml).join("")
+    : "";
+
   return `
     <TALLYMESSAGE xmlns:UDF="TallyUDF">
-      <VOUCHER VCHTYPE="${escapeXml(voucher.voucherType)}" ACTION="Create" OBJVIEW="Accounting Voucher View">
+      <VOUCHER VCHTYPE="${escapeXml(voucher.voucherType)}" ACTION="Create" OBJVIEW="${objView}">
         <DATE>${formatTallyDate(voucher.date)}</DATE>
         <EFFECTIVEDATE>${formatTallyDate(voucher.date)}</EFFECTIVEDATE>${guidTag}
         <VOUCHERTYPENAME>${escapeXml(voucher.voucherType)}</VOUCHERTYPENAME>
         <VOUCHERTYPEORIGNAME>${escapeXml(voucher.voucherType)}</VOUCHERTYPEORIGNAME>
-        <VOUCHERNUMBER>${escapeXml(voucher.reference)}</VOUCHERNUMBER>${partyLedgerNameTag}
-        <NARRATION>${escapeXml(voucher.narration)}</NARRATION>${placeOfSupplyTag}${reverseChargeTag}${ledgerLines}
+        <VOUCHERNUMBER>${escapeXml(voucher.reference)}</VOUCHERNUMBER>
+        <REFERENCE>${escapeXml(voucher.reference)}</REFERENCE>${partyLedgerNameTag}
+        <NARRATION>${escapeXml(voucher.narration)}</NARRATION>${placeOfSupplyTag}${reverseChargeTag}${inventoryLines}${ledgerLines}
       </VOUCHER>
     </TALLYMESSAGE>`;
 }

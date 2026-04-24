@@ -12,6 +12,8 @@ import {
   journalLineToTallyEntry,
   type TallyPartyMaster,
   type TallyVoucher,
+  type TallyInventoryEntry,
+  type TallyVoucherType,
 } from "@/lib/tally-xml";
 
 export const runtime = "nodejs";
@@ -97,6 +99,68 @@ function extractHsnRatePairs(
     return [];
   }
   return pairs;
+}
+
+/**
+ * Heuristic mapping of Bill rows to Tally Inventory entries.
+ * Searches template columns for keywords to identify Item, Qty, Rate, etc.
+ */
+function mapRowsToInventoryEntries(
+  rows: any[],
+  template: { name: string; columns: any[] },
+  voucherType: TallyVoucherType
+): TallyInventoryEntry[] {
+  const columns = (template.columns as any[]) || [];
+  const isPurchase = voucherType === "Purchase";
+
+  // Find column IDs for Item, Qty, Rate, Amount
+  const itemCol = columns.find((c) =>
+    ["item", "description", "desc", "particulars"].some((k) =>
+      c.name.toLowerCase().includes(k)
+    )
+  )?.id;
+  const qtyCol = columns.find((c) =>
+    ["qty", "quantity", "quant"].some((k) => c.name.toLowerCase().includes(k))
+  )?.id;
+  const rateCol = columns.find((c) =>
+    ["rate", "price", "unit price"].some((k) => c.name.toLowerCase().includes(k))
+  )?.id;
+  const unitCol = columns.find((c) =>
+    ["unit", "uom", "measure"].some((k) => c.name.toLowerCase().includes(k))
+  )?.id;
+  const amtCol = columns.find((c) =>
+    ["amount", "amt", "total"].some((k) => c.name.toLowerCase() === k)
+  )?.id;
+
+  if (!itemCol) return [];
+
+  return rows
+    .map((row: any) => {
+      const rowAmtValue = row[amtCol];
+      const rowAmt = typeof rowAmtValue === "number" ? rowAmtValue : parseFloat(rowAmtValue || "0");
+      if (rowAmt === 0 && !row[itemCol]) return null;
+
+      const qtyValue = row[qtyCol];
+      const qty = typeof qtyValue === "number" ? qtyValue : parseFloat(qtyValue || "1");
+      const amount = rowAmt;
+
+      // Tally Inventory signs:
+      // Sales items are Credit (positive in XML with ISDEEMEDPOSITIVE=No)
+      // Purchase items are Debit (negative in XML with ISDEEMEDPOSITIVE=Yes)
+      const entryAmount = isPurchase ? -amount : amount;
+
+      const rateValue = row[rateCol];
+      const rate = typeof rateValue === "number" ? rateValue : parseFloat(rateValue || "0");
+
+      return {
+        stockItemName: row[itemCol] || "Inventory Item",
+        qty: qty,
+        unit: row[unitCol] || "Nos",
+        rate: rate || (qty !== 0 ? amount / qty : amount),
+        amount: entryAmount,
+      };
+    })
+    .filter((e): e is TallyInventoryEntry => e !== null && e.amount !== 0);
 }
 
 /**
@@ -271,8 +335,14 @@ export async function GET(request: NextRequest) {
               placeOfSupply: true,
               hsnCode: true,
               rows: true,
-              cessAmount: true,  // [Task 3b] Cess amount for tobacco/luxury goods
+              cessAmount: true, // [Task 3b] Cess amount for tobacco/luxury goods
               gstin: true, // [P1] Used to emit SOURCEOFDETAILS=Autofill for registered parties
+              template: {
+                select: {
+                  name: true,
+                  columns: true,
+                },
+              },
             },
           },
         },
@@ -297,6 +367,12 @@ export async function GET(request: NextRequest) {
             rows: true,
             cessAmount: true,
             gstin: true,
+            template: {
+              select: {
+                name: true,
+                columns: true,
+              },
+            },
           },
         });
         for (const pb of purchaseBills) {
@@ -337,6 +413,14 @@ export async function GET(request: NextRequest) {
           reference:
             billData?.billNumber ?? entry.purchaseId ?? entry.paymentId ?? entry.id,
           narration: entry.narration,
+          inventoryEntries:
+            billData && billData.template
+              ? mapRowsToInventoryEntries(
+                  billData.rows as any[],
+                  billData.template as any,
+                  resolveExportVoucherType(entry.voucherType, entry.narration)
+                )
+              : undefined,
           ledgerEntries: entry.lines.map((line) => {
             const tallyEntry = journalLineToTallyEntry({
               ...line,

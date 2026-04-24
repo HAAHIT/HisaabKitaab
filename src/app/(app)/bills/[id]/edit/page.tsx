@@ -6,6 +6,7 @@ import {
   Card,
   CardBody,
   CardHeader,
+  Checkbox,
   Chip,
   Divider,
   Input,
@@ -14,9 +15,13 @@ import {
   Textarea,
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
+import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
+import { ItemSearch } from "@/components/ui/ItemSearch";
+import { StateSearch } from "@/components/ui/StateSearch";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { evaluateRow, type ColumnDef } from "@/lib/formula";
 import { GST_STATE_CODES } from "@/lib/gst-states";
+import { extractGstinStateCode, isValidGstinFormat } from "@/lib/gst-helpers";
 
 interface Template {
   id: string;
@@ -24,14 +29,7 @@ interface Template {
   columns: ColumnDef[];
 }
 
-interface PartyOption {
-  id: string;
-  name: string;
-  type: "CUSTOMER" | "VENDOR";
-  phone: string | null;
-  address: string | null;
-  gstin: string | null;
-}
+// PartyOption is now imported from PartySearch component
 
 interface BillResponse {
   id: string;
@@ -48,6 +46,8 @@ interface BillResponse {
   terms: string | null;
   taxPercent: number;
   hsnCode?: string | null;
+  roundOff?: number;
+  shippingAddress?: string | null;
 }
 
 function formatCurrency(value: number) {
@@ -97,7 +97,7 @@ export default function EditBillPage({
   const router = useRouter();
   const { t } = useLanguage();
 
-  const [parties, setParties] = useState<PartyOption[]>([]);
+  const [selectedParty, setSelectedParty] = useState<PartyOption | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [bill, setBill] = useState<BillResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -108,45 +108,50 @@ export default function EditBillPage({
     type: "success" | "error";
   } | null>(null);
 
-  const [partyId, setPartyId] = useState("");
+  // partyId is derived from selectedParty
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
   const [gstin, setGstin] = useState("");
   const [rows, setRows] = useState<Record<string, string | number>[]>([]);
-  const [taxPercent, setTaxPercent] = useState(18);
   const [isInterState, setIsInterState] = useState(false);
   const [placeOfSupply, setPlaceOfSupply] = useState("");
-  const [hsnCode, setHsnCode] = useState("");
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("");
+  const [tenantGstin, setTenantGstin] = useState<string | null>(null);
+  const [enableRoundOff, setEnableRoundOff] = useState(false);
+  const [shippingAddress, setShippingAddress] = useState("");
+  const [showShipTo, setShowShipTo] = useState(false);
 
   const fetchFormData = useCallback(async () => {
     setLoading(true);
     try {
-      const [billResponse, templatesResponse, partiesResponse] = await Promise.all([
+      const [billResponse, templatesResponse, partiesResponse, settingsResponse] = await Promise.all([
         fetch(`/api/bills/${id}`),
         fetch("/api/templates"),
         fetch("/api/parties"),
+        fetch("/api/settings"),
       ]);
 
       if (!billResponse.ok) {
         throw new Error(await readError(billResponse));
       }
 
-      const [billData, templatesData, partiesData] = await Promise.all([
+      const [billData, templatesData, partiesData, settingsData] = await Promise.all([
         billResponse.json(),
         templatesResponse.json().catch(() => ({ templates: [] })),
         partiesResponse.json().catch(() => ({ parties: [] })),
+        settingsResponse.json().catch(() => ({ settings: null })),
       ]);
+
+      if (settingsData.settings?.companyGstin) {
+        setTenantGstin(settingsData.settings.companyGstin);
+      }
 
       const nextBill = billData.bill as BillResponse;
       const nextTemplates = (templatesData.templates || []) as Template[];
-      const nextParties = (partiesData.parties || []) as PartyOption[];
 
       setBill(nextBill);
-      setParties(nextParties);
-      setPartyId(nextBill.partyId || "");
       setCustomerName(nextBill.customerName);
       setCustomerPhone(nextBill.customerPhone || "");
       setCustomerAddress(nextBill.customerAddress || "");
@@ -154,10 +159,29 @@ export default function EditBillPage({
       setRows(Array.isArray(nextBill.rows) ? nextBill.rows : []);
       setNotes(nextBill.notes || "");
       setTerms(nextBill.terms || "");
-      setTaxPercent(nextBill.taxPercent);
-      setHsnCode(nextBill.hsnCode || "");
       setIsInterState(nextBill.isInterState === true);
       setPlaceOfSupply(nextBill.placeOfSupply || "");
+      // Seed round-off / ship-to from existing bill data
+      if (nextBill.roundOff && nextBill.roundOff !== 0) {
+        setEnableRoundOff(true);
+      }
+      if (nextBill.shippingAddress) {
+        setShowShipTo(true);
+        setShippingAddress(nextBill.shippingAddress);
+      }
+
+      // Pre-seed party from bill data for the PartySearch component
+      if (nextBill.partyId) {
+        setSelectedParty({
+          id: nextBill.partyId,
+          name: nextBill.customerName,
+          phone: nextBill.customerPhone,
+          type: "CUSTOMER",
+          currentBalance: 0,
+          address: nextBill.customerAddress,
+          gstin: nextBill.gstin,
+        });
+      }
 
       const template = nextTemplates.find((item) => item.id === nextBill.templateId) || null;
       setSelectedTemplate(template);
@@ -178,9 +202,8 @@ export default function EditBillPage({
     window.setTimeout(() => setToast(null), 3000);
   }
 
-  function applyPartySnapshot(nextPartyId: string) {
-    setPartyId(nextPartyId);
-    const party = parties.find((item) => item.id === nextPartyId);
+  function applyPartySnapshot(party: PartyOption | null) {
+    setSelectedParty(party);
     if (!party) {
       return;
     }
@@ -193,6 +216,12 @@ export default function EditBillPage({
     if (party.gstin && party.gstin.length >= 2) {
       const code = party.gstin.substring(0, 2);
       if (GST_STATE_CODES[code]) setPlaceOfSupply(code);
+    }
+    // Auto-derive interstate from GSTIN comparison
+    const partyState = extractGstinStateCode(party.gstin);
+    const tenantState = extractGstinStateCode(tenantGstin);
+    if (partyState && tenantState) {
+      setIsInterState(partyState !== tenantState);
     }
     setErrors((currentErrors) => ({
       ...currentErrors,
@@ -249,23 +278,40 @@ export default function EditBillPage({
       return { subtotal: 0, taxAmount: 0, grandTotal: 0 };
     }
 
-    const nextSubtotal = rows.reduce((sum, row) => {
-      const value =
-        typeof row[lastValueColumn.id] === "number"
-          ? (row[lastValueColumn.id] as number)
-          : 0;
-      return sum + value;
-    }, 0);
+    let nextGrandTotal = 0;
+    let nextTaxAmount = 0;
 
-    const nextTaxAmount = Math.round(((nextSubtotal * taxPercent) / 100) * 100) / 100;
-    const nextGrandTotal = Math.round((nextSubtotal + nextTaxAmount) * 100) / 100;
+    rows.forEach(row => {
+      const amountCol = selectedTemplate.columns.find(c => c.id === "col_amount" || c.name.toLowerCase() === "total" || c.name.toLowerCase() === "amount") || lastValueColumn;
+      if (typeof row[amountCol.id] === "number") {
+        nextGrandTotal += row[amountCol.id] as number;
+      }
+
+      const taxAmountCol = selectedTemplate.columns.find(c => c.id === "col_tax_amount" || c.name.toLowerCase() === "tax amount" || c.name.toLowerCase() === "gst amount");
+      if (taxAmountCol && typeof row[taxAmountCol.id] === "number") {
+        nextTaxAmount += row[taxAmountCol.id] as number;
+      }
+    });
+
+    nextGrandTotal = Math.round(nextGrandTotal * 100) / 100;
+    nextTaxAmount = Math.round(nextTaxAmount * 100) / 100;
+    const nextSubtotal = Math.round((nextGrandTotal - nextTaxAmount) * 100) / 100;
 
     return {
       subtotal: nextSubtotal,
       taxAmount: nextTaxAmount,
       grandTotal: nextGrandTotal,
     };
-  }, [rows, selectedTemplate, taxPercent]);
+  }, [rows, selectedTemplate]);
+
+  const roundOff = useMemo(() => {
+    if (!enableRoundOff) return 0;
+    return Math.round((Math.round(grandTotal) - grandTotal) * 100) / 100;
+  }, [enableRoundOff, grandTotal]);
+
+  const roundedGrandTotal = useMemo(() => {
+    return enableRoundOff ? Math.round(grandTotal) : grandTotal;
+  }, [enableRoundOff, grandTotal]);
 
   async function handleSave(status: "DRAFT" | "FINAL") {
     const mainScroll = document.querySelector("main");
@@ -277,7 +323,7 @@ export default function EditBillPage({
     }
 
     const formErrors: Record<string, boolean> = {};
-    if (!partyId) {
+    if (!selectedParty) {
       formErrors.partyId = true;
     }
     if (!customerName.trim()) {
@@ -303,7 +349,7 @@ export default function EditBillPage({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          partyId,
+          partyId: selectedParty!.id,
           customerName: customerName.trim(),
           customerPhone: customerPhone.trim() || null,
           customerAddress: customerAddress.trim() || null,
@@ -311,12 +357,14 @@ export default function EditBillPage({
           rows,
           notes: notes.trim() || null,
           terms: terms.trim() || null,
-          taxPercent,
+          taxPercent: 0,
           subtotal,
           taxAmount,
-          grandTotal,
+          grandTotal: roundedGrandTotal,
+          roundOff,
+          shippingAddress: showShipTo ? shippingAddress.trim() || null : null,
           isInterState,
-          hsnCode: hsnCode.trim() || null,
+          hsnCode: null,
           placeOfSupply: placeOfSupply.trim() || null,
           status,
         }),
@@ -350,9 +398,8 @@ export default function EditBillPage({
     <>
       {toast && (
         <div
-          className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${
-            toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
-          }`}
+          className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
+            }`}
         >
           {toast.message}
         </div>
@@ -394,32 +441,13 @@ export default function EditBillPage({
             <h2 className="text-lg font-semibold">Bill To</h2>
           </CardHeader>
           <CardBody className="space-y-4 p-6">
-            <Select
-              label="Party"
-              placeholder="Select customer or vendor"
-              selectedKeys={partyId ? new Set([partyId]) : new Set([])}
-              onSelectionChange={(keys) => {
-                const value = Array.from(keys)[0] as string;
-                if (value) {
-                  applyPartySnapshot(value);
-                }
-              }}
-              variant="bordered"
-              isLoading={loading}
+            <PartySearch
+              value={selectedParty?.id || null}
+              onChange={applyPartySnapshot}
+              placeholder="Search customer or vendor…"
               isInvalid={Boolean(errors.partyId)}
-              errorMessage={errors.partyId ? "Party is required" : undefined}
-            >
-              {parties.map((party) => (
-                <SelectItem key={party.id} textValue={party.name}>
-                  <div className="flex w-full items-center justify-between">
-                    <span>{party.name}</span>
-                    <span className="text-xs capitalize text-default-400">
-                      {party.type.toLowerCase()}
-                    </span>
-                  </div>
-                </SelectItem>
-              ))}
-            </Select>
+              initialParty={selectedParty}
+            />
 
             <div className="grid gap-4 md:grid-cols-2">
               <Input
@@ -464,8 +492,11 @@ export default function EditBillPage({
                 label="GSTIN"
                 placeholder="GST Number (optional)"
                 value={gstin}
-                onValueChange={setGstin}
+                onValueChange={(v) => setGstin(v.toUpperCase())}
                 variant="bordered"
+                isInvalid={gstin.trim().length > 0 && !isValidGstinFormat(gstin)}
+                errorMessage={gstin.trim().length > 0 && !isValidGstinFormat(gstin) ? "Invalid GSTIN format (15 chars: 22AAAAA0000A1Z5)" : undefined}
+                maxLength={15}
               />
             </div>
           </CardBody>
@@ -475,29 +506,19 @@ export default function EditBillPage({
           <CardHeader className="flex items-center justify-between px-6 pt-6 pb-0">
             <div className="flex gap-4 items-center">
               <h2 className="text-lg font-semibold">Line Items</h2>
-              <Select
-                aria-label="Place of supply"
-                placeholder="Place of Supply (State)"
-                size="sm"
-                variant="bordered"
-                className="w-[200px]"
-                selectedKeys={placeOfSupply ? new Set([placeOfSupply]) : new Set([])}
-                onSelectionChange={(keys) => {
-                  const value = Array.from(keys)[0] as string | undefined;
-                  setPlaceOfSupply(value ?? "");
-                  if (value) {
+              <StateSearch
+                value={placeOfSupply}
+                onChange={(code) => {
+                  setPlaceOfSupply(code);
+                  if (code) {
                     setErrors((curr) => ({ ...curr, placeOfSupply: false }));
                   }
                 }}
                 isInvalid={Boolean(errors.placeOfSupply)}
                 errorMessage={errors.placeOfSupply ? "Required for final bills" : undefined}
-              >
-                {Object.entries(GST_STATE_CODES).map(([code, name]) => (
-                  <SelectItem key={code} textValue={`${code} - ${name}`}>
-                    {code} — {name}
-                  </SelectItem>
-                ))}
-              </Select>
+                className="w-[200px]"
+                placeholder="Place of Supply (State)"
+              />
             </div>
             <Button
               size="sm"
@@ -550,10 +571,64 @@ export default function EditBillPage({
                       <td key={column.id} className="px-2 py-2">
                         {column.type === "formula" ? (
                           <span className="font-mono font-medium text-success">
-                            {typeof row[column.id] === "number"
-                              ? formatColumnValue(column.name, row[column.id] as number)
-                              : "-"}
+                            {(() => {
+                              const raw = row[column.id];
+                              const num = typeof raw === "number" ? raw : parseFloat(String(raw));
+                              return !isNaN(num) ? formatColumnValue(column.name, num) : "-";
+                            })()}
                           </span>
+                        ) : column.type === "text" && (column.name.toLowerCase().includes("item") || column.name.toLowerCase().includes("desc") || column.name.toLowerCase().includes("product")) ? (
+                          <ItemSearch
+                            value={null}
+                            inputValue={String(row[column.id] || "")}
+                            onInputChange={(value) => updateCell(rowIndex, column.id, value)}
+                            onChange={(item) => {
+                              if (item) {
+                                setRows((currentRows) => {
+                                  const nextRows = [...currentRows];
+                                  const newRow = { ...nextRows[rowIndex] };
+                                  newRow[column.id] = item.name;
+                                  if (selectedTemplate) {
+                                    // 1. Rate Mapping
+                                    const rateCol = selectedTemplate.columns.find(c =>
+                                      c.id === "col_rate" ||
+                                      (c.type === "number" && (c.name.toLowerCase() === "rate" || c.name.toLowerCase() === "price" || c.name.toLowerCase().includes("rate")))
+                                    );
+                                    if (rateCol && item.rate != null) {
+                                      newRow[rateCol.id] = item.rate;
+                                    }
+
+                                    // 2. Tax % Mapping
+                                    const taxCol = selectedTemplate.columns.find(c =>
+                                      c.id === "col_tax_percent" ||
+                                      (c.type === "number" && (c.name.toLowerCase().includes("tax %") || c.name.toLowerCase().includes("gst %") || c.name.toLowerCase() === "tax percent"))
+                                    );
+                                    if (taxCol && item.taxRate != null) {
+                                      newRow[taxCol.id] = item.taxRate;
+                                    }
+
+                                    // 3. HSN Code Mapping
+                                    const hsnCol = selectedTemplate.columns.find(c =>
+                                      c.id === "col_hsn" ||
+                                      (c.type === "text" && (c.name.toLowerCase().includes("hsn") || c.name.toLowerCase().includes("sac")))
+                                    );
+                                    if (hsnCol && item.hsnCode) {
+                                      newRow[hsnCol.id] = item.hsnCode;
+                                    }
+
+                                    nextRows[rowIndex] = evaluateRow(newRow, selectedTemplate.columns);
+                                  } else {
+                                    nextRows[rowIndex] = newRow;
+                                  }
+                                  return nextRows;
+                                });
+                              } else {
+                                updateCell(rowIndex, column.id, "");
+                              }
+                            }}
+                            className="min-w-[200px]"
+                            placeholder={column.name}
+                          />
                         ) : column.type === "number" ? (
                           <Input
                             type="number"
@@ -652,6 +727,27 @@ export default function EditBillPage({
                 variant="bordered"
                 minRows={3}
               />
+              {/* Ship To */}
+              <div>
+                <Checkbox
+                  size="sm"
+                  isSelected={showShipTo}
+                  onValueChange={setShowShipTo}
+                >
+                  <span className="text-sm">Ship to a different address</span>
+                </Checkbox>
+                {showShipTo && (
+                  <Textarea
+                    label="Shipping Address"
+                    placeholder="Enter shipping address..."
+                    value={shippingAddress}
+                    onValueChange={setShippingAddress}
+                    variant="bordered"
+                    minRows={2}
+                    className="mt-2"
+                  />
+                )}
+              </div>
             </CardBody>
           </Card>
 
@@ -665,49 +761,59 @@ export default function EditBillPage({
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-default-500">Tax</span>
-                    <Input
-                      type="number"
-                      aria-label="Tax percentage"
-                      value={String(taxPercent)}
-                      onValueChange={(value) => setTaxPercent(Number.parseFloat(value) || 0)}
-                      variant="bordered"
-                      size="sm"
-                      className="w-20"
-                      endContent={<span className="text-sm text-default-400">%</span>}
-                    />
+                    <span className="text-default-500">Total Tax</span>
                   </div>
                   <span className="font-medium">{formatCurrency(taxAmount)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-default-400">{t("bills.autoTaxNote")}</p>
-                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={isInterState}
-                      onChange={(e) => setIsInterState(e.target.checked)}
-                      className="accent-primary"
-                    />
-                    <span className="text-xs text-default-500">Inter-state (IGST)</span>
-                  </label>
+                  {(() => {
+                    const partyState = extractGstinStateCode(gstin);
+                    const tenantState = extractGstinStateCode(tenantGstin);
+                    const isAutoDetected = !!(partyState && tenantState);
+                    return (
+                      <div className="flex flex-col items-end gap-0.5">
+                        <label className={`flex items-center gap-1.5 select-none ${isAutoDetected ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}>
+                          <input
+                            type="checkbox"
+                            checked={isInterState}
+                            onChange={(e) => setIsInterState(e.target.checked)}
+                            className="accent-primary"
+                            disabled={isAutoDetected}
+                          />
+                          <span className="text-xs text-default-500">Inter-state (IGST)</span>
+                        </label>
+                        {isAutoDetected && (
+                          <span className="text-[10px] text-default-400">Auto-detected from GST Numbers</span>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="shrink-0 text-sm text-default-500">HSN/SAC Code</span>
-                  <Input
-                    aria-label="HSN/SAC Code"
-                    placeholder="e.g. 9983"
-                    size="sm"
-                    variant="bordered"
-                    value={hsnCode}
-                    onValueChange={setHsnCode}
-                    className="max-w-[200px]"
-                  />
+                <Divider />
+                {/* Round-off toggle */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      size="sm"
+                      isSelected={enableRoundOff}
+                      onValueChange={setEnableRoundOff}
+                      isDisabled={grandTotal === 0}
+                    >
+                      <span className="text-sm">Round off to nearest ₹</span>
+                    </Checkbox>
+                    {enableRoundOff && roundOff !== 0 && (
+                      <span className={`text-sm font-mono ${roundOff > 0 ? 'text-success' : 'text-danger'}`}>
+                        {roundOff > 0 ? '+' : ''}{formatCurrency(roundOff)}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <Divider />
                 <div className="flex justify-between">
                   <span className="text-lg font-bold">Grand Total</span>
                   <span className="text-lg font-bold text-primary">
-                    {formatCurrency(grandTotal)}
+                    {formatCurrency(roundedGrandTotal)}
                   </span>
                 </div>
               </div>

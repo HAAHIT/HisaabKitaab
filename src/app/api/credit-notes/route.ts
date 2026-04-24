@@ -26,6 +26,15 @@ const CreateNoteSchema = z.object({
   taxAmount: z.number().nonnegative().default(0),
   grandTotal: z.number().nonnegative().default(0),
   isInterState: z.boolean().optional(),
+  hsnCode: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (data.taxAmount > 0 && !data.hsnCode?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "HSN code is required since the note contains GST elements.",
+      path: ["hsnCode"],
+    });
+  }
 });
 
 export async function GET(request: NextRequest) {

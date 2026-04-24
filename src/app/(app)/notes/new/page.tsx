@@ -14,7 +14,9 @@ import {
 } from "@heroui/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
+import { StateSearch } from "@/components/ui/StateSearch";
 import { GST_STATE_CODES } from "@/lib/gst-states";
+import { extractGstinStateCode } from "@/lib/gst-helpers";
 
 type NoteType = "CREDIT_NOTE" | "DEBIT_NOTE";
 
@@ -63,6 +65,7 @@ export default function NewNotePage() {
   const [subtotal, setSubtotal] = useState<number>(0);
   const [taxPercent, setTaxPercent] = useState<number>(18);
   const [isInterState, setIsInterState] = useState(false);
+  const [tenantGstin, setTenantGstin] = useState<string | null>(null);
   const [additionalNotes, setAdditionalNotes] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, boolean>>({});
@@ -72,6 +75,18 @@ export default function NewNotePage() {
   const grandTotal = Math.round((subtotal + taxAmount) * 100) / 100;
 
   const reasons = isCredit ? REASONS_CREDIT : REASONS_DEBIT;
+
+  // Fetch company GSTIN from settings on mount
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.settings?.companyGstin) {
+          setTenantGstin(data.settings.companyGstin);
+        }
+      })
+      .catch(() => {/* silently ignore */});
+  }, []);
 
   // Reset reason when note type changes (shouldn't happen mid-session, but safe)
   useEffect(() => {
@@ -195,9 +210,16 @@ export default function NewNotePage() {
                 setSelectedParty(party);
                 if (party) {
                   setErrors((prev) => ({ ...prev, party: false }));
+                  // Auto-fill place of supply from first 2 digits of party GSTIN
                   if (party.gstin && party.gstin.length >= 2) {
                     const code = party.gstin.substring(0, 2);
                     if (GST_STATE_CODES[code]) setPlaceOfSupply(code);
+                  }
+                  // Auto-derive interstate from GSTIN comparison
+                  const partyState = extractGstinStateCode(party.gstin);
+                  const tenantState = extractGstinStateCode(tenantGstin);
+                  if (partyState && tenantState) {
+                    setIsInterState(partyState !== tenantState);
                   }
                 }
               }}
@@ -336,39 +358,39 @@ export default function NewNotePage() {
 
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-default-400">Tax type</p>
-                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={isInterState}
-                      onChange={(e) => setIsInterState(e.target.checked)}
-                      className="accent-primary"
-                    />
-                    <span className="text-xs text-default-500">Inter-state (IGST)</span>
-                  </label>
+                  {(() => {
+                    const isAutoDetected = !!selectedParty?.gstin;
+                    return (
+                      <div className="flex flex-col items-end gap-0.5">
+                        <label className={`flex items-center gap-1.5 select-none ${isAutoDetected ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}>
+                          <input
+                            type="checkbox"
+                            checked={isInterState}
+                            onChange={(e) => setIsInterState(e.target.checked)}
+                            className="accent-primary"
+                            disabled={isAutoDetected}
+                          />
+                          <span className="text-xs text-default-500">Inter-state (IGST)</span>
+                        </label>
+                        {isAutoDetected && (
+                          <span className="text-[10px] text-default-400">Auto-detected from GST Numbers</span>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <div className="flex items-center justify-between gap-3">
                   <span className="shrink-0 text-sm text-default-500">Place of Supply</span>
-                  <Select
-                    aria-label="Place of supply"
-                    placeholder="Select state"
-                    size="sm"
-                    variant="bordered"
-                    className="max-w-[200px]"
-                    isInvalid={Boolean(errors.placeOfSupply)}
-                    selectedKeys={placeOfSupply ? new Set([placeOfSupply]) : new Set([])}
-                    onSelectionChange={(keys) => {
-                      const value = Array.from(keys)[0] as string | undefined;
-                      setPlaceOfSupply(value ?? "");
+                  <StateSearch
+                    value={placeOfSupply}
+                    onChange={(code) => {
+                      setPlaceOfSupply(code);
                       setErrors((prev) => ({ ...prev, placeOfSupply: false }));
                     }}
-                  >
-                    {Object.entries(GST_STATE_CODES).map(([code, name]) => (
-                      <SelectItem key={code} textValue={`${code} - ${name}`}>
-                        {code} — {name}
-                      </SelectItem>
-                    ))}
-                  </Select>
+                    isInvalid={Boolean(errors.placeOfSupply)}
+                    className="max-w-[200px]"
+                  />
                 </div>
 
                 <Divider />

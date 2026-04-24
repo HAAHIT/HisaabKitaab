@@ -176,10 +176,11 @@ export default function ReportsClient({
         const res = await fetch(`/api/import/status/${importJobId}`);
         if (!res.ok) throw new Error("Failed to fetch job status");
         const data = await res.json();
+        const processed = data.processed ?? ((data.imported ?? 0) + (data.skipped ?? 0));
 
         setJobProgress({
-          processed: data.processed, // Total successfully or skipped processed
-          total: data.totalItems,
+          processed, // Total successfully or skipped processed
+          total: data.totalItems ?? data.totalDetected ?? processed,
           status: data.status,
         });
 
@@ -190,12 +191,12 @@ export default function ReportsClient({
 
           if (data.status === "COMPLETED") {
             setImportResult({
-              partiesCreated: 0, // Detailed metrics omitted in async architecture
-              imported: data.processed, 
-              skipped: 0,
-              failed: data.failed,
-              parseErrors: [],
-              importErrors: [],
+              partiesCreated: data.partiesCreated ?? 0,
+              imported: data.imported ?? data.processed ?? 0,
+              skipped: data.skipped ?? 0,
+              failed: data.failed ?? 0,
+              parseErrors: data.parseErrors ?? [],
+              importErrors: data.importErrors ?? [],
             });
           } else {
             setImportError(data.error || "Job failed in background");
@@ -221,7 +222,18 @@ export default function ReportsClient({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Import failed");
       
-      if (data.jobId) {
+      if (data.status === "COMPLETED" || typeof data.imported === "number") {
+        setImportResult({
+          partiesCreated: data.partiesCreated ?? 0,
+          imported: data.imported ?? data.processed ?? 0,
+          skipped: data.skipped ?? 0,
+          failed: data.failed ?? 0,
+          parseErrors: data.parseErrors ?? [],
+          importErrors: data.importErrors ?? [],
+        });
+        setImporting(false);
+        setImportJobId(null);
+      } else if (data.jobId) {
         setImportJobId(data.jobId);
         setJobProgress({ processed: 0, total: data.totalDetected || 0, status: "PENDING" });
       } else {

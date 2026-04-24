@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { VoucherType } from "@prisma/client";
+import { Prisma, VoucherType } from "@prisma/client";
 import { tenantScope } from "@/lib/tenant";
 import TransactionsClient from "./TransactionsClient";
 
@@ -14,20 +14,25 @@ export default async function TransactionsPage({
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const where: any = await tenantScope();
-  
+  const where: Prisma.JournalEntryWhereInput = await tenantScope();
+
+  const entryDateFilter: Prisma.DateTimeFilter = {};
   if (searchParams.from) {
     const fromDate = new Date(searchParams.from);
     if (!isNaN(fromDate.getTime())) {
-      where.entryDate = { ...where.entryDate, gte: fromDate };
+      entryDateFilter.gte = fromDate;
     }
   }
 
   if (searchParams.to) {
     const toDate = new Date(searchParams.to);
     if (!isNaN(toDate.getTime())) {
-      where.entryDate = { ...where.entryDate, lte: toDate };
+      entryDateFilter.lte = toDate;
     }
+  }
+
+  if (Object.keys(entryDateFilter).length > 0) {
+    where.entryDate = entryDateFilter;
   }
 
   if (searchParams.type) {

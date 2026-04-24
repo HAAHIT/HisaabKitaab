@@ -18,9 +18,17 @@ export default function CreateTemplatePage() {
   const router = useRouter();
   const { t } = useLanguage();
   const [name, setName] = useState("");
-  const [columns, setColumns] = useState<ColumnDef[]>([
-    { id: crypto.randomUUID(), name: "", type: "text", position: 0 },
-  ]);
+  const DEFAULT_COLUMNS: ColumnDef[] = [
+    { id: "col_item", name: "Item", type: "text", position: 0, isSystem: true },
+    { id: "col_hsn", name: "HSN Code", type: "text", position: 1, isSystem: true },
+    { id: "col_qty", name: "Qty", type: "number", position: 2, isSystem: true },
+    { id: "col_rate", name: "Rate", type: "number", position: 3, isSystem: true },
+    { id: "col_tax_percent", name: "Tax %", type: "number", position: 4, isSystem: true },
+    { id: "col_tax_amount", name: "Tax Amount", type: "formula", formula: "{Qty} * ({Rate} * {Tax %} / 100)", position: 5, isSystem: true },
+    { id: "col_amount", name: "Amount", type: "formula", formula: "({Qty} * {Rate}) + {Tax Amount}", position: 6, isSystem: true },
+  ];
+
+  const [columns, setColumns] = useState<ColumnDef[]>(DEFAULT_COLUMNS);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<number, string>>({});
   const [toast, setToast] = useState<{
@@ -292,6 +300,7 @@ export default function CreateTemplatePage() {
                       variant="bordered"
                       size="sm"
                       isRequired
+                      isDisabled={col.isSystem}
                     />
                     <Select
                       label={t("templates.type")}
@@ -303,6 +312,7 @@ export default function CreateTemplatePage() {
                       }}
                       variant="bordered"
                       size="sm"
+                      isDisabled={col.isSystem}
                     >
                       {columnTypeOptions.map((option) => (
                         <SelectItem key={option.key} textValue={option.label}>{option.label}</SelectItem>
@@ -318,7 +328,7 @@ export default function CreateTemplatePage() {
                     color="danger"
                     aria-label={`Remove column ${index + 1}`}
                     onPress={() => removeColumn(index)}
-                    isDisabled={columns.length === 1}
+                    isDisabled={columns.length === 1 || col.isSystem}
                     className="mt-1 md:mt-0"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
