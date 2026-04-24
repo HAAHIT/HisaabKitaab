@@ -2,8 +2,10 @@ import { prisma } from "@/lib/prisma";
 import {
   CHART_OF_ACCOUNTS,
   paymentModeToAccount,
+  partyTypeToAccountCode,
   type AccountCode,
 } from "@/lib/chart-of-accounts";
+import { getSettlementDirectionForParty } from "@/lib/accounting";
 import { roundTo2 } from "@/lib/journal-reporting";
 
 type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
@@ -362,6 +364,53 @@ export async function journalForContraEntry(
         accountCode: otherAccount,
         debit: payment.amount,
         credit: 0,
+      },
+    ],
+  });
+}
+
+/**
+ * Generic journal entry for non-customer/vendor party types.
+ * Handles Expense, Income, Asset, Liability, and Equity payments
+ * by dynamically resolving the ledger account from the party type.
+ *
+ * Tally voucher mapping:
+ *   EXPENSE/ASSET/LIABILITY/EQUITY → PAYMENT voucher (money going out)
+ *   INCOME → RECEIPT voucher (money coming in)
+ */
+export async function journalForLedgerPayment(
+  tx: PrismaTx,
+  tenantId: string,
+  payment: PaymentJournalInput & { partyType: string }
+) {
+  const ledgerAccount = partyTypeToAccountCode(payment.partyType);
+  const bankAccount = paymentModeToAccount(payment.mode);
+  const isOutgoing =
+    getSettlementDirectionForParty(
+      payment.partyType as Parameters<typeof getSettlementDirectionForParty>[0]
+    ) === "OUTGOING";
+
+  return createJournalEntry(tx, {
+    tenantId,
+    entryDate: payment.date,
+    narration: `${isOutgoing ? "Payment to" : "Receipt from"} ${payment.partyName} (${payment.mode})`,
+    voucherType: isOutgoing ? "PAYMENT" : "RECEIPT",
+    paymentId: payment.id,
+    createdBy: payment.createdBy,
+    lines: [
+      {
+        accountCode: isOutgoing ? ledgerAccount : bankAccount,
+        debit: payment.amount,
+        credit: 0,
+        partyId: isOutgoing ? payment.partyId : null,
+        partyName: isOutgoing ? payment.partyName : null,
+      },
+      {
+        accountCode: isOutgoing ? bankAccount : ledgerAccount,
+        debit: 0,
+        credit: payment.amount,
+        partyId: isOutgoing ? null : payment.partyId,
+        partyName: isOutgoing ? null : payment.partyName,
       },
     ],
   });

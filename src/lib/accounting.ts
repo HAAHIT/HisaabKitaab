@@ -156,12 +156,7 @@ export function getLedgerAmountsForBalanceDelta(
     return { debit: 0, credit: 0 };
   }
 
-  // Credit-nature accounts (Positive balance means Credit):
-  // Vendor, Income, Liability, Equity
-  // Debit-nature accounts (Positive balance means Debit):
-  // Customer, Expense, Asset
-  const isCreditNature = (["VENDOR", "INCOME", "LIABILITY", "EQUITY"] as PartyType[]).includes(partyType);
-  const positiveIsCredit = isCreditNature;
+  const positiveIsCredit = getSettlementDirectionForParty(partyType) === "INCOMING";
 
   if (balanceDelta > 0) {
     return positiveIsCredit
@@ -182,12 +177,12 @@ export function getBalanceIndicator(
     return null;
   }
 
-  const isDebitNature = (["CUSTOMER", "EXPENSE", "ASSET"] as PartyType[]).includes(partyType);
-  if (isDebitNature) {
-    return balance > 0 ? "Dr" : "Cr";
+  const positiveIsCredit = getSettlementDirectionForParty(partyType) === "INCOMING";
+  if (positiveIsCredit) {
+    return balance > 0 ? "Cr" : "Dr";
   }
 
-  return balance > 0 ? "Cr" : "Dr";
+  return balance > 0 ? "Dr" : "Cr";
 }
 
 export function getBalanceStatusLabel(
@@ -202,7 +197,7 @@ export function getBalanceStatusLabel(
     return "advance balance";
   }
 
-  const isReceiveNature = (["CUSTOMER", "INCOME", "ASSET"] as PartyType[]).includes(partyType);
+  const isReceiveNature = getSettlementDirectionForParty(partyType) === "INCOMING";
   return isReceiveNature ? "to receive" : "to pay";
 }
 
@@ -210,7 +205,7 @@ export function getPartyBalanceColor(partyType: SupportedPartyType, balance: num
   const v = Math.round(balance * 100) / 100;
   if (v === 0) return "text-default-400";
   if (v > 0) return "text-warning";
-  const isGood = (["CUSTOMER", "INCOME", "ASSET"] as PartyType[]).includes(partyType);
+  const isGood = getSettlementDirectionForParty(partyType) === "INCOMING";
   return isGood ? "text-success" : "text-danger";
 }
 

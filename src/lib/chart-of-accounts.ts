@@ -3,6 +3,14 @@ export type AccountCode =
   | "PURCHASE"
   | "SUNDRY_DEBTORS"
   | "SUNDRY_CREDITORS"
+  | "DIRECT_EXPENSE"
+  | "INDIRECT_EXPENSE"
+  | "DIRECT_INCOME"
+  | "INDIRECT_INCOME"
+  | "FIXED_ASSETS"
+  | "LOANS_ADVANCES"
+  | "CURRENT_LIABILITIES"
+  | "CURRENT_ASSETS"
   | "CASH"
   | "BANK"
   | "UPI"
@@ -52,6 +60,62 @@ export const CHART_OF_ACCOUNTS: Record<AccountCode, AccountDefinition> = {
     tallyGroup: "Sundry Creditors",
     type: "LIABILITY",
     normalBalance: "CREDIT",
+  },
+  DIRECT_EXPENSE: {
+    code: "DIRECT_EXPENSE",
+    name: "Direct Expenses",
+    tallyGroup: "Direct Expenses",
+    type: "EXPENSE",
+    normalBalance: "DEBIT",
+  },
+  INDIRECT_EXPENSE: {
+    code: "INDIRECT_EXPENSE",
+    name: "Indirect Expenses",
+    tallyGroup: "Indirect Expenses",
+    type: "EXPENSE",
+    normalBalance: "DEBIT",
+  },
+  DIRECT_INCOME: {
+    code: "DIRECT_INCOME",
+    name: "Direct Incomes",
+    tallyGroup: "Direct Incomes",
+    type: "INCOME",
+    normalBalance: "CREDIT",
+  },
+  INDIRECT_INCOME: {
+    code: "INDIRECT_INCOME",
+    name: "Indirect Incomes",
+    tallyGroup: "Indirect Incomes",
+    type: "INCOME",
+    normalBalance: "CREDIT",
+  },
+  FIXED_ASSETS: {
+    code: "FIXED_ASSETS",
+    name: "Fixed Assets",
+    tallyGroup: "Fixed Assets",
+    type: "ASSET",
+    normalBalance: "DEBIT",
+  },
+  LOANS_ADVANCES: {
+    code: "LOANS_ADVANCES",
+    name: "Loans & Advances (Asset)",
+    tallyGroup: "Loans & Advances (Asset)",
+    type: "ASSET",
+    normalBalance: "DEBIT",
+  },
+  CURRENT_LIABILITIES: {
+    code: "CURRENT_LIABILITIES",
+    name: "Current Liabilities",
+    tallyGroup: "Current Liabilities",
+    type: "LIABILITY",
+    normalBalance: "CREDIT",
+  },
+  CURRENT_ASSETS: {
+    code: "CURRENT_ASSETS",
+    name: "Current Assets",
+    tallyGroup: "Current Assets",
+    type: "ASSET",
+    normalBalance: "DEBIT",
   },
   CASH: {
     code: "CASH",
@@ -151,5 +215,40 @@ export function paymentModeToAccount(mode: string): AccountCode {
       return "BANK";
     default:
       return "CASH";
+  }
+}
+
+/**
+ * Maps a PartyType to the corresponding chart-of-accounts code for
+ * journal entries. Used by the generic `journalForLedgerPayment` helper
+ * to resolve the correct ledger account for non-customer/vendor parties.
+ *
+ * Tally equivalent mapping:
+ *   CUSTOMER  → Sundry Debtors
+ *   VENDOR    → Sundry Creditors
+ *   EXPENSE   → Indirect Expenses (Rent, Office Exp, Travelling, etc.)
+ *   INCOME    → Indirect Incomes (Interest, Commission, etc.)
+ *   ASSET     → Fixed Assets (Machinery, Furniture, etc.)
+ *   LIABILITY → Current Liabilities (EMI, Loans payable, etc.)
+ *   EQUITY    → Capital Account
+ */
+export function partyTypeToAccountCode(partyType: string): AccountCode {
+  switch (partyType) {
+    case "CUSTOMER":
+      return "SUNDRY_DEBTORS";
+    case "VENDOR":
+      return "SUNDRY_CREDITORS";
+    case "EXPENSE":
+      return "INDIRECT_EXPENSE";
+    case "INCOME":
+      return "INDIRECT_INCOME";
+    case "ASSET":
+      return "FIXED_ASSETS";
+    case "LIABILITY":
+      return "CURRENT_LIABILITIES";
+    case "EQUITY":
+      return "OWNER_EQUITY";
+    default:
+      return "SUNDRY_DEBTORS";
   }
 }

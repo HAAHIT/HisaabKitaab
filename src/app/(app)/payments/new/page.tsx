@@ -88,7 +88,7 @@ export default function RecordPaymentPage() {
   const [notes, setNotes] = useState("");
   const [paymentStatus, setPaymentStatus] = useState("COMPLETED");
 
-  const [paymentFlowType, setPaymentFlowType] = useState<"party" | "contra">("party");
+  const [paymentFlowType, setPaymentFlowType] = useState<"party" | "ledger" | "contra">("party");
   const [destinationAccountId, setDestinationAccountId] = useState("");
 
   useEffect(() => {
@@ -119,9 +119,9 @@ export default function RecordPaymentPage() {
   const selectedBillDisplay = selectedBill;
 
   async function handleSave() {
-    if (paymentFlowType === "party") {
+    if (paymentFlowType === "party" || paymentFlowType === "ledger") {
       if (!partyId) {
-        showToast("Select a party", "error");
+        showToast(paymentFlowType === "ledger" ? "Select an expense/income ledger" : "Select a party", "error");
         return;
       }
     } else {
@@ -151,12 +151,12 @@ export default function RecordPaymentPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          partyId: paymentFlowType === "party" ? partyId : null,
+          partyId: paymentFlowType === "contra" ? null : partyId,
           accountId,
           destinationAccountId: paymentFlowType === "contra" ? destinationAccountId : null,
           billId: paymentFlowType === "party" ? (billId || null) : null,
           amount: Number.parseFloat(amount),
-          type: paymentFlowType === "party" ? direction : "OUTGOING", // Contra is always outgoing from source
+          type: paymentFlowType === "contra" ? "OUTGOING" : direction,
           mode: mode,
           date,
           notes: notes.trim() || null,
@@ -219,10 +219,11 @@ export default function RecordPaymentPage() {
         <Tabs
           aria-label="Payment Type"
           selectedKey={paymentFlowType}
-          onSelectionChange={(k) => setPaymentFlowType(k as "party" | "contra")}
+          onSelectionChange={(k) => setPaymentFlowType(k as "party" | "ledger" | "contra")}
           classNames={{ base: "w-full", tabList: "w-full" }}
         >
           <Tab key="party" title="Party Payment" />
+          <Tab key="ledger" title="Expense / Income" />
           <Tab key="contra" title="Bank Transfer (Contra)" />
         </Tabs>
       </section>
@@ -388,6 +389,34 @@ export default function RecordPaymentPage() {
             </>
           )}
 
+          {paymentFlowType === "ledger" && (
+            <>
+              <PartySearch
+                value={selectedParty?.id ?? null}
+                onChange={(party) => {
+                  setSelectedParty(party);
+                  setBillId("");
+                  setSelectedBill(null);
+                  if (party) {
+                    setDirection(getSettlementDirectionForParty(party.type as SupportedPartyType));
+                  }
+                }}
+                placeholder="Select expense, income, or other ledger"
+                filterTypes={["EXPENSE", "INCOME", "ASSET", "LIABILITY", "EQUITY"]}
+              />
+
+              {selectedParty && (
+                <div className={`rounded-lg px-3 py-2 text-sm ${getBalanceBannerClass(selectedParty.type as SupportedPartyType, selectedParty.currentBalance)}`}>
+                  Ledger balance:{" "}
+                  <strong>{formatSignedBalance(selectedParty.currentBalance)}</strong>
+                  <span className="ml-2 text-xs text-default-400">
+                    ({selectedParty.type} ledger • Direction: {direction === "OUTGOING" ? "Payment" : "Receipt"})
+                  </span>
+                </div>
+              )}
+            </>
+          )}
+
           <Input
             label="Amount (INR)"
             placeholder="Enter amount"
@@ -404,7 +433,7 @@ export default function RecordPaymentPage() {
           />
 
           <div className="grid grid-cols-2 gap-4">
-            {paymentFlowType === "party" && (
+            {(paymentFlowType === "party" || paymentFlowType === "ledger") && (
               <Select
                 label="Type"
                 placeholder="Select direction"
@@ -416,6 +445,7 @@ export default function RecordPaymentPage() {
                   }
                 }}
                 variant="bordered"
+                isDisabled={paymentFlowType === "ledger"}
               >
                 <SelectItem key="INCOMING">Received</SelectItem>
                 <SelectItem key="OUTGOING">Paid</SelectItem>

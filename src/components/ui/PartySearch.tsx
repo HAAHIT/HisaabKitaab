@@ -20,6 +20,8 @@ interface PartySearchProps {
   value: string | null;
   onChange: (party: PartyOption | null) => void;
   partyType?: "CUSTOMER" | "VENDOR" | null;
+  /** Filter to multiple party types at once (e.g. ["EXPENSE","INCOME"]) */
+  filterTypes?: string[];
   placeholder?: string;
   autoFocus?: boolean;
   isInvalid?: boolean;
@@ -40,6 +42,7 @@ export function PartySearch({
   value,
   onChange,
   partyType,
+  filterTypes,
   placeholder,
   autoFocus,
   isInvalid,
@@ -58,7 +61,11 @@ export function PartySearch({
     setIsLoading(true);
     try {
       const params = new URLSearchParams({ limit: "20" });
-      if (partyType) params.set("type", partyType);
+      if (filterTypes && filterTypes.length > 0) {
+        params.set("types", filterTypes.join(","));
+      } else if (partyType) {
+        params.set("type", partyType);
+      }
       if (search) params.set("search", search);
       const response = await fetch(`/api/parties?${params}`);
       if (response.ok) {
@@ -80,7 +87,7 @@ export function PartySearch({
   useEffect(() => {
     fetchParties("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [partyType]);
+  }, [partyType, filterTypes]);
 
   function handleInputChange(val: string) {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -146,9 +153,8 @@ export function PartySearch({
               {party.currentBalance !== 0 && (
                 <div className="flex flex-col items-end">
                   <span
-                    className={`text-sm font-semibold ${
-                      party.currentBalance > 0 ? "text-success" : "text-danger"
-                    }`}
+                    className={`text-sm font-semibold ${party.currentBalance > 0 ? "text-success" : "text-danger"
+                      }`}
                   >
                     {formatSignedBalance(party.currentBalance)}
                   </span>
@@ -168,7 +174,8 @@ export function PartySearch({
       <QuickAddPartyModal
         isOpen={isOpen}
         onOpenChange={onOpenChange}
-        initialType={partyType || "CUSTOMER"}
+        initialType={partyType || (filterTypes?.[0]) || "CUSTOMER"}
+        allowedTypes={filterTypes || (partyType ? [partyType] : ["CUSTOMER", "VENDOR"])}
         onSuccess={(newParty) => {
           selectedPartyRef.current = newParty;
           setParties((prev) => [...prev, newParty]);

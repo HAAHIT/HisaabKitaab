@@ -52,8 +52,9 @@ export function EditPaymentModal({
     onSuccess: () => void;
 }) {
     const isContraPayment = !payment?.partyId && !!payment?.destinationAccountId;
+    const isLedgerPayment = payment?.party ? ["EXPENSE", "INCOME", "ASSET", "LIABILITY", "EQUITY"].includes(payment.party.type) : false;
 
-    const [paymentType, setPaymentType] = useState<"party" | "contra">("party");
+    const [paymentType, setPaymentType] = useState<"party" | "ledger" | "contra">("party");
     const [selectedParty, setSelectedParty] = useState<PartyOption | null>(null);
     const [accountId, setAccountId] = useState("");
     const [destAccountId, setDestAccountId] = useState("");
@@ -69,7 +70,7 @@ export function EditPaymentModal({
     // Populate form when payment changes
     useEffect(() => {
         if (!payment) return;
-        setPaymentType(isContraPayment ? "contra" : "party");
+        setPaymentType(isContraPayment ? "contra" : isLedgerPayment ? "ledger" : "party");
         setSelectedParty(null); // PartySearch will load by value
         setAccountId(payment.accountId ?? "");
         setDestAccountId(payment.destinationAccountId ?? "");
@@ -87,15 +88,15 @@ export function EditPaymentModal({
         fetch("/api/bank-accounts")
             .then((r) => r.json())
             .then((d) => setBankAccounts(d.accounts || []))
-            .catch(() => {});
+            .catch(() => { });
     }, [isOpen, bankAccounts.length]);
 
     async function handleSave() {
         if (!payment) return;
         setError(null);
 
-        if (paymentType === "party" && !selectedParty && !payment.partyId) {
-            setError("Select a party");
+        if ((paymentType === "party" || paymentType === "ledger") && !selectedParty && !payment.partyId) {
+            setError(paymentType === "ledger" ? "Select an expense/income ledger" : "Select a party");
             return;
         }
         if (!amount || parseFloat(amount) <= 0) {
@@ -121,7 +122,7 @@ export function EditPaymentModal({
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    partyId: paymentType === "party" ? (selectedParty?.id ?? payment.partyId) : null,
+                    partyId: (paymentType === "party" || paymentType === "ledger") ? (selectedParty?.id ?? payment.partyId) : null,
                     destinationAccountId: paymentType === "contra" ? destAccountId : null,
                     accountId,
                     amount: parseFloat(amount),
@@ -159,21 +160,23 @@ export function EditPaymentModal({
                             <Tabs
                                 aria-label="Payment type"
                                 selectedKey={paymentType}
-                                onSelectionChange={(k) => setPaymentType(k as "party" | "contra")}
+                                onSelectionChange={(k) => setPaymentType(k as "party" | "ledger" | "contra")}
                                 classNames={{ base: "w-full", tabList: "w-full" }}
                             >
                                 <Tab key="party" title="Party Payment" />
+                                <Tab key="ledger" title="Expense / Income" />
                                 <Tab key="contra" title="Bank Transfer (Contra)" />
                             </Tabs>
 
-                            {paymentType === "party" && (
+                            {(paymentType === "party" || paymentType === "ledger") && (
                                 <PartySearch
                                     value={selectedParty?.id ?? payment?.partyId ?? null}
                                     onChange={(party) => {
                                         setSelectedParty(party);
                                         if (party) setDirection(getSettlementDirectionForParty(party.type as SupportedPartyType));
                                     }}
-                                    placeholder="Select customer, vendor, or ledger"
+                                    placeholder={paymentType === "ledger" ? "Select expense, income, or other ledger" : "Select customer, vendor, or ledger"}
+                                    filterTypes={paymentType === "ledger" ? ["EXPENSE", "INCOME", "ASSET", "LIABILITY", "EQUITY"] : undefined}
                                 />
                             )}
 
@@ -188,7 +191,7 @@ export function EditPaymentModal({
                             />
 
                             <div className="grid grid-cols-2 gap-3">
-                                {paymentType === "party" && (
+                                {(paymentType === "party" || paymentType === "ledger") && (
                                     <Select
                                         label="Type"
                                         selectedKeys={new Set([direction])}
@@ -197,6 +200,7 @@ export function EditPaymentModal({
                                             if (v) setDirection(v);
                                         }}
                                         variant="bordered"
+                                        isDisabled={paymentType === "ledger"}
                                     >
                                         <SelectItem key="INCOMING">Received</SelectItem>
                                         <SelectItem key="OUTGOING">Paid</SelectItem>
@@ -241,7 +245,7 @@ export function EditPaymentModal({
                                     </Select>
                                 )}
 
-                                {paymentType === "party" && (
+                                {(paymentType === "party" || paymentType === "ledger") && (
                                     <Select
                                         label="Payment Mode"
                                         selectedKeys={new Set([mode])}

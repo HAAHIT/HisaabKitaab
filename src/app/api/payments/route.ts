@@ -10,6 +10,7 @@ import {
   journalForPaymentMade,
   journalForPaymentReceived,
   journalForContraEntry,
+  journalForLedgerPayment,
 } from "@/lib/journal";
 import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
@@ -357,25 +358,40 @@ export async function POST(request: NextRequest) {
             date: newPayment.date,
             createdBy: userId!,
             // We pass extra props that the TS interface doesn't strictly complain about yet, but we will fix TS
-            sourceAccountType: account.type,
-            destAccountType: destAccount.type,
-          } as any);
+            sourceAccountType: account.type as "CASH" | "BANK",
+            destAccountType: destAccount.type as "CASH" | "BANK",
+          });
         } else if (party) {
-          if (type === "INCOMING") {
-            await journalForPaymentReceived(tx, tenantId, {
-              id: newPayment.id,
-              partyId: party.id,
-              partyName: party.name,
-              amount: newPayment.amount.toNumber(),
-              mode: newPayment.mode,
-              date: newPayment.date,
-              createdBy: userId!,
-            });
+          if (party.type === "CUSTOMER" || party.type === "VENDOR") {
+            // Legacy customer/vendor journal entries
+            if (type === "INCOMING") {
+              await journalForPaymentReceived(tx, tenantId, {
+                id: newPayment.id,
+                partyId: party.id,
+                partyName: party.name,
+                amount: newPayment.amount.toNumber(),
+                mode: newPayment.mode,
+                date: newPayment.date,
+                createdBy: userId!,
+              });
+            } else {
+              await journalForPaymentMade(tx, tenantId, {
+                id: newPayment.id,
+                partyId: party.id,
+                partyName: party.name,
+                amount: newPayment.amount.toNumber(),
+                mode: newPayment.mode,
+                date: newPayment.date,
+                createdBy: userId!,
+              });
+            }
           } else {
-            await journalForPaymentMade(tx, tenantId, {
+            // Tally-style ledger payments (Expense, Income, Asset, Liability, Equity)
+            await journalForLedgerPayment(tx, tenantId, {
               id: newPayment.id,
               partyId: party.id,
               partyName: party.name,
+              partyType: party.type,
               amount: newPayment.amount.toNumber(),
               mode: newPayment.mode,
               date: newPayment.date,
@@ -520,11 +536,23 @@ export async function PATCH(request: NextRequest) {
           date: payment.date,
           createdBy: userId || payment.createdBy,
         });
-      } else {
+      } else if (payment.party && (payment.party.type === "CUSTOMER" || payment.party.type === "VENDOR")) {
         await journalForPaymentMade(tx, tenantId, {
           id: updated.id,
           partyId: payment.partyId,
           partyName: updated.party?.name || null,
+          amount: payment.amount.toNumber(),
+          mode: payment.mode,
+          date: payment.date,
+          createdBy: userId || payment.createdBy,
+        });
+      } else if (payment.party) {
+        // Tally-style ledger payments (Expense, Income, Asset, Liability, Equity)
+        await journalForLedgerPayment(tx, tenantId, {
+          id: updated.id,
+          partyId: payment.partyId,
+          partyName: updated.party?.name || null,
+          partyType: payment.party.type,
           amount: payment.amount.toNumber(),
           mode: payment.mode,
           date: payment.date,

@@ -6,7 +6,15 @@ import { logError, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { isValidGstinFormat } from "@/lib/gst-helpers";
 
-const VALID_PARTY_TYPES = new Set<PartyType>(["CUSTOMER", "VENDOR"]);
+const VALID_PARTY_TYPES = new Set<PartyType>([
+  "CUSTOMER",
+  "VENDOR",
+  "EXPENSE",
+  "INCOME",
+  "ASSET",
+  "LIABILITY",
+  "EQUITY"
+]);
 
 function isPartyType(value: string | undefined): value is PartyType {
   return Boolean(value && VALID_PARTY_TYPES.has(value as PartyType));
@@ -46,6 +54,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const search = searchParams.get("search") || "";
   const type = searchParams.get("type") || "";
+  const typesParam = searchParams.get("types") || "";
   const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
   const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10)));
 
@@ -58,7 +67,15 @@ export async function GET(request: NextRequest) {
     ];
   }
 
-  if (type && type !== "ALL" && VALID_PARTY_TYPES.has(type as PartyType)) {
+  if (typesParam) {
+    const types = typesParam
+      .split(",")
+      .map(t => t.trim().toUpperCase())
+      .filter((t) => VALID_PARTY_TYPES.has(t as PartyType)) as PartyType[];
+    if (types.length > 0) {
+      where.type = { in: types };
+    }
+  } else if (type && type !== "ALL" && VALID_PARTY_TYPES.has(type as PartyType)) {
     where.type = type as PartyType;
   }
 
