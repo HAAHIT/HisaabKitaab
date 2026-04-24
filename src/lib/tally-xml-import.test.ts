@@ -183,3 +183,83 @@ describe("stateNameToGstCode — reverse lookup (G1c)", () => {
     expect(stateNameToGstCode("Atlantis")).toBeNull();
   });
 });
+
+// ── Native Tally export shapes ───────────────────────────────────────────────
+
+describe("parseTallyXml — native Tally export shape", () => {
+  it("parses vouchers from BODY > DATA > TALLYMESSAGE", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<ENVELOPE>
+  <HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>
+  <BODY>
+    <DATA>
+      <TALLYMESSAGE xmlns:UDF="TallyUDF">
+        <VOUCHER VCHTYPE="Sales" ACTION="Create">
+          <DATE>20250402</DATE>
+          <VOUCHERTYPENAME>Sales</VOUCHERTYPENAME>
+          <VOUCHERNUMBER>TS-001</VOUCHERNUMBER>
+          <PARTYLEDGERNAME>Native Customer</PARTYLEDGERNAME>
+          <ALLLEDGERENTRIES.LIST>
+            <LEDGERNAME>Native Customer</LEDGERNAME>
+            <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+            <AMOUNT>-1180</AMOUNT>
+          </ALLLEDGERENTRIES.LIST>
+          <ALLLEDGERENTRIES.LIST>
+            <LEDGERNAME>Sales</LEDGERNAME>
+            <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+            <AMOUNT>1180</AMOUNT>
+          </ALLLEDGERENTRIES.LIST>
+        </VOUCHER>
+      </TALLYMESSAGE>
+    </DATA>
+  </BODY>
+</ENVELOPE>`;
+
+    const result = parseTallyXml(xml);
+
+    expect(result.parseErrors).toHaveLength(0);
+    expect(result.vouchers).toHaveLength(1);
+    expect(result.vouchers[0].reference).toBe("TS-001");
+    expect(result.vouchers[0].lines[0].partyName).toBe("Native Customer");
+  });
+
+  it("uses PARTYLEDGERNAME instead of BILLALLOCATIONS NAME for generic party ledgers", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<ENVELOPE>
+  <BODY>
+    <IMPORTDATA>
+      <REQUESTDATA>
+        <TALLYMESSAGE xmlns:UDF="TallyUDF">
+          <VOUCHER VCHTYPE="Sales" ACTION="Create">
+            <DATE>20250403</DATE>
+            <VOUCHERTYPENAME>Sales</VOUCHERTYPENAME>
+            <VOUCHERNUMBER>INV-300</VOUCHERNUMBER>
+            <PARTYLEDGERNAME>Correct Customer</PARTYLEDGERNAME>
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>Sundry Debtors</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+              <AMOUNT>-1180</AMOUNT>
+              <BILLALLOCATIONS.LIST>
+                <NAME>INV-300</NAME>
+                <BILLTYPE>On Account</BILLTYPE>
+                <AMOUNT>-1180</AMOUNT>
+              </BILLALLOCATIONS.LIST>
+            </ALLLEDGERENTRIES.LIST>
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>Sales</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+              <AMOUNT>1180</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>
+          </VOUCHER>
+        </TALLYMESSAGE>
+      </REQUESTDATA>
+    </IMPORTDATA>
+  </BODY>
+</ENVELOPE>`;
+
+    const result = parseTallyXml(xml);
+
+    expect(result.parseErrors).toHaveLength(0);
+    expect(result.vouchers[0].lines[0].partyName).toBe("Correct Customer");
+  });
+});

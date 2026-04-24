@@ -106,7 +106,7 @@ const VCH_HEURISTIC: Record<string, "SALES" | "PURCHASE" | "RECEIPT" | "PAYMENT"
 export type ParsedLedgerLine = {
   ledgerName: string;
   accountCode: AccountCode;
-  /** Party name from BILLALLOCATIONS.LIST or the ledger name itself (for unknown ledgers) */
+  /** Party name from PARTYLEDGERNAME or the ledger name itself (for native Tally exports) */
   partyName: string | null;
   debit: number;
   credit: number;
@@ -195,7 +195,7 @@ function parseAmount(raw: unknown): number {
   return isNaN(n) ? 0 : n;
 }
 
-function extractBillAllocPartyName(entry: Record<string, unknown>): string | null {
+function extractBillAllocationName(entry: Record<string, unknown>): string | null {
   const alloc = entry["BILLALLOCATIONS.LIST"];
   if (!alloc) return null;
   const first = Array.isArray(alloc) ? alloc[0] : alloc;
@@ -207,6 +207,10 @@ function extractBillAllocPartyName(entry: Record<string, unknown>): string | nul
 function asArray<T>(value: T | T[] | undefined | null): T[] {
   if (!value) return [];
   return Array.isArray(value) ? value : [value];
+}
+
+function isPartyAccountCode(accountCode: AccountCode): boolean {
+  return accountCode === "SUNDRY_DEBTORS" || accountCode === "SUNDRY_CREDITORS";
 }
 
 // ── Main parser ───────────────────────────────────────────────────────────────
@@ -245,16 +249,38 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
   }
 
   // Navigate to TALLYMESSAGE array.
-  // A combined Tally export (masters + vouchers) contains TWO <IMPORTDATA> blocks
-  // inside one <BODY>.  fast-xml-parser returns IMPORTDATA as either a single object
-  // or an array depending on the document — always normalise with asArray().
+  // Importable HisaabKitaab XML uses BODY > IMPORTDATA > REQUESTDATA.
+  // Native Tally exports commonly use BODY > DATA > TALLYMESSAGE, and some
+  // exports wrap LEDGER/VOUCHER nodes directly in BODY > DATA > COLLECTION.
   const messageCollections: unknown[][] = [];
   try {
+    const collectMessages = (container: Record<string, unknown> | undefined) => {
+      if (!container) return;
+
+      const raw = container["TALLYMESSAGE"];
+      if (raw) {
+        messageCollections.push(asArray(raw));
+      }
+
+      const collection = container["COLLECTION"] as Record<string, unknown> | undefined;
+      if (!collection) return;
+
+      const collectionMessages: unknown[] = [
+        ...asArray(collection["LEDGER"] as unknown).map((ledger) => ({ LEDGER: ledger })),
+        ...asArray(collection["VOUCHER"] as unknown).map((voucher) => ({ VOUCHER: voucher })),
+      ];
+      if (collectionMessages.length > 0) {
+        messageCollections.push(collectionMessages);
+      }
+    };
+
     // fast-xml-parser may produce an array of ENVELOPEs for concatenated XML declarations
     const envelopes = asArray(parsed["ENVELOPE"]);
     for (const env of envelopes) {
       const envelope = env as Record<string, unknown>;
       const body = envelope?.["BODY"] as Record<string, unknown> | undefined;
+      collectMessages(body);
+
       // Use asArray — combined exports have multiple IMPORTDATA siblings
       const importDataBlocks = asArray(
         body?.["IMPORTDATA"] as Record<string, unknown> | Record<string, unknown>[] | undefined
@@ -263,10 +289,14 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
         const requestData = (importData as Record<string, unknown>)?.["REQUESTDATA"] as
           | Record<string, unknown>
           | undefined;
-        const raw = requestData?.["TALLYMESSAGE"];
-        if (raw) {
-          messageCollections.push(asArray(raw));
-        }
+        collectMessages(requestData);
+      }
+
+      const dataBlocks = asArray(
+        body?.["DATA"] as Record<string, unknown> | Record<string, unknown>[] | undefined
+      );
+      for (const data of dataBlocks) {
+        collectMessages(data as Record<string, unknown>);
       }
     }
   } catch {
@@ -370,6 +400,11 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
 
     const reference = String(v["VOUCHERNUMBER"] ?? "").trim();
     const narration = String(v["NARRATION"] ?? "").trim();
+    const partyLedgerName =
+      String(v["PARTYLEDGERNAME"] ?? "").trim() ||
+      String(v["BASICBUYERNAME"] ?? "").trim() ||
+      String(v["BASICBASEPARTYNAME"] ?? "").trim() ||
+      null;
 
     // Extract Tally's REMOTEID / GUID for idempotent re-import.
     // HisaabKitaab exports prefix the journal entry ID with "HisaabKitaab-";
@@ -415,12 +450,17 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       const accountCode: AccountCode =
         resolvedCode ?? FALLBACK_BY_VOUCHER[voucherType] ?? "SUNDRY_DEBTORS";
 
-      // partyName: from BILLALLOCATIONS if present, otherwise the ledger name itself
-      // (for real Tally exports where party name IS the ledger name)
-      const billAllocName = extractBillAllocPartyName(e);
+      // BILLALLOCATIONS.LIST > NAME is the bill/outstanding reference in Tally,
+      // not reliably the party name. Prefer PARTYLEDGERNAME for generic party
+      // ledgers, and use the ledger name itself for native exports where the
+      // party ledger is named directly.
+      const billAllocName = extractBillAllocationName(e);
       const partyName =
-        billAllocName ??
-        (resolvedCode === undefined ? ledgerName : null);
+        resolvedCode === undefined
+          ? ledgerName
+          : isPartyAccountCode(accountCode)
+            ? partyLedgerName ?? (billAllocName && billAllocName !== reference ? billAllocName : null)
+            : null;
 
       lines.push({ ledgerName, accountCode, partyName, debit, credit });
     }

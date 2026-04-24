@@ -4,13 +4,8 @@ import { resolveWriteTenant } from "@/lib/api-tenant";
 import { logError, logInfo, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { parseTallyXml } from "@/lib/tally-xml-import";
-import { createJournalEntry } from "@/lib/journal";
+import { processImportJob } from "@/app/api/jobs/process-import/route";
 import { gzipSync } from "zlib";
-import type { AccountCode } from "@/lib/chart-of-accounts";
-
-// Derive Prisma tx type from the client instance to avoid the
-// @prisma/client → .prisma/client re-export failure under Prisma v7.
-type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 
 export const runtime = "nodejs";
 
@@ -55,7 +50,6 @@ export async function POST(request: NextRequest) {
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const actorId: string = userId;
   const tid: string = tenantId;
 
   let xmlText: string;
@@ -107,19 +101,6 @@ export async function POST(request: NextRequest) {
     }
   });
 
-  // Trigger background job (fire-and-forget for local dev where Vercel cron isn't running)
-  try {
-    const processUrl = new URL("/api/jobs/process-import", request.url);
-    fetch(processUrl.toString(), {
-      method: "GET",
-      headers: {
-        "x-cron-secret": process.env.CRON_SECRET || "",
-      },
-    }).catch((e) => console.error("Fire-and-forget process-import failed:", e));
-  } catch (err) {
-    console.error("Failed to construct process-import URL:", err);
-  }
-
   logInfo("import.tally-xml.queued", {
     requestId: getRequestId(request),
     tenantId: tid,
@@ -127,9 +108,33 @@ export async function POST(request: NextRequest) {
     totalItems,
   });
 
+  const processResponse = await processImportJob(job.id);
+  const processPayload = await processResponse.json().catch(() => null);
+
+  if (!processResponse.ok) {
+    return NextResponse.json(
+      {
+        jobId: job.id,
+        error: processPayload?.error || "Import job failed.",
+        parseErrors: upfrontErrors,
+      },
+      { status: processResponse.status }
+    );
+  }
+
+  if (processPayload && typeof processPayload.imported === "number") {
+    return NextResponse.json({
+      ...processPayload,
+      totalDetected: processPayload.totalItems ?? totalItems,
+      parseErrors: Array.from(new Set([...upfrontErrors, ...(processPayload.parseErrors ?? [])])),
+      importErrors: [],
+    });
+  }
+
   return NextResponse.json({
     jobId: job.id,
-    message: totalItems > 0 ? "Import job queued successfully." : "No vouchers detected in XML.",
+    status: processPayload?.status ?? "PENDING",
+    message: processPayload?.message ?? "Import job queued successfully.",
     totalDetected: totalItems,
     parseErrors: upfrontErrors,
   });

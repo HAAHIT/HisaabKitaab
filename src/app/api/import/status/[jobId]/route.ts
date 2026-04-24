@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { resolveWriteTenant } from "@/lib/api-tenant";
+import { processImportJob } from "@/app/api/jobs/process-import/route";
 
 export const runtime = "nodejs";
 
@@ -22,6 +23,10 @@ export async function GET(
 
   if (!job || job.tenantId !== tenantId) {
     return NextResponse.json({ error: "Job not found" }, { status: 404 });
+  }
+
+  if (job.status === "PENDING") {
+    return processImportJob(job.id);
   }
 
   return NextResponse.json({

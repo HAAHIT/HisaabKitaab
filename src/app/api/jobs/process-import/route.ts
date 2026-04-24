@@ -30,15 +30,15 @@ export function resolveImportVoucherType(
   originalTypeName: string,
   baseType: string
 ): VoucherType {
-  if (originalTypeName === "Sales Return" || originalTypeName === "Credit Note")
+  // [FIX] Case-insensitive comparison — Tally versions emit varying casing
+  // e.g. "Sales Return", "SALES RETURN", "sales return".
+  const normalized = originalTypeName.trim().toUpperCase();
+  if (normalized === "SALES RETURN" || normalized === "CREDIT NOTE")
     return "CREDIT_NOTE";
-  if (
-    originalTypeName === "Purchase Return" ||
-    originalTypeName === "Debit Note"
-  )
+  if (normalized === "PURCHASE RETURN" || normalized === "DEBIT NOTE")
     return "DEBIT_NOTE";
   // [X4] Preserve Contra voucher type instead of collapsing to JOURNAL
-  if (originalTypeName === "Contra") return "CONTRA";
+  if (normalized === "CONTRA") return "CONTRA";
   return baseType as VoucherType;
 }
 
@@ -51,16 +51,28 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  return processImportJob();
+}
+
+export async function processImportJob(jobId?: string) {
+
   // ── Atomic job claim ────────────────────────────────────────────────────────
   // Two-step: find oldest PENDING job, then atomically update only if it is
   // still PENDING. If two cron workers race, only one will see count=1.
-  const candidate = await prisma.importJob.findFirst({
-    where: { status: "PENDING" },
-    orderBy: { createdAt: "asc" },
-  });
+  const candidate = jobId
+    ? await prisma.importJob.findFirst({
+      where: { id: jobId, status: "PENDING" },
+    })
+    : await prisma.importJob.findFirst({
+      where: { status: "PENDING" },
+      orderBy: { createdAt: "asc" },
+    });
 
   if (!candidate) {
-    return NextResponse.json({ message: "No pending jobs" });
+    return NextResponse.json({
+      status: "IDLE",
+      message: jobId ? "Job is not pending" : "No pending jobs",
+    });
   }
 
   const claimed = await prisma.importJob.updateMany({
@@ -70,7 +82,11 @@ export async function GET(request: NextRequest) {
 
   if (claimed.count === 0) {
     // Another worker already claimed this job between our findFirst and updateMany
-    return NextResponse.json({ message: "Job already claimed by another worker" });
+    return NextResponse.json({
+      jobId: candidate.id,
+      status: "PROCESSING",
+      message: "Job already claimed by another worker",
+    });
   }
 
   const job = candidate;
@@ -94,35 +110,53 @@ export async function GET(request: NextRequest) {
       xmlText = gunzipSync(compressed).toString("utf-8");
     }
 
-    // [P1] Resolve/Create template for Tally imports so inventory rows can be saved.
-    // We use a reserved name to avoid cluttering the user's custom template list.
-    let tallyTemplateId: string | null = null;
-    const existingTallyTemplate = await prisma.billTemplate.findFirst({
-      where: { name: "__TALLY_IMPORT__", tenantId: tid },
-      select: { id: true },
-    });
-    if (existingTallyTemplate) {
-      tallyTemplateId = existingTallyTemplate.id;
-    } else {
-      // If not found, create a minimalist template that includes common Tally columns
-      const fallbackTemplate = await prisma.billTemplate.create({
-        data: {
-          tenantId: tid,
-          name: "__TALLY_IMPORT__",
-          columns: [
-            { id: "Item", name: "Item", type: "text", position: 0 },
-            { id: "Qty", name: "Qty", type: "number", position: 1 },
-            { id: "Unit", name: "Unit", type: "text", position: 2 },
-            { id: "Rate", name: "Rate", type: "number", position: 3 },
-            { id: "Amount", name: "Amount", type: "number", position: 4 },
-          ],
-          createdBy: actorId ?? "SYSTEM",
-        },
-      });
-      tallyTemplateId = fallbackTemplate.id;
+    const { vouchers, partyMasters, parseErrors } = parseTallyXml(xmlText);
+
+    if (parseErrors.length > 0 && vouchers.length === 0 && partyMasters.length === 0) {
+      throw new Error(parseErrors.join("; "));
     }
 
-    const { vouchers, partyMasters } = parseTallyXml(xmlText);
+    await prisma.importJob.update({
+      where: { id: job.id },
+      data: { totalItems: vouchers.length },
+    });
+
+    const needsTallyTemplate = vouchers.some(
+      (voucher) =>
+        voucher.inventoryRows &&
+        voucher.inventoryRows.length > 0 &&
+        (voucher.voucherType === "SALES" || voucher.voucherType === "PURCHASE")
+    );
+
+    // [P1] Resolve/Create template for Tally imports only when inventory rows
+    // need to be saved. This avoids creating a hidden template for ledger-only XML.
+    let tallyTemplateId: string | null = null;
+    if (needsTallyTemplate) {
+      const existingTallyTemplate = await prisma.billTemplate.findFirst({
+        where: { name: "__TALLY_IMPORT__", tenantId: tid },
+        select: { id: true },
+      });
+      if (existingTallyTemplate) {
+        tallyTemplateId = existingTallyTemplate.id;
+      } else {
+        // If not found, create a minimalist template that includes common Tally columns
+        const fallbackTemplate = await prisma.billTemplate.create({
+          data: {
+            tenantId: tid,
+            name: "__TALLY_IMPORT__",
+            columns: [
+              { id: "Item", name: "Item", type: "text", position: 0 },
+              { id: "Qty", name: "Qty", type: "number", position: 1 },
+              { id: "Unit", name: "Unit", type: "text", position: 2 },
+              { id: "Rate", name: "Rate", type: "number", position: 3 },
+              { id: "Amount", name: "Amount", type: "number", position: 4 },
+            ],
+            createdBy: actorId,
+          },
+        });
+        tallyTemplateId = fallbackTemplate.id;
+      }
+    }
 
     let partiesCreated = 0;
     const partyCache = new Map<string, string>();
@@ -199,19 +233,22 @@ export async function GET(request: NextRequest) {
 
     // [S2] Batch party pre-resolution — chunks of 25 to reduce lock contention
     // compared to the previous Promise.all that fired all upserts in parallel.
-    const allPartyNames = [
-      ...new Set(
-        vouchers
-          .flatMap((v) => v.lines.map((l) => l.partyName))
-          .filter((n): n is string => !!n)
-      ),
-    ].filter((name) => !partyCache.has(name));
+    const partyAccountCodes = new Map<string, AccountCode>();
+    for (const voucher of vouchers) {
+      for (const line of voucher.lines) {
+        if (line.partyName && !partyCache.has(line.partyName) && !partyAccountCodes.has(line.partyName)) {
+          partyAccountCodes.set(line.partyName, line.accountCode);
+        }
+      }
+    }
+
+    const allPartyEntries = [...partyAccountCodes.entries()];
 
     const PARTY_BATCH = 25;
-    for (let i = 0; i < allPartyNames.length; i += PARTY_BATCH) {
-      const batch = allPartyNames.slice(i, i + PARTY_BATCH);
+    for (let i = 0; i < allPartyEntries.length; i += PARTY_BATCH) {
+      const batch = allPartyEntries.slice(i, i + PARTY_BATCH);
       await Promise.all(
-        batch.map((name) => resolvePartyId(name, "SUNDRY_DEBTORS"))
+        batch.map(([name, accountCode]) => resolvePartyId(name, accountCode))
       );
     }
 
@@ -240,6 +277,8 @@ export async function GET(request: NextRequest) {
         data: { status: "PENDING" },
       });
       return NextResponse.json({
+        jobId: job.id,
+        status: "PENDING",
         message: "Import already in progress for this tenant, will retry",
       });
     }
@@ -251,12 +290,14 @@ export async function GET(request: NextRequest) {
       const dates = vouchersWithoutRemoteId.map((v) => v.entryDate.getTime());
       const rangeMin = new Date(Math.min(...dates));
       const rangeMax = new Date(Math.max(...dates));
+      // [FIX] Cast totalDebit via float8 to strip DECIMAL(19,4) trailing zeros
+      // (e.g. "100.0000" → "100") so it matches JS String(number) output.
       const existingFingerprints: { fp: string }[] = await prisma.$queryRaw`
         SELECT CONCAT(
           "voucherType", '|',
           TO_CHAR("entryDate", 'YYYY-MM-DD'), '|',
           COALESCE("narration", ''), '|',
-          "totalDebit"::text
+          "totalDebit"::float8::text
         ) as fp
         FROM "JournalEntry"
         WHERE "tenantId" = ${tid}
@@ -278,7 +319,13 @@ export async function GET(request: NextRequest) {
         // Use date string only (YYYY-MM-DD) for fingerprint — avoids IST/UTC
         // mismatch where Tally's YYYYMMDD date becomes the previous day in UTC.
         const dateStr = voucher.entryDate.toISOString().slice(0, 10);
-        const fingerprint = `${voucher.voucherType}|${dateStr}|${voucher.narration}|${String(voucher.totalDebit)}`;
+        // [FIX] Use the *resolved* voucherType (e.g. CREDIT_NOTE) to match
+        // the DB-side fingerprint, not the raw parser type (e.g. SALES).
+        const resolvedType = resolveImportVoucherType(
+          voucher.originalTypeName,
+          voucher.voucherType
+        );
+        const fingerprint = `${resolvedType}|${dateStr}|${voucher.narration}|${String(voucher.totalDebit)}`;
         if (duplicateFingerprints.has(fingerprint)) {
           return "skipped";
         }
@@ -315,7 +362,7 @@ export async function GET(request: NextRequest) {
               const createdBill = await tx.bill.create({
                 data: {
                   tenantId: tid,
-                  billNumber: voucher.reference || `IMP-${Date.now()}`,
+                  billNumber: voucher.reference || `IMP-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`,  // [FIX] random suffix prevents unique constraint collision
                   templateId: tallyTemplateId,
                   partyId: partyLine.partyId!,
                   customerName: partyLine.partyName ?? "Customer",
@@ -455,24 +502,32 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       jobId: job.id,
+      status: "COMPLETED",
+      totalItems: vouchers.length,
       partiesCreated,
       imported,
       skipped,
-      failed
+      failed,
+      parseErrors,
     });
 
   } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
     if (job?.id) {
       await prisma.importJob.update({
         where: { id: job.id },
         data: {
           status: "FAILED",
-          error: err instanceof Error ? err.message : String(err)
+          error
         }
       });
     }
     logError("import.process.job-failed", { error: err });
-    return NextResponse.json({ error: "Job failed" }, { status: 500 });
+    return NextResponse.json({
+      jobId: job?.id,
+      status: "FAILED",
+      error,
+    }, { status: 500 });
   } finally {
     // [W1-FIX] Guaranteed lock release in finally — covers success, catch, and
     // early returns. pg_advisory_unlock returns false (not an error) if the lock
