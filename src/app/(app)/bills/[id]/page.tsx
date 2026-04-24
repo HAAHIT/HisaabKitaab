@@ -21,6 +21,7 @@ import { BillActionBar } from "@/components/bills/BillActionBar";
 import type { ColumnDef } from "@/lib/formula";
 import { shareBill } from "@/lib/share";
 import { numberToIndianWords } from "@/lib/number-to-words";
+import { aggregateTaxByRate } from "@/lib/tax-summary";
 
 interface BillDetail {
   id: string;
@@ -46,8 +47,10 @@ interface BillDetail {
   taxPercent: number;
   taxAmount: number;
   grandTotal: number;
+  roundOff: number;
   placeOfSupply: string | null;
   hsnCode: string | null;
+  shippingAddress: string | null;
   status: string;
   createdAt: string;
   template: {
@@ -173,6 +176,7 @@ export default function BillDetailPage({
             subtotal: currentBill.subtotal,
             taxAmount: currentBill.taxAmount,
             grandTotal: currentBill.grandTotal,
+            roundOff: currentBill.roundOff || 0,
             isInterState: currentBill.isInterState === true,
             status,
           });
@@ -365,7 +369,13 @@ export default function BillDetailPage({
                     <td className="py-3 px-2 text-default-400">{i + 1}</td>
                     {columns.map((col) => (
                       <td key={col.name} className={`py-3 px-2 ${col.type === "number" || col.type === "formula" ? "text-right font-mono" : ""} ${col.type === "formula" ? "text-success font-medium" : ""}`}>
-                        {col.type === "number" || col.type === "formula" ? typeof row[col.id] === "number" ? formatColumnValue(col.name, row[col.id] as number) : row[col.id] || "—" : row[col.id] || "—"}
+                        {(col.type === "number" || col.type === "formula")
+                          ? (() => {
+                            const raw = row[col.id];
+                            const num = typeof raw === "number" ? raw : parseFloat(String(raw));
+                            return !isNaN(num) ? formatColumnValue(col.name, num) : raw || "—";
+                          })()
+                          : row[col.id] || "—"}
                       </td>
                     ))}
                   </tr>
@@ -387,6 +397,14 @@ export default function BillDetailPage({
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between"><span className="text-default-500">Subtotal</span><span className="font-medium">{formatCurrency(bill.subtotal)}</span></div>
                 <div className="flex justify-between"><span className="text-default-500">Tax ({bill.taxPercent}%)</span><span className="font-medium">{formatCurrency(bill.taxAmount)}</span></div>
+                {bill.roundOff !== 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-default-500">Round Off</span>
+                    <span className={`font-medium font-mono ${bill.roundOff > 0 ? 'text-success' : 'text-danger'}`}>
+                      {bill.roundOff > 0 ? '+' : ''}{formatCurrency(bill.roundOff)}
+                    </span>
+                  </div>
+                )}
                 <Divider />
                 <div className="flex justify-between"><span className="text-xl font-bold">Grand Total</span><span className="text-xl font-bold text-primary">{formatCurrency(bill.grandTotal)}</span></div>
               </div>
@@ -491,7 +509,7 @@ export default function BillDetailPage({
           </div>
         </div>
 
-        {/* Bill To / Ship To */}
+        {/* Bill To / Supply Details / Ship To */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: '1fr 1fr',
@@ -521,6 +539,14 @@ export default function BillDetailPage({
             {bill.hsnCode && <div><strong>HSN/SAC Code:</strong> <span style={{ fontFamily: 'monospace' }}>{bill.hsnCode}</span></div>}
             <div><strong>Supply Type:</strong> {bill.isInterState ? "Inter-State (IGST)" : "Intra-State (CGST + SGST)"}</div>
           </div>
+          {bill.shippingAddress && (
+            <div style={{ border: '1px solid #ccc', padding: '12px', borderRadius: '4px', gridColumn: '1 / -1' }}>
+              <div style={{ fontSize: '8pt', fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '6px' }}>
+                Ship To
+              </div>
+              <div style={{ color: '#444', whiteSpace: 'pre-line' }}>{bill.shippingAddress}</div>
+            </div>
+          )}
         </div>
 
         {/* Line Items Table */}
@@ -552,7 +578,11 @@ export default function BillDetailPage({
                     fontFamily: col.type === "number" || col.type === "formula" ? 'monospace' : 'inherit',
                   }}>
                     {col.type === "number" || col.type === "formula"
-                      ? typeof row[col.id] === "number" ? formatColumnValue(col.name, row[col.id] as number) : row[col.id] || "—"
+                      ? (() => {
+                        const raw = row[col.id];
+                        const num = typeof raw === "number" ? raw : parseFloat(String(raw));
+                        return !isNaN(num) ? formatColumnValue(col.name, num) : raw || "—";
+                      })()
                       : row[col.id] || "—"}
                   </td>
                 ))}
@@ -595,43 +625,85 @@ export default function BillDetailPage({
                   <td style={{ padding: '6px 8px', borderBottom: '1px solid #eee' }}>Subtotal</td>
                   <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', borderBottom: '1px solid #eee' }}>{formatCurrency(bill.subtotal)}</td>
                 </tr>
-                {bill.taxAmount > 0 && !bill.isInterState && (
-                  <>
-                    <tr>
-                      <td style={{ padding: '6px 8px', borderBottom: '1px solid #eee', color: '#444' }}>
-                        CGST ({(bill.subtotal > 0 ? (bill.taxAmount / bill.subtotal * 100) / 2 : 0).toFixed(1)}%)
-                      </td>
-                      <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', borderBottom: '1px solid #eee' }}>
-                        {formatCurrency(Math.round((bill.taxAmount / 2) * 100) / 100)}
-                      </td>
-                    </tr>
-                    <tr>
-                      <td style={{ padding: '6px 8px', borderBottom: '1px solid #eee', color: '#444' }}>
-                        SGST ({(bill.subtotal > 0 ? (bill.taxAmount / bill.subtotal * 100) / 2 : 0).toFixed(1)}%)
-                      </td>
-                      <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', borderBottom: '1px solid #eee' }}>
-                        {formatCurrency(Math.round((bill.taxAmount / 2) * 100) / 100)}
-                      </td>
-                    </tr>
-                  </>
-                )}
-                {bill.taxAmount > 0 && bill.isInterState && (
+                {(() => {
+                  const slabs = aggregateTaxByRate(
+                    bill.rows,
+                    columns,
+                    bill.isInterState === true,
+                    { subtotal: bill.subtotal, taxAmount: bill.taxAmount, taxPercent: bill.taxPercent, hsnCode: bill.hsnCode }
+                  );
+                  if (bill.taxAmount === 0) {
+                    return (
+                      <tr>
+                        <td style={{ padding: '6px 8px', borderBottom: '1px solid #eee', color: '#444' }}>Tax</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', borderBottom: '1px solid #eee' }}>{formatCurrency(0)}</td>
+                      </tr>
+                    );
+                  }
+                  if (slabs.length === 1) {
+                    // Single-slab: show traditional CGST/SGST or IGST rows
+                    const slab = slabs[0];
+                    if (bill.isInterState) {
+                      return (
+                        <tr>
+                          <td style={{ padding: '6px 8px', borderBottom: '1px solid #eee', color: '#444' }}>
+                            IGST ({slab.rate}%)
+                          </td>
+                          <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', borderBottom: '1px solid #eee' }}>
+                            {formatCurrency(slab.igst)}
+                          </td>
+                        </tr>
+                      );
+                    }
+                    return (
+                      <>
+                        <tr>
+                          <td style={{ padding: '6px 8px', borderBottom: '1px solid #eee', color: '#444' }}>
+                            CGST ({(slab.rate / 2).toFixed(1)}%)
+                          </td>
+                          <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', borderBottom: '1px solid #eee' }}>
+                            {formatCurrency(slab.cgst)}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td style={{ padding: '6px 8px', borderBottom: '1px solid #eee', color: '#444' }}>
+                            SGST ({(slab.rate / 2).toFixed(1)}%)
+                          </td>
+                          <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', borderBottom: '1px solid #eee' }}>
+                            {formatCurrency(slab.sgst)}
+                          </td>
+                        </tr>
+                      </>
+                    );
+                  }
+                  // Multi-slab: show per-slab breakdown
+                  return (
+                    <>
+                      {slabs.map((slab, idx) => (
+                        <tr key={idx}>
+                          <td style={{ padding: '6px 8px', borderBottom: '1px solid #eee', color: '#444' }}>
+                            {bill.isInterState
+                              ? `IGST @${slab.rate}%`
+                              : `GST @${slab.rate}% (${(slab.rate / 2).toFixed(1)}+${(slab.rate / 2).toFixed(1)})`}
+                            {slab.hsnCode !== '—' && (
+                              <span style={{ fontSize: '7pt', color: '#888', marginLeft: '4px' }}>[{slab.hsnCode}]</span>
+                            )}
+                          </td>
+                          <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', borderBottom: '1px solid #eee' }}>
+                            {formatCurrency(slab.totalTax)}
+                          </td>
+                        </tr>
+                      ))}
+                    </>
+                  );
+                })()}
+                {bill.roundOff !== 0 && (
                   <tr>
                     <td style={{ padding: '6px 8px', borderBottom: '1px solid #eee', color: '#444' }}>
-                      IGST ({(bill.subtotal > 0 ? (bill.taxAmount / bill.subtotal * 100) : 0).toFixed(1)}%)
+                      Round Off
                     </td>
                     <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', borderBottom: '1px solid #eee' }}>
-                      {formatCurrency(bill.taxAmount)}
-                    </td>
-                  </tr>
-                )}
-                {bill.taxAmount === 0 && (
-                  <tr>
-                    <td style={{ padding: '6px 8px', borderBottom: '1px solid #eee', color: '#444' }}>
-                      Tax
-                    </td>
-                    <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', borderBottom: '1px solid #eee' }}>
-                      {formatCurrency(0)}
+                      {bill.roundOff > 0 ? '+' : ''}{formatCurrency(bill.roundOff)}
                     </td>
                   </tr>
                 )}

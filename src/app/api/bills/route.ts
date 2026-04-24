@@ -117,10 +117,12 @@ const CreateBillSchema = z.object({
   subtotal: z.number().nonnegative().default(0),
   taxAmount: z.number().nonnegative().default(0),
   grandTotal: z.number().nonnegative().default(0),
+  roundOff: z.number().min(-0.99).max(0.99).default(0), // Round-off adjustment (±₹0.99 max)
   status: z.string().optional(),
   isInterState: z.boolean().optional(),
   paymentMode: z.string().optional(),
   hsnCode: z.string().nullish(),
+  shippingAddress: z.string().nullish(), // Ship To address
   date: z.string().optional(), // [ADDED] Allow custom issue dates
 }).superRefine((data, ctx) => {
   // [P0] FINAL bills must always declare place of supply for GSTR-1 compliance.
@@ -144,9 +146,9 @@ const CreateBillSchema = z.object({
       (row) => {
         if (!row || typeof row !== "object") return false;
         // Check if ANY value contains an HSN code (either col_hsn, _hsnCode, or any key containing 'hsn')
-        return Object.entries(row).some(([key, val]) => 
-          (key === "col_hsn" || key === "_hsnCode" || key.toLowerCase().includes("hsn")) && 
-          typeof val === "string" && 
+        return Object.entries(row).some(([key, val]) =>
+          (key === "col_hsn" || key === "_hsnCode" || key.toLowerCase().includes("hsn")) &&
+          typeof val === "string" &&
           val.trim() !== ""
         );
       }
@@ -363,8 +365,10 @@ export async function POST(request: NextRequest) {
       subtotal,
       taxAmount,
       grandTotal,
+      roundOff,
       status,
       hsnCode,
+      shippingAddress,
       date,
     } = body;
 
@@ -454,7 +458,7 @@ export async function POST(request: NextRequest) {
       where: { id: tenantId },
       select: { gstin: true },
     });
-    
+
     const resolvedGrandTotal =
       typeof grandTotal === "number" && Number.isFinite(grandTotal)
         ? grandTotal
@@ -479,7 +483,7 @@ export async function POST(request: NextRequest) {
     const effectiveGstin = gstin || party.gstin;
     const isInterState = deriveIsInterState(effectiveGstin, tenant?.gstin, body.isInterState);
     const normalizedPaymentMode = normalizePaymentMode(body.paymentMode);
-    
+
     // Use the explicitly provided bill date if present, otherwise default to now
     let billDateObj = new Date();
     if (typeof date === "string" && date.trim() !== "") {
@@ -495,7 +499,7 @@ export async function POST(request: NextRequest) {
     const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    
+
     const snapshot = buildBillSnapshotFromParty(party, {
       customerName,
       customerPhone,
@@ -554,10 +558,12 @@ export async function POST(request: NextRequest) {
           taxPercent: taxPercent ?? billingSettings.defaultTaxPercent,
           taxAmount: taxAmount || 0,
           grandTotal: resolvedGrandTotal,
+          roundOff: roundOff || 0,
           status: billStatus,
           isInterState,
           placeOfSupply: body.placeOfSupply ?? null,  // [B1] GSTR-1 mandatory field
           hsnCode: hsnCode ?? null, // Fallback HSN Code
+          shippingAddress: shippingAddress ?? null,
           date: billDateObj, // Store custom bill date 
           createdBy: userId!,
           isDeleted: false,
@@ -601,6 +607,7 @@ export async function POST(request: NextRequest) {
           subtotal: createdBill.subtotal.toNumber(),
           taxAmount: createdBill.taxAmount.toNumber(),
           grandTotal: createdBill.grandTotal.toNumber(),
+          roundOff: roundOff || 0,
           createdBy: userId!,
           entryDate: createdBill.date, // Use the custom bill date for accounting ledgers
           isInterState,

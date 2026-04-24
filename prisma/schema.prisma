@@ -154,8 +154,10 @@ model Bill {
   taxAmount       Decimal        @default(0) @db.Decimal(19, 4) // [B3] Float → Decimal
   cessAmount      Decimal        @default(0) @db.Decimal(19, 4) // GST Cess amount charged on this bill
   grandTotal      Decimal        @db.Decimal(19, 4) // [B3] Float → Decimal
+  roundOff        Decimal        @default(0) @db.Decimal(19, 4) // Round-off adjustment (±₹0.99 max)
   placeOfSupply   String? // [B1] GSTR-1 mandatory field
   hsnCode         String? // [ADDED] Fallback HSN wrapper for older bills
+  shippingAddress String? // Ship To address (when different from billing address)
   status          BillStatus     @default(DRAFT)
   createdBy       String
   createdAt       DateTime       @default(now())

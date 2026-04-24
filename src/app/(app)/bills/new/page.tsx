@@ -93,6 +93,9 @@ export default function NewBillPage() {
   const [didAutoFocusRow, setDidAutoFocusRow] = useState(false);
   const [tenantGstin, setTenantGstin] = useState<string | null>(null);
   const [billDate, setBillDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [enableRoundOff, setEnableRoundOff] = useState(false);
+  const [shippingAddress, setShippingAddress] = useState("");
+  const [showShipTo, setShowShipTo] = useState(false);
 
   const fetchFormData = useCallback(async () => {
     setLoading(true);
@@ -137,8 +140,8 @@ export default function NewBillPage() {
           setSelectedParty(p);
         }
       })
-      .catch(() => {/* silently ignore — user can search manually */});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+      .catch(() => {/* silently ignore — user can search manually */ });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preselectedPartyId]);
 
   function showToast(message: string, type: "success" | "error") {
@@ -236,6 +239,15 @@ export default function NewBillPage() {
     };
   }, [rows, selectedTemplate]);
 
+  const roundOff = useMemo(() => {
+    if (!enableRoundOff) return 0;
+    return Math.round(grandTotal) - grandTotal;
+  }, [enableRoundOff, grandTotal]);
+
+  const roundedGrandTotal = useMemo(() => {
+    return enableRoundOff ? Math.round(grandTotal) : grandTotal;
+  }, [enableRoundOff, grandTotal]);
+
   const firstEditableColumnId = useMemo(() => {
     if (!selectedTemplate) {
       return null;
@@ -318,10 +330,12 @@ export default function NewBillPage() {
           subtotal,
           taxPercent: 0,
           taxAmount,
-          grandTotal,
+          grandTotal: roundedGrandTotal,
+          roundOff,
           isInterState,
           placeOfSupply: placeOfSupply || null,
           hsnCode: null,
+          shippingAddress: showShipTo && shippingAddress.trim() ? shippingAddress.trim() : null,
           notes: notes.trim() || null,
           terms: terms.trim() || null,
           status,
@@ -347,9 +361,8 @@ export default function NewBillPage() {
     <>
       {toast && (
         <div
-          className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${
-            toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
-          }`}
+          className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
+            }`}
         >
           {toast.message}
         </div>
@@ -531,7 +544,7 @@ export default function NewBillPage() {
                         {t("common.change")}
                       </Button>
                     </div>
-                    
+
                     <div className="space-y-1 text-sm text-default-500">
                       {selectedParty.phone && (
                         <p className="flex items-center gap-2">
@@ -549,11 +562,10 @@ export default function NewBillPage() {
                         </p>
                       )}
                     </div>
-                    
+
                     {selectedParty.currentBalance !== 0 && (
-                      <div className={`mt-3 pt-3 border-t border-default-200 text-sm font-medium flex items-center gap-2 ${
-                        selectedParty.currentBalance < 0 ? "text-success" : "text-danger"
-                      }`}>
+                      <div className={`mt-3 pt-3 border-t border-default-200 text-sm font-medium flex items-center gap-2 ${selectedParty.currentBalance < 0 ? "text-success" : "text-danger"
+                        }`}>
                         <div className={`w-2 h-2 rounded-full ${selectedParty.currentBalance < 0 ? "bg-success" : "bg-danger"}`} />
                         {selectedParty.currentBalance < 0
                           ? `To Get: ₹${Math.abs(selectedParty.currentBalance).toLocaleString("en-IN")}`
@@ -651,11 +663,11 @@ export default function NewBillPage() {
                                       const nextRows = [...currentRows];
                                       const newRow = { ...nextRows[rowIndex] };
                                       newRow[column.id] = item.name;
-                                      
+
                                       if (selectedTemplate) {
                                         // 1. Rate Mapping
-                                        const rateCol = selectedTemplate.columns.find(c => 
-                                          c.id === "col_rate" || 
+                                        const rateCol = selectedTemplate.columns.find(c =>
+                                          c.id === "col_rate" ||
                                           (c.type === "number" && (c.name.toLowerCase() === "rate" || c.name.toLowerCase() === "price" || c.name.toLowerCase().includes("rate")))
                                         );
                                         if (rateCol && item.rate != null) {
@@ -663,17 +675,17 @@ export default function NewBillPage() {
                                         }
 
                                         // 2. Tax % Mapping
-                                        const taxCol = selectedTemplate.columns.find(c => 
-                                          c.id === "col_tax_percent" || 
+                                        const taxCol = selectedTemplate.columns.find(c =>
+                                          c.id === "col_tax_percent" ||
                                           (c.type === "number" && (c.name.toLowerCase().includes("tax %") || c.name.toLowerCase().includes("gst %") || c.name.toLowerCase() === "tax percent"))
                                         );
                                         if (taxCol && item.taxRate != null) {
                                           newRow[taxCol.id] = item.taxRate;
                                         }
-                                        
+
                                         // 3. HSN Code Mapping
-                                        const hsnCol = selectedTemplate.columns.find(c => 
-                                          c.id === "col_hsn" || 
+                                        const hsnCol = selectedTemplate.columns.find(c =>
+                                          c.id === "col_hsn" ||
                                           (c.type === "text" && (c.name.toLowerCase().includes("hsn") || c.name.toLowerCase().includes("sac")))
                                         );
                                         if (hsnCol && item.hsnCode) {
@@ -792,6 +804,29 @@ export default function NewBillPage() {
                     variant="bordered"
                     minRows={3}
                   />
+                  {/* Ship To Address */}
+                  <div>
+                    <label className="flex items-center gap-1.5 select-none cursor-pointer mb-2">
+                      <input
+                        type="checkbox"
+                        checked={showShipTo}
+                        onChange={(e) => setShowShipTo(e.target.checked)}
+                        className="accent-primary"
+                      />
+                      <span className="text-sm text-default-600">Ship to a different address</span>
+                    </label>
+                    {showShipTo && (
+                      <Textarea
+                        label="Shipping Address"
+                        placeholder="Enter shipping / delivery address..."
+                        value={shippingAddress}
+                        onValueChange={setShippingAddress}
+                        variant="bordered"
+                        minRows={2}
+                        className="animate-slide-up"
+                      />
+                    )}
+                  </div>
                 </CardBody>
               </Card>
 
@@ -848,10 +883,27 @@ export default function NewBillPage() {
                       />
                     </div>
                     <Divider />
+                    {/* Round-Off Toggle */}
+                    <div className="flex items-center justify-between">
+                      <label className="flex items-center gap-1.5 select-none cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={enableRoundOff}
+                          onChange={(e) => setEnableRoundOff(e.target.checked)}
+                          className="accent-primary"
+                        />
+                        <span className="text-xs text-default-500">Round off to nearest ₹</span>
+                      </label>
+                      {enableRoundOff && roundOff !== 0 && (
+                        <span className={`text-sm font-mono ${roundOff > 0 ? 'text-success' : 'text-danger'}`}>
+                          {roundOff > 0 ? '+' : ''}{formatCurrency(roundOff)}
+                        </span>
+                      )}
+                    </div>
                     <div className="flex justify-between">
                       <span className="text-lg font-bold">Grand Total</span>
                       <span className="text-lg font-bold text-primary">
-                        {formatCurrency(grandTotal)}
+                        {formatCurrency(roundedGrandTotal)}
                       </span>
                     </div>
                   </div>

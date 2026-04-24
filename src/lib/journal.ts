@@ -44,6 +44,7 @@ interface SalesBillJournalInput {
   subtotal: number;
   taxAmount: number;
   grandTotal: number;
+  roundOff?: number; // Explicit round-off amount from bill UI
   createdBy: string;
   entryDate: Date;
   isInterState?: boolean;
@@ -127,7 +128,7 @@ export async function createJournalEntry(
   if (Math.abs(totalDebit - totalCredit) > 0.001) {
     throw new Error(
       `UNBALANCED JOURNAL ENTRY: Debit (${totalDebit}) != Credit (${totalCredit}). ` +
-        `Narration: "${params.narration}".`
+      `Narration: "${params.narration}".`
     );
   }
 
@@ -187,8 +188,11 @@ export async function journalForSalesBill(
   tenantId: string,
   bill: SalesBillJournalInput
 ) {
-  const theoreticalTotal = roundTo2(bill.subtotal + bill.taxAmount);
-  const diff = roundTo2(bill.grandTotal - theoreticalTotal);
+  // buildSalesTaxLines rounds taxAmount to nearest rupee (Section 170 CGST Act).
+  // diff must use the same rounded value so ROUND_OFF exactly balances the entry.
+  const roundedTax = bill.taxAmount > 0 ? Math.round(bill.taxAmount) : 0;
+  const creditSideBeforeRoundOff = roundTo2(bill.subtotal + roundedTax);
+  const diff = roundTo2(bill.grandTotal - creditSideBeforeRoundOff);
 
   return createJournalEntry(tx, {
     tenantId,
@@ -213,12 +217,12 @@ export async function journalForSalesBill(
       ...buildSalesTaxLines(bill.taxAmount, "CREDIT", bill.isInterState),
       ...(diff !== 0
         ? [
-            {
-              accountCode: "ROUND_OFF" as const,
-              debit: diff < 0 ? Math.abs(diff) : 0,
-              credit: diff > 0 ? diff : 0,
-            },
-          ]
+          {
+            accountCode: "ROUND_OFF" as const,
+            debit: diff < 0 ? Math.abs(diff) : 0,
+            credit: diff > 0 ? diff : 0,
+          },
+        ]
         : []),
     ],
   });
@@ -229,8 +233,9 @@ export async function journalForCancelledSalesBill(
   tenantId: string,
   bill: SalesBillJournalInput
 ) {
-  const theoreticalTotal = roundTo2(bill.subtotal + bill.taxAmount);
-  const diff = roundTo2(bill.grandTotal - theoreticalTotal);
+  const roundedTax = bill.taxAmount > 0 ? Math.round(bill.taxAmount) : 0;
+  const creditSideBeforeRoundOff = roundTo2(bill.subtotal + roundedTax);
+  const diff = roundTo2(bill.grandTotal - creditSideBeforeRoundOff);
 
   return createJournalEntry(tx, {
     tenantId,
@@ -257,12 +262,12 @@ export async function journalForCancelledSalesBill(
       ...buildSalesTaxLines(bill.taxAmount, "DEBIT", bill.isInterState),
       ...(diff !== 0
         ? [
-            {
-              accountCode: "ROUND_OFF" as const,
-              debit: diff > 0 ? diff : 0,
-              credit: diff < 0 ? Math.abs(diff) : 0,
-            },
-          ]
+          {
+            accountCode: "ROUND_OFF" as const,
+            debit: diff > 0 ? diff : 0,
+            credit: diff < 0 ? Math.abs(diff) : 0,
+          },
+        ]
         : []),
     ],
   });

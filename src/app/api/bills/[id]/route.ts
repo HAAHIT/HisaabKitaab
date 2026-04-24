@@ -33,9 +33,11 @@ const ALLOWED_BILL_PATCH_KEYS = new Set([
   "subtotal",
   "taxAmount",
   "grandTotal",
+  "roundOff",
   "status",
   "isInterState",
   "hsnCode",
+  "shippingAddress",
 ]);
 
 const ALLOWED_BILL_PATCH_STATUSES = new Set(["DRAFT", "FINAL"]);
@@ -122,6 +124,7 @@ export async function GET(
     taxPercent: bill.taxPercent?.toNumber() ?? 0,
     taxAmount: bill.taxAmount?.toNumber() ?? 0,
     grandTotal: bill.grandTotal?.toNumber() ?? 0,
+    roundOff: bill.roundOff?.toNumber() ?? 0,
   };
 
   return NextResponse.json({ bill: serializedBill });
@@ -324,6 +327,19 @@ export async function PATCH(
     if (hasOwn(body, "hsnCode")) {
       const hsn = body.hsnCode;
       updateData.hsnCode = typeof hsn === "string" && hsn.trim() ? hsn.trim() : null;
+    }
+
+    // Round-off: clamp to ±0.99
+    if (hasOwn(body, "roundOff")) {
+      const ro = parseOptionalNumber(body.roundOff);
+      if (ro !== undefined && Math.abs(ro) <= 0.99) {
+        updateData.roundOff = ro;
+      }
+    }
+
+    // Shipping address
+    if (hasOwn(body, "shippingAddress")) {
+      updateData.shippingAddress = normalizeOptionalString(body.shippingAddress);
     }
 
     let nextPartyId = existing.partyId;
@@ -597,6 +613,7 @@ export async function PATCH(
       }
 
       if (existing.status !== "FINAL" && finalStatus === "FINAL") {
+        const nextRoundOff = (updateData.roundOff as number | undefined) ?? 0;
         await journalForSalesBill(tx, tenantId, {
           id: updatedBill.id,
           billNumber: updatedBill.billNumber,
@@ -605,6 +622,7 @@ export async function PATCH(
           subtotal: nextSubtotal,
           taxAmount: nextTaxAmount,
           grandTotal: nextGrandTotal,
+          roundOff: nextRoundOff,
           createdBy: userId || updatedBill.createdBy,
           entryDate: updatedBill.updatedAt,
           isInterState,
