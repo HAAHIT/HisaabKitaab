@@ -101,7 +101,10 @@ export async function processImportJob(jobId?: string) {
 
   try {
     const tid = job.tenantId;
-    const actorId = "system"; // Internal cron actor
+    // Use the uploading user's ID for Bill.createdBy (FK to User table).
+    // Fall back to "system" only for non-FK fields (JournalEntry, AuditLog, BillTemplate).
+    const billCreatorId = job.createdBy ?? "system";
+    const actorId = job.createdBy ?? "system";
 
     // [S-W1] Decompress if stored with gzip prefix (backwards-compatible with raw XML)
     let xmlText = job.xmlData;
@@ -375,7 +378,7 @@ export async function processImportJob(jobId?: string) {
                   isInterState: voucher.isInterState ?? false,
                   placeOfSupply: voucher.placeOfSupply,
                   date: voucher.entryDate,
-                  createdBy: actorId ?? "SYSTEM",
+                  createdBy: billCreatorId,
                 },
               });
               billId = createdBill.id;

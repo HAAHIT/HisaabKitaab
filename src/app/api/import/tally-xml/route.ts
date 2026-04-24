@@ -95,6 +95,7 @@ export async function POST(request: NextRequest) {
   const job = await prisma.importJob.create({
     data: {
       tenantId: tid,
+      createdBy: userId,
       totalItems: totalItems,
       xmlData: compressedXml,
       status: "PENDING",

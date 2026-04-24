@@ -421,6 +421,7 @@ enum MeasurementStatus {
 model ImportJob {
   id         String    @id @default(cuid())
   tenantId   String
+  createdBy  String?   // User ID of the admin who initiated the import (used for Bill FK)
   status     JobStatus @default(PENDING) // PENDING, PROCESSING, COMPLETED, FAILED
   totalItems Int       @default(0)
   processed  Int       @default(0)
