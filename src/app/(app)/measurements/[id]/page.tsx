@@ -333,6 +333,7 @@ export default function MeasurementDetailPage({
               />
               <Button
                 color="primary"
+                variant="solid"
                 className="w-full font-semibold shadow-md"
                 onPress={handleUpdateStatus}
                 isLoading={saving}

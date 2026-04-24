@@ -293,6 +293,7 @@ export function EditPaymentModal({
                             </Button>
                             <Button
                                 color="primary"
+                                variant="solid"
                                 onPress={handleSave}
                                 isLoading={isSaving}
                                 className="font-semibold"

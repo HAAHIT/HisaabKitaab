@@ -712,7 +712,7 @@ export default function NewBillPage() {
                                 aria-label={`Row ${rowIndex + 1} ${column.name}`}
                                 value={String(row[column.id] || "")}
                                 onValueChange={(value) => updateCell(rowIndex, column.id, value)}
-                                variant="underlined"
+                                variant="bordered"
                                 size="sm"
                                 className="min-w-[80px]"
                               />
@@ -727,7 +727,7 @@ export default function NewBillPage() {
                                     updateCell(rowIndex, column.id, value);
                                   }
                                 }}
-                                variant="underlined"
+                                variant="bordered"
                                 size="sm"
                                 className="min-w-[120px]"
                               >
@@ -742,7 +742,7 @@ export default function NewBillPage() {
                                 aria-label={`Row ${rowIndex + 1} ${column.name}`}
                                 value={String(row[column.id] || "")}
                                 onValueChange={(value) => updateCell(rowIndex, column.id, value)}
-                                variant="underlined"
+                                variant="bordered"
                                 size="sm"
                                 className="min-w-[130px]"
                               />
@@ -752,7 +752,7 @@ export default function NewBillPage() {
                                 aria-label={`Row ${rowIndex + 1} ${column.name}`}
                                 value={String(row[column.id] || "")}
                                 onValueChange={(value) => updateCell(rowIndex, column.id, value)}
-                                variant="underlined"
+                                variant="bordered"
                                 size="sm"
                                 className="min-w-[120px]"
                               />
