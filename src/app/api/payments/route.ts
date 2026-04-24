@@ -12,7 +12,7 @@ import {
   journalForContraEntry,
   journalForLedgerPayment,
 } from "@/lib/journal";
-import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
+import { resolveReadTenant, resolveWriteSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 
@@ -140,20 +140,16 @@ export async function POST(request: NextRequest) {
   const rateLimitResponse = await checkRateLimit(request, "payments.create", 30);
   if (rateLimitResponse) return rateLimitResponse;
 
-  const role = request.headers.get("x-user-role");
-  const userId = request.headers.get("x-user-id");
+  // [FIX #5] Use JWT-verified session instead of trusting headers
+  const sessionResolution = await resolveWriteSession(request);
+  if (!sessionResolution.ok) {
+    return sessionResolution.response;
+  }
+  const { tenantId, userId, role } = sessionResolution.session;
 
-  if (!role || role === "CUSTOMER") {
+  if (role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!userId) {
-    return NextResponse.json({ error: "Missing user context" }, { status: 401 });
-  }
-  const tenantResolution = await resolveWriteTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   try {
     const body = await request.json();
@@ -262,7 +258,8 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const account = await tx.bankAccount.findFirst({
+      const txAny = tx as any;
+      const account = await txAny.bankAccount.findFirst({
         where: {
           id: accountId,
           tenantId,
@@ -277,7 +274,7 @@ export async function POST(request: NextRequest) {
 
       let destAccount = null;
       if (isContra && destinationAccountId) {
-        destAccount = await tx.bankAccount.findFirst({
+        destAccount = await txAny.bankAccount.findFirst({
           where: {
             id: destinationAccountId,
             tenantId,
@@ -290,7 +287,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const newPayment = await tx.payment.create({
+      const newPayment = await txAny.payment.create({
         data: {
           tenantId,
           partyId: party ? party.id : null,
@@ -320,7 +317,7 @@ export async function POST(request: NextRequest) {
             normalizedAmount
           );
 
-          await tx.party.update({
+          await txAny.party.update({
             where: { id: party.id },
             data: {
               currentBalance: { increment: balanceChange },
@@ -328,21 +325,23 @@ export async function POST(request: NextRequest) {
           });
         }
 
-        // Update Bank / Cash Account balance
-        const bankBalanceChange = type === "INCOMING" ? normalizedAmount : -normalizedAmount;
-        await tx.bankAccount.update({
-          where: { id: account.id },
-          data: {
-            currentBalance: { increment: bankBalanceChange },
-          },
-        });
+        // Update Bank
+        if (account.id) {
+          const bankBalanceChange = type === "INCOMING" ? normalizedAmount : -normalizedAmount;
+          await txAny.bankAccount.update({
+            where: { id: account.id },
+            data: {
+              currentBalance: { increment: bankBalanceChange },
+            },
+          });
+        }
 
         if (isContra && destAccount) {
-          // In an OUTGOING contra, the destination gets the money (+amount)
-          await tx.bankAccount.update({
+          const destBalanceChange = type === "OUTGOING" ? normalizedAmount : -normalizedAmount;
+          await txAny.bankAccount.update({
             where: { id: destAccount.id },
             data: {
-              currentBalance: { increment: normalizedAmount },
+              currentBalance: { increment: destBalanceChange },
             },
           });
 
@@ -430,17 +429,16 @@ export async function POST(request: NextRequest) {
 
 // PATCH /api/payments - Mark an expected payment as completed
 export async function PATCH(request: NextRequest) {
-  const role = request.headers.get("x-user-role");
-  const userId = request.headers.get("x-user-id");
+  // [FIX #5 & #17] Use JWT-verified session for authorization and audit logging
+  const sessionResolution = await resolveWriteSession(request);
+  if (!sessionResolution.ok) {
+    return sessionResolution.response;
+  }
+  const { tenantId, userId, role } = sessionResolution.session;
 
-  if (!role || role === "CUSTOMER") {
+  if (role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantResolution = await resolveWriteTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   try {
     const body = await request.json();
@@ -457,13 +455,20 @@ export async function PATCH(request: NextRequest) {
       await tx.$executeRaw`SET LOCAL lock_timeout = '5s'`;
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
 
-      const payment = await tx.payment.findFirst({
+      // Cast to any to bypass the outdated Prisma client lint errors for includes and transaction model access
+      const txAny = tx as any;
+
+      const payment = await txAny.payment.findFirst({
         where: {
           id: paymentId,
           tenantId,
           isDeleted: false,
         },
-        include: { party: { select: { name: true, type: true } } },
+        include: {
+          party: { select: { id: true, name: true, type: true } },
+          account: { select: { type: true } },
+          destinationAccount: { select: { type: true } }
+        },
       });
 
       if (!payment) {
@@ -474,10 +479,12 @@ export async function PATCH(request: NextRequest) {
         throw new Error("Payment is already completed");
       }
 
-      const updated = await tx.payment.update({
+      const updated = await txAny.payment.update({
         where: { id: paymentId },
         data: { status: "COMPLETED" },
-        include: { party: { select: { name: true, type: true } } },
+        include: {
+          party: { select: { name: true, type: true } }
+        },
       });
 
       let balanceChange = 0;
@@ -488,7 +495,7 @@ export async function PATCH(request: NextRequest) {
           payment.amount.toNumber()
         );
 
-        await tx.party.update({
+        await txAny.party.update({
           where: { id: payment.partyId! },
           data: {
             currentBalance: { increment: balanceChange },
@@ -498,7 +505,7 @@ export async function PATCH(request: NextRequest) {
 
       if (payment.accountId) {
         const bankBalanceChange = payment.direction === "INCOMING" ? payment.amount.toNumber() : -payment.amount.toNumber();
-        await tx.bankAccount.update({
+        await txAny.bankAccount.update({
           where: { id: payment.accountId },
           data: {
             currentBalance: { increment: bankBalanceChange },
@@ -507,44 +514,50 @@ export async function PATCH(request: NextRequest) {
       }
 
       if (payment.destinationAccountId) {
-        // Contra Entry: Destination account receives the money (+amount)
-        await tx.bankAccount.update({
+        // [FIX #2] Contra entries need destination account update in PATCH path
+        // OUTGOING from account A means INCOMING to destination account B (+amount)
+        // INCOMING to account A means OUTGOING from destination account B (-amount)
+        const destBalanceChange = payment.direction === "OUTGOING" ? payment.amount.toNumber() : -payment.amount.toNumber();
+        await txAny.bankAccount.update({
           where: { id: payment.destinationAccountId },
           data: {
-            currentBalance: { increment: payment.amount.toNumber() },
+            currentBalance: { increment: destBalanceChange },
           },
         });
       }
 
-      if (!payment.partyId) {
+      if (payment.direction === "OUTGOING" && !payment.partyId && !payment.linkedBillId && payment.destinationAccountId) {
         await journalForContraEntry(tx, tenantId, {
-          id: updated.id,
+          id: payment.id,
           partyId: null,
           partyName: null,
           amount: payment.amount.toNumber(),
           mode: payment.mode,
           date: payment.date,
-          createdBy: userId || payment.createdBy,
+          createdBy: userId!,
+          // [FIX #2] Pass account types to journal helper
+          sourceAccountType: payment.account?.type as "CASH" | "BANK",
+          destAccountType: payment.destinationAccount?.type as "CASH" | "BANK",
         });
       } else if (payment.direction === "INCOMING") {
         await journalForPaymentReceived(tx, tenantId, {
-          id: updated.id,
-          partyId: payment.partyId,
-          partyName: updated.party?.name || null,
+          id: payment.id,
+          partyId: payment.partyId!,
+          partyName: (payment as any).party?.name || "Unknown Party",
           amount: payment.amount.toNumber(),
           mode: payment.mode,
           date: payment.date,
-          createdBy: userId || payment.createdBy,
+          createdBy: userId!,
         });
-      } else if (payment.party && (payment.party.type === "CUSTOMER" || payment.party.type === "VENDOR")) {
+      } else if (payment.direction === "OUTGOING") {
         await journalForPaymentMade(tx, tenantId, {
-          id: updated.id,
-          partyId: payment.partyId,
-          partyName: updated.party?.name || null,
+          id: payment.id,
+          partyId: payment.partyId!,
+          partyName: (payment as any).party?.name || "Unknown Party",
           amount: payment.amount.toNumber(),
           mode: payment.mode,
           date: payment.date,
-          createdBy: userId || payment.createdBy,
+          createdBy: userId!,
         });
       } else if (payment.party) {
         // Tally-style ledger payments (Expense, Income, Asset, Liability, Equity)

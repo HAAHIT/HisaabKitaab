@@ -19,7 +19,7 @@ import {
   journalForSalesBill,
 } from "@/lib/journal";
 import { NextRequest, NextResponse } from "next/server";
-import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
+import { resolveReadTenant, resolveWriteSession } from "@/lib/api-tenant";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { logError, getRequestId } from "@/lib/observability";
 import crypto from "crypto";
@@ -193,10 +193,6 @@ async function loadBillingSettings(tenantId: string) {
 
 // GET /api/bills — List bills with filtering
 export async function GET(request: NextRequest) {
-  const role = request.headers.get("x-user-role");
-  if (!role || role === "CUSTOMER") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
   const tenantResolution = await resolveReadTenant(request);
   if (!tenantResolution.ok) {
     return tenantResolution.response;
@@ -255,10 +251,17 @@ export async function GET(request: NextRequest) {
       where.partyId = partyId;
     }
 
+    // [FIX #19] Validate date params before passing to Prisma
     if (from || to) {
       where.createdAt = {};
-      if (from) where.createdAt.gte = new Date(from);
-      if (to) where.createdAt.lte = new Date(to);
+      if (from) {
+        const fromDate = new Date(from);
+        if (!Number.isNaN(fromDate.getTime())) where.createdAt.gte = fromDate;
+      }
+      if (to) {
+        const toDate = new Date(to);
+        if (!Number.isNaN(toDate.getTime())) where.createdAt.lte = toDate;
+      }
     }
 
     const [bills, total] = await Promise.all([
@@ -307,20 +310,16 @@ export async function POST(request: NextRequest) {
   const rateLimitResponse = await checkRateLimit(request, "bills.create", 30);
   if (rateLimitResponse) return rateLimitResponse;
 
-  const role = request.headers.get("x-user-role");
-  const userId = request.headers.get("x-user-id");
+  // [FIX #5] Use JWT-verified session instead of trusting proxy headers
+  const sessionResolution = await resolveWriteSession(request);
+  if (!sessionResolution.ok) {
+    return sessionResolution.response;
+  }
+  const { tenantId, userId, role } = sessionResolution.session;
 
-  if (!role || role === "CUSTOMER") {
+  if (role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!userId) {
-    return NextResponse.json({ error: "Missing user context" }, { status: 401 });
-  }
-  const tenantResolution = await resolveWriteTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   try {
     let rawBody: Record<string, unknown>;
@@ -485,10 +484,20 @@ export async function POST(request: NextRequest) {
     const normalizedPaymentMode = normalizePaymentMode(body.paymentMode);
 
     // Use the explicitly provided bill date if present, otherwise default to now
+    // [FIX #11] Limit backdating to 180 days to prevent altering locked GST periods
     let billDateObj = new Date();
     if (typeof date === "string" && date.trim() !== "") {
       const parsedDate = new Date(date);
       if (!Number.isNaN(parsedDate.getTime())) {
+        const maxBackdateDays = 180;
+        const minAllowedDate = new Date();
+        minAllowedDate.setDate(minAllowedDate.getDate() - maxBackdateDays);
+        if (parsedDate < minAllowedDate) {
+          return NextResponse.json(
+            { error: `Bill date cannot be more than ${maxBackdateDays} days in the past` },
+            { status: 400 }
+          );
+        }
         billDateObj = parsedDate;
       }
     }
@@ -533,15 +542,26 @@ export async function POST(request: NextRequest) {
       await tx.$executeRaw`SET LOCAL lock_timeout = '5s'`;
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
 
-      const existingCount = await tx.bill.count({
+      // [FIX #1] Use max bill sequence number instead of count to prevent gaps
+      // from cancelled/deleted bills causing duplicate numbers on next creation.
+      const lastBill = await tx.bill.findFirst({
         where: {
           tenantId,
+          billNumber: { startsWith: prefix },
           createdAt: { gte: monthStart, lt: nextMonthStart },
         },
+        orderBy: { billNumber: "desc" },
+        select: { billNumber: true },
       });
-      const billNumber = `${prefix}-${yearMonth}-${String(existingCount + 1).padStart(3, "0")}`;
+      let nextSeq = 1;
+      if (lastBill?.billNumber) {
+        const parts = lastBill.billNumber.split("-");
+        const lastSeq = parseInt(parts[parts.length - 1], 10);
+        if (!Number.isNaN(lastSeq)) nextSeq = lastSeq + 1;
+      }
+      const billNumber = `${prefix}-${yearMonth}-${String(nextSeq).padStart(3, "0")}`;
 
-      const createdBill = await tx.bill.create({
+      const createdBill = await (tx as any).bill.create({
         data: {
           tenantId,
           billNumber,
@@ -615,7 +635,7 @@ export async function POST(request: NextRequest) {
       }
 
       if (isQuickBill && normalizedPaymentMode) {
-        const createdPayment = await tx.payment.create({
+        const createdPayment = await (tx as any).payment.create({
           data: {
             tenantId,
             partyId: party.id,

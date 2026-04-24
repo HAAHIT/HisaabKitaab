@@ -60,22 +60,25 @@ interface PaymentJournalInput {
   mode: string;
   date: Date;
   createdBy: string;
+  // [FIX #2] Contra entries need to know if accounts were CASH or BANK
   sourceAccountType?: "CASH" | "BANK";
   destAccountType?: "CASH" | "BANK";
 }
 
 interface PurchaseBillJournalInput {
   id: string;
-  vendorName: string;
-  partyId: string | null;
+  partyId: string;
+  partyName: string;
   subtotal: number;
   cgst: number;
   sgst: number;
   igst: number;
   grandTotal: number;
+  // [FIX #4] Purchase bills now support explicit round-off
+  roundOff?: number;
   isReverseCharge?: boolean;
   createdBy: string;
-  billDate: Date;
+  entryDate: Date;
 }
 
 function buildSalesTaxLines(
@@ -422,7 +425,8 @@ export async function journalForPurchaseBill(
   purchase: PurchaseBillJournalInput
 ) {
   const theoreticalTotal = roundTo2(purchase.subtotal + purchase.cgst + purchase.sgst + purchase.igst);
-  const diff = roundTo2(purchase.grandTotal - theoreticalTotal);
+  // [FIX #4] Use explicit roundOff if provided, otherwise compute from drift
+  const diff = purchase.roundOff !== undefined ? purchase.roundOff : roundTo2(purchase.grandTotal - theoreticalTotal);
 
   const lines: JournalLineInput[] = [
     {
@@ -435,7 +439,7 @@ export async function journalForPurchaseBill(
       debit: 0,
       credit: purchase.grandTotal,
       partyId: purchase.partyId,
-      partyName: purchase.vendorName,
+      partyName: purchase.partyName,
     },
   ];
 
@@ -473,8 +477,8 @@ export async function journalForPurchaseBill(
 
   return createJournalEntry(tx, {
     tenantId,
-    entryDate: purchase.billDate,
-    narration: `Purchase from ${purchase.vendorName}`,
+    entryDate: purchase.entryDate,
+    narration: `Purchase from ${purchase.partyName}`,
     voucherType: "PURCHASE",
     purchaseId: purchase.id,
     isReverseCharge: purchase.isReverseCharge,

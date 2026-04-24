@@ -5,6 +5,7 @@
  */
 
 import type { ColumnDef } from "@/lib/formula";
+import { roundTo2 } from "@/lib/journal-reporting";
 
 export interface TaxSlabSummary {
     rate: number;        // e.g. 18
@@ -73,8 +74,8 @@ export function aggregateTaxByRate(
                 rate: billLevelTax.taxPercent || 0,
                 hsnCode: billLevelTax.hsnCode || "—",
                 taxableValue: billLevelTax.subtotal,
-                cgst: isInterState ? 0 : Math.round((billLevelTax.taxAmount / 2) * 100) / 100,
-                sgst: isInterState ? 0 : Math.round((billLevelTax.taxAmount / 2) * 100) / 100,
+                cgst: isInterState ? 0 : roundTo2(billLevelTax.taxAmount / 2),
+                sgst: isInterState ? 0 : roundTo2(billLevelTax.taxAmount / 2),
                 igst: isInterState ? billLevelTax.taxAmount : 0,
                 totalTax: billLevelTax.taxAmount,
             },
@@ -107,13 +108,13 @@ export function aggregateTaxByRate(
 
         const existing = slabMap.get(rate);
         if (existing) {
-            existing.taxableValue += taxable;
-            existing.totalTax += taxAmt;
+            existing.taxableValue = roundTo2(existing.taxableValue + taxable);
+            existing.totalTax = roundTo2(existing.totalTax + taxAmt);
             if (isInterState) {
-                existing.igst += taxAmt;
+                existing.igst = roundTo2(existing.igst + taxAmt);
             } else {
-                existing.cgst += Math.round((taxAmt / 2) * 100) / 100;
-                existing.sgst += Math.round((taxAmt / 2) * 100) / 100;
+                existing.cgst = roundTo2(existing.cgst + roundTo2(taxAmt / 2));
+                existing.sgst = roundTo2(existing.sgst + roundTo2(taxAmt / 2));
             }
             // Merge HSN — if different, concatenate
             if (hsn !== "—" && existing.hsnCode !== hsn && !existing.hsnCode.includes(hsn)) {
@@ -124,8 +125,8 @@ export function aggregateTaxByRate(
                 rate,
                 hsnCode: hsn,
                 taxableValue: taxable,
-                cgst: isInterState ? 0 : Math.round((taxAmt / 2) * 100) / 100,
-                sgst: isInterState ? 0 : Math.round((taxAmt / 2) * 100) / 100,
+                cgst: isInterState ? 0 : roundTo2(taxAmt / 2),
+                sgst: isInterState ? 0 : roundTo2(taxAmt / 2),
                 igst: isInterState ? taxAmt : 0,
                 totalTax: taxAmt,
             });

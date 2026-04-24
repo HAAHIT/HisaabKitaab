@@ -41,13 +41,48 @@ export const VALID_GST_SLABS = new Set([0, 0.25, 3, 5, 18]);
  */
 const GSTIN_REGEX = /^\d{2}[A-Z]{5}\d{4}[A-Z][A-Z\d]Z[A-Z\d]$/;
 
+// ── Verhoeff check-digit tables for GSTIN validation ────────────────────────
+// [FIX #13] The 15th character of a GSTIN is a Verhoeff check digit.
+// These lookup tables implement the Verhoeff algorithm.
+const VERHOEFF_D: number[][] = [
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [1, 2, 3, 4, 0, 6, 7, 8, 9, 5],
+  [2, 3, 4, 0, 1, 7, 8, 9, 5, 6], [3, 4, 0, 1, 2, 8, 9, 5, 6, 7],
+  [4, 0, 1, 2, 3, 9, 5, 6, 7, 8], [5, 9, 8, 7, 6, 0, 4, 3, 2, 1],
+  [6, 5, 9, 8, 7, 1, 0, 4, 3, 2], [7, 6, 5, 9, 8, 2, 1, 0, 4, 3],
+  [8, 7, 6, 5, 9, 3, 2, 1, 0, 4], [9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
+];
+const VERHOEFF_P: number[][] = [
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [1, 5, 7, 6, 2, 8, 3, 0, 9, 4],
+  [5, 8, 0, 3, 7, 9, 6, 1, 4, 2], [8, 9, 1, 6, 0, 4, 3, 5, 2, 7],
+  [9, 4, 5, 3, 1, 2, 6, 8, 7, 0], [4, 2, 8, 6, 5, 7, 3, 9, 0, 1],
+  [2, 7, 9, 3, 8, 0, 6, 4, 1, 5], [7, 0, 4, 6, 9, 1, 3, 2, 5, 8],
+];
+const GSTIN_CHAR_MAP = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+function verhoeffCheck(gstin: string): boolean {
+  const upper = gstin.toUpperCase().trim();
+  if (upper.length !== 15) return false;
+  let c = 0;
+  // Process characters right-to-left
+  const chars = upper.split("").reverse();
+  for (let i = 0; i < chars.length; i++) {
+    const idx = GSTIN_CHAR_MAP.indexOf(chars[i]);
+    if (idx < 0) return false;
+    c = VERHOEFF_D[c][VERHOEFF_P[i % 8][idx % 10]];
+  }
+  return c === 0;
+}
+
 /**
- * Validates whether a GSTIN string matches the official 15-character format.
- * Returns true if the GSTIN is structurally valid.
- * Does NOT perform Verhoeff check digit verification.
+ * Validates whether a GSTIN string matches the official 15-character format
+ * AND passes the Verhoeff check-digit verification.
+ * Returns true if the GSTIN is both structurally and arithmetically valid.
  */
 export function isValidGstinFormat(gstin: string): boolean {
-  return GSTIN_REGEX.test(gstin.toUpperCase().trim());
+  const upper = gstin.toUpperCase().trim();
+  if (!GSTIN_REGEX.test(upper)) return false;
+  // Verhoeff check catches typos that pass the regex
+  return verhoeffCheck(upper);
 }
 
 /**

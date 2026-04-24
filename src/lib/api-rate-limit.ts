@@ -73,10 +73,37 @@ export async function checkRateLimit(
 
     return null;
   } catch (error) {
-    // If the rate limit check itself fails, allow the request through
-    // rather than blocking legitimate traffic — but always log so an
-    // attacker cannot silently exploit DB downtime to bypass limits.
+    // [FIX #6] In-memory fallback if the database is down or connection pool is exhausted.
+    // This prevents attackers from exploiting DB downtime to bypass rate limits.
+    const fallbackLimit = fallbackCheck(storeKey, limit);
+    if (fallbackLimit) {
+      return NextResponse.json(
+        { error: "Too many requests (fallback-limit). Please try again later." },
+        { status: 429 }
+      );
+    }
+
     logError("rate-limit.check.error", { key: storeKey, error });
     return null;
   }
+}
+
+// Simple in-memory sliding window for fallback
+const MEM_LIMITS = new Map<string, { count: number; windowStart: number }>();
+
+function fallbackCheck(key: string, limit: number): boolean {
+  const now = Date.now();
+  const existing = MEM_LIMITS.get(key);
+
+  if (!existing || now - existing.windowStart > WINDOW_MS) {
+    MEM_LIMITS.set(key, { count: 1, windowStart: now });
+    return false;
+  }
+
+  if (existing.count >= limit) {
+    return true;
+  }
+
+  existing.count++;
+  return false;
 }

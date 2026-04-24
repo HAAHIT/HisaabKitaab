@@ -149,6 +149,11 @@ export type ParsedVoucher = {
    * Key names match standard HisaabKitaab template columns (Item, Qty, Rate, Amount).
    */
   inventoryRows?: Record<string, any>[];
+  /**
+   * [FIX #12] Hash-based fingerprint for idempotency when no REMOTEID is present.
+   * Generated from (date + reference + totalDebit + narration + lineCount).
+   */
+  fingerprint: string;
 };
 
 export type ParsedPartyMaster = {
@@ -182,8 +187,13 @@ export function parseTallyDate(raw: unknown): Date | null {
   const s = String(raw ?? "").trim();
   if (s.length !== 8) return null;
   const year = parseInt(s.slice(0, 4), 10);
-  const month = parseInt(s.slice(4, 6), 10) - 1;
+  const monthRaw = parseInt(s.slice(4, 6), 10);
   const day = parseInt(s.slice(6, 8), 10);
+
+  // [FIX #15] Explicitly validate month and day bounds to catch malformed Tally dates
+  if (monthRaw < 1 || monthRaw > 12 || day < 1 || day > 31) return null;
+
+  const month = monthRaw - 1;
   // 06:30 UTC = 12:00 noon IST — date string is unambiguous in every timezone
   const d = new Date(Date.UTC(year, month, day, 6, 30, 0));
   return isNaN(d.getTime()) ? null : d;
@@ -544,6 +554,22 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       });
     }
 
+    // [FIX #12] Generate a stable fingerprint for this voucher.
+    // This allows the importer to detect duplicates even for native Tally exports 
+    // that don't have a stable GUID/REMOTEID, preventing duplicate journal entries.
+    const fingerprintSource = [
+      entryDate.toISOString().slice(0, 10),
+      reference,
+      totalDebit.toFixed(2),
+      narration,
+      lines.length,
+    ].join("|");
+    // Simple non-cryptographic hash for fingerprinting
+    const fingerprint = Array.from(fingerprintSource).reduce(
+      (hash, char) => (hash << 5) - hash + char.charCodeAt(0),
+      0
+    ).toString(36);
+
     vouchers.push({
       voucherType,
       originalTypeName: typeName,
@@ -553,6 +579,7 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       lines,
       totalDebit,
       remoteId,
+      fingerprint,
       placeOfSupply,
       taxPercent: parsedTaxPercent,
       hsnCodes: parsedHsnCodes,

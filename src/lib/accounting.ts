@@ -214,7 +214,7 @@ export function formatPartyBalance(balance: number) {
   const formatted = new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
-    maximumFractionDigits: 0,
+    maximumFractionDigits: 2,
   }).format(Math.abs(v));
 
   if (v === 0) return formatted;

@@ -1,17 +1,29 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { TENANT_CONTEXT_MISSING_MESSAGE } from "@/lib/tenant";
-import { resolveVerifiedTenantId } from "@/lib/session-server";
+import { TENANT_CONTEXT_MISSING_MESSAGE, resolveTenantIdFromRequest } from "@/lib/tenant";
+import { resolveVerifiedTenantId, resolveVerifiedSession } from "@/lib/session-server";
+import type { VerifiedSession } from "@/lib/session-server";
 
 type TenantResolution =
   | {
-      ok: true;
-      tenantId: string;
-    }
+    ok: true;
+    tenantId: string;
+  }
   | {
-      ok: false;
-      response: NextResponse<{ error: string }>;
-    };
+    ok: false;
+    response: NextResponse<{ error: string }>;
+  };
+
+// [FIX #5] Full session resolution — returns tenantId, userId, role from JWT
+type SessionResolution =
+  | {
+    ok: true;
+    session: VerifiedSession;
+  }
+  | {
+    ok: false;
+    response: NextResponse<{ error: string }>;
+  };
 
 function tenantMissingResponse() {
   return NextResponse.json(
@@ -62,15 +74,40 @@ export async function resolveWriteTenant(
 }
 
 /**
- * Resolves tenant for public/unauthenticated operations where a JWT is not available.
- * Relies on the x-tenant-id header (set by proxy) or default environment variables.
+ * [FIX #5] Resolves the full JWT-verified session for write operations.
+ *
+ * Replaces the pattern of reading x-user-role/x-user-id from headers,
+ * which can be spoofed if the proxy is bypassed.
+ */
+export async function resolveWriteSession(
+  request: NextRequest
+): Promise<SessionResolution> {
+  const session = await resolveVerifiedSession(request);
+  if (!session) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 }
+      ),
+    };
+  }
+
+  return {
+    ok: true,
+    session,
+  };
+}
+
+/**
+ * [FIX #18] Resolves tenant for public/unauthenticated operations where a JWT is not available.
+ * Uses ESM import instead of require() for tree-shaking compatibility.
  */
 export function resolvePublicTenant(
   request: NextRequest
 ): TenantResolution {
-  const { resolveTenantIdFromRequest } = require("@/lib/tenant");
   const tenantId = resolveTenantIdFromRequest(request);
-  
+
   if (!tenantId) {
     return {
       ok: false,
