@@ -75,7 +75,7 @@ function extractHsnRatePairs(
 
     let hsnCode =
       typeof r["_hsnCode"] === "string" ? r["_hsnCode"].trim() : null;
-    
+
     if (!hsnCode && billLevelHsn) hsnCode = billLevelHsn.trim();
     if (!hsnCode) continue;
 
@@ -261,15 +261,28 @@ export async function GET(request: NextRequest) {
         orderBy: { name: "asc" },
       });
 
-      const fetchedParties = parties.map((p: (typeof parties)[number]) => ({
-        name: p.name,
-        group: p.type === "CUSTOMER" ? "Sundry Debtors" : "Sundry Creditors",
-        openingBalance: p.openingBalance.toNumber(),
-        phone: p.phone,
-        email: p.email,
-        address: p.address,
-        gstin: p.gstin,
-      }));
+      const fetchedParties = parties.map((p: (typeof parties)[number]) => {
+        let tallyGroup = "Sundry Debtors";
+        switch (p.type) {
+          case "CUSTOMER": tallyGroup = "Sundry Debtors"; break;
+          case "VENDOR": tallyGroup = "Sundry Creditors"; break;
+          case "EXPENSE": tallyGroup = "Indirect Expenses"; break;
+          case "INCOME": tallyGroup = "Indirect Incomes"; break;
+          case "ASSET": tallyGroup = "Current Assets"; break;
+          case "LIABILITY": tallyGroup = "Current Liabilities"; break;
+          case "EQUITY": tallyGroup = "Capital Account"; break;
+        }
+
+        return {
+          name: p.name,
+          group: tallyGroup,
+          openingBalance: p.openingBalance.toNumber(),
+          phone: p.phone,
+          email: p.email,
+          address: p.address,
+          gstin: p.gstin,
+        };
+      });
 
       const standardLedgers: TallyPartyMaster[] = Object.values(CHART_OF_ACCOUNTS).map(acc => ({
         name: acc.name,
@@ -416,10 +429,10 @@ export async function GET(request: NextRequest) {
           inventoryEntries:
             billData && billData.template
               ? mapRowsToInventoryEntries(
-                  billData.rows as any[],
-                  billData.template as any,
-                  resolveExportVoucherType(entry.voucherType, entry.narration)
-                )
+                billData.rows as any[],
+                billData.template as any,
+                resolveExportVoucherType(entry.voucherType, entry.narration)
+              )
               : undefined,
           ledgerEntries: entry.lines.map((line) => {
             const tallyEntry = journalLineToTallyEntry({

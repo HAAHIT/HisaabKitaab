@@ -378,7 +378,9 @@ export default function PaymentsListPage() {
                             <div className="flex items-center justify-between">
                               <div className="flex flex-col gap-1">
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <span className="font-semibold">{payment.party.name}</span>
+                                  <span className="font-semibold">
+                                    {payment.party ? payment.party.name : "Bank/Cash Transfer"}
+                                  </span>
                                   <Chip
                                     size="sm"
                                     variant="flat"

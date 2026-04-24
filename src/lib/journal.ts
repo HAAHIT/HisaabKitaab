@@ -58,6 +58,8 @@ interface PaymentJournalInput {
   mode: string;
   date: Date;
   createdBy: string;
+  sourceAccountType?: "CASH" | "BANK";
+  destAccountType?: "CASH" | "BANK";
 }
 
 interface PurchaseBillJournalInput {
@@ -336,14 +338,10 @@ export async function journalForContraEntry(
   tenantId: string,
   payment: PaymentJournalInput
 ) {
-  // If payment.direction is INCOMING, Cash/Bank is debited.
-  // We need to know which account is debited and which is credited.
-  // For contra, one side is Cash and the other is Bank.
-  // The 'mode' is usually one side, and the 'accountId' conceptually points to the specific bank/cash.
-  // But wait, the standard contra entry UI needs to be designed. For now, we'll assume mode is the primary entry, and 'CASH' is the other.
-  // To keep it simple, we just debit the mode's account and credit Cash, or vice versa.
-  const mainAccount = paymentModeToAccount(payment.mode);
-  const otherAccount = mainAccount === "CASH" ? "BANK" : "CASH";
+  // A contra entry involves money moving from a source BankAccount to a destination BankAccount.
+  // sourceAccountType and destAccountType dictate if we use "BANK" or "CASH" for the lines.
+  const mainAccount = payment.sourceAccountType === "CASH" ? "CASH" : "BANK";
+  const otherAccount = payment.destAccountType === "CASH" ? "CASH" : "BANK";
 
   return createJournalEntry(tx, {
     tenantId,
@@ -354,14 +352,16 @@ export async function journalForContraEntry(
     createdBy: payment.createdBy,
     lines: [
       {
-        accountCode: payment.amount > 0 ? mainAccount : otherAccount,
-        debit: Math.abs(payment.amount),
-        credit: 0,
+        // Credit the Source Account (Money goes OUT)
+        accountCode: mainAccount,
+        debit: 0,
+        credit: payment.amount,
       },
       {
-        accountCode: payment.amount > 0 ? otherAccount : mainAccount,
-        debit: 0,
-        credit: Math.abs(payment.amount),
+        // Debit the Destination Account (Money comes IN)
+        accountCode: otherAccount,
+        debit: payment.amount,
+        credit: 0,
       },
     ],
   });

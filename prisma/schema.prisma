@@ -208,32 +208,35 @@ model Party {
 }
 
 model Payment {
-  id           String        @id @default(cuid())
-  partyId      String?
-  accountId    String?
-  direction    PayDirection
-  amount       Decimal       @db.Decimal(19, 4) // [B3] Float → Decimal
-  date         DateTime
-  mode         PaymentMode
-  status       PaymentStatus @default(COMPLETED)
-  referenceNo  String?
-  linkedBillId String?
-  notes        String?
-  receiptUrl   String?
-  createdBy    String
-  createdAt    DateTime      @default(now())
-  isDeleted    Boolean       @default(false)
-  updatedAt    DateTime      @updatedAt
-  tenantId     String
-  creator      User          @relation(fields: [createdBy], references: [id])
-  linkedBill   Bill?         @relation(fields: [linkedBillId], references: [id])
-  party        Party?        @relation(fields: [partyId], references: [id])
-  account      BankAccount?  @relation(fields: [accountId], references: [id])
-  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  id                   String        @id @default(cuid())
+  partyId              String?
+  accountId            String?
+  destinationAccountId String?
+  direction            PayDirection
+  amount               Decimal       @db.Decimal(19, 4) // [B3] Float → Decimal
+  date                 DateTime
+  mode                 PaymentMode
+  status               PaymentStatus @default(COMPLETED)
+  referenceNo          String?
+  linkedBillId         String?
+  notes                String?
+  receiptUrl           String?
+  createdBy            String
+  createdAt            DateTime      @default(now())
+  isDeleted            Boolean       @default(false)
+  updatedAt            DateTime      @updatedAt
+  tenantId             String
+  creator              User          @relation(fields: [createdBy], references: [id])
+  linkedBill           Bill?         @relation(fields: [linkedBillId], references: [id])
+  party                Party?        @relation(fields: [partyId], references: [id])
+  account              BankAccount?  @relation("SourceAccount", fields: [accountId], references: [id])
+  destinationAccount   BankAccount?  @relation("DestinationAccount", fields: [destinationAccountId], references: [id])
+  tenant               Tenant        @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
   @@index([tenantId, partyId])
   @@index([tenantId, accountId])
+  @@index([tenantId, destinationAccountId])
   @@index([tenantId, direction])
 }
 
@@ -251,8 +254,9 @@ model BankAccount {
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
   
-  tenant         Tenant      @relation(fields: [tenantId], references: [id])
-  payments       Payment[]
+  tenant              Tenant    @relation(fields: [tenantId], references: [id])
+  sourcePayments      Payment[] @relation("SourceAccount")
+  destinationPayments Payment[] @relation("DestinationAccount")
 
   @@unique([tenantId, name])
   @@index([tenantId])
@@ -398,6 +402,11 @@ enum SyncState {
 enum PartyType {
   VENDOR
   CUSTOMER
+  EXPENSE
+  INCOME
+  ASSET
+  LIABILITY
+  EQUITY
 }
 
 enum PayDirection {

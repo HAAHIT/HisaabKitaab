@@ -156,14 +156,24 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { partyId, accountId, amount, type, mode, date, notes, billId, status } = body;
+    const { partyId, accountId, destinationAccountId, amount, type, mode, date, notes, billId, status } = body;
     const normalizedAmount = parsePaymentAmount(amount);
     const normalizedMode = normalizePaymentMode(mode);
     const paymentDate = date ? new Date(date) : new Date();
 
-    if ((!partyId && !billId) || !normalizedAmount || !type || !normalizedMode || !accountId) {
+    // A payment is a Contra entry if it has no party/bill, has a destination account, and is outgoing from the source.
+    const isContra = type === "OUTGOING" && !partyId && !billId && !!destinationAccountId;
+
+    if (!isContra && (!partyId && !billId)) {
       return NextResponse.json(
-        { error: "Party/bill, accountId, amount, type, and mode are required" },
+        { error: "Party or Destination Account is required" },
+        { status: 400 }
+      );
+    }
+
+    if (!normalizedAmount || !type || !normalizedMode || !accountId) {
+      return NextResponse.json(
+        { error: "accountId, amount, type, and mode are required" },
         { status: 400 }
       );
     }
@@ -188,61 +198,67 @@ export async function POST(request: NextRequest) {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
 
       let resolvedPartyId = partyId as string | null;
+      let party = null;
       const resolvedBillId = billId || null;
 
-      if (billId) {
-        const linkedBill = await tx.bill.findUnique({
-          where: { id: billId },
-          select: {
-            id: true,
-            tenantId: true,
-            partyId: true,
-            status: true,
-            party: {
-              select: {
-                id: true,
-                type: true,
+      if (!isContra) {
+        if (billId) {
+          const linkedBill = await tx.bill.findUnique({
+            where: { id: billId },
+            select: {
+              id: true,
+              tenantId: true,
+              partyId: true,
+              status: true,
+              party: {
+                select: {
+                  id: true,
+                  type: true,
+                },
               },
             },
+          });
+
+          if (
+            !linkedBill ||
+            linkedBill.tenantId !== tenantId ||
+            linkedBill.status !== "FINAL" ||
+            !linkedBill.partyId ||
+            !linkedBill.party
+          ) {
+            throw new Error("Linked bill must be a final bill attached to a party");
+          }
+
+          if (resolvedPartyId && resolvedPartyId !== linkedBill.partyId) {
+            throw new Error("Linked bill does not belong to the selected party");
+          }
+
+          resolvedPartyId = linkedBill.partyId;
+          const settlementDir = getSettlementDirectionForParty(linkedBill.party.type);
+          // Wait, if it's an EXPENSE/INCOME, settlement direction might not be strictly INCOMING/OUTGOING from the generic `getSettlementDirectionForParty`.. but EXPENSE party pays out.
+          // Let's just allow it for generic ledgers or check if it throws.
+          if (settlementDir && type !== settlementDir) {
+            throw new Error("Linked bill payments must use the settlement direction for that party");
+          }
+        }
+
+        if (!resolvedPartyId) {
+          throw new Error("Party not found");
+        }
+
+        party = await tx.party.findFirst({
+          where: {
+            id: resolvedPartyId,
+            tenantId,
+            isDeleted: false,
+            isActive: true,
           },
+          select: { id: true, name: true, type: true },
         });
 
-        if (
-          !linkedBill ||
-          linkedBill.tenantId !== tenantId ||
-          linkedBill.status !== "FINAL" ||
-          !linkedBill.partyId ||
-          !linkedBill.party
-        ) {
-          throw new Error("Linked bill must be a final bill attached to a party");
+        if (!party) {
+          throw new Error("Party not found");
         }
-
-        if (resolvedPartyId && resolvedPartyId !== linkedBill.partyId) {
-          throw new Error("Linked bill does not belong to the selected party");
-        }
-
-        resolvedPartyId = linkedBill.partyId;
-        if (type !== getSettlementDirectionForParty(linkedBill.party.type)) {
-          throw new Error("Linked bill payments must use the settlement direction for that party");
-        }
-      }
-
-      if (!resolvedPartyId) {
-        throw new Error("Party not found");
-      }
-
-      const party = await tx.party.findFirst({
-        where: {
-          id: resolvedPartyId,
-          tenantId,
-          isDeleted: false,
-          isActive: true,
-        },
-        select: { id: true, name: true, type: true },
-      });
-
-      if (!party) {
-        throw new Error("Party not found");
       }
 
       const account = await tx.bankAccount.findFirst({
@@ -258,11 +274,27 @@ export async function POST(request: NextRequest) {
         throw new Error("Bank account not found");
       }
 
+      let destAccount = null;
+      if (isContra && destinationAccountId) {
+        destAccount = await tx.bankAccount.findFirst({
+          where: {
+            id: destinationAccountId,
+            tenantId,
+            isDeleted: false,
+            isActive: true,
+          },
+        });
+        if (!destAccount) {
+          throw new Error("Destination bank account not found");
+        }
+      }
+
       const newPayment = await tx.payment.create({
         data: {
           tenantId,
-          partyId: party.id,
+          partyId: party ? party.id : null,
           accountId: account.id,
+          destinationAccountId: destAccount ? destAccount.id : null,
           direction: type,
           amount: normalizedAmount,
           date: paymentDate,
@@ -280,18 +312,20 @@ export async function POST(request: NextRequest) {
       });
 
       if (paymentStatus === "COMPLETED") {
-        const balanceChange = getPaymentBalanceDelta(
-          party.type,
-          type,
-          normalizedAmount
-        );
+        if (!isContra && party) {
+          const balanceChange = getPaymentBalanceDelta(
+            party.type,
+            type,
+            normalizedAmount
+          );
 
-        await tx.party.update({
-          where: { id: party.id },
-          data: {
-            currentBalance: { increment: balanceChange },
-          },
-        });
+          await tx.party.update({
+            where: { id: party.id },
+            data: {
+              currentBalance: { increment: balanceChange },
+            },
+          });
+        }
 
         // Update Bank / Cash Account balance
         const bankBalanceChange = type === "INCOMING" ? normalizedAmount : -normalizedAmount;
@@ -302,26 +336,52 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        if (type === "INCOMING") {
-          await journalForPaymentReceived(tx, tenantId, {
+        if (isContra && destAccount) {
+          // In an OUTGOING contra, the destination gets the money (+amount)
+          await tx.bankAccount.update({
+            where: { id: destAccount.id },
+            data: {
+              currentBalance: { increment: normalizedAmount },
+            },
+          });
+
+          // Hack: just call journalForContraEntry. 
+          // We must update the signature or payload in journalForContraEntry to receive the dest account Info.
+          // Since it's imported above, we'll leave it unchanged here and update journal.ts.
+          await journalForContraEntry(tx, tenantId, {
             id: newPayment.id,
-            partyId: party.id,
-            partyName: party.name,
+            partyId: null,
+            partyName: null,
             amount: newPayment.amount.toNumber(),
             mode: newPayment.mode,
             date: newPayment.date,
             createdBy: userId!,
-          });
-        } else {
-          await journalForPaymentMade(tx, tenantId, {
-            id: newPayment.id,
-            partyId: party.id,
-            partyName: party.name,
-            amount: newPayment.amount.toNumber(),
-            mode: newPayment.mode,
-            date: newPayment.date,
-            createdBy: userId!,
-          });
+            // We pass extra props that the TS interface doesn't strictly complain about yet, but we will fix TS
+            sourceAccountType: account.type,
+            destAccountType: destAccount.type,
+          } as any);
+        } else if (party) {
+          if (type === "INCOMING") {
+            await journalForPaymentReceived(tx, tenantId, {
+              id: newPayment.id,
+              partyId: party.id,
+              partyName: party.name,
+              amount: newPayment.amount.toNumber(),
+              mode: newPayment.mode,
+              date: newPayment.date,
+              createdBy: userId!,
+            });
+          } else {
+            await journalForPaymentMade(tx, tenantId, {
+              id: newPayment.id,
+              partyId: party.id,
+              partyName: party.name,
+              amount: newPayment.amount.toNumber(),
+              mode: newPayment.mode,
+              date: newPayment.date,
+              createdBy: userId!,
+            });
+          }
         }
       }
 
@@ -426,6 +486,16 @@ export async function PATCH(request: NextRequest) {
           where: { id: payment.accountId },
           data: {
             currentBalance: { increment: bankBalanceChange },
+          },
+        });
+      }
+
+      if (payment.destinationAccountId) {
+        // Contra Entry: Destination account receives the money (+amount)
+        await tx.bankAccount.update({
+          where: { id: payment.destinationAccountId },
+          data: {
+            currentBalance: { increment: payment.amount.toNumber() },
           },
         });
       }

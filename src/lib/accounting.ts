@@ -1,6 +1,7 @@
 import { roundTo2 } from "./journal-reporting";
+import { type PartyType } from "@prisma/client";
 
-export type SupportedPartyType = "CUSTOMER" | "VENDOR";
+export type SupportedPartyType = PartyType;
 export type SupportedPayDirection = "INCOMING" | "OUTGOING";
 export type SupportedBillStatus = "DRAFT" | "FINAL" | "CANCELLED";
 export type PartyLedgerEntryType = "BILL" | "PAYMENT" | "OPENING" | "NOTE";
@@ -94,7 +95,18 @@ export function getPaymentBalanceDelta(
 export function getSettlementDirectionForParty(
   partyType: SupportedPartyType
 ): SupportedPayDirection {
-  return partyType === "CUSTOMER" ? "INCOMING" : "OUTGOING";
+  switch (partyType) {
+    case "CUSTOMER":
+    case "INCOME":
+    case "ASSET":
+      return "INCOMING";
+    case "VENDOR":
+    case "EXPENSE":
+    case "LIABILITY":
+    case "EQUITY":
+    default:
+      return "OUTGOING";
+  }
 }
 
 export function getBillBalanceDelta(
@@ -144,16 +156,22 @@ export function getLedgerAmountsForBalanceDelta(
     return { debit: 0, credit: 0 };
   }
 
-  const positiveIsDebit = partyType === "VENDOR";
+  // Credit-nature accounts (Positive balance means Credit):
+  // Vendor, Income, Liability, Equity
+  // Debit-nature accounts (Positive balance means Debit):
+  // Customer, Expense, Asset
+  const isCreditNature = (["VENDOR", "INCOME", "LIABILITY", "EQUITY"] as PartyType[]).includes(partyType);
+  const positiveIsCredit = isCreditNature;
+
   if (balanceDelta > 0) {
-    return positiveIsDebit
-      ? { debit: amount, credit: 0 }
-      : { debit: 0, credit: amount };
+    return positiveIsCredit
+      ? { debit: 0, credit: amount }
+      : { debit: amount, credit: 0 };
   }
 
-  return positiveIsDebit
-    ? { debit: 0, credit: amount }
-    : { debit: amount, credit: 0 };
+  return positiveIsCredit
+    ? { debit: amount, credit: 0 }
+    : { debit: 0, credit: amount };
 }
 
 export function getBalanceIndicator(
@@ -164,11 +182,12 @@ export function getBalanceIndicator(
     return null;
   }
 
-  if (partyType === "CUSTOMER") {
-    return balance > 0 ? "Cr" : "Dr";
+  const isDebitNature = (["CUSTOMER", "EXPENSE", "ASSET"] as PartyType[]).includes(partyType);
+  if (isDebitNature) {
+    return balance > 0 ? "Dr" : "Cr";
   }
 
-  return balance > 0 ? "Dr" : "Cr";
+  return balance > 0 ? "Cr" : "Dr";
 }
 
 export function getBalanceStatusLabel(
@@ -183,14 +202,16 @@ export function getBalanceStatusLabel(
     return "advance balance";
   }
 
-  return partyType === "CUSTOMER" ? "to receive" : "to pay";
+  const isReceiveNature = (["CUSTOMER", "INCOME", "ASSET"] as PartyType[]).includes(partyType);
+  return isReceiveNature ? "to receive" : "to pay";
 }
 
 export function getPartyBalanceColor(partyType: SupportedPartyType, balance: number) {
   const v = Math.round(balance * 100) / 100;
   if (v === 0) return "text-default-400";
   if (v > 0) return "text-warning";
-  return partyType === "CUSTOMER" ? "text-success" : "text-danger";
+  const isGood = (["CUSTOMER", "INCOME", "ASSET"] as PartyType[]).includes(partyType);
+  return isGood ? "text-success" : "text-danger";
 }
 
 export function formatPartyBalance(balance: number) {

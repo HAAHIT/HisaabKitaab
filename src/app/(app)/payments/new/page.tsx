@@ -16,6 +16,8 @@ import {
   RadioGroup,
   Select,
   SelectItem,
+  Tabs,
+  Tab,
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
@@ -86,6 +88,9 @@ export default function RecordPaymentPage() {
   const [notes, setNotes] = useState("");
   const [paymentStatus, setPaymentStatus] = useState("COMPLETED");
 
+  const [paymentFlowType, setPaymentFlowType] = useState<"party" | "contra">("party");
+  const [destinationAccountId, setDestinationAccountId] = useState("");
+
   useEffect(() => {
     async function loadAccounts() {
       try {
@@ -114,9 +119,20 @@ export default function RecordPaymentPage() {
   const selectedBillDisplay = selectedBill;
 
   async function handleSave() {
-    if (!partyId) {
-      showToast("Select a party", "error");
-      return;
+    if (paymentFlowType === "party") {
+      if (!partyId) {
+        showToast("Select a party", "error");
+        return;
+      }
+    } else {
+      if (!accountId || !destinationAccountId) {
+        showToast("Select both Source and Destination accounts", "error");
+        return;
+      }
+      if (accountId === destinationAccountId) {
+        showToast("Source and Destination accounts cannot be the same", "error");
+        return;
+      }
     }
 
     if (!amount || Number.parseFloat(amount) <= 0) {
@@ -135,12 +151,13 @@ export default function RecordPaymentPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          partyId,
+          partyId: paymentFlowType === "party" ? partyId : null,
           accountId,
-          billId: billId || null,
+          destinationAccountId: paymentFlowType === "contra" ? destinationAccountId : null,
+          billId: paymentFlowType === "party" ? (billId || null) : null,
           amount: Number.parseFloat(amount),
-          type: direction,
-          mode,
+          type: paymentFlowType === "party" ? direction : "OUTGOING", // Contra is always outgoing from source
+          mode: mode,
           date,
           notes: notes.trim() || null,
           status: paymentStatus,
@@ -197,6 +214,18 @@ export default function RecordPaymentPage() {
           </p>
         </div>
       </div>
+
+      <section className="mb-6">
+        <Tabs
+          aria-label="Payment Type"
+          selectedKey={paymentFlowType}
+          onSelectionChange={(k) => setPaymentFlowType(k as "party" | "contra")}
+          classNames={{ base: "w-full", tabList: "w-full" }}
+        >
+          <Tab key="party" title="Party Payment" />
+          <Tab key="contra" title="Bank Transfer (Contra)" />
+        </Tabs>
+      </section>
 
       <section className="mb-6">
         <RadioGroup
@@ -305,54 +334,58 @@ export default function RecordPaymentPage() {
 
       <Card shadow="sm" className="mb-6">
         <CardHeader className="px-6 pt-6 pb-0">
-          <h2 className="font-semibold">Payment Details</h2>
+          <h2 className="font-semibold">{paymentFlowType === "party" ? "Payment Details" : "Transfer Details"}</h2>
         </CardHeader>
         <CardBody className="space-y-5 p-6">
-          <PartySearch
-            value={selectedParty?.id ?? null}
-            onChange={(party) => {
-              setSelectedParty(party);
-              setBillId("");
-              if (party) {
-                setDirection(getSettlementDirectionForParty(party.type as SupportedPartyType));
-              }
-            }}
-            placeholder="Select customer or vendor"
-          />
+          {paymentFlowType === "party" && (
+            <>
+              <PartySearch
+                value={selectedParty?.id ?? null}
+                onChange={(party) => {
+                  setSelectedParty(party);
+                  setBillId("");
+                  if (party) {
+                    setDirection(getSettlementDirectionForParty(party.type as SupportedPartyType));
+                  }
+                }}
+                placeholder="Select customer, vendor, or ledger"
+              />
 
-          {selectedParty && (
-            <div className={`rounded-lg px-3 py-2 text-sm ${getBalanceBannerClass(selectedParty.type as SupportedPartyType, selectedParty.currentBalance)}`}>
-              Current balance:{" "}
-              <strong>{formatSignedBalance(selectedParty.currentBalance)}</strong>
-              {" "}
-              {getBalanceStatusLabel(selectedParty.type as SupportedPartyType, Math.round(selectedParty.currentBalance * 100) / 100)}
-            </div>
-          )}
+              {selectedParty && (
+                <div className={`rounded-lg px-3 py-2 text-sm ${getBalanceBannerClass(selectedParty.type as SupportedPartyType, selectedParty.currentBalance)}`}>
+                  Current balance:{" "}
+                  <strong>{formatSignedBalance(selectedParty.currentBalance)}</strong>
+                  {" "}
+                  {getBalanceStatusLabel(selectedParty.type as SupportedPartyType, Math.round(selectedParty.currentBalance * 100) / 100)}
+                </div>
+              )}
 
-          <BillSearch
-            value={billId}
-            onChange={(bill) => {
-              if (bill) {
-                setBillId(bill.id);
-                setSelectedBill(bill);
-                if (selectedParty) {
-                  setDirection(getSettlementDirectionForParty(selectedParty.type as SupportedPartyType));
-                }
-              } else {
-                setBillId("");
-                setSelectedBill(null);
-              }
-            }}
-            partyId={partyId}
-            isDisabled={!selectedParty}
-            description="When linked, the server validates that the payment settles the selected bill."
-          />
+              <BillSearch
+                value={billId}
+                onChange={(bill) => {
+                  if (bill) {
+                    setBillId(bill.id);
+                    setSelectedBill(bill);
+                    if (selectedParty) {
+                      setDirection(getSettlementDirectionForParty(selectedParty.type as SupportedPartyType));
+                    }
+                  } else {
+                    setBillId("");
+                    setSelectedBill(null);
+                  }
+                }}
+                partyId={partyId}
+                isDisabled={!selectedParty}
+                description="When linked, the server validates that the payment settles the selected bill."
+              />
 
-          {selectedBillDisplay && (
-            <div className="rounded-lg bg-primary/5 px-3 py-2 text-sm text-primary">
-              Linked to bill <strong>{selectedBillDisplay.billNumber}</strong>. Settlement direction is{" "}
-              <strong>{selectedParty?.type === "CUSTOMER" ? "Received" : "Paid"}</strong>.
-            </div>
+              {selectedBillDisplay && (
+                <div className="rounded-lg bg-primary/5 px-3 py-2 text-sm text-primary">
+                  Linked to bill <strong>{selectedBillDisplay.billNumber}</strong>. Settlement direction is{" "}
+                  <strong>{selectedParty?.type === "CUSTOMER" ? "Received" : "Paid"}</strong>.
+                </div>
+              )}
+            </>
           )}
 
           <Input
@@ -371,24 +404,26 @@ export default function RecordPaymentPage() {
           />
 
           <div className="grid grid-cols-2 gap-4">
-            <Select
-              label="Type"
-              placeholder="Select direction"
-              selectedKeys={new Set([direction])}
-              onSelectionChange={(keys) => {
-                const value = Array.from(keys)[0] as string;
-                if (value) {
-                  setDirection(value);
-                }
-              }}
-              variant="bordered"
-            >
-              <SelectItem key="INCOMING">Received</SelectItem>
-              <SelectItem key="OUTGOING">Paid</SelectItem>
-            </Select>
+            {paymentFlowType === "party" && (
+              <Select
+                label="Type"
+                placeholder="Select direction"
+                selectedKeys={new Set([direction])}
+                onSelectionChange={(keys) => {
+                  const value = Array.from(keys)[0] as string;
+                  if (value) {
+                    setDirection(value);
+                  }
+                }}
+                variant="bordered"
+              >
+                <SelectItem key="INCOMING">Received</SelectItem>
+                <SelectItem key="OUTGOING">Paid</SelectItem>
+              </Select>
+            )}
 
             <Select
-              label="Account"
+              label={paymentFlowType === "contra" ? "Source Account" : "Account"}
               placeholder="Select account"
               selectedKeys={new Set(accountId ? [accountId] : [])}
               onSelectionChange={(keys) => {
@@ -398,29 +433,45 @@ export default function RecordPaymentPage() {
                   const acc = bankAccounts.find((a) => a.id === value);
                   if (acc?.type === "CASH") {
                     setMode("CASH");
-                  } else if (mode === "CASH") {
-                    // Reset to bank transfer if changing from cash to bank account
+                  } else {
                     setMode("BANK_TRANSFER");
                   }
                 }
               }}
               variant="bordered"
+              className={paymentFlowType === "contra" ? "" : "flex-1"}
             >
-              {bankAccounts.map((acc) => (
-                <SelectItem key={acc.id} textValue={acc.name}>
-                  <div className="flex flex-col">
-                    <span>{acc.name}</span>
-                    <span className="text-xs text-default-400">
-                      Balance: {formatSignedBalance(acc.currentBalance)}
-                    </span>
-                  </div>
+              {bankAccounts.map((account) => (
+                <SelectItem key={account.id} textValue={account.name}>
+                  {account.name} (Bal: ₹{account.currentBalance})
                 </SelectItem>
               ))}
             </Select>
 
-            {bankAccounts.find((a) => a.id === accountId)?.type === "BANK" && (
+            {paymentFlowType === "contra" && (
               <Select
-                label="Transfer Mode"
+                label="Destination Account"
+                placeholder="Select destination"
+                selectedKeys={new Set(destinationAccountId ? [destinationAccountId] : [])}
+                onSelectionChange={(keys) => {
+                  const value = Array.from(keys)[0] as string;
+                  if (value) {
+                    setDestinationAccountId(value);
+                  }
+                }}
+                variant="bordered"
+              >
+                {bankAccounts.map((account) => (
+                  <SelectItem key={account.id} textValue={account.name}>
+                    {account.name} (Bal: ₹{account.currentBalance})
+                  </SelectItem>
+                ))}
+              </Select>
+            )}
+
+            {paymentFlowType === "party" && (
+              <Select
+                label="Payment Mode"
                 placeholder="Select mode"
                 selectedKeys={new Set([mode])}
                 onSelectionChange={(keys) => {
@@ -431,7 +482,8 @@ export default function RecordPaymentPage() {
                 }}
                 variant="bordered"
               >
-                <SelectItem key="BANK_TRANSFER">Bank Transfer (IMPS/NEFT)</SelectItem>
+                <SelectItem key="BANK_TRANSFER">Bank Transfer</SelectItem>
+                <SelectItem key="CASH">Cash</SelectItem>
                 <SelectItem key="UPI">UPI</SelectItem>
                 <SelectItem key="CHEQUE">Cheque</SelectItem>
               </Select>
