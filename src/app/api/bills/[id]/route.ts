@@ -115,7 +115,16 @@ export async function GET(
     return NextResponse.json({ error: "Bill not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ bill });
+  // Prisma Decimal fields don't serialize to JSON correctly — convert to plain numbers
+  const serializedBill = {
+    ...bill,
+    subtotal: bill.subtotal?.toNumber() ?? 0,
+    taxPercent: bill.taxPercent?.toNumber() ?? 0,
+    taxAmount: bill.taxAmount?.toNumber() ?? 0,
+    grandTotal: bill.grandTotal?.toNumber() ?? 0,
+  };
+
+  return NextResponse.json({ bill: serializedBill });
 }
 
 // PATCH /api/bills/[id] - Update a draft bill
@@ -470,15 +479,15 @@ export async function PATCH(
           (row) => {
             if (!row || typeof row !== "object") return false;
             // Check if ANY value contains an HSN code (either col_hsn, _hsnCode, or any key containing 'hsn')
-            return Object.entries(row).some(([key, val]) => 
-              (key === "col_hsn" || key === "_hsnCode" || key.toLowerCase().includes("hsn")) && 
-              typeof val === "string" && 
+            return Object.entries(row).some(([key, val]) =>
+              (key === "col_hsn" || key === "_hsnCode" || key.toLowerCase().includes("hsn")) &&
+              typeof val === "string" &&
               val.trim() !== ""
             );
           }
         );
       const hasFallbackHsn = hasOwn(updateData, "hsnCode") ? !!updateData.hsnCode : !!existing.hsnCode;
-      
+
       if (!hasHsn && !hasFallbackHsn) {
         return NextResponse.json(
           {

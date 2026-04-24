@@ -73,7 +73,7 @@ const MAIN_NAV: NavItem[] = [
   {
     icon: (
       <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
       </svg>
     ),
     translationKey: "nav.purchases" as any,
@@ -202,7 +202,7 @@ export default function AppShell({
       ) {
         return;
       }
-      
+
       if (e.key === "F8") {
         e.preventDefault();
         router.push("/bills/new");
@@ -230,7 +230,7 @@ export default function AppShell({
       ),
     [user.role]
   );
-  
+
   const canQuickBill = user.role !== "CUSTOMER";
   const hasMoreSheet = user.role !== "CUSTOMER";
   const roleLabel = t(resolveRoleTranslationKey(user.role));
@@ -259,9 +259,8 @@ export default function AppShell({
     <div className="flex h-screen overflow-hidden bg-default-50 dark:bg-default-50/10">
       {/* ── Desktop Sidebar ──────────────────────────── */}
       <aside
-        className={`hidden lg:flex flex-col border-r border-divider bg-background transition-all duration-300 print:hidden ${
-          sidebarCollapsed ? "w-[72px]" : "w-[260px]"
-        }`}
+        className={`hidden lg:flex flex-col border-r border-divider bg-background transition-all duration-300 print:hidden ${sidebarCollapsed ? "w-[72px]" : "w-[260px]"
+          }`}
       >
         {/* Logo */}
         <div className="flex items-center gap-3 px-4 h-16 border-b border-divider">
@@ -310,34 +309,32 @@ export default function AppShell({
 
           {navItems.map((item) => {
             return (
-            <Tooltip
-              key={item.href}
-              content={t(item.translationKey)}
-              placement="right"
-              isDisabled={!sidebarCollapsed}
-            >
-              <motion.button
-                whileHover={{ scale: 1.02, x: 2 }}
-                whileTap={{ scale: 0.96 }}
-                onClick={() => router.push(item.href)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group ${
-                  isActive(item.href)
-                    ? "bg-primary/10 text-primary font-semibold"
-                    : "text-default-600 hover:bg-default-100 hover:text-default-900"
-                }`}
+              <Tooltip
+                key={item.href}
+                content={t(item.translationKey)}
+                placement="right"
+                isDisabled={!sidebarCollapsed}
               >
-                <span
-                  className={`flex-shrink-0 ${
-                    isActive(item.href) ? "text-primary" : "text-default-400 group-hover:text-default-600"
-                  }`}
+                <motion.button
+                  whileHover={{ scale: 1.02, x: 2 }}
+                  whileTap={{ scale: 0.96 }}
+                  onClick={() => router.push(item.href)}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group ${isActive(item.href)
+                      ? "bg-primary/10 text-primary font-semibold"
+                      : "text-default-600 hover:bg-default-100 hover:text-default-900"
+                    }`}
                 >
-                  {item.icon}
-                </span>
-                {!sidebarCollapsed && (
-                  <span className="truncate">{t(item.translationKey)}</span>
-                )}
-              </motion.button>
-            </Tooltip>
+                  <span
+                    className={`flex-shrink-0 ${isActive(item.href) ? "text-primary" : "text-default-400 group-hover:text-default-600"
+                      }`}
+                  >
+                    {item.icon}
+                  </span>
+                  {!sidebarCollapsed && (
+                    <span className="truncate">{t(item.translationKey)}</span>
+                  )}
+                </motion.button>
+              </Tooltip>
             );
           })}
 
@@ -357,12 +354,11 @@ export default function AppShell({
               >
                 <button
                   onClick={() => router.push("/settings/users")}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group ${
-                    pathname === "/settings/users"
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group ${pathname === "/settings/users"
                       ? "bg-primary/10 text-primary font-semibold"
                       : "text-default-600 hover:bg-default-100 hover:text-default-900"
-                  }`}
-                  >
+                    }`}
+                >
                   <svg className="w-5 h-5 flex-shrink-0 text-default-400 group-hover:text-default-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                   </svg>
@@ -379,12 +375,11 @@ export default function AppShell({
               >
                 <button
                   onClick={() => router.push("/settings/templates")}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group ${
-                    pathname.startsWith("/settings/templates")
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group ${pathname.startsWith("/settings/templates")
                       ? "bg-primary/10 text-primary font-semibold"
                       : "text-default-600 hover:bg-default-100 hover:text-default-900"
-                  }`}
-                  >
+                    }`}
+                >
                   <svg className="w-5 h-5 flex-shrink-0 text-default-400 group-hover:text-default-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
@@ -401,12 +396,11 @@ export default function AppShell({
               >
                 <button
                   onClick={() => router.push("/settings/company")}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group ${
-                    pathname === "/settings/company"
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group ${pathname === "/settings/company"
                       ? "bg-primary/10 text-primary font-semibold"
                       : "text-default-600 hover:bg-default-100 hover:text-default-900"
-                  }`}
-                  >
+                    }`}
+                >
                   <svg className="w-5 h-5 flex-shrink-0 text-default-400 group-hover:text-default-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                   </svg>
@@ -423,11 +417,10 @@ export default function AppShell({
               >
                 <button
                   onClick={() => router.push("/settings/items")}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group ${
-                    pathname === "/settings/items"
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group ${pathname === "/settings/items"
                       ? "bg-primary/10 text-primary font-semibold"
                       : "text-default-600 hover:bg-default-100 hover:text-default-900"
-                  }`}
+                    }`}
                 >
                   <svg
                     className="w-5 h-5 flex-shrink-0 text-default-400 group-hover:text-default-600"
@@ -455,9 +448,9 @@ export default function AppShell({
         <div className="flex items-center gap-2 px-3 py-2 border-t border-divider justify-between">
           {!sidebarCollapsed && (
             <div className="flex gap-2 items-center">
-              <Button 
-                size="sm" 
-                variant="flat" 
+              <Button
+                size="sm"
+                variant="flat"
                 color="primary"
                 onPress={() => setLanguage(language === "en" ? "hi" : "en")}
                 className="font-bold"
@@ -576,7 +569,7 @@ export default function AppShell({
         </div>
 
         {/* ── Mobile Bottom Nav ────────────────────────── */}
-        <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-white/60 p-2 pb-safe backdrop-blur-xl dark:bg-black/60 lg:hidden">
+        <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-white/60 p-2 pb-safe backdrop-blur-xl dark:bg-black/60 lg:hidden no-print">
           <div className="mx-auto flex max-w-md items-center justify-around gap-1">
             {navItems.slice(0, 4).map((item) => {
               const isActive = pathname === item.href;
@@ -584,11 +577,10 @@ export default function AppShell({
                 <button
                   key={item.href}
                   onClick={() => router.push(item.href)}
-                  className={`flex flex-col items-center gap-1.5 rounded-2xl px-4 py-2 transition-all ${
-                    isActive
+                  className={`flex flex-col items-center gap-1.5 rounded-2xl px-4 py-2 transition-all ${isActive
                       ? "bg-primary/15 text-primary shadow-[0_4px_12px_rgba(59,130,246,0.1)]"
                       : "text-default-500 hover:bg-default-100/50"
-                  }`}
+                    }`}
                 >
                   <div
                     className={`transition-transform duration-300 ${isActive ? "scale-110" : ""}`}
@@ -733,12 +725,12 @@ export default function AppShell({
               <span className="font-medium">{t(item.translationKey)}</span>
             </button>
           ))}
-          
+
           <div className="h-px bg-divider my-2" />
-          
+
           {user.role === "ADMIN" && (
             <>
-              <button 
+              <button
                 onClick={() => { setMoreSheetOpen(false); router.push("/settings/company"); }}
                 className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-default-100 transition text-left"
               >
@@ -747,7 +739,7 @@ export default function AppShell({
                 </span>
                 <span>{t("settings.businessProfile")}</span>
               </button>
-              <button 
+              <button
                 onClick={() => { setMoreSheetOpen(false); router.push("/settings/users"); }}
                 className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-default-100 transition text-left"
               >
@@ -756,7 +748,7 @@ export default function AppShell({
                 </span>
                 <span>{t("shell.users")}</span>
               </button>
-              <button 
+              <button
                 onClick={() => { setMoreSheetOpen(false); router.push("/settings/templates"); }}
                 className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-default-100 transition text-left"
               >
@@ -776,9 +768,9 @@ export default function AppShell({
               </button>
             </>
           )}
-          
+
           <div className="h-px bg-divider my-2" />
-          
+
           <div className="flex items-center justify-between px-3 py-2">
             <span className="text-default-500 font-medium">{t("shell.settings")}</span>
             <div className="flex items-center gap-2">
@@ -788,7 +780,7 @@ export default function AppShell({
               <ThemeSwitcher />
             </div>
           </div>
-          
+
           <button
             onClick={handleLogout}
             className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-danger hover:bg-danger/10 transition text-left"

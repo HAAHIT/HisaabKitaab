@@ -30,14 +30,13 @@ export function BillActionBar({ bill, onShare }: BillActionBarProps) {
   }
 
   function handlePayment() {
-    const nextUrl = `/payments/new?billId=${bill.id}${
-      bill.partyId ? `&partyId=${bill.partyId}` : ""
-    }`;
+    const nextUrl = `/payments/new?billId=${bill.id}${bill.partyId ? `&partyId=${bill.partyId}` : ""
+      }`;
     router.push(nextUrl);
   }
 
   return (
-    <div className="pointer-events-none fixed bottom-[80px] left-0 right-0 z-40 px-4 md:bottom-8">
+    <div className="pointer-events-none fixed bottom-[80px] left-0 right-0 z-40 px-4 md:bottom-8 no-print">
       <div className="pointer-events-auto mx-auto max-w-2xl">
         <div className="flex items-center justify-around gap-2 rounded-2xl border border-divider bg-background/90 p-2 shadow-[0_-8px_30px_-15px_rgba(0,0,0,0.3)] backdrop-blur-md dark:shadow-[0_-8px_30px_-15px_rgba(0,0,0,0.8)]">
           {bill.status !== "DRAFT" && (
