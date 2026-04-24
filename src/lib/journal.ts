@@ -52,8 +52,8 @@ interface SalesBillJournalInput {
 
 interface PaymentJournalInput {
   id: string;
-  partyId: string;
-  partyName: string;
+  partyId: string | null;
+  partyName: string | null;
   amount: number;
   mode: string;
   date: Date;
@@ -295,8 +295,8 @@ export async function journalForPaymentReceived(
         accountCode: "SUNDRY_DEBTORS",
         debit: 0,
         credit: payment.amount,
-        partyId: payment.partyId,
-        partyName: payment.partyName,
+        partyId: payment.partyId || null,
+        partyName: payment.partyName || null,
       },
     ],
   });
@@ -319,13 +319,49 @@ export async function journalForPaymentMade(
         accountCode: "SUNDRY_CREDITORS",
         debit: payment.amount,
         credit: 0,
-        partyId: payment.partyId,
-        partyName: payment.partyName,
+        partyId: payment.partyId || null,
+        partyName: payment.partyName || null,
       },
       {
         accountCode: paymentModeToAccount(payment.mode),
         debit: 0,
         credit: payment.amount,
+      },
+    ],
+  });
+}
+
+export async function journalForContraEntry(
+  tx: PrismaTx,
+  tenantId: string,
+  payment: PaymentJournalInput
+) {
+  // If payment.direction is INCOMING, Cash/Bank is debited.
+  // We need to know which account is debited and which is credited.
+  // For contra, one side is Cash and the other is Bank.
+  // The 'mode' is usually one side, and the 'accountId' conceptually points to the specific bank/cash.
+  // But wait, the standard contra entry UI needs to be designed. For now, we'll assume mode is the primary entry, and 'CASH' is the other.
+  // To keep it simple, we just debit the mode's account and credit Cash, or vice versa.
+  const mainAccount = paymentModeToAccount(payment.mode);
+  const otherAccount = mainAccount === "CASH" ? "BANK" : "CASH";
+
+  return createJournalEntry(tx, {
+    tenantId,
+    entryDate: payment.date,
+    narration: `Contra Transfer (${payment.mode})`,
+    voucherType: "CONTRA",
+    paymentId: payment.id,
+    createdBy: payment.createdBy,
+    lines: [
+      {
+        accountCode: payment.amount > 0 ? mainAccount : otherAccount,
+        debit: Math.abs(payment.amount),
+        credit: 0,
+      },
+      {
+        accountCode: payment.amount > 0 ? otherAccount : mainAccount,
+        debit: 0,
+        credit: Math.abs(payment.amount),
       },
     ],
   });

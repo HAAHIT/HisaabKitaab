@@ -9,6 +9,7 @@ import {
 import {
   journalForPaymentMade,
   journalForPaymentReceived,
+  journalForContraEntry,
 } from "@/lib/journal";
 import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
@@ -155,14 +156,14 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { partyId, amount, type, mode, date, notes, billId, status } = body;
+    const { partyId, accountId, amount, type, mode, date, notes, billId, status } = body;
     const normalizedAmount = parsePaymentAmount(amount);
     const normalizedMode = normalizePaymentMode(mode);
     const paymentDate = date ? new Date(date) : new Date();
 
-    if ((!partyId && !billId) || !normalizedAmount || !type || !normalizedMode) {
+    if ((!partyId && !billId) || !normalizedAmount || !type || !normalizedMode || !accountId) {
       return NextResponse.json(
-        { error: "Party or linked bill, amount, type, and mode are required" },
+        { error: "Party/bill, accountId, amount, type, and mode are required" },
         { status: 400 }
       );
     }
@@ -244,10 +245,24 @@ export async function POST(request: NextRequest) {
         throw new Error("Party not found");
       }
 
+      const account = await tx.bankAccount.findFirst({
+        where: {
+          id: accountId,
+          tenantId,
+          isDeleted: false,
+          isActive: true,
+        },
+      });
+
+      if (!account) {
+        throw new Error("Bank account not found");
+      }
+
       const newPayment = await tx.payment.create({
         data: {
           tenantId,
           partyId: party.id,
+          accountId: account.id,
           direction: type,
           amount: normalizedAmount,
           date: paymentDate,
@@ -275,6 +290,15 @@ export async function POST(request: NextRequest) {
           where: { id: party.id },
           data: {
             currentBalance: { increment: balanceChange },
+          },
+        });
+
+        // Update Bank / Cash Account balance
+        const bankBalanceChange = type === "INCOMING" ? normalizedAmount : -normalizedAmount;
+        await tx.bankAccount.update({
+          where: { id: account.id },
+          data: {
+            currentBalance: { increment: bankBalanceChange },
           },
         });
 
@@ -320,7 +344,7 @@ export async function POST(request: NextRequest) {
     // Return the application error message for intentional business-logic throws
     // (e.g. wrong party, wrong direction). Hide unexpected infrastructure errors.
     if (error instanceof Prisma.PrismaClientKnownRequestError ||
-        error instanceof Prisma.PrismaClientValidationError) {
+      error instanceof Prisma.PrismaClientValidationError) {
       return NextResponse.json({ error: "Failed to process payment" }, { status: 500 });
     }
     const msg = error instanceof Error ? error.message : "Failed to process payment";
@@ -380,24 +404,47 @@ export async function PATCH(request: NextRequest) {
         include: { party: { select: { name: true, type: true } } },
       });
 
-      const balanceChange = getPaymentBalanceDelta(
-        payment.party.type,
-        payment.direction,
-        payment.amount.toNumber()
-      );
+      let balanceChange = 0;
+      if (payment.party) {
+        balanceChange = getPaymentBalanceDelta(
+          payment.party.type,
+          payment.direction,
+          payment.amount.toNumber()
+        );
 
-      await tx.party.update({
-        where: { id: payment.partyId },
-        data: {
-          currentBalance: { increment: balanceChange },
-        },
-      });
+        await tx.party.update({
+          where: { id: payment.partyId! },
+          data: {
+            currentBalance: { increment: balanceChange },
+          },
+        });
+      }
 
-      if (payment.direction === "INCOMING") {
+      if (payment.accountId) {
+        const bankBalanceChange = payment.direction === "INCOMING" ? payment.amount.toNumber() : -payment.amount.toNumber();
+        await tx.bankAccount.update({
+          where: { id: payment.accountId },
+          data: {
+            currentBalance: { increment: bankBalanceChange },
+          },
+        });
+      }
+
+      if (!payment.partyId) {
+        await journalForContraEntry(tx, tenantId, {
+          id: updated.id,
+          partyId: null,
+          partyName: null,
+          amount: payment.amount.toNumber(),
+          mode: payment.mode,
+          date: payment.date,
+          createdBy: userId || payment.createdBy,
+        });
+      } else if (payment.direction === "INCOMING") {
         await journalForPaymentReceived(tx, tenantId, {
           id: updated.id,
           partyId: payment.partyId,
-          partyName: updated.party.name,
+          partyName: updated.party?.name || null,
           amount: payment.amount.toNumber(),
           mode: payment.mode,
           date: payment.date,
@@ -407,7 +454,7 @@ export async function PATCH(request: NextRequest) {
         await journalForPaymentMade(tx, tenantId, {
           id: updated.id,
           partyId: payment.partyId,
-          partyName: updated.party.name,
+          partyName: updated.party?.name || null,
           amount: payment.amount.toNumber(),
           mode: payment.mode,
           date: payment.date,
@@ -435,7 +482,7 @@ export async function PATCH(request: NextRequest) {
   } catch (error) {
     logError("payments.complete.error", { requestId: getRequestId(request), error });
     if (error instanceof Prisma.PrismaClientKnownRequestError ||
-        error instanceof Prisma.PrismaClientValidationError) {
+      error instanceof Prisma.PrismaClientValidationError) {
       return NextResponse.json({ error: "Failed to complete payment" }, { status: 500 });
     }
     const msg = error instanceof Error ? error.message : "Failed to complete payment";

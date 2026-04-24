@@ -31,7 +31,8 @@ function formatCurrency(value: number): string {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(value);
 }
 
@@ -222,9 +223,8 @@ export default function PaymentsListPage() {
 
       {toast && (
         <div
-          className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${
-            toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
-          }`}
+          className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
+            }`}
         >
           {toast.message}
         </div>
@@ -349,9 +349,8 @@ export default function PaymentsListPage() {
                           <span className="text-warning">-{formatCurrency(group.outgoingTotal)}</span>
                         </div>
                         <svg
-                          className={`h-4 w-4 text-default-500 transition-transform ${
-                            isCollapsed ? "" : "rotate-180"
-                          }`}
+                          className={`h-4 w-4 text-default-500 transition-transform ${isCollapsed ? "" : "rotate-180"
+                            }`}
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
@@ -372,9 +371,8 @@ export default function PaymentsListPage() {
                         <Card
                           key={payment.id}
                           shadow="sm"
-                          className={`transition hover:shadow-md ${
-                            payment.status === "EXPECTED" ? "border-l-4 border-l-warning" : ""
-                          }`}
+                          className={`transition hover:shadow-md ${payment.status === "EXPECTED" ? "border-l-4 border-l-warning" : ""
+                            }`}
                         >
                           <CardBody className="p-4">
                             <div className="flex items-center justify-between">
@@ -425,9 +423,8 @@ export default function PaymentsListPage() {
 
                               <div className="flex items-center gap-3">
                                 <p
-                                  className={`text-lg font-bold ${
-                                    payment.direction === "INCOMING" ? "text-success" : "text-warning"
-                                  }`}
+                                  className={`text-lg font-bold ${payment.direction === "INCOMING" ? "text-success" : "text-warning"
+                                    }`}
                                 >
                                   {payment.direction === "INCOMING" ? "+" : "-"}
                                   {formatCurrency(payment.amount)}

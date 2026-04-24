@@ -21,6 +21,14 @@ import { useRouter } from "next/navigation";
 import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
 import { BillSearch, type BillOption } from "@/components/ui/BillSearch";
 
+type BankAccount = {
+  id: string;
+  name: string;
+  type: string;
+  accountNumber: string | null;
+  currentBalance: number;
+};
+
 function formatSignedBalance(value: number) {
   const v = Math.round(value * 100) / 100;
   const absolute = Math.abs(v).toLocaleString("en-IN");
@@ -68,12 +76,33 @@ export default function RecordPaymentPage() {
   const [billId, setBillId] = useState("");
   const [selectedBill, setSelectedBill] = useState<BillOption | null>(null);
 
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
+  const [accountId, setAccountId] = useState("");
+
   const [amount, setAmount] = useState("");
   const [direction, setDirection] = useState("INCOMING");
-  const [mode, setMode] = useState("CASH");
+  const [mode, setMode] = useState("BANK_TRANSFER");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [notes, setNotes] = useState("");
   const [paymentStatus, setPaymentStatus] = useState("COMPLETED");
+
+  useEffect(() => {
+    async function loadAccounts() {
+      try {
+        const res = await fetch("/api/bank-accounts");
+        if (res.ok) {
+          const data = await res.json();
+          setBankAccounts(data.accounts || []);
+          if (data.accounts?.length > 0) {
+            const first = data.accounts[0];
+            setAccountId(first.id);
+            setMode(first.type === "CASH" ? "CASH" : "BANK_TRANSFER");
+          }
+        }
+      } catch (err) { }
+    }
+    loadAccounts();
+  }, []);
 
 
 
@@ -95,6 +124,11 @@ export default function RecordPaymentPage() {
       return;
     }
 
+    if (!accountId) {
+      showToast("Select a Bank or Cash account", "error");
+      return;
+    }
+
     setSaving(true);
     try {
       const response = await fetch("/api/payments", {
@@ -102,6 +136,7 @@ export default function RecordPaymentPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           partyId,
+          accountId,
           billId: billId || null,
           amount: Number.parseFloat(amount),
           type: direction,
@@ -132,9 +167,8 @@ export default function RecordPaymentPage() {
     <div className="mx-auto max-w-2xl animate-fade-in p-4 lg:p-8">
       {toast && (
         <div
-          className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${
-            toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
-          }`}
+          className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
+            }`}
         >
           {toast.message}
         </div>
@@ -174,22 +208,20 @@ export default function RecordPaymentPage() {
           <Radio
             value="COMPLETED"
             classNames={{
-              base: `group relative m-0 max-w-full cursor-pointer rounded-2xl border p-4 transition-all duration-300 ${
-                paymentStatus === "COMPLETED"
-                  ? "border-emerald-400/70 bg-gradient-to-br from-emerald-500/15 to-emerald-400/5 shadow-[0_10px_30px_-18px_rgba(16,185,129,0.8)] ring-1 ring-emerald-400/40"
-                  : "border-default-200 bg-content1 hover:border-emerald-300/60 hover:bg-emerald-500/[0.04]"
-              }`,
+              base: `group relative m-0 max-w-full cursor-pointer rounded-2xl border p-4 transition-all duration-300 ${paymentStatus === "COMPLETED"
+                ? "border-emerald-400/70 bg-gradient-to-br from-emerald-500/15 to-emerald-400/5 shadow-[0_10px_30px_-18px_rgba(16,185,129,0.8)] ring-1 ring-emerald-400/40"
+                : "border-default-200 bg-content1 hover:border-emerald-300/60 hover:bg-emerald-500/[0.04]"
+                }`,
               label: "block w-full",
               wrapper: "hidden",
             }}
           >
             <div className="flex items-center gap-4">
               <div
-                className={`rounded-xl p-3 transition-colors ${
-                  paymentStatus === "COMPLETED"
-                    ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30"
-                    : "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
-                }`}
+                className={`rounded-xl p-3 transition-colors ${paymentStatus === "COMPLETED"
+                  ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30"
+                  : "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
+                  }`}
               >
                 <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
@@ -202,20 +234,18 @@ export default function RecordPaymentPage() {
               </div>
               <div className="flex-1">
                 <p
-                  className={`text-base font-bold ${
-                    paymentStatus === "COMPLETED"
-                      ? "text-emerald-700 dark:text-emerald-300"
-                      : "text-default-900 dark:text-default-100"
-                  }`}
+                  className={`text-base font-bold ${paymentStatus === "COMPLETED"
+                    ? "text-emerald-700 dark:text-emerald-300"
+                    : "text-default-900 dark:text-default-100"
+                    }`}
                 >
                   Already Received / Paid
                 </p>
                 <p
-                  className={`text-xs ${
-                    paymentStatus === "COMPLETED"
-                      ? "text-emerald-700/80 dark:text-emerald-300/80"
-                      : "text-default-500"
-                  }`}
+                  className={`text-xs ${paymentStatus === "COMPLETED"
+                    ? "text-emerald-700/80 dark:text-emerald-300/80"
+                    : "text-default-500"
+                    }`}
                 >
                   Money has already changed hands
                 </p>
@@ -226,22 +256,20 @@ export default function RecordPaymentPage() {
           <Radio
             value="EXPECTED"
             classNames={{
-              base: `group relative m-0 max-w-full cursor-pointer rounded-2xl border p-4 transition-all duration-300 ${
-                paymentStatus === "EXPECTED"
-                  ? "border-amber-400/70 bg-gradient-to-br from-amber-500/15 to-amber-400/5 shadow-[0_10px_30px_-18px_rgba(245,158,11,0.8)] ring-1 ring-amber-400/40"
-                  : "border-default-200 bg-content1 hover:border-amber-300/60 hover:bg-amber-500/[0.04]"
-              }`,
+              base: `group relative m-0 max-w-full cursor-pointer rounded-2xl border p-4 transition-all duration-300 ${paymentStatus === "EXPECTED"
+                ? "border-amber-400/70 bg-gradient-to-br from-amber-500/15 to-amber-400/5 shadow-[0_10px_30px_-18px_rgba(245,158,11,0.8)] ring-1 ring-amber-400/40"
+                : "border-default-200 bg-content1 hover:border-amber-300/60 hover:bg-amber-500/[0.04]"
+                }`,
               label: "block w-full",
               wrapper: "hidden",
             }}
           >
             <div className="flex items-center gap-4">
               <div
-                className={`rounded-xl p-3 transition-colors ${
-                  paymentStatus === "EXPECTED"
-                    ? "bg-amber-500 text-white shadow-lg shadow-amber-500/30"
-                    : "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"
-                }`}
+                className={`rounded-xl p-3 transition-colors ${paymentStatus === "EXPECTED"
+                  ? "bg-amber-500 text-white shadow-lg shadow-amber-500/30"
+                  : "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"
+                  }`}
               >
                 <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
@@ -254,20 +282,18 @@ export default function RecordPaymentPage() {
               </div>
               <div className="flex-1">
                 <p
-                  className={`text-base font-bold ${
-                    paymentStatus === "EXPECTED"
-                      ? "text-amber-700 dark:text-amber-300"
-                      : "text-default-900 dark:text-default-100"
-                  }`}
+                  className={`text-base font-bold ${paymentStatus === "EXPECTED"
+                    ? "text-amber-700 dark:text-amber-300"
+                    : "text-default-900 dark:text-default-100"
+                    }`}
                 >
                   Expected / Planned
                 </p>
                 <p
-                  className={`text-xs ${
-                    paymentStatus === "EXPECTED"
-                      ? "text-amber-700/80 dark:text-amber-300/80"
-                      : "text-default-500"
-                  }`}
+                  className={`text-xs ${paymentStatus === "EXPECTED"
+                    ? "text-amber-700/80 dark:text-amber-300/80"
+                    : "text-default-500"
+                    }`}
                 >
                   Payment confirmed for a later date
                 </p>
@@ -362,22 +388,54 @@ export default function RecordPaymentPage() {
             </Select>
 
             <Select
-              label="Payment Mode"
-              placeholder="Select mode"
-              selectedKeys={new Set([mode])}
+              label="Account"
+              placeholder="Select account"
+              selectedKeys={new Set(accountId ? [accountId] : [])}
               onSelectionChange={(keys) => {
                 const value = Array.from(keys)[0] as string;
                 if (value) {
-                  setMode(value);
+                  setAccountId(value);
+                  const acc = bankAccounts.find((a) => a.id === value);
+                  if (acc?.type === "CASH") {
+                    setMode("CASH");
+                  } else if (mode === "CASH") {
+                    // Reset to bank transfer if changing from cash to bank account
+                    setMode("BANK_TRANSFER");
+                  }
                 }
               }}
               variant="bordered"
             >
-              <SelectItem key="CASH">Cash</SelectItem>
-              <SelectItem key="BANK_TRANSFER">Bank Transfer</SelectItem>
-              <SelectItem key="UPI">UPI</SelectItem>
-              <SelectItem key="CHEQUE">Cheque</SelectItem>
+              {bankAccounts.map((acc) => (
+                <SelectItem key={acc.id} textValue={acc.name}>
+                  <div className="flex flex-col">
+                    <span>{acc.name}</span>
+                    <span className="text-xs text-default-400">
+                      Balance: {formatSignedBalance(acc.currentBalance)}
+                    </span>
+                  </div>
+                </SelectItem>
+              ))}
             </Select>
+
+            {bankAccounts.find((a) => a.id === accountId)?.type === "BANK" && (
+              <Select
+                label="Transfer Mode"
+                placeholder="Select mode"
+                selectedKeys={new Set([mode])}
+                onSelectionChange={(keys) => {
+                  const value = Array.from(keys)[0] as string;
+                  if (value) {
+                    setMode(value);
+                  }
+                }}
+                variant="bordered"
+              >
+                <SelectItem key="BANK_TRANSFER">Bank Transfer (IMPS/NEFT)</SelectItem>
+                <SelectItem key="UPI">UPI</SelectItem>
+                <SelectItem key="CHEQUE">Cheque</SelectItem>
+              </Select>
+            )}
           </div>
 
           <Input label="Date" type="date" value={date} onValueChange={setDate} variant="bordered" />

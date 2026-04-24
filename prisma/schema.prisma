@@ -29,6 +29,7 @@ model Tenant {
   payments       Payment[]
   users          User[]
   importJobs     ImportJob[]
+  bankAccounts   BankAccount[]
 }
 
 model User {
@@ -208,7 +209,8 @@ model Party {
 
 model Payment {
   id           String        @id @default(cuid())
-  partyId      String
+  partyId      String?
+  accountId    String?
   direction    PayDirection
   amount       Decimal       @db.Decimal(19, 4) // [B3] Float → Decimal
   date         DateTime
@@ -225,12 +227,36 @@ model Payment {
   tenantId     String
   creator      User          @relation(fields: [createdBy], references: [id])
   linkedBill   Bill?         @relation(fields: [linkedBillId], references: [id])
-  party        Party         @relation(fields: [partyId], references: [id])
+  party        Party?        @relation(fields: [partyId], references: [id])
+  account      BankAccount?  @relation(fields: [accountId], references: [id])
   tenant       Tenant        @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
   @@index([tenantId, partyId])
+  @@index([tenantId, accountId])
   @@index([tenantId, direction])
+}
+
+model BankAccount {
+  id             String      @id @default(cuid())
+  tenantId       String
+  name           String
+  type           AccountType
+  accountNumber  String?
+  openingBalance Decimal     @default(0) @db.Decimal(19, 4)
+  currentBalance Decimal     @default(0) @db.Decimal(19, 4)
+  isActive       Boolean     @default(true)
+  isDeleted      Boolean     @default(false)
+  createdBy      String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  
+  tenant         Tenant      @relation(fields: [tenantId], references: [id])
+  payments       Payment[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([tenantId, type])
 }
 
 model JournalEntry {
@@ -435,7 +461,6 @@ model ImportJob {
   tenant     Tenant    @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
-  @@index([status])
 }
 
 enum JobStatus {
@@ -443,4 +468,9 @@ enum JobStatus {
   PROCESSING
   COMPLETED
   FAILED
+}
+
+enum AccountType {
+  BANK
+  CASH
 }
