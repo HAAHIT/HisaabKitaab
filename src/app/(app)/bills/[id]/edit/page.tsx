@@ -6,6 +6,7 @@ import {
   Card,
   CardBody,
   CardHeader,
+  Checkbox,
   Chip,
   Divider,
   Input,
@@ -20,7 +21,7 @@ import { StateSearch } from "@/components/ui/StateSearch";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { evaluateRow, type ColumnDef } from "@/lib/formula";
 import { GST_STATE_CODES } from "@/lib/gst-states";
-import { extractGstinStateCode } from "@/lib/gst-helpers";
+import { extractGstinStateCode, isValidGstinFormat } from "@/lib/gst-helpers";
 
 interface Template {
   id: string;
@@ -45,6 +46,8 @@ interface BillResponse {
   terms: string | null;
   taxPercent: number;
   hsnCode?: string | null;
+  roundOff?: number;
+  shippingAddress?: string | null;
 }
 
 function formatCurrency(value: number) {
@@ -116,6 +119,9 @@ export default function EditBillPage({
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("");
   const [tenantGstin, setTenantGstin] = useState<string | null>(null);
+  const [enableRoundOff, setEnableRoundOff] = useState(false);
+  const [shippingAddress, setShippingAddress] = useState("");
+  const [showShipTo, setShowShipTo] = useState(false);
 
   const fetchFormData = useCallback(async () => {
     setLoading(true);
@@ -155,6 +161,14 @@ export default function EditBillPage({
       setTerms(nextBill.terms || "");
       setIsInterState(nextBill.isInterState === true);
       setPlaceOfSupply(nextBill.placeOfSupply || "");
+      // Seed round-off / ship-to from existing bill data
+      if (nextBill.roundOff && nextBill.roundOff !== 0) {
+        setEnableRoundOff(true);
+      }
+      if (nextBill.shippingAddress) {
+        setShowShipTo(true);
+        setShippingAddress(nextBill.shippingAddress);
+      }
 
       // Pre-seed party from bill data for the PartySearch component
       if (nextBill.partyId) {
@@ -290,6 +304,15 @@ export default function EditBillPage({
     };
   }, [rows, selectedTemplate]);
 
+  const roundOff = useMemo(() => {
+    if (!enableRoundOff) return 0;
+    return Math.round((Math.round(grandTotal) - grandTotal) * 100) / 100;
+  }, [enableRoundOff, grandTotal]);
+
+  const roundedGrandTotal = useMemo(() => {
+    return enableRoundOff ? Math.round(grandTotal) : grandTotal;
+  }, [enableRoundOff, grandTotal]);
+
   async function handleSave(status: "DRAFT" | "FINAL") {
     const mainScroll = document.querySelector("main");
 
@@ -337,7 +360,9 @@ export default function EditBillPage({
           taxPercent: 0,
           subtotal,
           taxAmount,
-          grandTotal,
+          grandTotal: roundedGrandTotal,
+          roundOff,
+          shippingAddress: showShipTo ? shippingAddress.trim() || null : null,
           isInterState,
           hsnCode: null,
           placeOfSupply: placeOfSupply.trim() || null,
@@ -373,9 +398,8 @@ export default function EditBillPage({
     <>
       {toast && (
         <div
-          className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${
-            toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
-          }`}
+          className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
+            }`}
         >
           {toast.message}
         </div>
@@ -468,8 +492,11 @@ export default function EditBillPage({
                 label="GSTIN"
                 placeholder="GST Number (optional)"
                 value={gstin}
-                onValueChange={setGstin}
+                onValueChange={(v) => setGstin(v.toUpperCase())}
                 variant="bordered"
+                isInvalid={gstin.trim().length > 0 && !isValidGstinFormat(gstin)}
+                errorMessage={gstin.trim().length > 0 && !isValidGstinFormat(gstin) ? "Invalid GSTIN format (15 chars: 22AAAAA0000A1Z5)" : undefined}
+                maxLength={15}
               />
             </div>
           </CardBody>
@@ -544,9 +571,11 @@ export default function EditBillPage({
                       <td key={column.id} className="px-2 py-2">
                         {column.type === "formula" ? (
                           <span className="font-mono font-medium text-success">
-                            {typeof row[column.id] === "number"
-                              ? formatColumnValue(column.name, row[column.id] as number)
-                              : "-"}
+                            {(() => {
+                              const raw = row[column.id];
+                              const num = typeof raw === "number" ? raw : parseFloat(String(raw));
+                              return !isNaN(num) ? formatColumnValue(column.name, num) : "-";
+                            })()}
                           </span>
                         ) : column.type === "text" && (column.name.toLowerCase().includes("item") || column.name.toLowerCase().includes("desc") || column.name.toLowerCase().includes("product")) ? (
                           <ItemSearch
@@ -559,36 +588,36 @@ export default function EditBillPage({
                                   const nextRows = [...currentRows];
                                   const newRow = { ...nextRows[rowIndex] };
                                   newRow[column.id] = item.name;
-                                    if (selectedTemplate) {
-                                      // 1. Rate Mapping
-                                      const rateCol = selectedTemplate.columns.find(c => 
-                                        c.id === "col_rate" || 
-                                        (c.type === "number" && (c.name.toLowerCase() === "rate" || c.name.toLowerCase() === "price" || c.name.toLowerCase().includes("rate")))
-                                      );
-                                      if (rateCol && item.rate != null) {
-                                        newRow[rateCol.id] = item.rate;
-                                      }
+                                  if (selectedTemplate) {
+                                    // 1. Rate Mapping
+                                    const rateCol = selectedTemplate.columns.find(c =>
+                                      c.id === "col_rate" ||
+                                      (c.type === "number" && (c.name.toLowerCase() === "rate" || c.name.toLowerCase() === "price" || c.name.toLowerCase().includes("rate")))
+                                    );
+                                    if (rateCol && item.rate != null) {
+                                      newRow[rateCol.id] = item.rate;
+                                    }
 
-                                      // 2. Tax % Mapping
-                                      const taxCol = selectedTemplate.columns.find(c => 
-                                        c.id === "col_tax_percent" || 
-                                        (c.type === "number" && (c.name.toLowerCase().includes("tax %") || c.name.toLowerCase().includes("gst %") || c.name.toLowerCase() === "tax percent"))
-                                      );
-                                      if (taxCol && item.taxRate != null) {
-                                        newRow[taxCol.id] = item.taxRate;
-                                      }
-                                      
-                                      // 3. HSN Code Mapping
-                                      const hsnCol = selectedTemplate.columns.find(c => 
-                                        c.id === "col_hsn" || 
-                                        (c.type === "text" && (c.name.toLowerCase().includes("hsn") || c.name.toLowerCase().includes("sac")))
-                                      );
-                                      if (hsnCol && item.hsnCode) {
-                                        newRow[hsnCol.id] = item.hsnCode;
-                                      }
+                                    // 2. Tax % Mapping
+                                    const taxCol = selectedTemplate.columns.find(c =>
+                                      c.id === "col_tax_percent" ||
+                                      (c.type === "number" && (c.name.toLowerCase().includes("tax %") || c.name.toLowerCase().includes("gst %") || c.name.toLowerCase() === "tax percent"))
+                                    );
+                                    if (taxCol && item.taxRate != null) {
+                                      newRow[taxCol.id] = item.taxRate;
+                                    }
 
-                                      nextRows[rowIndex] = evaluateRow(newRow, selectedTemplate.columns);
-                                    } else {
+                                    // 3. HSN Code Mapping
+                                    const hsnCol = selectedTemplate.columns.find(c =>
+                                      c.id === "col_hsn" ||
+                                      (c.type === "text" && (c.name.toLowerCase().includes("hsn") || c.name.toLowerCase().includes("sac")))
+                                    );
+                                    if (hsnCol && item.hsnCode) {
+                                      newRow[hsnCol.id] = item.hsnCode;
+                                    }
+
+                                    nextRows[rowIndex] = evaluateRow(newRow, selectedTemplate.columns);
+                                  } else {
                                     nextRows[rowIndex] = newRow;
                                   }
                                   return nextRows;
@@ -698,6 +727,27 @@ export default function EditBillPage({
                 variant="bordered"
                 minRows={3}
               />
+              {/* Ship To */}
+              <div>
+                <Checkbox
+                  size="sm"
+                  isSelected={showShipTo}
+                  onValueChange={setShowShipTo}
+                >
+                  <span className="text-sm">Ship to a different address</span>
+                </Checkbox>
+                {showShipTo && (
+                  <Textarea
+                    label="Shipping Address"
+                    placeholder="Enter shipping address..."
+                    value={shippingAddress}
+                    onValueChange={setShippingAddress}
+                    variant="bordered"
+                    minRows={2}
+                    className="mt-2"
+                  />
+                )}
+              </div>
             </CardBody>
           </Card>
 
@@ -718,33 +768,52 @@ export default function EditBillPage({
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-default-400">{t("bills.autoTaxNote")}</p>
                   {(() => {
-                        const partyState = extractGstinStateCode(gstin);
-                        const tenantState = extractGstinStateCode(tenantGstin);
-                        const isAutoDetected = !!(partyState && tenantState);
-                        return (
-                          <div className="flex flex-col items-end gap-0.5">
-                            <label className={`flex items-center gap-1.5 select-none ${isAutoDetected ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}>
-                              <input
-                                type="checkbox"
-                                checked={isInterState}
-                                onChange={(e) => setIsInterState(e.target.checked)}
-                                className="accent-primary"
-                                disabled={isAutoDetected}
-                              />
-                              <span className="text-xs text-default-500">Inter-state (IGST)</span>
-                            </label>
-                            {isAutoDetected && (
-                              <span className="text-[10px] text-default-400">Auto-detected from GST Numbers</span>
-                            )}
-                          </div>
-                        );
-                      })()}
+                    const partyState = extractGstinStateCode(gstin);
+                    const tenantState = extractGstinStateCode(tenantGstin);
+                    const isAutoDetected = !!(partyState && tenantState);
+                    return (
+                      <div className="flex flex-col items-end gap-0.5">
+                        <label className={`flex items-center gap-1.5 select-none ${isAutoDetected ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}>
+                          <input
+                            type="checkbox"
+                            checked={isInterState}
+                            onChange={(e) => setIsInterState(e.target.checked)}
+                            className="accent-primary"
+                            disabled={isAutoDetected}
+                          />
+                          <span className="text-xs text-default-500">Inter-state (IGST)</span>
+                        </label>
+                        {isAutoDetected && (
+                          <span className="text-[10px] text-default-400">Auto-detected from GST Numbers</span>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+                <Divider />
+                {/* Round-off toggle */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      size="sm"
+                      isSelected={enableRoundOff}
+                      onValueChange={setEnableRoundOff}
+                      isDisabled={grandTotal === 0}
+                    >
+                      <span className="text-sm">Round off to nearest ₹</span>
+                    </Checkbox>
+                    {enableRoundOff && roundOff !== 0 && (
+                      <span className={`text-sm font-mono ${roundOff > 0 ? 'text-success' : 'text-danger'}`}>
+                        {roundOff > 0 ? '+' : ''}{formatCurrency(roundOff)}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <Divider />
                 <div className="flex justify-between">
                   <span className="text-lg font-bold">Grand Total</span>
                   <span className="text-lg font-bold text-primary">
-                    {formatCurrency(grandTotal)}
+                    {formatCurrency(roundedGrandTotal)}
                   </span>
                 </div>
               </div>

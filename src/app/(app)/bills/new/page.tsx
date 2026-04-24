@@ -241,7 +241,8 @@ export default function NewBillPage() {
 
   const roundOff = useMemo(() => {
     if (!enableRoundOff) return 0;
-    return Math.round(grandTotal) - grandTotal;
+    // Clean to 2dp to avoid IEEE 754 noise (e.g. 0.2999999999992724 → 0.30)
+    return Math.round((Math.round(grandTotal) - grandTotal) * 100) / 100;
   }, [enableRoundOff, grandTotal]);
 
   const roundedGrandTotal = useMemo(() => {
@@ -885,12 +886,13 @@ export default function NewBillPage() {
                     <Divider />
                     {/* Round-Off Toggle */}
                     <div className="flex items-center justify-between">
-                      <label className="flex items-center gap-1.5 select-none cursor-pointer">
+                      <label className={`flex items-center gap-1.5 select-none ${grandTotal === 0 ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
                         <input
                           type="checkbox"
                           checked={enableRoundOff}
                           onChange={(e) => setEnableRoundOff(e.target.checked)}
                           className="accent-primary"
+                          disabled={grandTotal === 0}
                         />
                         <span className="text-xs text-default-500">Round off to nearest ₹</span>
                       </label>
