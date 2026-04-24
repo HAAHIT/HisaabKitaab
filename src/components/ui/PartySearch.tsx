@@ -121,6 +121,24 @@ export function PartySearch({
         autoFocus={autoFocus}
         isInvalid={isInvalid}
         listboxProps={{
+          bottomContent: parties.length > 0 ? (
+            <div className="p-2 pt-1 border-t border-divider/50 mt-1">
+              <Button
+                className="w-full justify-start font-medium"
+                size="sm"
+                color="primary"
+                variant="light"
+                onPress={() => {
+                  if (document.activeElement instanceof HTMLElement) {
+                    document.activeElement.blur();
+                  }
+                  onOpen();
+                }}
+              >
+                + Add New {partyType ? t(`parties.${partyType.toLowerCase()}Type` as any) : "Party / Ledger"}
+              </Button>
+            </div>
+          ) : undefined,
           emptyContent: (
             <div className="flex flex-col items-center justify-center gap-3 p-4 text-center">
               <p className="text-default-500">No parties found.</p>
@@ -135,7 +153,7 @@ export function PartySearch({
                   onOpen();
                 }}
               >
-                + Add New Party
+                + Add New {partyType ? t(`parties.${partyType.toLowerCase()}Type` as any) : "Party / Ledger"}
               </Button>
             </div>
           ),

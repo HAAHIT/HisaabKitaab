@@ -184,7 +184,15 @@ export async function POST(request: NextRequest) {
     }, { isolationLevel: "RepeatableRead" });
 
     return NextResponse.json({ party }, { status: 201 });
-  } catch (error) {
+  } catch (error: any) {
+    if (error.code === "P2002") {
+      logError("parties.create.duplicate", { requestId: getRequestId(request) });
+      return NextResponse.json(
+        { error: "A party or ledger with this exact name already exists." },
+        { status: 409 }
+      );
+    }
+
     logError("parties.create.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Internal server error" },
