@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { resolveWriteTenant } from "@/lib/api-tenant";
+import { resolveWriteSession } from "@/lib/api-tenant";
 import { logError, logInfo, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { parseTallyXml } from "@/lib/tally-xml-import";
@@ -36,21 +36,16 @@ export async function POST(request: NextRequest) {
   );
   if (rateLimitResponse) return rateLimitResponse;
 
-  const role = request.headers.get("x-user-role");
-  const userId = request.headers.get("x-user-id");
 
-  if (role !== "ADMIN") {
+
+  // [FIX] Use JWT-verified session instead of trusting proxy headers
+  const sessionResolution = await resolveWriteSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId: tid, userId: sessionUserId, role: sessionRole } = sessionResolution.session;
+
+  if (sessionRole !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantResolution = await resolveWriteTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  const tid: string = tenantId;
 
   let xmlText: string;
   try {
@@ -95,7 +90,7 @@ export async function POST(request: NextRequest) {
   const job = await prisma.importJob.create({
     data: {
       tenantId: tid,
-      createdBy: userId,
+      createdBy: sessionUserId,
       totalItems: totalItems,
       xmlData: compressedXml,
       status: "PENDING",

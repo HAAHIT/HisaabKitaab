@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { recomputePartyBalance } from "@/lib/party-balance.server";
 
-import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
+import { resolveWriteSession } from "@/lib/api-tenant";
 import { logError, logInfo, getRequestId } from "@/lib/observability";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -9,16 +9,14 @@ export const runtime = "nodejs";
 
 // GET /api/parties/reconcile — report balance discrepancies (Admin only)
 export async function GET(request: NextRequest) {
-  const role = request.headers.get("x-user-role");
+  // [FIX] Use JWT-verified session instead of trusting proxy headers
+  const sessionResolution = await resolveWriteSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, role } = sessionResolution.session;
 
-  if (role !== "ADMIN") {
+  if (role !== "ADMIN" && role !== "ACCOUNTANT") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantResolution = await resolveReadTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   try {
     const parties = await prisma.party.findMany({
@@ -50,34 +48,36 @@ export async function GET(request: NextRequest) {
 
 // POST /api/parties/reconcile — fix all drifted balances (Admin only)
 export async function POST(request: NextRequest) {
-  const role = request.headers.get("x-user-role");
+  // [FIX] Use JWT-verified session instead of trusting proxy headers
+  const sessionResolution = await resolveWriteSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, role } = sessionResolution.session;
 
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantResolution = await resolveWriteTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   try {
-    const parties = await prisma.party.findMany({
-      where: { tenantId, isDeleted: false },
-      select: { id: true, name: true, currentBalance: true },
-    });
+    // [FIX #3] Wrap reconciliation in a transaction for atomicity
+    const fixed = await prisma.$transaction(async (tx) => {
+      const parties = await tx.party.findMany({
+        where: { tenantId, isDeleted: false },
+        select: { id: true, name: true, currentBalance: true },
+      });
 
-    let fixed = 0;
-    for (const party of parties) {
-      const computed = await recomputePartyBalance(prisma, party.id, tenantId);
-      if (Math.abs(computed - party.currentBalance.toNumber()) >= 0.01) {
-        await prisma.party.update({
-          where: { id: party.id },
-          data: { currentBalance: computed },
-        });
-        fixed++;
+      let count = 0;
+      for (const party of parties) {
+        const computed = await recomputePartyBalance(tx, party.id, tenantId);
+        if (Math.abs(computed - party.currentBalance.toNumber()) >= 0.01) {
+          await tx.party.update({
+            where: { id: party.id },
+            data: { currentBalance: computed },
+          });
+          count++;
+        }
       }
-    }
+      return count;
+    });
 
     logInfo("parties.reconcile.fixed", { requestId: getRequestId(request), fixed });
     return NextResponse.json({ fixed });

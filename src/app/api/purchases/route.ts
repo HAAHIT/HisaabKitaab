@@ -11,7 +11,7 @@ import {
   journalForPurchaseBill,
 } from "@/lib/journal";
 import { NextRequest, NextResponse } from "next/server";
-import { resolveWriteTenant } from "@/lib/api-tenant";
+import { resolveWriteSession } from "@/lib/api-tenant";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { logError, getRequestId } from "@/lib/observability";
 import crypto from "crypto";
@@ -35,8 +35,8 @@ const CreatePurchaseSchema = z.object({
   billDate: z.string().datetime().optional(),
   gstin: z.string().regex(GSTIN_REGEX, { message: "Invalid GSTIN format." }).nullish(),
   placeOfSupply: z.string().refine((val) => GST_STATE_CODE_SET.has(val), {
-      message: "Invalid place of supply. Must be a 2-digit GST state code.",
-    }).nullish(),
+    message: "Invalid place of supply. Must be a 2-digit GST state code.",
+  }).nullish(),
   rows: z.array(z.record(z.string(), z.unknown())).min(1),
   notes: z.string().nullish(),
   terms: z.string().nullish(),
@@ -70,20 +70,14 @@ export async function POST(request: NextRequest) {
   const rateLimitResponse = await checkRateLimit(request, "purchases.create", 30);
   if (rateLimitResponse) return rateLimitResponse;
 
-  const role = request.headers.get("x-user-role");
-  const userId = request.headers.get("x-user-id");
+  // [FIX] Use JWT-verified session instead of trusting proxy headers
+  const sessionResolution = await resolveWriteSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, userId, role } = sessionResolution.session;
 
-  if (!role || role === "CUSTOMER") {
+  if (role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!userId) {
-    return NextResponse.json({ error: "Missing user context" }, { status: 401 });
-  }
-  const tenantResolution = await resolveWriteTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   try {
     const rawBody = await request.json();
@@ -142,7 +136,7 @@ export async function POST(request: NextRequest) {
     const effectiveGstin = gstin || party.gstin;
     const isInterState = deriveIsInterState(effectiveGstin, tenant?.gstin, body.isInterState);
     const now = new Date();
-    
+
     // Use provided templateId or fallback to __PURCHASE_BILL__
     let template;
     if (templateId) {
@@ -155,7 +149,7 @@ export async function POST(request: NextRequest) {
       template = await prisma.billTemplate.findFirst({
         where: { name: "__PURCHASE_BILL__", tenantId },
       });
-      
+
       if (!template) {
         template = await prisma.billTemplate.create({
           data: {

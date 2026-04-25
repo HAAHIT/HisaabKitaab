@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
+import { resolveReadTenant, resolveWriteSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 
 export const runtime = "nodejs";
@@ -52,12 +52,12 @@ export async function POST(request: NextRequest) {
     const reqId = getRequestId(request);
 
     try {
-        const tenantResolution = await resolveWriteTenant(request);
+        const tenantResolution = await resolveWriteSession(request);
         if (!tenantResolution.ok) {
             return tenantResolution.response;
         }
-        const tenantId = tenantResolution.tenantId;
-        const userId = request.headers.get("x-user-id");
+        const tenantId = tenantResolution.session.tenantId;
+        const userId = tenantResolution.session.userId;
 
         const body = await request.json().catch(() => ({}));
 

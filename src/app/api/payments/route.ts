@@ -12,7 +12,7 @@ import {
   journalForContraEntry,
   journalForLedgerPayment,
 } from "@/lib/journal";
-import { resolveReadTenant, resolveWriteSession } from "@/lib/api-tenant";
+import { resolveWriteSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 
@@ -160,6 +160,14 @@ export async function POST(request: NextRequest) {
 
     // A payment is a Contra entry if it has no party/bill, has a destination account, and is outgoing from the source.
     const isContra = type === "OUTGOING" && !partyId && !billId && !!destinationAccountId;
+
+    // [FIX #MEDIUM-1] Guard against contra self-transfer (same source and destination account)
+    if (isContra && accountId === destinationAccountId) {
+      return NextResponse.json(
+        { error: "Source and destination accounts must be different for contra entries" },
+        { status: 400 }
+      );
+    }
 
     if (!isContra && (!partyId && !billId)) {
       return NextResponse.json(

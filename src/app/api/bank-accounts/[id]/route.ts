@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { resolveWriteTenant } from "@/lib/api-tenant";
+import { resolveWriteSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 
 export const runtime = "nodejs";
@@ -13,13 +13,13 @@ export async function DELETE(
     const { id } = await params;
 
     try {
-        const tenantResolution = await resolveWriteTenant(request);
+        const tenantResolution = await resolveWriteSession(request);
         if (!tenantResolution.ok) {
             return tenantResolution.response;
         }
-        const tenantId = tenantResolution.tenantId;
-        const userId = request.headers.get("x-user-id");
-        const role = request.headers.get("x-user-role");
+        const tenantId = tenantResolution.session.tenantId;
+        const userId = tenantResolution.session.userId;
+        const role = tenantResolution.session.role;
 
         if (role !== "ADMIN") {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
