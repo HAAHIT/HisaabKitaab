@@ -17,17 +17,17 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ---
 
-## Tenant Isolation (Systematic Enforcement)
+## Tenant Isolation & Authentication (Systematic Enforcement)
 
-**Zero-Trust Policy**: Every DB query must be scoped to `tenantId`. Never rely on unverified headers.
+**Zero-Trust Policy**: Every DB query must be scoped to `tenantId` and all role checks must derive directly from the verified session context. Never rely on unverified headers.
 
 | Operation | Function | Why |
 |-----------|----------|-----|
-| All Operations (READ/WRITE) | `await resolveVerifiedTenantId(request)` from `@/lib/session-server` | **Mandatory**. Every request must be verified against the JWT payload. |
+| All Route Operations (READ/WRITE) | `await resolveWriteSession(request)` / `await resolveVerifiedTenantId(request)` from `@/lib/session-server` | **Mandatory**. Replaces all instances of raw header extraction. Every request must be verified strictly against the JWT payload (`x-user-role`, `x-user-id` and `x-tenant-id` headers are security vulnerabilities). |
 | DB Access | `...await tenantScope()` | Helper for Prisma query scoping. |
 
 > [!WARNING]
-> The legacy `resolveTenantIdFromRequest(request)` is deprecated and must not be used for new routes. Relying on unverified `x-tenant-id` headers is a security risk.
+> DO NOT manually extract `x-user-role`, `x-user-id`, or use `resolveTenantIdFromRequest` anywhere—not even in Server Components/Page Layouts. All pages and API endpoints must follow the JWT extraction paradigm to ensure verifiable session handling.
 
 ---
 
@@ -42,9 +42,19 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## Build Stability & Hygiene
 
+- **Follow Codebase Patterns**: Always study and replicate the existing patterns used within the application. Do not introduce new architectural patterns, external dependencies, or conflicting abstract paradigms. If there is an existing utility function, UI component layout pattern, or hook to handle a task, you **must** use it rather than inventing a new approach.
 - **Zero-Tolerance for Errors**: New code must not introduce any TypeScript errors. Existing errors in `ts_errors.txt` should be resolved as you touch related files.
 - **Deduplication**: Object keys (especially in `translations.ts`) must be unique. Overwriting keys is a build failure.
 - **No Artifact Clutter**: Professional root directory only. Scripts belong in `scripts/`, documentation in `docs/`. Obsolete `.js` or `.ts` files in root must be deleted.
+
+---
+
+## UI Consistency & HeroUI Patterns
+
+- **Component Standardization**: Always use **HeroUI** components (e.g., `<Input>`, `<Checkbox>`, `<Select>`) instead of raw HTML elements (like `<input type="checkbox">`) to enforce unified rounding, padding, hover states, and accessibility across the application.
+- **Visual Heights & Alignment**: Ensure elements in side-by-side containers or tables have physically matching rendering heights. For instance, pass `size="sm"` explicitly to custom components inside data-dense line-item grids.
+- **Labels vs Placeholders**: For consistency alongside standard floating-label inputs, custom search components (like `PartySearch` or `ItemSearch`) must support and use the `label` prop. Do not substitute floating labels with inline placeholders in mixed-form layouts.
+- **Variant Agnosticism**: Custom wrapper components must permit UI variant overrides (e.g., passing `variant="underlined"` to a custom `ItemSearch` input when inside an `underlined` table grid). Never hardcode visual variants if the component is used across different form paradigms.
 
 ---
 
