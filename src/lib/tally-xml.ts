@@ -132,6 +132,11 @@ export interface TallyPartyMaster {
   gstin?: string | null;
 }
 
+export interface TallyItemMaster {
+  name: string;
+  unit: string;
+}
+
 // ── Internal DB → Tally voucher type mapping ─────────────────────────────────
 
 const VOUCHER_TYPE_MAP: Record<string, TallyVoucherType> = {
@@ -305,7 +310,8 @@ function buildLedgerEntryXml(
     hsnCodes: string[];
     gstin?: string | null;
     isCompositionDealer?: boolean;
-  }
+  },
+  inventoryEntries?: TallyInventoryEntry[]
 ): string {
   const isSettlement = (voucherType === "Receipt" || voucherType === "Payment") && entry.reference;
   const billAllocations = entry.partyName
@@ -323,7 +329,7 @@ function buildLedgerEntryXml(
   // When only hsnCodes are available, emit one block per HSN at the bill-level rate.
   // When neither is provided, emit one block without HSNCODE.
   let gstDetails = "";
-  if (entry.isIncomeLedger && gstContext && gstContext.taxPercent > 0) {
+  if (entry.isIncomeLedger && gstContext) {
     const cess = gstContext.cessAmount ?? 0;
     if (gstContext.hsnRatePairs.length > 0) {
       // De-duplicate: same HSN + same rate should produce only one block
@@ -339,36 +345,42 @@ function buildLedgerEntryXml(
           buildGstDetailsXml(taxPercent, cess, hsnCode, gstContext.gstin, gstContext.isCompositionDealer)
         )
         .join("");
-    } else if (gstContext.hsnCodes.length > 0) {
-      gstDetails = gstContext.hsnCodes
-        .map((code) => buildGstDetailsXml(gstContext.taxPercent, cess, code, gstContext.gstin, gstContext.isCompositionDealer))
-        .join("");
-    } else {
-      gstDetails = buildGstDetailsXml(gstContext.taxPercent, cess, undefined, gstContext.gstin, gstContext.isCompositionDealer);
+    } else if (gstContext.taxPercent > 0) {
+      if (gstContext.hsnCodes.length > 0) {
+        gstDetails = gstContext.hsnCodes
+          .map((code) => buildGstDetailsXml(gstContext.taxPercent, cess, code, gstContext.gstin, gstContext.isCompositionDealer))
+          .join("");
+      } else {
+        gstDetails = buildGstDetailsXml(gstContext.taxPercent, cess, undefined, gstContext.gstin, gstContext.isCompositionDealer);
+      }
     }
+  }
+
+  let inventoryLines = "";
+  if (entry.isIncomeLedger && inventoryEntries && inventoryEntries.length > 0) {
+    inventoryLines = inventoryEntries.map(buildInventoryEntryXml).join("");
   }
 
   return `
       <ALLLEDGERENTRIES.LIST>
         <LEDGERNAME>${escapeXml(entry.ledgerName)}</LEDGERNAME>
         <ISDEEMEDPOSITIVE>${entry.amount >= 0 ? "Yes" : "No"}</ISDEEMEDPOSITIVE>
-        <AMOUNT>${entry.amount >= 0 ? "-" : ""}${formatAmount(entry.amount)}</AMOUNT>${billAllocations}${gstDetails}
+        <AMOUNT>${entry.amount >= 0 ? "-" : ""}${formatAmount(entry.amount)}</AMOUNT>${billAllocations}${gstDetails}${inventoryLines}
       </ALLLEDGERENTRIES.LIST>`;
 }
 
 function buildInventoryEntryXml(entry: TallyInventoryEntry): string {
-  // Signs: for Sales items, this should be positive (Tally ISDEEMEDPOSITIVE=No convention)
-  // for Purchase items, it's negative.
   // [W-X1] ISDEEMEDPOSITIVE=No/Yes must correctly match Amount sign for balance.
+  // entry.amount >= 0 -> CREDIT (No). entry.amount < 0 -> DEBIT (Yes).
   return `
-      <ALLINVENTORYENTRIES.LIST>
-        <STOCKITEMNAME>${escapeXml(entry.stockItemName)}</STOCKITEMNAME>
-        <ISDEEMEDPOSITIVE>${entry.amount >= 0 ? "No" : "Yes"}</ISDEEMEDPOSITIVE>
-        <AMOUNT>${formatAmount(entry.amount)}</AMOUNT>
-        <ACTUALQTY>${entry.qty} ${escapeXml(entry.unit)}</ACTUALQTY>
-        <BILLEDQTY>${entry.qty} ${escapeXml(entry.unit)}</BILLEDQTY>
-        <RATE>${formatAmount(entry.rate)}/${escapeXml(entry.unit)}</RATE>
-      </ALLINVENTORYENTRIES.LIST>`;
+        <INVENTORYALLOCATIONS.LIST>
+          <STOCKITEMNAME>${escapeXml(entry.stockItemName)}</STOCKITEMNAME>
+          <ISDEEMEDPOSITIVE>${entry.amount >= 0 ? "No" : "Yes"}</ISDEEMEDPOSITIVE>
+          <AMOUNT>${entry.amount < 0 ? "-" : ""}${formatAmount(entry.amount)}</AMOUNT>
+          <ACTUALQTY>${entry.qty} ${escapeXml(entry.unit)}</ACTUALQTY>
+          <BILLEDQTY>${entry.qty} ${escapeXml(entry.unit)}</BILLEDQTY>
+          <RATE>${formatAmount(entry.rate)}/${escapeXml(entry.unit)}</RATE>
+        </INVENTORYALLOCATIONS.LIST>`;
 }
 
 function buildVoucherXml(voucher: TallyVoucher): string {
@@ -376,10 +388,14 @@ function buildVoucherXml(voucher: TallyVoucher): string {
   // [Fix P1] Discard GST info for non-taxable voucher types like Journal/Contra/Payment
   const isGstEligible = ["Sales", "Purchase", "Credit Note", "Debit Note"].includes(voucher.voucherType);
 
+  const hasGst =
+    (voucher.taxPercent != null && voucher.taxPercent > 0) ||
+    (voucher.hsnRatePairs != null && voucher.hsnRatePairs.length > 0);
+
   const gstContext =
-    isGstEligible && voucher.taxPercent != null && voucher.taxPercent > 0
+    isGstEligible && hasGst
       ? {
-          taxPercent: voucher.taxPercent,
+          taxPercent: voucher.taxPercent ?? 0,
           cessAmount: voucher.cessAmount ?? 0,
           // hsnRatePairs takes priority; fall back to legacy hsnCodes list
           hsnRatePairs: voucher.hsnRatePairs ?? [],
@@ -394,7 +410,8 @@ function buildVoucherXml(voucher: TallyVoucher): string {
       buildLedgerEntryXml(
         { ...entry, reference: entry.partyName ? (entry.reference ?? voucher.reference) : undefined },
         voucher.voucherType,
-        gstContext
+        gstContext,
+        voucher.inventoryEntries
       )
     )
     .join("");
@@ -432,11 +449,7 @@ function buildVoucherXml(voucher: TallyVoucher): string {
         <PARTYLEDGERNAME>${escapeXml(partyLedgerEntry.partyName)}</PARTYLEDGERNAME>`
     : "";
 
-  const hasInventory = !!(voucher.inventoryEntries && voucher.inventoryEntries.length > 0);
-  const objView = hasInventory ? "Invoice Voucher View" : "Accounting Voucher View";
-  const inventoryLines = hasInventory
-    ? voucher.inventoryEntries!.map(buildInventoryEntryXml).join("")
-    : "";
+  const objView = "Accounting Voucher View";
 
   return `
     <TALLYMESSAGE xmlns:UDF="TallyUDF">
@@ -447,7 +460,7 @@ function buildVoucherXml(voucher: TallyVoucher): string {
         <VOUCHERTYPEORIGNAME>${escapeXml(voucher.voucherType)}</VOUCHERTYPEORIGNAME>
         <VOUCHERNUMBER>${escapeXml(voucher.reference)}</VOUCHERNUMBER>
         <REFERENCE>${escapeXml(voucher.reference)}</REFERENCE>${partyLedgerNameTag}
-        <NARRATION>${escapeXml(voucher.narration)}</NARRATION>${placeOfSupplyTag}${reverseChargeTag}${inventoryLines}${ledgerLines}
+        <NARRATION>${escapeXml(voucher.narration)}</NARRATION>${placeOfSupplyTag}${reverseChargeTag}${ledgerLines}
       </VOUCHER>
     </TALLYMESSAGE>`;
 }
@@ -481,6 +494,29 @@ function buildPartyMasterXml(party: TallyPartyMaster): string {
         ${gstinField}
         ${addressField}
       </LEDGER>
+    </TALLYMESSAGE>`;
+}
+
+export function buildItemMasterXml(item: TallyItemMaster): string {
+  return `
+    <TALLYMESSAGE xmlns:UDF="TallyUDF">
+      <STOCKITEM NAME="${escapeXml(item.name)}" ACTION="Alter">
+        <MASTERID>${escapeXml(item.name)}</MASTERID>
+        <NAME>${escapeXml(item.name)}</NAME>
+        <PARENT>Primary</PARENT>
+        <BASEUNITS>${escapeXml(item.unit)}</BASEUNITS>
+      </STOCKITEM>
+    </TALLYMESSAGE>`;
+}
+
+export function buildUnitMasterXml(unit: string): string {
+  return `
+    <TALLYMESSAGE xmlns:UDF="TallyUDF">
+      <UNIT NAME="${escapeXml(unit)}" ACTION="Alter">
+        <MASTERID>${escapeXml(unit)}</MASTERID>
+        <NAME>${escapeXml(unit)}</NAME>
+        <ISSIMPLEUNIT>Yes</ISSIMPLEUNIT>
+      </UNIT>
     </TALLYMESSAGE>`;
 }
 
@@ -544,9 +580,15 @@ export function buildTallyVoucherXml(
  */
 export function buildTallyPartyMasterXml(
   parties: TallyPartyMaster[],
+  items: TallyItemMaster[],
+  units: string[],
   companyName: string
 ): string {
-  const messages = parties.map(buildPartyMasterXml);
+  const messages = [
+    ...units.map(buildUnitMasterXml),
+    ...items.map(buildItemMasterXml),
+    ...parties.map(buildPartyMasterXml),
+  ];
   const block = buildImportDataBlock(messages, "All Masters", companyName);
   return wrapEnvelope([block]);
 }
@@ -561,11 +603,18 @@ export function buildTallyPartyMasterXml(
  */
 export function buildCombinedTallyXml(
   parties: TallyPartyMaster[],
+  items: TallyItemMaster[],
+  units: string[],
   vouchers: TallyVoucher[],
   companyName: string
 ): string {
+  const masterMessages = [
+    ...units.map(buildUnitMasterXml),
+    ...items.map(buildItemMasterXml),
+    ...parties.map(buildPartyMasterXml),
+  ];
   const masterBlock = buildImportDataBlock(
-    parties.map(buildPartyMasterXml),
+    masterMessages,
     "All Masters",
     companyName
   );

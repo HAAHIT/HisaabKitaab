@@ -11,6 +11,7 @@ import {
   resolveExportVoucherType,   // [A4] Sales Return detection for cancellation entries
   journalLineToTallyEntry,
   type TallyPartyMaster,
+  type TallyItemMaster,
   type TallyVoucher,
   type TallyInventoryEntry,
   type TallyVoucherType,
@@ -77,14 +78,13 @@ function extractHsnRatePairs(
       typeof r["_hsnCode"] === "string" ? r["_hsnCode"].trim() : null;
 
     if (!hsnCode && billLevelHsn) hsnCode = billLevelHsn.trim();
-    if (!hsnCode) continue;
 
     // Per-line rate is present only when the UI writes _taxPercent per row
     const rawRate = r["_taxPercent"];
     if (typeof rawRate === "number" && Number.isFinite(rawRate)) {
       hasPerLineRate = true;
-      pairs.push({ hsnCode, taxPercent: rawRate });
-    } else if (typeof billLevelTaxPercent === "number" && Number.isFinite(billLevelTaxPercent)) {
+      pairs.push({ hsnCode: hsnCode || "", taxPercent: rawRate });
+    } else if (hsnCode && typeof billLevelTaxPercent === "number" && Number.isFinite(billLevelTaxPercent)) {
       // Fallback: use the bill-level rate for this HSN
       pairs.push({ hsnCode, taxPercent: billLevelTaxPercent });
     }
@@ -241,8 +241,10 @@ export async function GET(request: NextRequest) {
 
     let xml = "";
 
-    // ── Party masters ────────────────────────────────────────────────────────
+    // ── Party & Item masters ────────────────────────────────────────────────────────
     let allMastersToExport: TallyPartyMaster[] = [];
+    let allItemsToExport: TallyItemMaster[] = [];
+    let allUnitsToExport: string[] = [];
 
     if (type === "masters" || type === "all") {
       const parties = await prisma.party.findMany({
@@ -290,8 +292,15 @@ export async function GET(request: NextRequest) {
 
       allMastersToExport = [...standardLedgers, ...fetchedParties];
 
+      const catalogItems = await prisma.itemCatalog.findMany({
+        where: { tenantId },
+        select: { name: true, unit: true },
+      });
+      allItemsToExport = catalogItems.map(i => ({ name: i.name, unit: i.unit }));
+      allUnitsToExport = Array.from(new Set(catalogItems.map(i => i.unit)));
+
       if (type === "masters") {
-        xml = buildTallyPartyMasterXml(allMastersToExport, companyName);
+        xml = buildTallyPartyMasterXml(allMastersToExport, allItemsToExport, allUnitsToExport, companyName);
         return xmlResponse(xml, `tally_masters_${from}_to_${to}.xml`);
       }
     }
@@ -486,7 +495,7 @@ export async function GET(request: NextRequest) {
       }
 
       // For "all" — append vouchers after masters
-      let combinedXml = buildCombinedXml(allMastersToExport, vouchers, companyName, from, to);
+      let combinedXml = buildCombinedXml(allMastersToExport, allItemsToExport, allUnitsToExport, vouchers, companyName, from, to);
       if (hsnWarningComment) {
         combinedXml = combinedXml.replace(
           '<?xml version="1.0" encoding="UTF-8"?>',
@@ -517,12 +526,14 @@ function xmlResponse(xml: string, filename: string, hsnMissingCount = 0) {
 
 function buildCombinedXml(
   parties: TallyPartyMaster[],
+  items: TallyItemMaster[],
+  units: string[],
   vouchers: TallyVoucher[],
   companyName: string,
   from: string,
   to: string
 ): string {
-  const combinedXml = buildCombinedTallyXml(parties, vouchers, companyName);
+  const combinedXml = buildCombinedTallyXml(parties, items, units, vouchers, companyName);
   return combinedXml.replace(
     '<?xml version="1.0" encoding="UTF-8"?>\n<ENVELOPE>',
     `<?xml version="1.0" encoding="UTF-8"?>\n<!-- HisaabKitaab Tally Export: ${from} to ${to} -->\n<ENVELOPE>`
