@@ -11,6 +11,7 @@ import {
   Select,
   SelectItem,
   Textarea,
+  Checkbox,
 } from "@heroui/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
@@ -85,7 +86,7 @@ export default function NewNotePage() {
           setTenantGstin(data.settings.companyGstin);
         }
       })
-      .catch(() => {/* silently ignore */});
+      .catch(() => {/* silently ignore */ });
   }, []);
 
   // Reset reason when note type changes (shouldn't happen mid-session, but safe)
@@ -154,9 +155,8 @@ export default function NewNotePage() {
     <>
       {toast && (
         <div
-          className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${
-            toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
-          }`}
+          className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
+            }`}
         >
           {toast.message}
         </div>
@@ -253,14 +253,12 @@ export default function NewNotePage() {
                 </div>
                 {selectedParty.currentBalance !== 0 && (
                   <div
-                    className={`mt-3 pt-3 border-t border-default-200 text-sm font-medium flex items-center gap-2 ${
-                      selectedParty.currentBalance < 0 ? "text-success" : "text-danger"
-                    }`}
+                    className={`mt-3 pt-3 border-t border-default-200 text-sm font-medium flex items-center gap-2 ${selectedParty.currentBalance < 0 ? "text-success" : "text-danger"
+                      }`}
                   >
                     <div
-                      className={`w-2 h-2 rounded-full ${
-                        selectedParty.currentBalance < 0 ? "bg-success" : "bg-danger"
-                      }`}
+                      className={`w-2 h-2 rounded-full ${selectedParty.currentBalance < 0 ? "bg-success" : "bg-danger"
+                        }`}
                     />
                     {selectedParty.currentBalance < 0
                       ? `To Get: ₹${Math.abs(selectedParty.currentBalance).toLocaleString("en-IN")}`
@@ -362,16 +360,15 @@ export default function NewNotePage() {
                     const isAutoDetected = !!selectedParty?.gstin;
                     return (
                       <div className="flex flex-col items-end gap-0.5">
-                        <label className={`flex items-center gap-1.5 select-none ${isAutoDetected ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}>
-                          <input
-                            type="checkbox"
-                            checked={isInterState}
-                            onChange={(e) => setIsInterState(e.target.checked)}
-                            className="accent-primary"
-                            disabled={isAutoDetected}
-                          />
+                        <Checkbox
+                          isSelected={isInterState}
+                          onValueChange={setIsInterState}
+                          isDisabled={isAutoDetected}
+                          size="sm"
+                          className={isAutoDetected ? "opacity-60 cursor-not-allowed" : ""}
+                        >
                           <span className="text-xs text-default-500">Inter-state (IGST)</span>
-                        </label>
+                        </Checkbox>
                         {isAutoDetected && (
                           <span className="text-[10px] text-default-400">Auto-detected from GST Numbers</span>
                         )}
@@ -398,9 +395,8 @@ export default function NewNotePage() {
                 <div className="flex justify-between">
                   <span className="text-lg font-bold">Grand Total</span>
                   <span
-                    className={`text-lg font-bold ${
-                      grandTotal > 0 ? "text-primary" : "text-default-400"
-                    }`}
+                    className={`text-lg font-bold ${grandTotal > 0 ? "text-primary" : "text-default-400"
+                      }`}
                   >
                     {formatCurrency(grandTotal)}
                   </span>

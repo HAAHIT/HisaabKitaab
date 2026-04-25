@@ -19,6 +19,7 @@ interface StateSearchProps {
   className?: string;
   label?: string;
   placeholder?: string;
+  variant?: "flat" | "bordered" | "underlined" | "faded";
 }
 
 /** Searchable combobox for GST Place of Supply (37+ states/UTs). */
@@ -30,6 +31,8 @@ export function StateSearch({
   size = "sm",
   label,
   placeholder = "Type to search state…",
+  variant,
+  className,
 }: StateSearchProps) {
   const stateOptions = useMemo<StateOption[]>(() => {
     return Object.entries(GST_STATE_CODES).map(([code, name]) => ({
@@ -91,6 +94,9 @@ export function StateSearch({
       placeholder={placeholder}
       isInvalid={isInvalid}
       errorMessage={errorMessage}
+      size={size}
+      variant={variant}
+      className={className}
       getKey={(item) => item.code}
       getTextValue={(item) => item.label}
       renderItem={(item) => (

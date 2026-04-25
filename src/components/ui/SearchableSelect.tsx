@@ -28,6 +28,8 @@ export interface SearchableSelectProps<T extends object> {
     errorMessage?: string;
     emptyContent?: string;
     size?: "sm" | "md" | "lg";
+    variant?: "flat" | "bordered" | "faded" | "underlined";
+    className?: string;
 }
 
 interface DropdownRect {
@@ -53,6 +55,8 @@ export function SearchableSelect<T extends object>({
     errorMessage,
     emptyContent = "No items found",
     size = "lg",
+    variant = "bordered",
+    className,
 }: SearchableSelectProps<T>) {
     const [isOpen, setIsOpen] = useState(false);
     const [rect, setRect] = useState<DropdownRect | null>(null);
@@ -225,7 +229,7 @@ export function SearchableSelect<T extends object>({
         <>
             {/* [FIX #20] Separate click handler on the wrapper; stop propagation
                 from the input so typing doesn't toggle the dropdown */}
-            <div ref={containerRef} className="w-full" onKeyDown={handleKeyDown}>
+            <div ref={containerRef} className={`w-full ${className || ""}`} onKeyDown={handleKeyDown}>
                 <Input
                     ref={inputRef}
                     label={label}
@@ -236,7 +240,7 @@ export function SearchableSelect<T extends object>({
                         if (!isOpen) open();
                     }}
                     onFocus={() => { if (!isOpen) open(); }}
-                    variant="bordered"
+                    variant={variant}
                     size={size}
                     classNames={{
                         inputWrapper: size === "lg" ? "h-16 min-h-16" : undefined,

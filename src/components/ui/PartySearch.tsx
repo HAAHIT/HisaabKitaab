@@ -26,6 +26,10 @@ interface PartySearchProps {
   autoFocus?: boolean;
   isInvalid?: boolean;
   initialParty?: PartyOption | null;
+  className?: string;
+  variant?: "flat" | "bordered" | "underlined" | "faded";
+  size?: "sm" | "md" | "lg";
+  label?: string;
 }
 
 function formatSignedBalance(value: number) {
@@ -43,6 +47,10 @@ export function PartySearch({
   autoFocus,
   isInvalid,
   initialParty,
+  className,
+  variant,
+  size,
+  label,
 }: PartySearchProps) {
   const { t } = useLanguage();
   const [parties, setParties] = useState<PartyOption[]>(
@@ -137,6 +145,10 @@ export function PartySearch({
         isLoading={isLoading}
         placeholder={placeholder || t("parties.searchPlaceholder")}
         isInvalid={isInvalid}
+        label={label}
+        size={size}
+        variant={variant}
+        className={className}
         getKey={(party) => party.id}
         getTextValue={(party) => party.name}
         bottomContent={bottomSection}

@@ -12,6 +12,7 @@ import {
   Select,
   SelectItem,
   Textarea,
+  Checkbox,
 } from "@heroui/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
@@ -720,6 +721,8 @@ export default function NewBillPage() {
                                   }
                                 }}
                                 className="min-w-[200px]"
+                                size="sm"
+                                variant="underlined"
                                 placeholder={column.name}
                               />
                             ) : column.type === "number" ? (
@@ -823,15 +826,13 @@ export default function NewBillPage() {
                   />
                   {/* Ship To Address */}
                   <div>
-                    <label className="flex items-center gap-1.5 select-none cursor-pointer mb-2">
-                      <input
-                        type="checkbox"
-                        checked={showShipTo}
-                        onChange={(e) => setShowShipTo(e.target.checked)}
-                        className="accent-primary"
-                      />
+                    <Checkbox
+                      isSelected={showShipTo}
+                      onValueChange={setShowShipTo}
+                      className="mb-2"
+                    >
                       <span className="text-sm text-default-600">Ship to a different address</span>
-                    </label>
+                    </Checkbox>
                     {showShipTo && (
                       <Textarea
                         label="Shipping Address"
@@ -867,16 +868,15 @@ export default function NewBillPage() {
                         const isAutoDetected = !!selectedParty?.gstin;
                         return (
                           <div className="flex flex-col items-end gap-0.5">
-                            <label className={`flex items-center gap-1.5 select-none ${isAutoDetected ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}>
-                              <input
-                                type="checkbox"
-                                checked={isInterState}
-                                onChange={(e) => setIsInterState(e.target.checked)}
-                                className="accent-primary"
-                                disabled={isAutoDetected}
-                              />
+                            <Checkbox
+                              isSelected={isInterState}
+                              onValueChange={setIsInterState}
+                              isDisabled={isAutoDetected}
+                              size="sm"
+                              className={isAutoDetected ? "opacity-60 cursor-not-allowed" : ""}
+                            >
                               <span className="text-xs text-default-500">Inter-state (IGST)</span>
-                            </label>
+                            </Checkbox>
                             {isAutoDetected && (
                               <span className="text-[10px] text-default-400">Auto-detected from GST Numbers</span>
                             )}
@@ -902,16 +902,15 @@ export default function NewBillPage() {
                     <Divider />
                     {/* Round-Off Toggle */}
                     <div className="flex items-center justify-between">
-                      <label className={`flex items-center gap-1.5 select-none ${grandTotal === 0 ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
-                        <input
-                          type="checkbox"
-                          checked={enableRoundOff}
-                          onChange={(e) => setEnableRoundOff(e.target.checked)}
-                          className="accent-primary"
-                          disabled={grandTotal === 0}
-                        />
+                      <Checkbox
+                        isSelected={enableRoundOff}
+                        onValueChange={setEnableRoundOff}
+                        isDisabled={grandTotal === 0}
+                        size="sm"
+                        className={grandTotal === 0 ? 'opacity-50 cursor-not-allowed' : ''}
+                      >
                         <span className="text-xs text-default-500">Round off to nearest ₹</span>
-                      </label>
+                      </Checkbox>
                       {enableRoundOff && roundOff !== 0 && (
                         <span className={`text-sm font-mono ${roundOff > 0 ? 'text-success' : 'text-danger'}`}>
                           {roundOff > 0 ? '+' : ''}{formatCurrency(roundOff)}

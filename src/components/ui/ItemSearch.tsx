@@ -24,6 +24,8 @@ interface ItemSearchProps {
   isInvalid?: boolean;
   allowsCustomValue?: boolean;
   className?: string;
+  size?: "sm" | "md" | "lg";
+  variant?: "flat" | "bordered" | "underlined" | "faded";
 }
 
 export function ItemSearch({
@@ -36,6 +38,8 @@ export function ItemSearch({
   isInvalid,
   allowsCustomValue = true,
   className,
+  size,
+  variant,
 }: ItemSearchProps) {
   const router = useRouter();
   const [items, setItems] = useState<ItemOption[]>([]);
@@ -122,7 +126,9 @@ export function ItemSearch({
           onChange(item);
         }}
         isLoading={isLoading}
-        label={placeholder || "Search items..."}
+        placeholder={placeholder || "Search items..."}
+        size={size}
+        variant={variant}
         isInvalid={isInvalid}
         getKey={(item) => item.id}
         getTextValue={(item) => item.name}

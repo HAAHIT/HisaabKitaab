@@ -16,6 +16,7 @@ import {
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
+import { ItemSearch, type ItemOption } from "@/components/ui/ItemSearch";
 import { StateSearch } from "@/components/ui/StateSearch";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { evaluateRow, type ColumnDef } from "@/lib/formula";
@@ -94,13 +95,13 @@ export function PurchaseBillForm() {
         fetch("/api/settings"),
       ]);
       const [tData, sData] = await Promise.all([templRes.json(), setRes.json()]);
-      
+
       setTemplates(tData.templates || []);
       if (sData.settings) {
-         setTaxPercent(sData.settings.defaultTaxPercent || 18);
-         if (sData.settings.companyGstin) {
-           setTenantGstin(sData.settings.companyGstin);
-         }
+        setTaxPercent(sData.settings.defaultTaxPercent || 18);
+        if (sData.settings.companyGstin) {
+          setTenantGstin(sData.settings.companyGstin);
+        }
       }
     } catch {
       showToast("Failed to load form data", "error");
@@ -242,9 +243,8 @@ export function PurchaseBillForm() {
   return (
     <>
       {toast && (
-        <div className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${
-          toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
-        }`}>
+        <div className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
+          }`}>
           {toast.message}
         </div>
       )}
@@ -252,7 +252,7 @@ export function PurchaseBillForm() {
       <div className="animate-fade-in p-4 lg:p-8">
         <div className="mb-6 flex items-center gap-3">
           <Button isIconOnly variant="light" onPress={() => router.push("/dashboard")}>
-             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M10 19l-7-7m0 0l7-7m-7 7h18" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} />
             </svg>
           </Button>
@@ -327,6 +327,7 @@ export function PurchaseBillForm() {
                       }
                     }}
                     partyType="VENDOR"
+                    label="Supplier"
                     placeholder="Search Supplier..."
                     isInvalid={Boolean(errors.partyId)}
                   />
@@ -393,6 +394,43 @@ export function PurchaseBillForm() {
                               </span>
                             ) : col.type === "number" ? (
                               <Input type="number" value={String(row[col.id] || "")} onValueChange={(v) => updateCell(rIdx, col.id, v)} variant="underlined" size="sm" className="min-w-[80px]" />
+                            ) : col.type === "text" && (col.name.toLowerCase().includes("item") || col.name.toLowerCase().includes("desc") || col.name.toLowerCase().includes("product")) ? (
+                              <ItemSearch
+                                value={null}
+                                inputValue={String(row[col.id] || "")}
+                                onInputChange={(v: string) => updateCell(rIdx, col.id, v)}
+                                onChange={(item: ItemOption | null) => {
+                                  if (item) {
+                                    setRows((currentRows) => {
+                                      const nextRows = [...currentRows];
+                                      const newRow = { ...nextRows[rIdx] };
+                                      newRow[col.id] = item.name;
+
+                                      if (selectedTemplate) {
+                                        const rateCol = selectedTemplate.columns.find(c => c.id === "col_rate" || (c.type === "number" && (c.name.toLowerCase() === "rate" || c.name.toLowerCase().includes("price"))));
+                                        if (rateCol && item.rate != null) newRow[rateCol.id] = item.rate;
+
+                                        const taxCol = selectedTemplate.columns.find(c => c.id === "col_tax_percent" || (c.type === "number" && c.name.toLowerCase().includes("tax %")));
+                                        if (taxCol && item.taxRate != null) newRow[taxCol.id] = item.taxRate;
+
+                                        const hsnCol = selectedTemplate.columns.find(c => c.id === "col_hsn" || (c.type === "text" && c.name.toLowerCase().includes("hsn")));
+                                        if (hsnCol && item.hsnCode) newRow[hsnCol.id] = item.hsnCode;
+
+                                        nextRows[rIdx] = evaluateRow(newRow, selectedTemplate.columns);
+                                      } else {
+                                        nextRows[rIdx] = newRow;
+                                      }
+                                      return nextRows;
+                                    });
+                                  } else {
+                                    updateCell(rIdx, col.id, "");
+                                  }
+                                }}
+                                className="min-w-[200px]"
+                                size="sm"
+                                variant="underlined"
+                                placeholder={col.name}
+                              />
                             ) : (
                               <Input type="text" value={String(row[col.id] || "")} onValueChange={(v) => updateCell(rIdx, col.id, v)} variant="underlined" size="sm" className="min-w-[120px]" />
                             )}
@@ -419,16 +457,14 @@ export function PurchaseBillForm() {
                       const isAutoDetected = !!selectedParty?.gstin;
                       return (
                         <div className="flex flex-col gap-0.5">
-                          <label className={`flex items-center gap-2 select-none ${isAutoDetected ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}>
-                            <input
-                              type="checkbox"
-                              checked={isInterState}
-                              onChange={(e) => setIsInterState(e.target.checked)}
-                              className="accent-primary"
-                              disabled={isAutoDetected}
-                            />
+                          <Checkbox
+                            isSelected={isInterState}
+                            onValueChange={setIsInterState}
+                            isDisabled={isAutoDetected}
+                            className={isAutoDetected ? "opacity-60 cursor-not-allowed" : ""}
+                          >
                             <span className="text-sm">Inter-State Transaction (IGST)</span>
-                          </label>
+                          </Checkbox>
                           {isAutoDetected && (
                             <span className="text-[10px] text-default-400 pl-6">Auto-detected from GST Numbers</span>
                           )}
