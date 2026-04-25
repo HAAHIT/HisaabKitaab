@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Button,
   Card,
@@ -69,6 +69,8 @@ export function PurchaseBillForm() {
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingAs, setSavingAs] = useState<"DRAFT" | "FINAL" | null>(null);
+  // [FIX #22] Ref guard prevents double-submit from rapid clicks
+  const savingRef = useRef(false);
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
@@ -195,6 +197,8 @@ export function PurchaseBillForm() {
       return;
     }
 
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSavingAs(status);
     try {
       const response = await fetch("/api/purchases", {
@@ -230,6 +234,7 @@ export function PurchaseBillForm() {
     } catch (error: any) {
       showToast(error.message, "error");
     } finally {
+      savingRef.current = false;
       setSavingAs(null);
     }
   }

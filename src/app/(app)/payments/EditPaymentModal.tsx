@@ -28,11 +28,14 @@ export type EditablePayment = {
     party: { name: string; type: string } | null;
 };
 
+// [FIX #27] Consistent sanitization — same logic as payments/new/page.tsx
 function sanitizeAmount(value: string) {
     const normalized = value.replace(/[^\d.]/g, "");
     const parts = normalized.split(".");
-    if (parts.length === 1) return parts[0];
-    return `${parts[0]}.${parts.slice(1).join("").slice(0, 2)}`;
+    const integerPart = parts[0].slice(0, 12); // Cap at 12 digits (~999 billion)
+    if (parts.length === 1) return integerPart;
+    const decimalPart = parts.slice(1).join("").slice(0, 2);
+    return `${integerPart}.${decimalPart}`;
 }
 
 async function readError(res: Response) {

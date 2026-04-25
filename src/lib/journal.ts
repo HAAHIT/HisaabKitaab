@@ -81,7 +81,7 @@ interface PurchaseBillJournalInput {
   entryDate: Date;
 }
 
-function buildSalesTaxLines(
+export function buildSalesTaxLines(
   taxAmount: number,
   direction: "DEBIT" | "CREDIT",
   isInterState = false
@@ -114,6 +114,49 @@ function buildSalesTaxLines(
     },
     {
       accountCode: "SGST_OUTPUT" as const,
+      debit: direction === "DEBIT" ? otherHalf : 0,
+      credit: direction === "CREDIT" ? otherHalf : 0,
+    },
+  ];
+}
+
+/**
+ * Builds input-tax journal lines for purchase-side entries (purchase bills, debit notes).
+ * Mirrors buildSalesTaxLines but uses INPUT accounts (CGST_INPUT, SGST_INPUT, IGST_INPUT).
+ * Rounding follows Section 170 CGST Act (nearest rupee).
+ */
+export function buildPurchaseTaxLines(
+  taxAmount: number,
+  direction: "DEBIT" | "CREDIT",
+  isInterState = false
+) {
+  if (taxAmount <= 0) {
+    return [];
+  }
+
+  if (isInterState) {
+    const roundedIgst = Math.round(taxAmount);
+    return [
+      {
+        accountCode: "IGST_INPUT" as const,
+        debit: direction === "DEBIT" ? roundedIgst : 0,
+        credit: direction === "CREDIT" ? roundedIgst : 0,
+      },
+    ];
+  }
+
+  const roundedTax = Math.round(taxAmount);
+  const halfTax = Math.round(roundedTax / 2);
+  const otherHalf = roundedTax - halfTax;
+
+  return [
+    {
+      accountCode: "CGST_INPUT" as const,
+      debit: direction === "DEBIT" ? halfTax : 0,
+      credit: direction === "CREDIT" ? halfTax : 0,
+    },
+    {
+      accountCode: "SGST_INPUT" as const,
       debit: direction === "DEBIT" ? otherHalf : 0,
       credit: direction === "CREDIT" ? otherHalf : 0,
     },

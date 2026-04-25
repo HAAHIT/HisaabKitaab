@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Button,
   Card,
@@ -76,6 +76,7 @@ export default function NewBillPage() {
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingAs, setSavingAs] = useState<"DRAFT" | "FINAL" | null>(null);
+  const savingRef = useRef(false);
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   const [toast, setToast] = useState<{
     message: string;
@@ -313,6 +314,20 @@ export default function NewBillPage() {
       return;
     }
 
+    // [FIX #28] Block submission if any formula columns produced NaN
+    if (status === "FINAL") {
+      const hasNaN = rows.some(row =>
+        Object.values(row).some(v => typeof v === "number" && !Number.isFinite(v))
+      );
+      if (hasNaN) {
+        showToast("Some row values are invalid (NaN). Please check formula columns.", "error");
+        return;
+      }
+    }
+
+    // [FIX #22] Double-submit protection
+    if (savingRef.current) return;
+    savingRef.current = true;
     setErrors({});
     setSavingAs(status);
 
@@ -354,6 +369,7 @@ export default function NewBillPage() {
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Failed to save bill", "error");
     } finally {
+      savingRef.current = false;
       setSavingAs(null);
     }
   }

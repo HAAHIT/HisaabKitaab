@@ -89,6 +89,8 @@ export async function checkRateLimit(
 }
 
 // Simple in-memory sliding window for fallback
+// [FIX #15] Capped at 10k entries to prevent unbounded memory growth
+const MEM_LIMIT_MAX_SIZE = 10_000;
 const MEM_LIMITS = new Map<string, { count: number; windowStart: number }>();
 
 function fallbackCheck(key: string, limit: number): boolean {
@@ -96,6 +98,11 @@ function fallbackCheck(key: string, limit: number): boolean {
   const existing = MEM_LIMITS.get(key);
 
   if (!existing || now - existing.windowStart > WINDOW_MS) {
+    // Evict oldest entries if map is at capacity
+    if (MEM_LIMITS.size >= MEM_LIMIT_MAX_SIZE) {
+      const firstKey = MEM_LIMITS.keys().next().value;
+      if (firstKey !== undefined) MEM_LIMITS.delete(firstKey);
+    }
     MEM_LIMITS.set(key, { count: 1, windowStart: now });
     return false;
   }

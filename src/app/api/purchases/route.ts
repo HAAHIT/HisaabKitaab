@@ -236,7 +236,7 @@ export async function POST(request: NextRequest) {
 
         await journalForPurchaseBill(tx, tenantId, {
           id: createdBill.id,
-          vendorName: party.name,
+          partyName: party.name,
           partyId: party.id,
           subtotal: createdBill.subtotal.toNumber(),
           cgst,
@@ -245,7 +245,7 @@ export async function POST(request: NextRequest) {
           grandTotal: createdBill.grandTotal.toNumber(),
           isReverseCharge: isReverseCharge || false,
           createdBy: userId!,
-          billDate: billDate ? new Date(billDate) : createdBill.createdAt,
+          entryDate: billDate ? new Date(billDate) : createdBill.createdAt,
         });
       }
 

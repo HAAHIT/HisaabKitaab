@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button, ButtonGroup, Input } from "@heroui/react";
 import BottomSheet from "@/components/ui/BottomSheet";
 import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
@@ -25,13 +25,13 @@ interface QuickBillSheetProps {
 function sanitizeAmountInput(value: string) {
   const normalized = value.replace(/[^\d.]/g, "");
   const parts = normalized.split(".");
+  const integerPart = parts[0].slice(0, 12);
 
   if (parts.length === 1) {
-    return parts[0];
+    return integerPart;
   }
 
-  // Only allow one decimal point, max 2 decimal places
-  return `${parts[0]}.${parts.slice(1).join("").replace(/\./g, "").slice(0, 2)}`;
+  return `${integerPart}.${parts.slice(1).join("").replace(/\./g, "").slice(0, 2)}`;
 }
 
 async function readError(response: Response) {
@@ -54,6 +54,7 @@ export function QuickBillSheet({
   const [taxPercent, setTaxPercent] = useState<number>(0);
   const [hsnCode, setHsnCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const loadingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   // Auto-fill description from last bill when party is selected
@@ -131,6 +132,8 @@ export function QuickBillSheet({
       return;
     }
 
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
     setError(null);
 
@@ -191,6 +194,7 @@ export function QuickBillSheet({
           : "An error occurred while creating the bill."
       );
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
   }

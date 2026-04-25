@@ -498,6 +498,16 @@ export async function POST(request: NextRequest) {
             { status: 400 }
           );
         }
+        // [FIX #8] Block future-dated bills — they'd land in wrong GST period
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        tomorrow.setHours(0, 0, 0, 0);
+        if (parsedDate >= tomorrow) {
+          return NextResponse.json(
+            { error: "Bill date cannot be in the future" },
+            { status: 400 }
+          );
+        }
         billDateObj = parsedDate;
       }
     }

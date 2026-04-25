@@ -214,7 +214,8 @@ export function paymentModeToAccount(mode: string): AccountCode {
     case "CHEQUE":
       return "BANK";
     default:
-      return "CASH";
+      // [FIX #20] Throw on unknown mode instead of silently defaulting to CASH
+      throw new Error(`Unknown payment mode: "${mode}". Expected CASH, UPI, BANK_TRANSFER, or CHEQUE.`);
   }
 }
 
@@ -249,6 +250,7 @@ export function partyTypeToAccountCode(partyType: string): AccountCode {
     case "EQUITY":
       return "OWNER_EQUITY";
     default:
-      return "SUNDRY_DEBTORS";
+      // [FIX #19] Throw on unknown type instead of silently defaulting to SUNDRY_DEBTORS
+      throw new Error(`Unknown party type: "${partyType}". Expected CUSTOMER, VENDOR, EXPENSE, INCOME, ASSET, LIABILITY, or EQUITY.`);
   }
 }

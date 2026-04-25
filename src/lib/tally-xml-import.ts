@@ -196,7 +196,10 @@ export function parseTallyDate(raw: unknown): Date | null {
   const month = monthRaw - 1;
   // 06:30 UTC = 12:00 noon IST — date string is unambiguous in every timezone
   const d = new Date(Date.UTC(year, month, day, 6, 30, 0));
-  return isNaN(d.getTime()) ? null : d;
+  if (isNaN(d.getTime())) return null;
+  // [FIX #37] Validate day didn't roll over (e.g. Feb 31 → Mar 3)
+  if (d.getUTCMonth() !== month || d.getUTCDate() !== day) return null;
+  return d;
 }
 
 function parseAmount(raw: unknown): number {

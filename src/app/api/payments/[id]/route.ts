@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { resolveWriteTenant } from "@/lib/api-tenant";
+import { resolveWriteSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 import { getPaymentBalanceDelta } from "@/lib/accounting";
 import {
@@ -35,20 +35,19 @@ export async function PATCH(
 ) {
     const reqId = getRequestId(request);
     const { id } = await params;
-    const role = request.headers.get("x-user-role");
-    const userId = request.headers.get("x-user-id");
 
-    if (!role || role === "CUSTOMER") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    // [FIX #1] Use JWT-verified session instead of trusting proxy headers
+    const sessionResolution = await resolveWriteSession(request);
+    if (!sessionResolution.ok) {
+        return sessionResolution.response;
     }
-    if (!userId) {
-        return NextResponse.json({ error: "Missing user context" }, { status: 401 });
+    const { tenantId, userId, role } = sessionResolution.session;
+
+    if (role === "CUSTOMER") {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     try {
-        const tenantResolution = await resolveWriteTenant(request);
-        if (!tenantResolution.ok) return tenantResolution.response;
-        const tenantId = tenantResolution.tenantId;
 
         const body = await request.json();
         const { date, notes, amount, direction, mode, accountId, partyId, destinationAccountId } = body;
@@ -108,7 +107,11 @@ export async function PATCH(
                         data: { currentBalance: { decrement: payment.amount.toNumber() } },
                     });
                 }
-                await tx.journalEntry.deleteMany({ where: { paymentId: id, tenantId } });
+                // [FIX #7] Void old entries instead of hard-deleting — preserves audit trail
+                await tx.journalEntry.updateMany({
+                    where: { paymentId: id, tenantId },
+                    data: { isBalanced: false, syncState: "MODIFIED" },
+                });
             }
 
             // Step 2: Resolve new values
@@ -215,15 +218,24 @@ export async function DELETE(
     const reqId = getRequestId(request);
     const { id } = await params;
 
-    try {
-        const tenantResolution = await resolveWriteTenant(request);
-        if (!tenantResolution.ok) {
-            return tenantResolution.response;
-        }
-        const tenantId = tenantResolution.tenantId;
-        const userId = request.headers.get("x-user-id");
+    // [FIX #1 & #2] Use JWT-verified session + add role check (was missing entirely)
+    const sessionResolution = await resolveWriteSession(request);
+    if (!sessionResolution.ok) {
+        return sessionResolution.response;
+    }
+    const { tenantId, userId, role } = sessionResolution.session;
 
+    if (role === "CUSTOMER") {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    try {
         const result = await prisma.$transaction(async (tx) => {
+            // [FIX #3] Acquire advisory lock to prevent concurrent balance mutations
+            const lockKey = generateLockKey(tenantId);
+            await tx.$executeRaw`SET LOCAL lock_timeout = '5s'`;
+            await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
+
             const payment = await tx.payment.findFirst({
                 where: { id, tenantId, isDeleted: false },
                 include: { party: true },
@@ -270,9 +282,10 @@ export async function DELETE(
                     });
                 }
 
-                // Hard delete associated JournalEntries
-                await tx.journalEntry.deleteMany({
+                // [FIX #7] Void old entries instead of hard-deleting — preserves audit trail
+                await tx.journalEntry.updateMany({
                     where: { paymentId: payment.id, tenantId },
+                    data: { isBalanced: false, syncState: "MODIFIED" },
                 });
             }
 

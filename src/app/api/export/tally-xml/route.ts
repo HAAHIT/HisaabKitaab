@@ -220,9 +220,9 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Block export if any entries are unbalanced
+    // [FIX #38] Scope unbalanced check to export date range (was blocking all exports)
     const unbalanced = await prisma.journalEntry.count({
-      where: { tenantId, isBalanced: false },
+      where: { tenantId, isBalanced: false, entryDate: { gte: fromDate, lte: toDate } },
     });
     if (unbalanced > 0) {
       return NextResponse.json(

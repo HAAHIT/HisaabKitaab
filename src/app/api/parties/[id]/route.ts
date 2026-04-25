@@ -68,16 +68,17 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const role = request.headers.get("x-user-role");
+  // [FIX #1] Use JWT-verified session instead of trusting proxy headers
+  const { resolveWriteSession } = await import("@/lib/api-tenant");
+  const sessionResolution = await resolveWriteSession(request);
+  if (!sessionResolution.ok) {
+    return sessionResolution.response;
+  }
+  const { tenantId, userId, role } = sessionResolution.session;
 
-  if (!role || role === "CUSTOMER") {
+  if (role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantResolution = await resolveWriteTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   try {
     const { id } = await params;
@@ -179,7 +180,7 @@ export async function PATCH(
           tenantId,
           entityType: "Party",
           entityId: party.id,
-          userId: request.headers.get("x-user-id") || null,
+          userId: userId || null,
           action: "UPDATE",
           fieldName: changedFields.join(","),
           oldValue: JSON.stringify(
@@ -217,16 +218,17 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const role = request.headers.get("x-user-role");
+  // [FIX #1] Use JWT-verified session instead of trusting proxy headers
+  const { resolveWriteSession } = await import("@/lib/api-tenant");
+  const sessionResolution = await resolveWriteSession(request);
+  if (!sessionResolution.ok) {
+    return sessionResolution.response;
+  }
+  const { tenantId, userId, role } = sessionResolution.session;
 
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantResolution = await resolveWriteTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   try {
     const { id } = await params;
@@ -234,6 +236,15 @@ export async function DELETE(
 
     if (!existingParty) {
       return NextResponse.json({ error: "Party not found" }, { status: 404 });
+    }
+
+    // [FIX #31] Block deletion if party has outstanding balance
+    const balance = existingParty.currentBalance?.toNumber?.() ?? existingParty.currentBalance ?? 0;
+    if (Math.abs(Number(balance)) > 0.01) {
+      return NextResponse.json(
+        { error: "Cannot delete a party with outstanding balance. Settle all dues first." },
+        { status: 400 }
+      );
     }
 
     await prisma.party.update({
@@ -251,7 +262,7 @@ export async function DELETE(
         tenantId,
         entityType: "Party",
         entityId: existingParty.id,
-        userId: request.headers.get("x-user-id") || null,
+        userId: userId || null,
         action: "DELETE",
         fieldName: "isDeleted",
         oldValue: JSON.stringify(false),

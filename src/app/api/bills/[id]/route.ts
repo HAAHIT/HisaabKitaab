@@ -9,7 +9,7 @@ import {
   journalForSalesBill,
 } from "@/lib/journal";
 import { NextRequest, NextResponse } from "next/server";
-import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
+import { resolveReadTenant, resolveWriteSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 
 // Derive Prisma types from the client instance to avoid the
@@ -135,17 +135,16 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const role = request.headers.get("x-user-role");
-  const userId = request.headers.get("x-user-id");
+  // [FIX #1] Use JWT-verified session instead of trusting proxy headers
+  const sessionResolution = await resolveWriteSession(request);
+  if (!sessionResolution.ok) {
+    return sessionResolution.response;
+  }
+  const { tenantId, userId, role } = sessionResolution.session;
 
-  if (!role || role === "CUSTOMER") {
+  if (role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantResolution = await resolveWriteTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   try {
     const { id } = await params;
@@ -647,17 +646,16 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const role = request.headers.get("x-user-role");
-  const userId = request.headers.get("x-user-id");
+  // [FIX #1] Use JWT-verified session instead of trusting proxy headers
+  const sessionResolution = await resolveWriteSession(request);
+  if (!sessionResolution.ok) {
+    return sessionResolution.response;
+  }
+  const { tenantId, userId, role } = sessionResolution.session;
 
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantResolution = await resolveWriteTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   try {
     const { id } = await params;

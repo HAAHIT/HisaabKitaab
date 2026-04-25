@@ -69,16 +69,16 @@ function parsePaymentAmount(value: unknown) {
 
 // GET /api/payments - List payments with filters
 export async function GET(request: NextRequest) {
-  const role = request.headers.get("x-user-role");
+  // [FIX #1] Use JWT-verified session for role check instead of trusting proxy headers
+  const sessionResolution = await resolveWriteSession(request);
+  if (!sessionResolution.ok) {
+    return sessionResolution.response;
+  }
+  const { tenantId, role } = sessionResolution.session;
 
-  if (!role || role === "CUSTOMER") {
+  if (role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantResolution = await resolveReadTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   const { searchParams } = new URL(request.url);
   const search = searchParams.get("search") || "";
@@ -176,6 +176,22 @@ export async function POST(request: NextRequest) {
     }
     if (Number.isNaN(paymentDate.getTime())) {
       return NextResponse.json({ error: "Invalid payment date" }, { status: 400 });
+    }
+    // [FIX #8 & #11] Block future dates and excessive backdating on payments
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+    if (paymentDate >= tomorrow) {
+      return NextResponse.json({ error: "Payment date cannot be in the future" }, { status: 400 });
+    }
+    const maxBackdateDays = 180;
+    const minAllowedPaymentDate = new Date();
+    minAllowedPaymentDate.setDate(minAllowedPaymentDate.getDate() - maxBackdateDays);
+    if (paymentDate < minAllowedPaymentDate) {
+      return NextResponse.json(
+        { error: `Payment date cannot be more than ${maxBackdateDays} days in the past` },
+        { status: 400 }
+      );
     }
 
     if (!VALID_DIRECTIONS.has(type)) {

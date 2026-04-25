@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   getBalanceStatusLabel,
   getSettlementDirectionForParty,
@@ -50,12 +50,13 @@ function getBalanceBannerClass(partyType: SupportedPartyType, balance: number) {
 function sanitizeAmountInput(value: string) {
   const normalized = value.replace(/[^\d.]/g, "");
   const parts = normalized.split(".");
+  // [FIX #23] Cap integer part to prevent floating-point precision breakdown
+  const integerPart = parts[0].slice(0, 12);
 
   if (parts.length === 1) {
-    return parts[0];
+    return integerPart;
   }
 
-  const integerPart = parts[0];
   const decimalPart = parts.slice(1).join("").slice(0, 2);
   return `${integerPart}.${decimalPart}`;
 }
@@ -69,6 +70,8 @@ export default function RecordPaymentPage() {
   const router = useRouter();
   const [selectedParty, setSelectedParty] = useState<PartyOption | null>(null);
   const [saving, setSaving] = useState(false);
+  // [FIX #22] Ref guard prevents double-submit from rapid clicks
+  const savingRef = useRef(false);
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error";
@@ -145,6 +148,8 @@ export default function RecordPaymentPage() {
       return;
     }
 
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
     try {
       const response = await fetch("/api/payments", {
@@ -176,6 +181,7 @@ export default function RecordPaymentPage() {
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Failed to save", "error");
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   }
