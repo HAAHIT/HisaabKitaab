@@ -394,91 +394,105 @@ export async function processImportJob(jobId?: string) {
           const isPaymentOrReceipt = resolvedType === "RECEIPT" || resolvedType === "PAYMENT" || resolvedType === "CONTRA";
 
           if (isSalesOrPurchase && tallyTemplateId) {
-            // Find the party LEDGER line to get the partyId (usually the first line)
+            // Find the party LEDGER line if available (cash/online sales may not have one)
             const partyLine = lines.find((l) => l.partyId);
-            if (partyLine) {
-              const amount = Math.abs(partyLine.debit !== 0 ? partyLine.debit : partyLine.credit);
-              const isPurchase = resolvedType === "PURCHASE" || resolvedType === "DEBIT_NOTE";
+            const isPurchase = resolvedType === "PURCHASE" || resolvedType === "DEBIT_NOTE";
 
-              const rows = voucher.inventoryRows && voucher.inventoryRows.length > 0
-                ? voucher.inventoryRows
-                : [{
-                  Item: isPurchase ? "Purchases" : "Sales",
-                  Qty: 1,
-                  Unit: "nos",
-                  Rate: amount,
-                  Amount: amount,
-                }];
+            // Compute grandTotal from the SALES/PURCHASE account line or total debit
+            const totalDebit = lines.reduce((s, l) => s + l.debit, 0);
+            const grandTotal = partyLine
+              ? Math.abs(partyLine.debit !== 0 ? partyLine.debit : partyLine.credit)
+              : totalDebit;
 
-              const createdBill = await tx.bill.create({
-                data: {
-                  tenantId: tid,
-                  billNumber: voucher.reference ? voucher.reference : `IMP-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`,
-                  templateId: tallyTemplateId,
-                  partyId: partyLine.partyId!,
-                  customerName: partyLine.partyName ?? "Customer",
-                  rows: rows as any,
-                  subtotal: rows.reduce((sum: number, r: any) => sum + (r.Amount || 0), 0),
-                  taxPercent: voucher.taxPercent ?? 0,
-                  taxAmount: Math.abs(voucher.lines.filter(l => l.accountCode.includes("GST")).reduce((s, l) => s + (l.debit || l.credit), 0)),
-                  grandTotal: amount,
-                  status: "FINAL",
-                  isInterState: voucher.isInterState ?? false,
-                  placeOfSupply: voucher.placeOfSupply,
-                  date: voucher.entryDate,
-                  createdBy: billCreatorId,
-                },
-              });
-              billId = createdBill.id;
+            // Derive customer name: party name → narration → fallback
+            const customerName = partyLine?.partyName
+              ?? (voucher.narration && voucher.narration.length > 0 ? voucher.narration.slice(0, 100) : (isPurchase ? "Vendor" : "Cash Customer"));
 
-              await tx.auditLog.create({
-                data: {
-                  tenantId: tid,
-                  entityType: "Bill",
-                  entityId: billId,
-                  userId: null,
-                  actorType: "SYSTEM",
-                  action: "CREATE",
-                  newValue: JSON.stringify({ source: "tally-import" }),
-                },
-              });
-            }
+            const rows = voucher.inventoryRows && voucher.inventoryRows.length > 0
+              ? voucher.inventoryRows
+              : [{
+                Item: isPurchase ? "Purchases" : "Sales",
+                Qty: 1,
+                Unit: "nos",
+                Rate: grandTotal,
+                Amount: grandTotal,
+              }];
+
+            const createdBill = await tx.bill.create({
+              data: {
+                tenantId: tid,
+                billNumber: voucher.reference ? voucher.reference : `IMP-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`,
+                templateId: tallyTemplateId,
+                partyId: partyLine?.partyId ?? null,
+                customerName,
+                rows: rows as any,
+                subtotal: rows.reduce((sum: number, r: any) => sum + (r.Amount || 0), 0),
+                taxPercent: voucher.taxPercent ?? 0,
+                taxAmount: Math.abs(voucher.lines.filter(l => l.accountCode.includes("GST")).reduce((s, l) => s + (l.debit || l.credit), 0)),
+                grandTotal,
+                status: "FINAL",
+                isInterState: voucher.isInterState ?? false,
+                placeOfSupply: voucher.placeOfSupply,
+                date: voucher.entryDate,
+                createdBy: billCreatorId,
+              },
+            });
+            billId = createdBill.id;
+
+            await tx.auditLog.create({
+              data: {
+                tenantId: tid,
+                entityType: "Bill",
+                entityId: billId,
+                userId: null,
+                actorType: "SYSTEM",
+                action: "CREATE",
+                newValue: JSON.stringify({ source: "tally-import" }),
+              },
+            });
           } else if (isPaymentOrReceipt) {
             const partyLine = lines.find((l) => l.partyId);
-            const cashBankLine = lines.find((l) => l.accountCode === "CASH" || l.accountCode === "BANK");
-            if (partyLine) {
-              const amount = Math.abs(partyLine.debit !== 0 ? partyLine.debit : partyLine.credit);
-              const direction = resolvedType === "RECEIPT" ? "INCOMING" : "OUTGOING";
-              const mode = cashBankLine?.accountCode === "CASH" ? "CASH" : "BANK_TRANSFER";
+            const cashBankLine = lines.find((l) => l.accountCode === "CASH" || l.accountCode === "BANK" || l.accountCode === "UPI");
 
-              const createdPayment = await tx.payment.create({
-                data: {
-                  tenantId: tid,
-                  partyId: partyLine.partyId,
-                  amount,
-                  date: voucher.entryDate,
-                  direction,
-                  mode,
-                  status: "COMPLETED",
-                  referenceNo: voucher.reference || null,
-                  notes: voucher.narration,
-                  createdBy: billCreatorId,
-                }
-              });
-              paymentId = createdPayment.id;
+            // Compute amount from party line or the cash/bank line
+            const paymentAmount = partyLine
+              ? Math.abs(partyLine.debit !== 0 ? partyLine.debit : partyLine.credit)
+              : cashBankLine
+                ? Math.abs(cashBankLine.debit !== 0 ? cashBankLine.debit : cashBankLine.credit)
+                : lines.reduce((s, l) => s + l.debit, 0);
 
-              await tx.auditLog.create({
-                data: {
-                  tenantId: tid,
-                  entityType: "Payment",
-                  entityId: paymentId,
-                  userId: null,
-                  actorType: "SYSTEM",
-                  action: "CREATE",
-                  newValue: JSON.stringify({ source: "tally-import" }),
-                },
-              });
-            }
+            const direction = resolvedType === "RECEIPT" ? "INCOMING" : "OUTGOING";
+            const mode = cashBankLine?.accountCode === "CASH" ? "CASH"
+              : cashBankLine?.accountCode === "UPI" ? "UPI"
+              : "BANK_TRANSFER";
+
+            const createdPayment = await tx.payment.create({
+              data: {
+                tenantId: tid,
+                partyId: partyLine?.partyId ?? null,
+                amount: paymentAmount,
+                date: voucher.entryDate,
+                direction,
+                mode,
+                status: "COMPLETED",
+                referenceNo: voucher.reference || null,
+                notes: voucher.narration,
+                createdBy: billCreatorId,
+              }
+            });
+            paymentId = createdPayment.id;
+
+            await tx.auditLog.create({
+              data: {
+                tenantId: tid,
+                entityType: "Payment",
+                entityId: paymentId,
+                userId: null,
+                actorType: "SYSTEM",
+                action: "CREATE",
+                newValue: JSON.stringify({ source: "tally-import" }),
+              },
+            });
           }
 
           const journalEntry = await createJournalEntry(tx, {
