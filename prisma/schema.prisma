@@ -460,9 +460,11 @@ model ImportJob {
   tenantId   String
   createdBy  String?   // User ID of the admin who initiated the import (used for Bill FK)
   status     JobStatus @default(PENDING) // PENDING, PROCESSING, COMPLETED, FAILED
-  totalItems Int       @default(0)
-  processed  Int       @default(0)
-  failed     Int       @default(0)
+  stage          String    @default("queued") // queued, parsing, parties, importing, balances, done
+  totalItems     Int       @default(0)
+  processed      Int       @default(0)
+  failed         Int       @default(0)
+  partiesCreated Int       @default(0)
   xmlData    String    @db.Text
   error      String?
   createdAt  DateTime  @default(now())

@@ -106,6 +106,12 @@ export async function processImportJob(jobId?: string) {
     const billCreatorId = job.createdBy ?? "system";
     const actorId = job.createdBy ?? "system";
 
+    // Stage: parsing XML
+    await prisma.importJob.update({
+      where: { id: job.id },
+      data: { stage: "parsing" },
+    });
+
     // [S-W1] Decompress if stored with gzip prefix (backwards-compatible with raw XML)
     let xmlText = job.xmlData;
     if (xmlText.startsWith("gzip:")) {
@@ -121,7 +127,7 @@ export async function processImportJob(jobId?: string) {
 
     await prisma.importJob.update({
       where: { id: job.id },
-      data: { totalItems: vouchers.length },
+      data: { totalItems: vouchers.length, stage: "parties" },
     });
 
     const needsTallyTemplate = vouchers.some(
@@ -252,6 +258,17 @@ export async function processImportJob(jobId?: string) {
       await Promise.all(
         batch.map(([name, accountCode]) => resolvePartyId(name, accountCode))
       );
+      // Check cancellation between party batches
+      const jobCheck = await prisma.importJob.findUnique({
+        where: { id: job.id },
+        select: { status: true },
+      });
+      if (jobCheck?.status === "FAILED") {
+        return NextResponse.json({
+          jobId: job.id, status: "FAILED", error: "Cancelled by user",
+          partiesCreated, imported: 0, skipped: 0, failed: 0,
+        });
+      }
     }
 
     let imported = 0;
@@ -273,15 +290,20 @@ export async function processImportJob(jobId?: string) {
 
     if (!lockAcquired) {
       // Another import is already running (or a leaked lock exists).
-      // Revert claim so the next cron cycle retries this job.
+      // Mark as FAILED so the user can retry — PENDING would loop forever
+      // if the lock is leaked from a crashed process.
       await prisma.importJob.update({
         where: { id: job.id },
-        data: { status: "PENDING" },
+        data: {
+          status: "FAILED",
+          stage: "done",
+          error: "Another import is already running. Please try again in a minute.",
+        },
       });
       return NextResponse.json({
         jobId: job.id,
-        status: "PENDING",
-        message: "Import already in progress for this tenant, will retry",
+        status: "FAILED",
+        error: "Another import is already running",
       });
     }
 
@@ -542,6 +564,12 @@ export async function processImportJob(jobId?: string) {
 
     const allVouchers = [...vouchersWithRemoteId, ...vouchersWithoutRemoteId];
 
+    // Stage: importing vouchers
+    await prisma.importJob.update({
+      where: { id: job.id },
+      data: { stage: "importing" },
+    });
+
     // Process in batches sequentially to avoid deadlocks on shared party rows.
     // Promise.allSettled was replaced: 50 parallel transactions caused lock
     // contention when multiple vouchers referenced the same party.
@@ -559,6 +587,23 @@ export async function processImportJob(jobId?: string) {
         }
       }
 
+      // Check if job was cancelled by user between batches
+      const currentJob = await prisma.importJob.findUnique({
+        where: { id: job.id },
+        select: { status: true },
+      });
+      if (currentJob?.status === "FAILED") {
+        // User cancelled — stop processing, keep what was already imported
+        return NextResponse.json({
+          jobId: job.id,
+          status: "FAILED",
+          error: "Cancelled by user",
+          imported,
+          skipped,
+          failed,
+        });
+      }
+
       // Update progress in DB after each batch
       await prisma.importJob.update({
         where: { id: job.id },
@@ -569,21 +614,17 @@ export async function processImportJob(jobId?: string) {
       });
     }
 
+    // Stage: recomputing party balances
     await prisma.importJob.update({
       where: { id: job.id },
       data: {
-        status: "COMPLETED",
+        stage: "balances",
         processed: imported + skipped,
         failed: failed,
-        // [S1] Clear raw XML to prevent storage bloat (up to 5MB per job).
-        // All relevant data is already persisted in JournalEntries + AuditLog.
-        xmlData: "",
       }
     });
 
     // [T2] Recompute balances for all parties touched during import.
-    // Runs AFTER the job is marked COMPLETED so import success is not
-    // blocked by a balance recompute failure.
     const affectedPartyIds = [...new Set(partyCache.values())];
     for (const pid of affectedPartyIds) {
       try {
@@ -593,6 +634,19 @@ export async function processImportJob(jobId?: string) {
         logError("import.party-balance.error", { pid, jobId: job.id, error: err });
       }
     }
+
+    // Stage: done — mark completed and clear raw XML
+    await prisma.importJob.update({
+      where: { id: job.id },
+      data: {
+        status: "COMPLETED",
+        stage: "done",
+        processed: imported + skipped,
+        failed: failed,
+        partiesCreated,
+        xmlData: "",
+      }
+    });
 
     return NextResponse.json({
       jobId: job.id,

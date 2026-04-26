@@ -120,33 +120,17 @@ export async function POST(request: NextRequest) {
     totalItems,
   });
 
-  const processResponse = await processImportJob(job.id);
-  const processPayload = await processResponse.json().catch(() => null);
-
-  if (!processResponse.ok) {
-    return NextResponse.json(
-      {
-        jobId: job.id,
-        error: processPayload?.error || "Import job failed.",
-        parseErrors: upfrontErrors,
-      },
-      { status: processResponse.status }
-    );
-  }
-
-  if (processPayload && typeof processPayload.imported === "number") {
-    return NextResponse.json({
-      ...processPayload,
-      totalDetected: processPayload.totalItems ?? totalItems,
-      parseErrors: Array.from(new Set([...upfrontErrors, ...(processPayload.parseErrors ?? [])])),
-      importErrors: [],
+  // Fire-and-forget: process in background so the UI can poll progress
+  processImportJob(job.id).catch((err) => {
+    logError("import.tally-xml.background-error", {
+      jobId: job.id,
+      error: err,
     });
-  }
+  });
 
   return NextResponse.json({
     jobId: job.id,
-    status: processPayload?.status ?? "PENDING",
-    message: processPayload?.message ?? "Import job queued successfully.",
+    status: "PENDING",
     totalDetected: totalItems,
     parseErrors: upfrontErrors,
   });
