@@ -114,7 +114,7 @@ describe("Combined export (masters + vouchers) round-trip", () => {
       }),
     ];
 
-    const xml = buildCombinedTallyXml(parties, vouchers, COMPANY);
+    const xml = buildCombinedTallyXml(parties, [], [], vouchers, COMPANY);
     const result = parseTallyXml(xml);
 
     expect(result.parseErrors).toHaveLength(0);
