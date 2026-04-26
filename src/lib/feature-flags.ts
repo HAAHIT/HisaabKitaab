@@ -27,6 +27,10 @@ export const FEATURE_FLAGS = {
     process.env.NEXT_PUBLIC_FEATURE_MEASUREMENTS_UI,
     true
   ),
+  testingWipeData: readBooleanFlag(
+    process.env.NEXT_PUBLIC_FEATURE_TESTING_WIPE_DATA,
+    false
+  ),
 } as const;
 
 export type FeatureFlagKey = keyof typeof FEATURE_FLAGS;

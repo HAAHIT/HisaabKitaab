@@ -126,9 +126,8 @@ export async function processImportJob(jobId?: string) {
 
     const needsTallyTemplate = vouchers.some(
       (voucher) =>
-        voucher.inventoryRows &&
-        voucher.inventoryRows.length > 0 &&
-        (voucher.voucherType === "SALES" || voucher.voucherType === "PURCHASE")
+        voucher.voucherType === "SALES" ||
+        voucher.voucherType === "PURCHASE"
     );
 
     // [P1] Resolve/Create template for Tally imports only when inventory rows
@@ -387,29 +386,42 @@ export async function processImportJob(jobId?: string) {
         }
 
         await prisma.$transaction(async (tx: PrismaTx) => {
-          // [P1] If voucher has inventory, create a Bill record first.
           let billId: string | null = null;
-          if (
-            voucher.inventoryRows &&
-            voucher.inventoryRows.length > 0 &&
-            (voucher.voucherType === "SALES" || voucher.voucherType === "PURCHASE") &&
-            tallyTemplateId
-          ) {
+          let paymentId: string | null = null;
+
+          const resolvedType = resolveImportVoucherType(voucher.originalTypeName, voucher.voucherType);
+          const isSalesOrPurchase = resolvedType === "SALES" || resolvedType === "PURCHASE" || resolvedType === "CREDIT_NOTE" || resolvedType === "DEBIT_NOTE";
+          const isPaymentOrReceipt = resolvedType === "RECEIPT" || resolvedType === "PAYMENT" || resolvedType === "CONTRA";
+
+          if (isSalesOrPurchase && tallyTemplateId) {
             // Find the party LEDGER line to get the partyId (usually the first line)
             const partyLine = lines.find((l) => l.partyId);
             if (partyLine) {
+              const amount = Math.abs(partyLine.debit !== 0 ? partyLine.debit : partyLine.credit);
+              const isPurchase = resolvedType === "PURCHASE" || resolvedType === "DEBIT_NOTE";
+
+              const rows = voucher.inventoryRows && voucher.inventoryRows.length > 0
+                ? voucher.inventoryRows
+                : [{
+                  Item: isPurchase ? "Purchases" : "Sales",
+                  Qty: 1,
+                  Unit: "nos",
+                  Rate: amount,
+                  Amount: amount,
+                }];
+
               const createdBill = await tx.bill.create({
                 data: {
                   tenantId: tid,
-                  billNumber: voucher.reference ? `TLY-${voucher.voucherType.substring(0, 3)}-${voucher.reference}-${crypto.randomBytes(2).toString('hex')}` : `IMP-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`,
+                  billNumber: voucher.reference ? voucher.reference : `IMP-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`,
                   templateId: tallyTemplateId,
                   partyId: partyLine.partyId!,
                   customerName: partyLine.partyName ?? "Customer",
-                  rows: voucher.inventoryRows as any,
-                  subtotal: voucher.inventoryRows.reduce((sum, r) => sum + (r.Amount || 0), 0),
+                  rows: rows as any,
+                  subtotal: rows.reduce((sum: number, r: any) => sum + (r.Amount || 0), 0),
                   taxPercent: voucher.taxPercent ?? 0,
                   taxAmount: Math.abs(voucher.lines.filter(l => l.accountCode.includes("GST")).reduce((s, l) => s + (l.debit || l.credit), 0)),
-                  grandTotal: Math.abs(partyLine.debit !== 0 ? partyLine.debit : partyLine.credit),
+                  grandTotal: amount,
                   status: "FINAL",
                   isInterState: voucher.isInterState ?? false,
                   placeOfSupply: voucher.placeOfSupply,
@@ -419,7 +431,6 @@ export async function processImportJob(jobId?: string) {
               });
               billId = createdBill.id;
 
-              // Audit the Bill creation
               await tx.auditLog.create({
                 data: {
                   tenantId: tid,
@@ -428,7 +439,43 @@ export async function processImportJob(jobId?: string) {
                   userId: null,
                   actorType: "SYSTEM",
                   action: "CREATE",
-                  newValue: JSON.stringify({ source: "tally-import-inventory" }),
+                  newValue: JSON.stringify({ source: "tally-import" }),
+                },
+              });
+            }
+          } else if (isPaymentOrReceipt) {
+            const partyLine = lines.find((l) => l.partyId);
+            const cashBankLine = lines.find((l) => l.accountCode === "CASH" || l.accountCode === "BANK");
+            if (partyLine) {
+              const amount = Math.abs(partyLine.debit !== 0 ? partyLine.debit : partyLine.credit);
+              const direction = resolvedType === "RECEIPT" ? "INCOMING" : "OUTGOING";
+              const mode = cashBankLine?.accountCode === "CASH" ? "CASH" : "BANK_TRANSFER";
+
+              const createdPayment = await tx.payment.create({
+                data: {
+                  tenantId: tid,
+                  partyId: partyLine.partyId,
+                  amount,
+                  date: voucher.entryDate,
+                  direction,
+                  mode,
+                  status: "COMPLETED",
+                  referenceNo: voucher.reference || null,
+                  notes: voucher.narration,
+                  createdBy: billCreatorId,
+                }
+              });
+              paymentId = createdPayment.id;
+
+              await tx.auditLog.create({
+                data: {
+                  tenantId: tid,
+                  entityType: "Payment",
+                  entityId: paymentId,
+                  userId: null,
+                  actorType: "SYSTEM",
+                  action: "CREATE",
+                  newValue: JSON.stringify({ source: "tally-import" }),
                 },
               });
             }
@@ -438,17 +485,11 @@ export async function processImportJob(jobId?: string) {
             tenantId: tid,
             entryDate: voucher.entryDate,
             narration: voucher.narration,
-            // [FIX] Resolve Credit Note / Debit Note types correctly.
-            // parseTallyXml coerces voucherType to SALES/PURCHASE for return
-            // vouchers; originalTypeName carries the raw Tally string needed
-            // to restore CREDIT_NOTE / DEBIT_NOTE for balance computation.
-            voucherType: resolveImportVoucherType(
-              voucher.originalTypeName,
-              voucher.voucherType
-            ),
+            voucherType: resolvedType,
             createdBy: actorId ?? "SYSTEM",
             ...(voucher.remoteId ? { remoteId: voucher.remoteId } : {}),
-            billId: billId ?? undefined, // Link to the created bill if inventory was present
+            billId: billId ?? undefined, // Link to created bill
+            paymentId: paymentId ?? undefined, // Link to created payment
             lines,
           });
 
