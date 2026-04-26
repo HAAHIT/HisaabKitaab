@@ -350,6 +350,42 @@ export async function processImportJob(jobId?: string) {
           })
         );
 
+        // ── Auto-adjust rounding for Tally imports ────────────────────────
+        // Tally's internal rounding can produce vouchers where debit ≠ credit
+        // by a few paise/rupees. Absorb small differences (≤ ₹5) into a
+        // ROUND_OFF line so createJournalEntry's strict balance check passes.
+        const totalDebit = lines.reduce((s, l) => s + l.debit, 0);
+        const totalCredit = lines.reduce((s, l) => s + l.credit, 0);
+        const imbalance = Math.round((totalDebit - totalCredit) * 100) / 100;
+
+        if (imbalance !== 0 && Math.abs(imbalance) <= 5) {
+          const existingRoundOff = lines.find((l) => l.accountCode === "ROUND_OFF");
+          if (existingRoundOff) {
+            // Net the current value with the adjustment.
+            // A journal line cannot have both debit AND credit > 0, so we must
+            // compute the net and assign to the correct side.
+            const netBefore = existingRoundOff.debit - existingRoundOff.credit;
+            const netAfter = Math.round((netBefore - imbalance) * 100) / 100;
+            if (Math.abs(netAfter) < 0.001) {
+              // Net zero — remove the ROUND_OFF line entirely
+              const idx = lines.indexOf(existingRoundOff);
+              if (idx >= 0) lines.splice(idx, 1);
+            } else {
+              existingRoundOff.debit = netAfter > 0 ? netAfter : 0;
+              existingRoundOff.credit = netAfter < 0 ? Math.abs(netAfter) : 0;
+            }
+          } else {
+            // Insert a new ROUND_OFF line
+            lines.push({
+              accountCode: "ROUND_OFF" as AccountCode,
+              debit: imbalance < 0 ? Math.abs(imbalance) : 0,
+              credit: imbalance > 0 ? imbalance : 0,
+              partyId: null,
+              partyName: undefined,
+            });
+          }
+        }
+
         await prisma.$transaction(async (tx: PrismaTx) => {
           // [P1] If voucher has inventory, create a Bill record first.
           let billId: string | null = null;

@@ -54,14 +54,30 @@ export async function POST(request: NextRequest) {
     if (!file || typeof file === "string") {
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
     }
-    const bytes = file.size;
-    if (bytes > MAX_BYTES) {
+    const fileSize = file.size;
+    if (fileSize > MAX_BYTES) {
       return NextResponse.json(
         { error: `File too large (max ${MAX_BYTES / 1024 / 1024} MB)` },
         { status: 413 }
       );
     }
-    xmlText = await file.text();
+
+    // Native Tally ERP 9 exports are often UTF-16 LE encoded.
+    // Blob.text() always decodes as UTF-8, producing garbled output for UTF-16.
+    // Detect encoding via BOM and use the correct TextDecoder.
+    const rawBuffer = await file.arrayBuffer();
+    const rawBytes = new Uint8Array(rawBuffer);
+
+    if (rawBytes[0] === 0xFF && rawBytes[1] === 0xFE) {
+      // UTF-16 LE BOM
+      xmlText = new TextDecoder("utf-16le").decode(rawBytes);
+    } else if (rawBytes[0] === 0xFE && rawBytes[1] === 0xFF) {
+      // UTF-16 BE BOM
+      xmlText = new TextDecoder("utf-16be").decode(rawBytes);
+    } else {
+      // Default: UTF-8 (handles BOM-less UTF-8 and UTF-8 with BOM)
+      xmlText = new TextDecoder("utf-8").decode(rawBytes);
+    }
   } catch (err) {
     logError("import.tally-xml.read-error", {
       requestId: getRequestId(request),
