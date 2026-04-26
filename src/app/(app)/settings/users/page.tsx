@@ -18,6 +18,7 @@ import {
   Skeleton,
 } from "@heroui/react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { generateRandomPassword } from "@/lib/utils";
 
 interface User {
   id: string;
@@ -68,12 +69,7 @@ export default function UserManagementPage() {
   }
 
   function generatePassword() {
-    const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$";
-    let pw = "";
-    for (let i = 0; i < 16; i++) {
-      pw += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    setFormPassword(pw);
+    setFormPassword(generateRandomPassword(16));
   }
 
   function openCreatePanel() {
