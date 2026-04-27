@@ -91,14 +91,6 @@ export async function processImportJob(jobId?: string) {
 
   const job = candidate;
 
-  const tenantLockKey = BigInt(
-    "0x" + crypto.createHash("sha256").update(job.tenantId).digest("hex").substring(0, 15)
-  );
-
-  // [W1-FIX] Track whether the session-level advisory lock was acquired so
-  // the finally block only attempts to unlock when necessary.
-  let lockAcquired = false;
-
   try {
     const tid = job.tenantId;
     // Use the uploading user's ID for Bill.createdBy (FK to User table).
@@ -119,9 +111,9 @@ export async function processImportJob(jobId?: string) {
       xmlText = gunzipSync(compressed).toString("utf-8");
     }
 
-    const { vouchers, partyMasters, parseErrors } = parseTallyXml(xmlText);
+    const { vouchers, partyMasters, bankMasters, parseErrors } = parseTallyXml(xmlText);
 
-    if (parseErrors.length > 0 && vouchers.length === 0 && partyMasters.length === 0) {
+    if (parseErrors.length > 0 && vouchers.length === 0 && partyMasters.length === 0 && bankMasters.length === 0) {
       throw new Error(parseErrors.join("; "));
     }
 
@@ -212,6 +204,37 @@ export async function processImportJob(jobId?: string) {
       partyCache.set(pm.name, upserted.id);
     }
 
+    // ── Bank / Cash account creation from Tally masters ─────────────────────
+    const bankAccountCache = new Map<string, string>(); // ledger name → BankAccount.id
+    for (const bm of bankMasters) {
+      const upserted = await prisma.bankAccount.upsert({
+        where: { tenantId_name: { tenantId: tid, name: bm.name } },
+        update: {},
+        create: {
+          tenantId: tid,
+          name: bm.name,
+          type: bm.type,
+          accountNumber: bm.accountNumber,
+          openingBalance: bm.openingBalance,
+          currentBalance: bm.openingBalance,
+          createdBy: actorId,
+        },
+        select: { id: true },
+      });
+      bankAccountCache.set(bm.name, upserted.id);
+    }
+
+    // Pre-populate cache from existing BankAccounts (for DayBook imports after Master import)
+    if (bankAccountCache.size === 0) {
+      const existingAccounts = await prisma.bankAccount.findMany({
+        where: { tenantId: tid, isDeleted: false },
+        select: { id: true, name: true },
+      });
+      for (const acc of existingAccounts) {
+        bankAccountCache.set(acc.name, acc.id);
+      }
+    }
+
     async function resolvePartyId(
       name: string,
       accountCode: AccountCode
@@ -280,18 +303,27 @@ export async function processImportJob(jobId?: string) {
 
     let duplicateFingerprints = new Set<string>();
 
-    // [W1-FIX] Non-blocking advisory lock — prevents indefinite hangs when a
-    // previous import leaked a session-level lock (e.g. process crash, serverless
-    // timeout). pg_try_advisory_lock returns false immediately if already held,
-    // instead of blocking forever like pg_advisory_lock.
-    const lockResult: { acquired: boolean }[] =
-      await prisma.$queryRaw`SELECT pg_try_advisory_lock(${tenantLockKey}) as acquired`;
-    lockAcquired = lockResult[0]?.acquired === true;
+    // Clean up stale PROCESSING jobs older than 10 minutes (crashed/leaked)
+    const staleThreshold = new Date(Date.now() - 10 * 60 * 1000);
+    await prisma.importJob.updateMany({
+      where: {
+        tenantId: tid,
+        status: "PROCESSING",
+        id: { not: job.id },
+        updatedAt: { lt: staleThreshold },
+      },
+      data: { status: "FAILED", stage: "done", error: "Timed out" },
+    });
 
-    if (!lockAcquired) {
-      // Another import is already running (or a leaked lock exists).
-      // Mark as FAILED so the user can retry — PENDING would loop forever
-      // if the lock is leaked from a crashed process.
+    // Concurrency guard: check for other active PROCESSING jobs for this tenant.
+    const otherProcessing = await prisma.importJob.count({
+      where: {
+        tenantId: tid,
+        status: "PROCESSING",
+        id: { not: job.id },
+      },
+    });
+    if (otherProcessing > 0) {
       await prisma.importJob.update({
         where: { id: job.id },
         data: {
@@ -363,6 +395,7 @@ export async function processImportJob(jobId?: string) {
               : null;
             return {
               accountCode: line.accountCode,
+              ledgerName: line.ledgerName,
               debit: line.debit,
               credit: line.credit,
               partyId,
@@ -399,6 +432,7 @@ export async function processImportJob(jobId?: string) {
             // Insert a new ROUND_OFF line
             lines.push({
               accountCode: "ROUND_OFF" as AccountCode,
+              ledgerName: "Round Off",
               debit: imbalance < 0 ? Math.abs(imbalance) : 0,
               credit: imbalance > 0 ? imbalance : 0,
               partyId: null,
@@ -426,9 +460,14 @@ export async function processImportJob(jobId?: string) {
               ? Math.abs(partyLine.debit !== 0 ? partyLine.debit : partyLine.credit)
               : totalDebit;
 
-            // Derive customer name: party name → narration → fallback
+            // Derive customer name: party name → primary ledger name (Cash/Online) → fallback
+            const primaryLine = lines.find((l) =>
+              l.accountCode === "CASH" || l.accountCode === "BANK" || l.accountCode === "UPI"
+              || l.accountCode === "SALES" || l.accountCode === "PURCHASE"
+            );
             const customerName = partyLine?.partyName
-              ?? (voucher.narration && voucher.narration.length > 0 ? voucher.narration.slice(0, 100) : (isPurchase ? "Vendor" : "Cash Customer"));
+              ?? primaryLine?.ledgerName
+              ?? (isPurchase ? "Vendor" : "Cash Customer");
 
             const rows = voucher.inventoryRows && voucher.inventoryRows.length > 0
               ? voucher.inventoryRows
@@ -447,6 +486,7 @@ export async function processImportJob(jobId?: string) {
                 templateId: tallyTemplateId,
                 partyId: partyLine?.partyId ?? null,
                 customerName,
+                notes: voucher.narration || null,
                 rows: rows as any,
                 subtotal: rows.reduce((sum: number, r: any) => sum + (r.Amount || 0), 0),
                 taxPercent: voucher.taxPercent ?? 0,
@@ -488,10 +528,16 @@ export async function processImportJob(jobId?: string) {
               : cashBankLine?.accountCode === "UPI" ? "UPI"
               : "BANK_TRANSFER";
 
+            // Resolve bank/cash account from cache using the ledger name
+            const accountId = cashBankLine?.ledgerName
+              ? bankAccountCache.get(cashBankLine.ledgerName) ?? null
+              : null;
+
             const createdPayment = await tx.payment.create({
               data: {
                 tenantId: tid,
                 partyId: partyLine?.partyId ?? null,
+                accountId,
                 amount: paymentAmount,
                 date: voucher.entryDate,
                 direction,
@@ -676,12 +722,5 @@ export async function processImportJob(jobId?: string) {
       status: "FAILED",
       error,
     }, { status: 500 });
-  } finally {
-    // [W1-FIX] Guaranteed lock release in finally — covers success, catch, and
-    // early returns. pg_advisory_unlock returns false (not an error) if the lock
-    // was never acquired, but we gate on lockAcquired to avoid unnecessary calls.
-    if (lockAcquired) {
-      try { await prisma.$executeRaw`SELECT pg_advisory_unlock(${tenantLockKey})`; } catch { /* best effort */ }
-    }
   }
 }

@@ -301,9 +301,17 @@ export type ParsedPartyMaster = {
   address: string | null;
 };
 
+export type ParsedBankMaster = {
+  name: string;
+  type: "BANK" | "CASH";
+  openingBalance: number;
+  accountNumber: string | null;
+};
+
 export type TallyParseResult = {
   vouchers: ParsedVoucher[];
   partyMasters: ParsedPartyMaster[];
+  bankMasters: ParsedBankMaster[];
   parseErrors: string[];
 };
 
@@ -367,6 +375,7 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
   const parseErrors: string[] = [];
   const vouchers: ParsedVoucher[] = [];
   const partyMasters: ParsedPartyMaster[] = [];
+  const bankMasters: ParsedBankMaster[] = [];
 
   let parsed: Record<string, unknown>;
   try {
@@ -390,6 +399,7 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
     return {
       vouchers: [],
       partyMasters: [],
+      bankMasters: [],
       parseErrors: [
         `XML parse error: ${err instanceof Error ? err.message : String(err)}`,
       ],
@@ -449,12 +459,12 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
     }
   } catch {
     parseErrors.push("Could not locate TALLYMESSAGE elements in XML");
-    return { vouchers, partyMasters, parseErrors };
+    return { vouchers, partyMasters, bankMasters, parseErrors };
   }
 
   if (messageCollections.length === 0) {
     parseErrors.push("No TALLYMESSAGE elements found in XML");
-    return { vouchers, partyMasters, parseErrors };
+    return { vouchers, partyMasters, bankMasters, parseErrors };
   }
 
   const allMessages = messageCollections.flat();
@@ -479,12 +489,32 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
   for (let i = 0; i < allMessages.length; i++) {
     const msg = allMessages[i] as Record<string, unknown>;
 
-    // ── Party master ─────────────────────────────────────────────────────────
+    // ── Ledger master ──────────────────────────────────────────────────────
     if (msg["LEDGER"]) {
       const ledger = msg["LEDGER"] as Record<string, unknown>;
       const name = String(ledger["NAME"] ?? ledger["@_NAME"] ?? "").trim();
       const parent = String(ledger["PARENT"] ?? "").trim();
       if (!name) continue;
+
+      // ── Bank / Cash account ─────────────────────────────────────────────
+      const upperParent = parent.toUpperCase();
+      if (upperParent === "BANK ACCOUNTS" || upperParent === "BANK OD ACCOUNTS" || upperParent === "CASH-IN-HAND") {
+        const openingBalance = parseAmount(ledger["OPENINGBALANCE"]);
+        const rawAccNo = ledger["BANKACCTNO"] ?? ledger["ACCOUNTNUMBER"];
+        const accountNumber = typeof rawAccNo === "string" && rawAccNo.trim().length > 0
+          ? rawAccNo.trim()
+          : null;
+
+        bankMasters.push({
+          name,
+          type: upperParent === "CASH-IN-HAND" ? "CASH" : "BANK",
+          openingBalance,
+          accountNumber,
+        });
+        continue;
+      }
+
+      // ── Party master (Sundry Debtors / Creditors) ───────────────────────
       if (parent !== "Sundry Debtors" && parent !== "Sundry Creditors") continue;
       const openingBalance = parseAmount(ledger["OPENINGBALANCE"]);
 
@@ -765,5 +795,5 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
     });
   }
 
-  return { vouchers, partyMasters, parseErrors };
+  return { vouchers, partyMasters, bankMasters, parseErrors };
 }
