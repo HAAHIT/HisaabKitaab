@@ -27,9 +27,11 @@ export async function GET(
   return NextResponse.json({
     id: job.id,
     status: job.status,
+    stage: job.stage,
     totalItems: job.totalItems,
     processed: job.processed,
     failed: job.failed,
-    error: job.error
+    partiesCreated: job.partiesCreated,
+    error: job.error,
   });
 }

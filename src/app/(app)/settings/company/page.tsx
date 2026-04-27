@@ -18,6 +18,7 @@ import {
   BUSINESS_TYPES,
   TAX_REGISTRATION_TYPES,
 } from "@/lib/tenant-settings";
+import { FEATURE_FLAGS } from "@/lib/feature-flags";
 
 async function readError(response: Response) {
   const data = await response.json().catch(() => null);
@@ -247,9 +248,8 @@ export default function CompanySettingsPage() {
     <div className="mx-auto max-w-5xl animate-fade-in p-4 lg:p-8">
       {toast && (
         <div
-          className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${
-            toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
-          }`}
+          className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
+            }`}
         >
           {toast.message}
         </div>
@@ -287,11 +287,10 @@ export default function CompanySettingsPage() {
             <div className="flex flex-col items-start gap-8 md:flex-row">
               <div className="flex flex-col items-center gap-3">
                 <div
-                  className={`flex h-32 w-32 items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed transition-all ${
-                    displayedCompanyLogo
+                  className={`flex h-32 w-32 items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed transition-all ${displayedCompanyLogo
                       ? "border-primary/50 bg-primary/5"
                       : "border-default-300 bg-default-50"
-                  }`}
+                    }`}
                 >
                   {displayedCompanyLogo ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -527,9 +526,29 @@ export default function CompanySettingsPage() {
                 {t("company.dangerSubtitle")}
               </p>
             </div>
-            <Button color="danger" variant="flat" onPress={handleResetLocalData}>
-              {t("company.resetOfflineStorage")}
-            </Button>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button color="danger" variant="flat" onPress={handleResetLocalData}>
+                {t("company.resetOfflineStorage")}
+              </Button>
+              {FEATURE_FLAGS.testingWipeData && (
+                <Button color="danger" variant="solid" onPress={async () => {
+                  if (!confirm("Are you absolutely sure you want to hard delete all cloud data? This cannot be undone.")) return;
+                  try {
+                    const res = await fetch("/api/settings/wipe-data", { method: "DELETE" });
+                    if (!res.ok) {
+                      const err = await res.json().catch(() => ({}));
+                      throw new Error(err.error || "Failed to wipe data");
+                    }
+                    showToast("Cloud data wiped successfully", "success");
+                    window.setTimeout(() => window.location.reload(), 1000);
+                  } catch (e) {
+                    showToast(e instanceof Error ? e.message : "Error wiping data", "error");
+                  }
+                }}>
+                  Wipe All Cloud Data
+                </Button>
+              )}
+            </div>
           </div>
         </CardBody>
       </Card>

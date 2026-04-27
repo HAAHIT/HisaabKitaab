@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { readStoredObject } from "@/lib/object-storage";
-import { resolveReadTenant } from "@/lib/api-tenant";
+import { resolveWriteSession } from "@/lib/api-tenant";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,17 +16,10 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const userId = request.headers.get("x-user-id");
-  const role = request.headers.get("x-user-role");
-
-  if (!userId || !role) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  const tenantResolution = await resolveReadTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
+  // [FIX] Use JWT-verified session instead of trusting proxy headers
+  const sessionResolution = await resolveWriteSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, userId, role } = sessionResolution.session;
 
   const { id } = await params;
 

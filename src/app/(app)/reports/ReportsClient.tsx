@@ -76,11 +76,37 @@ export default function ReportsClient({
   const [importResult, setImportResult] = useState<TallyImportResult | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [importJobId, setImportJobId] = useState<string | null>(null);
-  const [jobProgress, setJobProgress] = useState({ processed: 0, total: 0, status: "" });
+  const [jobProgress, setJobProgress] = useState({ processed: 0, total: 0, status: "", stage: "queued" });
   const [preview, setPreview] = useState<TrialBalancePreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
 
   const exportBlocked = unbalancedCount > 0;
+
+  // Resume progress bar if an import job is already running (e.g. after page refresh)
+  useEffect(() => {
+    let cancelled = false;
+    async function checkActive() {
+      try {
+        const res = await fetch("/api/import/active");
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (data.active && data.jobId) {
+          setImportJobId(data.jobId);
+          setImporting(true);
+          setJobProgress({
+            processed: data.processed ?? 0,
+            total: data.totalItems ?? 0,
+            status: data.status ?? "PROCESSING",
+            stage: data.stage ?? "queued",
+          });
+        }
+      } catch {
+        // Ignore — non-critical
+      }
+    }
+    checkActive();
+    return () => { cancelled = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const presetOptions = useMemo(() => {
     const fy = getCurrentFinancialYearRange();
@@ -176,12 +202,13 @@ export default function ReportsClient({
         const res = await fetch(`/api/import/status/${importJobId}`);
         if (!res.ok) throw new Error("Failed to fetch job status");
         const data = await res.json();
-        const processed = data.processed ?? ((data.imported ?? 0) + (data.skipped ?? 0));
+        const processed = data.processed ?? 0;
 
         setJobProgress({
-          processed, // Total successfully or skipped processed
-          total: data.totalItems ?? data.totalDetected ?? processed,
+          processed,
+          total: data.totalItems ?? 0,
           status: data.status,
+          stage: data.stage ?? "queued",
         });
 
         if (data.status === "COMPLETED" || data.status === "FAILED") {
@@ -192,20 +219,20 @@ export default function ReportsClient({
           if (data.status === "COMPLETED") {
             setImportResult({
               partiesCreated: data.partiesCreated ?? 0,
-              imported: data.imported ?? data.processed ?? 0,
-              skipped: data.skipped ?? 0,
+              imported: Math.max(0, (data.processed ?? 0) - (data.failed ?? 0)),
+              skipped: 0,
               failed: data.failed ?? 0,
               parseErrors: data.parseErrors ?? [],
               importErrors: data.importErrors ?? [],
             });
           } else {
-            setImportError(data.error || "Job failed in background");
+            setImportError(data.error || "Import failed");
           }
         }
-      } catch (err) {
-        console.error(err);
+      } catch {
+        // Silently retry on next interval
       }
-    }, 2000);
+    }, 1500);
 
     return () => clearInterval(interval);
   }, [importJobId]);
@@ -221,28 +248,26 @@ export default function ReportsClient({
       const res = await fetch("/api/import/tally-xml", { method: "POST", body });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Import failed");
-      
-      if (data.status === "COMPLETED" || typeof data.imported === "number") {
-        setImportResult({
-          partiesCreated: data.partiesCreated ?? 0,
-          imported: data.imported ?? data.processed ?? 0,
-          skipped: data.skipped ?? 0,
-          failed: data.failed ?? 0,
-          parseErrors: data.parseErrors ?? [],
-          importErrors: data.importErrors ?? [],
-        });
-        setImporting(false);
-        setImportJobId(null);
-      } else if (data.jobId) {
-        setImportJobId(data.jobId);
-        setJobProgress({ processed: 0, total: data.totalDetected || 0, status: "PENDING" });
-      } else {
-        setImportResult(data as TallyImportResult);
-        setImporting(false);
-      }
+
+      setImportJobId(data.jobId);
+      setJobProgress({ processed: 0, total: data.totalDetected || 0, status: "PENDING", stage: "queued" });
     } catch (err) {
       setImportError(err instanceof Error ? err.message : "Import failed");
       setImporting(false);
+    }
+  }
+
+  async function handleCancelImport() {
+    if (!importJobId) return;
+    try {
+      const res = await fetch(`/api/import/cancel/${importJobId}`, { method: "POST" });
+      if (res.ok) {
+        setImportJobId(null);
+        setImporting(false);
+        setImportError("Import cancelled");
+      }
+    } catch {
+      // Ignore
     }
   }
 
@@ -491,20 +516,69 @@ export default function ReportsClient({
             </Button>
           </div>
 
-          {importJobId && (
-            <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm space-y-1">
-              <p className="font-medium text-primary">Import {jobProgress.status.toLowerCase()}...</p>
-              <div className="w-full bg-default-200 rounded-full h-2.5 dark:bg-default-700 mt-2">
-                <div
-                  className="bg-primary h-2.5 rounded-full"
-                  style={{ width: `${Math.max(5, (jobProgress.processed / (jobProgress.total || 1)) * 100)}%` }}
-                ></div>
+          {importJobId && (() => {
+            const stageLabels: Record<string, string> = {
+              queued: "Preparing import...",
+              parsing: "Parsing XML file...",
+              parties: "Creating party records...",
+              importing: `Importing vouchers... (${jobProgress.processed} of ${jobProgress.total})`,
+              balances: "Recomputing party balances...",
+              done: "Finalizing...",
+            };
+            const stageOrder = ["queued", "parsing", "parties", "importing", "balances", "done"];
+            const stageWeights: Record<string, number> = {
+              queued: 0, parsing: 5, parties: 15, importing: 80, balances: 95, done: 100,
+            };
+            const stage = jobProgress.stage || "queued";
+            const basePercent = stageWeights[stage] ?? 0;
+            // Within "importing" stage, interpolate between 15% and 80% based on voucher progress
+            const percent = stage === "importing" && jobProgress.total > 0
+              ? 15 + (jobProgress.processed / jobProgress.total) * 65
+              : basePercent;
+            const currentIdx = stageOrder.indexOf(stage);
+
+            return (
+              <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-4 text-sm space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="font-medium text-primary">
+                    {stageLabels[stage] ?? "Processing..."}
+                  </p>
+                  <span className="text-xs font-mono text-default-400">
+                    {Math.round(percent)}%
+                  </span>
+                </div>
+
+                <div className="w-full bg-default-200 rounded-full h-2.5 dark:bg-default-700 overflow-hidden">
+                  <div
+                    className="bg-primary h-2.5 rounded-full transition-all duration-700 ease-out"
+                    style={{ width: `${Math.max(3, percent)}%` }}
+                  />
+                </div>
+
+                <div className="flex justify-between text-xs text-default-400">
+                  {stageOrder.slice(1, -1).map((s, i) => (
+                    <span key={s} className={currentIdx > i + 1 ? "text-primary" : currentIdx === i + 1 ? "text-primary font-medium" : ""}>
+                      {s === "parsing" ? "Parse" : s === "parties" ? "Parties" : s === "importing" ? "Vouchers" : "Balances"}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-default-500">
+                    You can navigate away — progress resumes when you return.
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="flat"
+                    color="danger"
+                    onPress={handleCancelImport}
+                  >
+                    Cancel
+                  </Button>
+                </div>
               </div>
-              <p className="text-default-500 mt-1">
-                Processed {jobProgress.processed} of {jobProgress.total} items
-              </p>
-            </div>
-          )}
+            );
+          })()}
 
           {importError && (
             <p className="rounded-xl border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger">

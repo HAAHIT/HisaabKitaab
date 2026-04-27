@@ -2,8 +2,10 @@ import { prisma } from "@/lib/prisma";
 import {
   CHART_OF_ACCOUNTS,
   paymentModeToAccount,
+  partyTypeToAccountCode,
   type AccountCode,
 } from "@/lib/chart-of-accounts";
+import { getSettlementDirectionForParty } from "@/lib/accounting";
 import { roundTo2 } from "@/lib/journal-reporting";
 
 type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
@@ -39,7 +41,7 @@ interface JournalEntryParams {
 interface SalesBillJournalInput {
   id: string;
   billNumber: string;
-  partyId: string;
+  partyId: string | null;
   partyName: string;
   subtotal: number;
   taxAmount: number;
@@ -52,29 +54,34 @@ interface SalesBillJournalInput {
 
 interface PaymentJournalInput {
   id: string;
-  partyId: string;
-  partyName: string;
+  partyId: string | null;
+  partyName: string | null;
   amount: number;
   mode: string;
   date: Date;
   createdBy: string;
+  // [FIX #2] Contra entries need to know if accounts were CASH or BANK
+  sourceAccountType?: "CASH" | "BANK";
+  destAccountType?: "CASH" | "BANK";
 }
 
 interface PurchaseBillJournalInput {
   id: string;
-  vendorName: string;
-  partyId: string | null;
+  partyId: string;
+  partyName: string;
   subtotal: number;
   cgst: number;
   sgst: number;
   igst: number;
   grandTotal: number;
+  // [FIX #4] Purchase bills now support explicit round-off
+  roundOff?: number;
   isReverseCharge?: boolean;
   createdBy: string;
-  billDate: Date;
+  entryDate: Date;
 }
 
-function buildSalesTaxLines(
+export function buildSalesTaxLines(
   taxAmount: number,
   direction: "DEBIT" | "CREDIT",
   isInterState = false
@@ -107,6 +114,49 @@ function buildSalesTaxLines(
     },
     {
       accountCode: "SGST_OUTPUT" as const,
+      debit: direction === "DEBIT" ? otherHalf : 0,
+      credit: direction === "CREDIT" ? otherHalf : 0,
+    },
+  ];
+}
+
+/**
+ * Builds input-tax journal lines for purchase-side entries (purchase bills, debit notes).
+ * Mirrors buildSalesTaxLines but uses INPUT accounts (CGST_INPUT, SGST_INPUT, IGST_INPUT).
+ * Rounding follows Section 170 CGST Act (nearest rupee).
+ */
+export function buildPurchaseTaxLines(
+  taxAmount: number,
+  direction: "DEBIT" | "CREDIT",
+  isInterState = false
+) {
+  if (taxAmount <= 0) {
+    return [];
+  }
+
+  if (isInterState) {
+    const roundedIgst = Math.round(taxAmount);
+    return [
+      {
+        accountCode: "IGST_INPUT" as const,
+        debit: direction === "DEBIT" ? roundedIgst : 0,
+        credit: direction === "CREDIT" ? roundedIgst : 0,
+      },
+    ];
+  }
+
+  const roundedTax = Math.round(taxAmount);
+  const halfTax = Math.round(roundedTax / 2);
+  const otherHalf = roundedTax - halfTax;
+
+  return [
+    {
+      accountCode: "CGST_INPUT" as const,
+      debit: direction === "DEBIT" ? halfTax : 0,
+      credit: direction === "CREDIT" ? halfTax : 0,
+    },
+    {
+      accountCode: "SGST_INPUT" as const,
       debit: direction === "DEBIT" ? otherHalf : 0,
       credit: direction === "CREDIT" ? otherHalf : 0,
     },
@@ -295,8 +345,8 @@ export async function journalForPaymentReceived(
         accountCode: "SUNDRY_DEBTORS",
         debit: 0,
         credit: payment.amount,
-        partyId: payment.partyId,
-        partyName: payment.partyName,
+        partyId: payment.partyId || null,
+        partyName: payment.partyName || null,
       },
     ],
   });
@@ -319,13 +369,94 @@ export async function journalForPaymentMade(
         accountCode: "SUNDRY_CREDITORS",
         debit: payment.amount,
         credit: 0,
-        partyId: payment.partyId,
-        partyName: payment.partyName,
+        partyId: payment.partyId || null,
+        partyName: payment.partyName || null,
       },
       {
         accountCode: paymentModeToAccount(payment.mode),
         debit: 0,
         credit: payment.amount,
+      },
+    ],
+  });
+}
+
+export async function journalForContraEntry(
+  tx: PrismaTx,
+  tenantId: string,
+  payment: PaymentJournalInput
+) {
+  // A contra entry involves money moving from a source BankAccount to a destination BankAccount.
+  // sourceAccountType and destAccountType dictate if we use "BANK" or "CASH" for the lines.
+  const mainAccount = payment.sourceAccountType === "CASH" ? "CASH" : "BANK";
+  const otherAccount = payment.destAccountType === "CASH" ? "CASH" : "BANK";
+
+  return createJournalEntry(tx, {
+    tenantId,
+    entryDate: payment.date,
+    narration: `Contra Transfer (${payment.mode})`,
+    voucherType: "CONTRA",
+    paymentId: payment.id,
+    createdBy: payment.createdBy,
+    lines: [
+      {
+        // Credit the Source Account (Money goes OUT)
+        accountCode: mainAccount,
+        debit: 0,
+        credit: payment.amount,
+      },
+      {
+        // Debit the Destination Account (Money comes IN)
+        accountCode: otherAccount,
+        debit: payment.amount,
+        credit: 0,
+      },
+    ],
+  });
+}
+
+/**
+ * Generic journal entry for non-customer/vendor party types.
+ * Handles Expense, Income, Asset, Liability, and Equity payments
+ * by dynamically resolving the ledger account from the party type.
+ *
+ * Tally voucher mapping:
+ *   EXPENSE/ASSET/LIABILITY/EQUITY → PAYMENT voucher (money going out)
+ *   INCOME → RECEIPT voucher (money coming in)
+ */
+export async function journalForLedgerPayment(
+  tx: PrismaTx,
+  tenantId: string,
+  payment: PaymentJournalInput & { partyType: string }
+) {
+  const ledgerAccount = partyTypeToAccountCode(payment.partyType);
+  const bankAccount = paymentModeToAccount(payment.mode);
+  const isOutgoing =
+    getSettlementDirectionForParty(
+      payment.partyType as Parameters<typeof getSettlementDirectionForParty>[0]
+    ) === "OUTGOING";
+
+  return createJournalEntry(tx, {
+    tenantId,
+    entryDate: payment.date,
+    narration: `${isOutgoing ? "Payment to" : "Receipt from"} ${payment.partyName} (${payment.mode})`,
+    voucherType: isOutgoing ? "PAYMENT" : "RECEIPT",
+    paymentId: payment.id,
+    createdBy: payment.createdBy,
+    lines: [
+      {
+        accountCode: isOutgoing ? ledgerAccount : bankAccount,
+        debit: payment.amount,
+        credit: 0,
+        partyId: isOutgoing ? payment.partyId : null,
+        partyName: isOutgoing ? payment.partyName : null,
+      },
+      {
+        accountCode: isOutgoing ? bankAccount : ledgerAccount,
+        debit: 0,
+        credit: payment.amount,
+        partyId: isOutgoing ? null : payment.partyId,
+        partyName: isOutgoing ? null : payment.partyName,
       },
     ],
   });
@@ -337,7 +468,8 @@ export async function journalForPurchaseBill(
   purchase: PurchaseBillJournalInput
 ) {
   const theoreticalTotal = roundTo2(purchase.subtotal + purchase.cgst + purchase.sgst + purchase.igst);
-  const diff = roundTo2(purchase.grandTotal - theoreticalTotal);
+  // [FIX #4] Use explicit roundOff if provided, otherwise compute from drift
+  const diff = purchase.roundOff !== undefined ? purchase.roundOff : roundTo2(purchase.grandTotal - theoreticalTotal);
 
   const lines: JournalLineInput[] = [
     {
@@ -350,7 +482,7 @@ export async function journalForPurchaseBill(
       debit: 0,
       credit: purchase.grandTotal,
       partyId: purchase.partyId,
-      partyName: purchase.vendorName,
+      partyName: purchase.partyName,
     },
   ];
 
@@ -388,8 +520,8 @@ export async function journalForPurchaseBill(
 
   return createJournalEntry(tx, {
     tenantId,
-    entryDate: purchase.billDate,
-    narration: `Purchase from ${purchase.vendorName}`,
+    entryDate: purchase.entryDate,
+    narration: `Purchase from ${purchase.partyName}`,
     voucherType: "PURCHASE",
     purchaseId: purchase.id,
     isReverseCharge: purchase.isReverseCharge,

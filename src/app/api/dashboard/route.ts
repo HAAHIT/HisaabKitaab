@@ -1,20 +1,18 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { logError, getRequestId } from "@/lib/observability";
-import { resolveReadTenant } from "@/lib/api-tenant";
+import { resolveWriteSession } from "@/lib/api-tenant";
 
 // GET /api/dashboard — Dashboard aggregated data
 export async function GET(request: NextRequest) {
-  const role = request.headers.get("x-user-role");
+  // [FIX] Use JWT-verified session instead of trusting proxy headers
+  const sessionResolution = await resolveWriteSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, role } = sessionResolution.session;
 
-  if (!role || role === "CUSTOMER") {
+  if (role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantResolution = await resolveReadTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   try {
     const now = new Date();

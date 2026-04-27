@@ -2,7 +2,7 @@ import { Role } from "@prisma/client";
 import { hashPassword } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
-import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
+import { resolveWriteSession } from "@/lib/api-tenant";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { logError, getRequestId } from "@/lib/observability";
 
@@ -25,18 +25,17 @@ function normalizeOptionalString(value: unknown) {
 
 // GET /api/users — List all users (Admin only)
 export async function GET(request: NextRequest) {
-  const role = request.headers.get("x-user-role");
+  // [FIX] Use JWT-verified session instead of trusting proxy headers
+  const sessionResolution = await resolveWriteSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { role } = sessionResolution.session;
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-
-  const tenantResolution = await resolveReadTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
+  const tenantId = sessionResolution.session.tenantId;
 
   const users = await prisma.user.findMany({
-    where: { tenantId: tenantResolution.tenantId },
+    where: { tenantId },
     select: {
       id: true,
       name: true,
@@ -57,21 +56,14 @@ export async function POST(request: NextRequest) {
   const rateLimitResponse = await checkRateLimit(request, "users.create", 20);
   if (rateLimitResponse) return rateLimitResponse;
 
-  const role = request.headers.get("x-user-role");
-  const adminId = request.headers.get("x-user-id");
+  // [FIX] Use JWT-verified session instead of trusting proxy headers
+  const sessionResolution = await resolveWriteSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, userId: adminId, role } = sessionResolution.session;
 
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!adminId) {
-    return NextResponse.json({ error: "Missing user context" }, { status: 401 });
-  }
-
-  const tenantResolution = await resolveWriteTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   try {
     const body = await request.json();

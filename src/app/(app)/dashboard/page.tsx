@@ -34,7 +34,7 @@ interface DashboardData {
     direction: string;
     mode: string;
     date: string;
-    party: { name: string; type: string };
+    party: { name: string; type: string } | null;
   }[];
   billStats: { status: string; _count: number; _sum: { grandTotal: number | null } }[];
 }
@@ -50,7 +50,7 @@ function CashFlowBar({ data }: { data: DashboardData["cashFlow"] }) {
     <div className="flex items-end gap-2 h-40">
       {data.map((d) => (
         <div key={d.month} className="flex-1 flex flex-col items-center gap-1">
-          <div className="flex gap-[2px] w-full justify-center items-end h-[120px]">
+          <div className="flex gap-0.5 w-full justify-center items-end h-[120px]">
             <div
               className="w-3 bg-gradient-to-t from-green-500 to-emerald-400 rounded-t"
               style={{ height: `${(d.received / maxVal) * 100}%`, minHeight: d.received > 0 ? "4px" : "0" }}
@@ -99,7 +99,6 @@ export default function DashboardPage() {
       }
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') return;
-      console.warn("Dashboard fetch failed:", err);
       setError("Network connection interrupted");
     } finally {
       if (!controller.signal.aborted) {
@@ -181,7 +180,7 @@ export default function DashboardPage() {
     return (
       <div className="p-4 lg:p-8 space-y-4">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1,2,3,4].map((i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
+          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
         </div>
         <div className="grid lg:grid-cols-2 gap-4">
           <Skeleton className="h-64 rounded-xl" />
@@ -203,9 +202,9 @@ export default function DashboardPage() {
             The data fetch was interrupted. Please click the button below to reload your dashboard.
           </p>
         </div>
-        <Button 
-          color="primary" 
-          variant="flat" 
+        <Button
+          color="primary"
+          variant="flat"
           onPress={() => {
             setLoading(true);
             fetchDashboard();
@@ -234,7 +233,7 @@ export default function DashboardPage() {
   const billCount = data?.billStats?.reduce((acc, b) => acc + b._count, 0) || 0;
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, ease: "easeOut" }}
@@ -338,11 +337,11 @@ export default function DashboardPage() {
             {data?.cashFlow && data.cashFlow.length > 0 ? (
               <CashFlowBar data={data.cashFlow} />
             ) : (
-              <EmptyState 
-                icon={TrendingUp} 
-                title={t("dash.noPaymentData")} 
-                description="Record payments or expenses to visualize your monthly cash trajectory here." 
-                className="py-10 border-none shadow-none bg-transparent" 
+              <EmptyState
+                icon={TrendingUp}
+                title={t("dash.noPaymentData")}
+                description="Record payments or expenses to visualize your monthly cash trajectory here."
+                className="py-10 border-none shadow-none bg-transparent"
               />
             )}
           </CardBody>
@@ -360,7 +359,7 @@ export default function DashboardPage() {
                 {data.recentPayments.map((p) => (
                   <div key={p.id} className="flex items-center justify-between py-2 border-b border-divider/30 last:border-0">
                     <div>
-                      <p className="font-medium text-sm">{p.party.name}</p>
+                      <p className="font-medium text-sm">{p.party?.name || "Bank Transfer"}</p>
                       <p className="text-xs text-default-400">
                         {new Date(p.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })} • {p.mode.toLowerCase().replace("_", " ")}
                       </p>
@@ -372,11 +371,11 @@ export default function DashboardPage() {
                 ))}
               </div>
             ) : (
-              <EmptyState 
-                icon={Wallet} 
-                title={t("dash.noPayments")} 
-                description="No recent payments have been tracked. They will appear here." 
-                className="py-10 border-none shadow-none bg-transparent" 
+              <EmptyState
+                icon={Wallet}
+                title={t("dash.noPayments")}
+                description="No recent payments have been tracked. They will appear here."
+                className="py-10 border-none shadow-none bg-transparent"
               />
             )}
           </CardBody>
@@ -420,11 +419,11 @@ export default function DashboardPage() {
               ))}
               {(!data?.billStats || data.billStats.length === 0) && (
                 <div className="w-full pb-0">
-                  <EmptyState 
-                    icon={Receipt} 
-                    title={t("dash.noBills")} 
-                    description="You haven't generated any bills yet. Your bill summaries will appear here." 
-                    className="py-10 border-none shadow-none bg-transparent" 
+                  <EmptyState
+                    icon={Receipt}
+                    title={t("dash.noBills")}
+                    description="You haven't generated any bills yet. Your bill summaries will appear here."
+                    className="py-10 border-none shadow-none bg-transparent"
                   />
                 </div>
               )}

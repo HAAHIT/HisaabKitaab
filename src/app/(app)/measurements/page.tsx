@@ -173,7 +173,7 @@ export default function MeasurementsListPage() {
                     src={measurement.photos[0].thumbnailUrl || measurement.photos[0].url}
                     alt={measurement.label}
                     fill
-                    unoptimized
+                    quality={60}
                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                     className="object-cover"
                   />

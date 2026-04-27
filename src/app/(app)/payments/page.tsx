@@ -11,27 +11,50 @@ import {
   Select,
   SelectItem,
   Skeleton,
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  useDisclosure,
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { EditPaymentModal, type EditablePayment } from "./EditPaymentModal";
 
 interface Payment {
   id: string;
+  partyId: string | null;
+  accountId: string | null;
+  destinationAccountId: string | null;
   amount: number;
   direction: string;
   mode: string;
   status: string;
   date: string;
   notes: string | null;
-  party: { name: string; type: string };
+  party: { name: string; type: string } | null;
   linkedBill: { id: string; billNumber: string } | null;
 }
+
+const PencilIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+  </svg>
+);
+
+const TrashIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+  </svg>
+);
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(value);
 }
 
@@ -58,6 +81,11 @@ export default function PaymentsListPage() {
     message: string;
     type: "success" | "error";
   } | null>(null);
+  const [paymentToDelete, setPaymentToDelete] = useState<Payment | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [paymentToEdit, setPaymentToEdit] = useState<Payment | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   const monthlyPaymentGroups = useMemo(() => {
     const monthFormatter = new Intl.DateTimeFormat("en-IN", {
@@ -192,6 +220,28 @@ export default function PaymentsListPage() {
     }
   }
 
+  async function handleDeletePayment() {
+    if (!paymentToDelete) return;
+    setIsDeleting(true);
+    try {
+      const res = await fetch(`/api/payments/${paymentToDelete.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw res;
+      showToast(t("payments.deletedSuccess") || "Payment deleted", "success");
+      await fetchPayments();
+      setIsDeleteModalOpen(false);
+      setPaymentToDelete(null);
+    } catch (error) {
+      showToast(
+        error instanceof Error ? (error as any).message || "Delete failed" : t("payments.deleteFailed"),
+        "error"
+      );
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
   return (
     <div className="animate-fade-in p-4 lg:p-8">
       <div className="mb-6 flex items-center justify-between">
@@ -222,9 +272,8 @@ export default function PaymentsListPage() {
 
       {toast && (
         <div
-          className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${
-            toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
-          }`}
+          className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
+            }`}
         >
           {toast.message}
         </div>
@@ -349,9 +398,8 @@ export default function PaymentsListPage() {
                           <span className="text-warning">-{formatCurrency(group.outgoingTotal)}</span>
                         </div>
                         <svg
-                          className={`h-4 w-4 text-default-500 transition-transform ${
-                            isCollapsed ? "" : "rotate-180"
-                          }`}
+                          className={`h-4 w-4 text-default-500 transition-transform ${isCollapsed ? "" : "rotate-180"
+                            }`}
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
@@ -372,15 +420,16 @@ export default function PaymentsListPage() {
                         <Card
                           key={payment.id}
                           shadow="sm"
-                          className={`transition hover:shadow-md ${
-                            payment.status === "EXPECTED" ? "border-l-4 border-l-warning" : ""
-                          }`}
+                          className={`transition hover:shadow-md ${payment.status === "EXPECTED" ? "border-l-4 border-l-warning" : ""
+                            }`}
                         >
                           <CardBody className="p-4">
                             <div className="flex items-center justify-between">
                               <div className="flex flex-col gap-1">
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <span className="font-semibold">{payment.party.name}</span>
+                                  <span className="font-semibold">
+                                    {payment.party ? payment.party.name : "Bank/Cash Transfer"}
+                                  </span>
                                   <Chip
                                     size="sm"
                                     variant="flat"
@@ -425,9 +474,8 @@ export default function PaymentsListPage() {
 
                               <div className="flex items-center gap-3">
                                 <p
-                                  className={`text-lg font-bold ${
-                                    payment.direction === "INCOMING" ? "text-success" : "text-warning"
-                                  }`}
+                                  className={`text-lg font-bold ${payment.direction === "INCOMING" ? "text-success" : "text-warning"
+                                    }`}
                                 >
                                   {payment.direction === "INCOMING" ? "+" : "-"}
                                   {formatCurrency(payment.amount)}
@@ -443,6 +491,29 @@ export default function PaymentsListPage() {
                                     {t("payments.markCompleted")}
                                   </Button>
                                 )}
+                                <Button
+                                  isIconOnly
+                                  variant="light"
+                                  size="sm"
+                                  onPress={() => {
+                                    setPaymentToEdit(payment);
+                                    setIsEditModalOpen(true);
+                                  }}
+                                >
+                                  <PencilIcon className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  isIconOnly
+                                  variant="light"
+                                  color="danger"
+                                  size="sm"
+                                  onPress={() => {
+                                    setPaymentToDelete(payment);
+                                    setIsDeleteModalOpen(true);
+                                  }}
+                                >
+                                  <TrashIcon className="h-4 w-4" />
+                                </Button>
                               </div>
                             </div>
                           </CardBody>
@@ -462,6 +533,58 @@ export default function PaymentsListPage() {
           )}
         </>
       )}
+
+      <EditPaymentModal
+        payment={paymentToEdit as EditablePayment | null}
+        isOpen={isEditModalOpen}
+        onClose={() => { setIsEditModalOpen(false); setPaymentToEdit(null); }}
+        onSuccess={() => { showToast("Payment updated", "success"); fetchPayments(); }}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onOpenChange={(open) => setIsDeleteModalOpen(open)}
+        backdrop="blur"
+        placement="center"
+        classNames={{
+          backdrop: "bg-black/60",
+        }}
+      >
+        <ModalContent>
+          {(onClose) => (
+            <>
+              <ModalHeader className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-full bg-danger/10">
+                    <TrashIcon className="w-5 h-5 text-danger" />
+                  </div>
+                  <span className="text-xl font-bold">Delete Transaction</span>
+                </div>
+              </ModalHeader>
+              <ModalBody>
+                <p className="text-default-500">
+                  Are you sure you want to delete this transaction for <span className="font-semibold text-foreground">{formatCurrency(paymentToDelete?.amount || 0)}</span>?
+                  This will reverse the balances and this action cannot be undone.
+                </p>
+              </ModalBody>
+              <ModalFooter>
+                <Button variant="flat" onPress={onClose} disabled={isDeleting}>
+                  Cancel
+                </Button>
+                <Button
+                  color="danger"
+                  onPress={handleDeletePayment}
+                  isLoading={isDeleting}
+                  className="font-semibold shadow-lg shadow-danger/20"
+                >
+                  Delete Transaction
+                </Button>
+              </ModalFooter>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
     </div>
   );
 }

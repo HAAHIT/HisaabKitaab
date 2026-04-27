@@ -217,7 +217,7 @@ export default function MyUploadsPage() {
                                   src={photo}
                                   alt={`${draft.label} draft ${index + 1}`}
                                   fill
-                                  unoptimized
+                                  quality={60}
                                   className="object-cover"
                                 />
                               </div>
@@ -292,7 +292,7 @@ export default function MyUploadsPage() {
                                     src={photo.thumbnailUrl || photo.url}
                                     alt={`${upload.label} ${index + 1}`}
                                     fill
-                                    unoptimized
+                                    quality={60}
                                     className="object-cover"
                                   />
                                 </div>

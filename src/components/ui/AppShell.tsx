@@ -116,6 +116,16 @@ const MORE_ITEMS: NavItem[] = [
   {
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0012 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75z" />
+      </svg>
+    ),
+    translationKey: "nav.banking" as any,
+    href: "/banking",
+    roles: ["ADMIN", "STAFF", "ACCOUNTANT"],
+  },
+  {
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 14l-4-4m0 0l4-4m-4 4h12M15 10l4 4m0 0l-4 4m4-4H3" />
       </svg>
     ),
@@ -320,8 +330,8 @@ export default function AppShell({
                   whileTap={{ scale: 0.96 }}
                   onClick={() => router.push(item.href)}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group ${isActive(item.href)
-                      ? "bg-primary/10 text-primary font-semibold"
-                      : "text-default-600 hover:bg-default-100 hover:text-default-900"
+                    ? "bg-primary/10 text-primary font-semibold"
+                    : "text-default-600 hover:bg-default-100 hover:text-default-900"
                     }`}
                 >
                   <span
@@ -355,8 +365,8 @@ export default function AppShell({
                 <button
                   onClick={() => router.push("/settings/users")}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group ${pathname === "/settings/users"
-                      ? "bg-primary/10 text-primary font-semibold"
-                      : "text-default-600 hover:bg-default-100 hover:text-default-900"
+                    ? "bg-primary/10 text-primary font-semibold"
+                    : "text-default-600 hover:bg-default-100 hover:text-default-900"
                     }`}
                 >
                   <svg className="w-5 h-5 flex-shrink-0 text-default-400 group-hover:text-default-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -376,8 +386,8 @@ export default function AppShell({
                 <button
                   onClick={() => router.push("/settings/templates")}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group ${pathname.startsWith("/settings/templates")
-                      ? "bg-primary/10 text-primary font-semibold"
-                      : "text-default-600 hover:bg-default-100 hover:text-default-900"
+                    ? "bg-primary/10 text-primary font-semibold"
+                    : "text-default-600 hover:bg-default-100 hover:text-default-900"
                     }`}
                 >
                   <svg className="w-5 h-5 flex-shrink-0 text-default-400 group-hover:text-default-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -397,8 +407,8 @@ export default function AppShell({
                 <button
                   onClick={() => router.push("/settings/company")}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group ${pathname === "/settings/company"
-                      ? "bg-primary/10 text-primary font-semibold"
-                      : "text-default-600 hover:bg-default-100 hover:text-default-900"
+                    ? "bg-primary/10 text-primary font-semibold"
+                    : "text-default-600 hover:bg-default-100 hover:text-default-900"
                     }`}
                 >
                   <svg className="w-5 h-5 flex-shrink-0 text-default-400 group-hover:text-default-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -418,8 +428,8 @@ export default function AppShell({
                 <button
                   onClick={() => router.push("/settings/items")}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group ${pathname === "/settings/items"
-                      ? "bg-primary/10 text-primary font-semibold"
-                      : "text-default-600 hover:bg-default-100 hover:text-default-900"
+                    ? "bg-primary/10 text-primary font-semibold"
+                    : "text-default-600 hover:bg-default-100 hover:text-default-900"
                     }`}
                 >
                   <svg
@@ -578,8 +588,8 @@ export default function AppShell({
                   key={item.href}
                   onClick={() => router.push(item.href)}
                   className={`flex flex-col items-center gap-1.5 rounded-2xl px-4 py-2 transition-all ${isActive
-                      ? "bg-primary/15 text-primary shadow-[0_4px_12px_rgba(59,130,246,0.1)]"
-                      : "text-default-500 hover:bg-default-100/50"
+                    ? "bg-primary/15 text-primary shadow-[0_4px_12px_rgba(59,130,246,0.1)]"
+                    : "text-default-500 hover:bg-default-100/50"
                     }`}
                 >
                   <div

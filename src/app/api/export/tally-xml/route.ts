@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { resolveReadTenant } from "@/lib/api-tenant";
+import { resolveWriteSession } from "@/lib/api-tenant";
 import { parseIndianDateRange } from "@/lib/journal-reporting";
 import { logError, getRequestId } from "@/lib/observability";
 import { CHART_OF_ACCOUNTS } from "@/lib/chart-of-accounts";
@@ -11,6 +11,7 @@ import {
   resolveExportVoucherType,   // [A4] Sales Return detection for cancellation entries
   journalLineToTallyEntry,
   type TallyPartyMaster,
+  type TallyItemMaster,
   type TallyVoucher,
   type TallyInventoryEntry,
   type TallyVoucherType,
@@ -75,16 +76,15 @@ function extractHsnRatePairs(
 
     let hsnCode =
       typeof r["_hsnCode"] === "string" ? r["_hsnCode"].trim() : null;
-    
+
     if (!hsnCode && billLevelHsn) hsnCode = billLevelHsn.trim();
-    if (!hsnCode) continue;
 
     // Per-line rate is present only when the UI writes _taxPercent per row
     const rawRate = r["_taxPercent"];
     if (typeof rawRate === "number" && Number.isFinite(rawRate)) {
       hasPerLineRate = true;
-      pairs.push({ hsnCode, taxPercent: rawRate });
-    } else if (typeof billLevelTaxPercent === "number" && Number.isFinite(billLevelTaxPercent)) {
+      pairs.push({ hsnCode: hsnCode || "", taxPercent: rawRate });
+    } else if (hsnCode && typeof billLevelTaxPercent === "number" && Number.isFinite(billLevelTaxPercent)) {
       // Fallback: use the bill-level rate for this HSN
       pairs.push({ hsnCode, taxPercent: billLevelTaxPercent });
     }
@@ -178,16 +178,14 @@ function mapRowsToInventoryEntries(
  * Access: ADMIN and ACCOUNTANT only.
  */
 export async function GET(request: NextRequest) {
-  const role = request.headers.get("x-user-role");
+  // [FIX] Use JWT-verified session instead of trusting proxy headers
+  const sessionResolution = await resolveWriteSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, role } = sessionResolution.session;
 
   if (role !== "ADMIN" && role !== "ACCOUNTANT") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantResolution = await resolveReadTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   const { searchParams } = new URL(request.url);
   const from = searchParams.get("from");
@@ -220,9 +218,9 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Block export if any entries are unbalanced
+    // [FIX #38] Scope unbalanced check to export date range (was blocking all exports)
     const unbalanced = await prisma.journalEntry.count({
-      where: { tenantId, isBalanced: false },
+      where: { tenantId, isBalanced: false, entryDate: { gte: fromDate, lte: toDate } },
     });
     if (unbalanced > 0) {
       return NextResponse.json(
@@ -243,8 +241,10 @@ export async function GET(request: NextRequest) {
 
     let xml = "";
 
-    // ── Party masters ────────────────────────────────────────────────────────
+    // ── Party & Item masters ────────────────────────────────────────────────────────
     let allMastersToExport: TallyPartyMaster[] = [];
+    let allItemsToExport: TallyItemMaster[] = [];
+    let allUnitsToExport: string[] = [];
 
     if (type === "masters" || type === "all") {
       const parties = await prisma.party.findMany({
@@ -261,15 +261,28 @@ export async function GET(request: NextRequest) {
         orderBy: { name: "asc" },
       });
 
-      const fetchedParties = parties.map((p: (typeof parties)[number]) => ({
-        name: p.name,
-        group: p.type === "CUSTOMER" ? "Sundry Debtors" : "Sundry Creditors",
-        openingBalance: p.openingBalance.toNumber(),
-        phone: p.phone,
-        email: p.email,
-        address: p.address,
-        gstin: p.gstin,
-      }));
+      const fetchedParties = parties.map((p: (typeof parties)[number]) => {
+        let tallyGroup = "Sundry Debtors";
+        switch (p.type) {
+          case "CUSTOMER": tallyGroup = "Sundry Debtors"; break;
+          case "VENDOR": tallyGroup = "Sundry Creditors"; break;
+          case "EXPENSE": tallyGroup = "Indirect Expenses"; break;
+          case "INCOME": tallyGroup = "Indirect Incomes"; break;
+          case "ASSET": tallyGroup = "Current Assets"; break;
+          case "LIABILITY": tallyGroup = "Current Liabilities"; break;
+          case "EQUITY": tallyGroup = "Capital Account"; break;
+        }
+
+        return {
+          name: p.name,
+          group: tallyGroup,
+          openingBalance: p.openingBalance.toNumber(),
+          phone: p.phone,
+          email: p.email,
+          address: p.address,
+          gstin: p.gstin,
+        };
+      });
 
       const standardLedgers: TallyPartyMaster[] = Object.values(CHART_OF_ACCOUNTS).map(acc => ({
         name: acc.name,
@@ -279,8 +292,15 @@ export async function GET(request: NextRequest) {
 
       allMastersToExport = [...standardLedgers, ...fetchedParties];
 
+      const catalogItems = await prisma.itemCatalog.findMany({
+        where: { tenantId },
+        select: { name: true, unit: true },
+      });
+      allItemsToExport = catalogItems.map(i => ({ name: i.name, unit: i.unit }));
+      allUnitsToExport = Array.from(new Set(catalogItems.map(i => i.unit)));
+
       if (type === "masters") {
-        xml = buildTallyPartyMasterXml(allMastersToExport, companyName);
+        xml = buildTallyPartyMasterXml(allMastersToExport, allItemsToExport, allUnitsToExport, companyName);
         return xmlResponse(xml, `tally_masters_${from}_to_${to}.xml`);
       }
     }
@@ -416,10 +436,10 @@ export async function GET(request: NextRequest) {
           inventoryEntries:
             billData && billData.template
               ? mapRowsToInventoryEntries(
-                  billData.rows as any[],
-                  billData.template as any,
-                  resolveExportVoucherType(entry.voucherType, entry.narration)
-                )
+                billData.rows as any[],
+                billData.template as any,
+                resolveExportVoucherType(entry.voucherType, entry.narration)
+              )
               : undefined,
           ledgerEntries: entry.lines.map((line) => {
             const tallyEntry = journalLineToTallyEntry({
@@ -475,7 +495,7 @@ export async function GET(request: NextRequest) {
       }
 
       // For "all" — append vouchers after masters
-      let combinedXml = buildCombinedXml(allMastersToExport, vouchers, companyName, from, to);
+      let combinedXml = buildCombinedXml(allMastersToExport, allItemsToExport, allUnitsToExport, vouchers, companyName, from, to);
       if (hsnWarningComment) {
         combinedXml = combinedXml.replace(
           '<?xml version="1.0" encoding="UTF-8"?>',
@@ -506,12 +526,14 @@ function xmlResponse(xml: string, filename: string, hsnMissingCount = 0) {
 
 function buildCombinedXml(
   parties: TallyPartyMaster[],
+  items: TallyItemMaster[],
+  units: string[],
   vouchers: TallyVoucher[],
   companyName: string,
   from: string,
   to: string
 ): string {
-  const combinedXml = buildCombinedTallyXml(parties, vouchers, companyName);
+  const combinedXml = buildCombinedTallyXml(parties, items, units, vouchers, companyName);
   return combinedXml.replace(
     '<?xml version="1.0" encoding="UTF-8"?>\n<ENVELOPE>',
     `<?xml version="1.0" encoding="UTF-8"?>\n<!-- HisaabKitaab Tally Export: ${from} to ${to} -->\n<ENVELOPE>`

@@ -27,8 +27,16 @@ export function numberToIndianWords(amount: number): string {
     if (amount === 0) return "Zero Rupees Only";
 
     const absAmount = Math.abs(amount);
-    const rupees = Math.floor(absAmount);
-    const paise = Math.round((absAmount - rupees) * 100);
+    // [FIX #3] Round to 2 decimal places first to avoid floating-point drift
+    // where paise could become 100 (e.g. 99.995 → paise=100).
+    const rounded = Math.round(absAmount * 100) / 100;
+    let rupees = Math.floor(rounded);
+    let paise = Math.round((rounded - rupees) * 100);
+    // Safety clamp: if paise somehow reaches 100, roll over
+    if (paise >= 100) {
+        rupees += 1;
+        paise = 0;
+    }
 
     let result = "";
 

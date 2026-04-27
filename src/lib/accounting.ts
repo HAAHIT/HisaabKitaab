@@ -1,6 +1,7 @@
 import { roundTo2 } from "./journal-reporting";
+import { type PartyType } from "@prisma/client";
 
-export type SupportedPartyType = "CUSTOMER" | "VENDOR";
+export type SupportedPartyType = PartyType;
 export type SupportedPayDirection = "INCOMING" | "OUTGOING";
 export type SupportedBillStatus = "DRAFT" | "FINAL" | "CANCELLED";
 export type PartyLedgerEntryType = "BILL" | "PAYMENT" | "OPENING" | "NOTE";
@@ -94,7 +95,18 @@ export function getPaymentBalanceDelta(
 export function getSettlementDirectionForParty(
   partyType: SupportedPartyType
 ): SupportedPayDirection {
-  return partyType === "CUSTOMER" ? "INCOMING" : "OUTGOING";
+  switch (partyType) {
+    case "CUSTOMER":
+    case "INCOME":
+    case "ASSET":
+      return "INCOMING";
+    case "VENDOR":
+    case "EXPENSE":
+    case "LIABILITY":
+    case "EQUITY":
+    default:
+      return "OUTGOING";
+  }
 }
 
 export function getBillBalanceDelta(
@@ -144,16 +156,17 @@ export function getLedgerAmountsForBalanceDelta(
     return { debit: 0, credit: 0 };
   }
 
-  const positiveIsDebit = partyType === "VENDOR";
+  const positiveIsCredit = getSettlementDirectionForParty(partyType) === "INCOMING";
+
   if (balanceDelta > 0) {
-    return positiveIsDebit
-      ? { debit: amount, credit: 0 }
-      : { debit: 0, credit: amount };
+    return positiveIsCredit
+      ? { debit: 0, credit: amount }
+      : { debit: amount, credit: 0 };
   }
 
-  return positiveIsDebit
-    ? { debit: 0, credit: amount }
-    : { debit: amount, credit: 0 };
+  return positiveIsCredit
+    ? { debit: amount, credit: 0 }
+    : { debit: 0, credit: amount };
 }
 
 export function getBalanceIndicator(
@@ -164,7 +177,8 @@ export function getBalanceIndicator(
     return null;
   }
 
-  if (partyType === "CUSTOMER") {
+  const positiveIsCredit = getSettlementDirectionForParty(partyType) === "INCOMING";
+  if (positiveIsCredit) {
     return balance > 0 ? "Cr" : "Dr";
   }
 
@@ -183,14 +197,16 @@ export function getBalanceStatusLabel(
     return "advance balance";
   }
 
-  return partyType === "CUSTOMER" ? "to receive" : "to pay";
+  const isReceiveNature = getSettlementDirectionForParty(partyType) === "INCOMING";
+  return isReceiveNature ? "to receive" : "to pay";
 }
 
 export function getPartyBalanceColor(partyType: SupportedPartyType, balance: number) {
   const v = Math.round(balance * 100) / 100;
   if (v === 0) return "text-default-400";
   if (v > 0) return "text-warning";
-  return partyType === "CUSTOMER" ? "text-success" : "text-danger";
+  const isGood = getSettlementDirectionForParty(partyType) === "INCOMING";
+  return isGood ? "text-success" : "text-danger";
 }
 
 export function formatPartyBalance(balance: number) {
@@ -198,7 +214,7 @@ export function formatPartyBalance(balance: number) {
   const formatted = new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
-    maximumFractionDigits: 0,
+    maximumFractionDigits: 2,
   }).format(Math.abs(v));
 
   if (v === 0) return formatted;

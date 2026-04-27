@@ -55,6 +55,141 @@ const FALLBACK_BY_VOUCHER: Record<string, AccountCode> = {
   JOURNAL: "SUNDRY_DEBTORS",
 };
 
+// ── Tally group → AccountCode mapping ───────────────────────────────────────
+// Maps Tally's standard account group names (as they appear in <PARENT>) to
+// our internal AccountCode. Used when LEDGER records are present in the XML
+// (e.g. Master.xml combined with DayBook, or an "All Masters" export).
+// "Duties & Taxes" is handled specially — see resolveGstAccountCode.
+
+const TALLY_GROUP_TO_ACCOUNT_CODE: Record<string, AccountCode> = {
+  "Sales Accounts": "SALES",
+  "Purchase Accounts": "PURCHASE",
+  "Sundry Debtors": "SUNDRY_DEBTORS",
+  "Sundry Creditors": "SUNDRY_CREDITORS",
+  "Bank Accounts": "BANK",
+  "Bank OD A/c": "BANK",
+  "Cash-in-Hand": "CASH",
+  "Capital Account": "OWNER_EQUITY",
+  "Reserves & Surplus": "OWNER_EQUITY",
+  "Direct Expenses": "DIRECT_EXPENSE",
+  "Indirect Expenses": "INDIRECT_EXPENSE",
+  "Direct Incomes": "DIRECT_INCOME",
+  "Indirect Incomes": "INDIRECT_INCOME",
+  "Fixed Assets": "FIXED_ASSETS",
+  "Investments": "FIXED_ASSETS",
+  "Loans & Advances (Asset)": "LOANS_ADVANCES",
+  "Current Assets": "CURRENT_ASSETS",
+  "Current Liabilities": "CURRENT_LIABILITIES",
+  "Provisions": "CURRENT_LIABILITIES",
+  "Secured Loans": "CURRENT_LIABILITIES",
+  "Unsecured Loans": "CURRENT_LIABILITIES",
+  "Loans (Liability)": "CURRENT_LIABILITIES",
+  "Deposits (Asset)": "CURRENT_ASSETS",
+  "Stock-in-Hand": "CURRENT_ASSETS",
+  "Misc. Expenses (ASSET)": "CURRENT_ASSETS",
+  "Suspense A/c": "CURRENT_ASSETS",
+  "Branch / Divisions": "CURRENT_ASSETS",
+};
+
+/**
+ * Resolves CGST/SGST/IGST + PAYABLE/RECEIVABLE from ledger name.
+ * Handles Tally naming quirks: "C Gst Payable @ 6%", "C-GST Receivable",
+ * "S Gst Receiceivable @ 6%" (typos), etc.
+ */
+function resolveGstAccountCode(ledgerName: string): AccountCode {
+  const upper = ledgerName.toUpperCase();
+  const isCgst = /\bC[\s-]?GST\b/i.test(ledgerName) || upper.includes("CGST");
+  const isSgst = /\bS[\s-]?GST\b/i.test(ledgerName) || upper.includes("SGST");
+  const isIgst = /\bI[\s-]?GST\b/i.test(ledgerName) || upper.includes("IGST");
+  // "RECEIV" catches both "RECEIVABLE" and Tally typos like "RECEICEIVABLE"
+  const isReceivable = upper.includes("RECEIV");
+
+  if (isCgst) return isReceivable ? "CGST_INPUT" : "CGST_OUTPUT";
+  if (isSgst) return isReceivable ? "SGST_INPUT" : "SGST_OUTPUT";
+  if (isIgst) return isReceivable ? "IGST_INPUT" : "IGST_OUTPUT";
+
+  // GST Liability / TDS under Duties & Taxes
+  if (upper.includes("TDS") || upper.includes("TAX DEDUCTED")) return "CURRENT_LIABILITIES";
+  return "CURRENT_LIABILITIES"; // generic duties & taxes fallback
+}
+
+/**
+ * Resolves AccountCode using the Tally group name from a LEDGER record.
+ * "Duties & Taxes" delegates to resolveGstAccountCode for sub-classification.
+ */
+function resolveFromTallyGroup(
+  group: string,
+  ledgerName: string
+): AccountCode | null {
+  if (group === "Duties & Taxes") return resolveGstAccountCode(ledgerName);
+  return TALLY_GROUP_TO_ACCOUNT_CODE[group] ?? null;
+}
+
+/**
+ * Pattern-based heuristic for resolving AccountCode from ledger names when
+ * no LEDGER group info is available (e.g. DayBook-only import without Master.xml).
+ *
+ * Patterns are ordered from most-specific to least-specific.
+ * Returns null for unrecognised names (caller falls back to voucher-type inference).
+ */
+function resolveAccountCodeByPattern(ledgerName: string): AccountCode | null {
+  const upper = ledgerName.toUpperCase();
+
+  // ── GST tax accounts (Duties & Taxes) ─────────────────────────────────────
+  const isCgst = /\bC[\s-]?GST\b/i.test(ledgerName) || upper.includes("CGST");
+  const isSgst = /\bS[\s-]?GST\b/i.test(ledgerName) || upper.includes("SGST");
+  const isIgst = /\bI[\s-]?GST\b/i.test(ledgerName) || upper.includes("IGST");
+
+  if (isCgst || isSgst || isIgst) {
+    const isReceivable = upper.includes("RECEIV");
+    if (isCgst) return isReceivable ? "CGST_INPUT" : "CGST_OUTPUT";
+    if (isSgst) return isReceivable ? "SGST_INPUT" : "SGST_OUTPUT";
+    if (isIgst) return isReceivable ? "IGST_INPUT" : "IGST_OUTPUT";
+  }
+
+  // ── GST-prefixed sales / purchase accounts ────────────────────────────────
+  // "Gst Sales @ 18 %", "Igst Sales @ 12 %"
+  if (/\bI?GST\s+SALES\b/i.test(ledgerName)) return "SALES";
+  if (/\bI?GST\s+PURCHASE/i.test(ledgerName)) return "PURCHASE";
+
+  // ── Sales A/c pattern ─────────────────────────────────────────────────────
+  // "Online Payment Sales A/c", "Cash Sales A/c"
+  if (/SALES\s*A\/?C/i.test(ledgerName)) return "SALES";
+
+  // ── Purchases A/c pattern ─────────────────────────────────────────────────
+  // "Computer Purchases A/c.", "Furniture Purchases A/c."
+  if (/PURCHASES?\s*A\/?C/i.test(ledgerName)) return "PURCHASE";
+
+  // ── Debit Note / Credit Note accounts ─────────────────────────────────────
+  if (/\bDEBIT\s*NOTE\b/i.test(ledgerName)) return "PURCHASE";
+  if (/\bCREDIT\s*NOTE\b/i.test(ledgerName)) return "SALES";
+
+  // ��─ Round off ─────────────────────────��───────────────────────────────────
+  // "Rounded Off A/.C", "Round Off"
+  if (/\bROUND/i.test(ledgerName)) return "ROUND_OFF";
+
+  // ── Bank accounts ─────────────────────────────────────────────────────────
+  // "HDFC Bank Ltd, Current A/c", "State Bank of India Current Account"
+  // Requires "Bank" + qualifying suffix to avoid matching party names like "Bank Road Traders"
+  if (/\bBANK\b/i.test(ledgerName) && /\b(A\/?C|LTD|ACCOUNT|CURRENT)\b/i.test(ledgerName)) return "BANK";
+
+  // ── Expense accounts ──────────────────────────────────────────────────────
+  // "Telephone Expenses A/c.", "Bank Commission Exp.A/c.", "Purchases Expenses A/c."
+  if (/EXP(?:ENSES?)?\.?\s*A\/?C/i.test(ledgerName)) return "INDIRECT_EXPENSE";
+  if (/\bDEPRECIATION\b/i.test(ledgerName)) return "INDIRECT_EXPENSE";
+
+  // ── Capital / Partner accounts ────────────────────────────────────────────
+  // "Atul S Doshi Current A/c", "Dhaval Nishit Doshi Fixed Capital A/c."
+  if (/CAPITAL\s*A\/?C/i.test(ledgerName)) return "OWNER_EQUITY";
+
+  // ── TDS / Tax liability ────���──────────────────────────────────────────────
+  // "Income Tax Tax Deducted At Source A/C", "GST (TDS) A/C"
+  if (/\bTDS\b/i.test(ledgerName) || /TAX\s*DEDUCTED/i.test(ledgerName)) return "CURRENT_LIABILITIES";
+  if (/\bGST\s*LIABILITY\b/i.test(ledgerName)) return "CURRENT_LIABILITIES";
+
+  return null;
+}
+
 /**
  * Maps Tally's voucher type name strings (both HisaabKitaab exports and
  * native TallyPrime exports) to our internal VoucherType enum values.
@@ -149,6 +284,11 @@ export type ParsedVoucher = {
    * Key names match standard HisaabKitaab template columns (Item, Qty, Rate, Amount).
    */
   inventoryRows?: Record<string, any>[];
+  /**
+   * [FIX #12] Hash-based fingerprint for idempotency when no REMOTEID is present.
+   * Generated from (date + reference + totalDebit + narration + lineCount).
+   */
+  fingerprint: string;
 };
 
 export type ParsedPartyMaster = {
@@ -161,9 +301,17 @@ export type ParsedPartyMaster = {
   address: string | null;
 };
 
+export type ParsedBankMaster = {
+  name: string;
+  type: "BANK" | "CASH";
+  openingBalance: number;
+  accountNumber: string | null;
+};
+
 export type TallyParseResult = {
   vouchers: ParsedVoucher[];
   partyMasters: ParsedPartyMaster[];
+  bankMasters: ParsedBankMaster[];
   parseErrors: string[];
 };
 
@@ -182,11 +330,19 @@ export function parseTallyDate(raw: unknown): Date | null {
   const s = String(raw ?? "").trim();
   if (s.length !== 8) return null;
   const year = parseInt(s.slice(0, 4), 10);
-  const month = parseInt(s.slice(4, 6), 10) - 1;
+  const monthRaw = parseInt(s.slice(4, 6), 10);
   const day = parseInt(s.slice(6, 8), 10);
+
+  // [FIX #15] Explicitly validate month and day bounds to catch malformed Tally dates
+  if (monthRaw < 1 || monthRaw > 12 || day < 1 || day > 31) return null;
+
+  const month = monthRaw - 1;
   // 06:30 UTC = 12:00 noon IST — date string is unambiguous in every timezone
   const d = new Date(Date.UTC(year, month, day, 6, 30, 0));
-  return isNaN(d.getTime()) ? null : d;
+  if (isNaN(d.getTime())) return null;
+  // [FIX #37] Validate day didn't roll over (e.g. Feb 31 → Mar 3)
+  if (d.getUTCMonth() !== month || d.getUTCDate() !== day) return null;
+  return d;
 }
 
 function parseAmount(raw: unknown): number {
@@ -219,6 +375,7 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
   const parseErrors: string[] = [];
   const vouchers: ParsedVoucher[] = [];
   const partyMasters: ParsedPartyMaster[] = [];
+  const bankMasters: ParsedBankMaster[] = [];
 
   let parsed: Record<string, unknown>;
   try {
@@ -242,6 +399,7 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
     return {
       vouchers: [],
       partyMasters: [],
+      bankMasters: [],
       parseErrors: [
         `XML parse error: ${err instanceof Error ? err.message : String(err)}`,
       ],
@@ -301,25 +459,62 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
     }
   } catch {
     parseErrors.push("Could not locate TALLYMESSAGE elements in XML");
-    return { vouchers, partyMasters, parseErrors };
+    return { vouchers, partyMasters, bankMasters, parseErrors };
   }
 
   if (messageCollections.length === 0) {
     parseErrors.push("No TALLYMESSAGE elements found in XML");
-    return { vouchers, partyMasters, parseErrors };
+    return { vouchers, partyMasters, bankMasters, parseErrors };
   }
 
   const allMessages = messageCollections.flat();
 
+  // ── Phase 1: Build ledger → group map from LEDGER records ─────────────────
+  // When the XML contains LEDGER definitions (e.g. Master.xml or combined
+  // export), we extract each ledger's PARENT group. This allows accurate
+  // AccountCode resolution for voucher entries that reference these ledgers.
+  const ledgerGroupMap = new Map<string, string>();
+  for (const rawMsg of allMessages) {
+    const m = rawMsg as Record<string, unknown>;
+    if (!m["LEDGER"]) continue;
+    const ledger = m["LEDGER"] as Record<string, unknown>;
+    const name = String(ledger["NAME"] ?? ledger["@_NAME"] ?? "").trim();
+    const parent = String(ledger["PARENT"] ?? "").trim();
+    if (name && parent) {
+      ledgerGroupMap.set(name, parent);
+    }
+  }
+
+  // ── Phase 2: Process party masters and vouchers ───────────────────────────
   for (let i = 0; i < allMessages.length; i++) {
     const msg = allMessages[i] as Record<string, unknown>;
 
-    // ── Party master ─────────────────────────────────────────────────────────
+    // ── Ledger master ──────────────────────────────────────────────────────
     if (msg["LEDGER"]) {
       const ledger = msg["LEDGER"] as Record<string, unknown>;
       const name = String(ledger["NAME"] ?? ledger["@_NAME"] ?? "").trim();
       const parent = String(ledger["PARENT"] ?? "").trim();
       if (!name) continue;
+
+      // ── Bank / Cash account ─────────────────────────────────────────────
+      const upperParent = parent.toUpperCase();
+      if (upperParent === "BANK ACCOUNTS" || upperParent === "BANK OD ACCOUNTS" || upperParent === "CASH-IN-HAND") {
+        const openingBalance = parseAmount(ledger["OPENINGBALANCE"]);
+        const rawAccNo = ledger["BANKACCTNO"] ?? ledger["ACCOUNTNUMBER"];
+        const accountNumber = typeof rawAccNo === "string" && rawAccNo.trim().length > 0
+          ? rawAccNo.trim()
+          : null;
+
+        bankMasters.push({
+          name,
+          type: upperParent === "CASH-IN-HAND" ? "CASH" : "BANK",
+          openingBalance,
+          accountNumber,
+        });
+        continue;
+      }
+
+      // ── Party master (Sundry Debtors / Creditors) ───────────────────────
       if (parent !== "Sundry Debtors" && parent !== "Sundry Creditors") continue;
       const openingBalance = parseAmount(ledger["OPENINGBALANCE"]);
 
@@ -445,18 +640,40 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
 
       if (absAmount === 0) continue;
 
-      const resolvedCode = LEDGER_TO_CODE[ledgerName];
-      // Unknown ledger name = treat as party ledger; infer group from voucher type
+      // ── AccountCode resolution chain ──────────────────────────────────
+      // 1. Exact match in LEDGER_TO_CODE (HisaabKitaab exports + common Tally names)
+      // 2. Group-based: use PARENT from LEDGER records in the same XML
+      // 3. Pattern-based: heuristic on the ledger name itself
+      // 4. Fallback: infer from voucher type (assumes unknown name is a party)
+      const exactCode = LEDGER_TO_CODE[ledgerName];
+      const groupCode = !exactCode && ledgerGroupMap.has(ledgerName)
+        ? resolveFromTallyGroup(ledgerGroupMap.get(ledgerName)!, ledgerName)
+        : null;
+      const patternCode = !exactCode && !groupCode
+        ? resolveAccountCodeByPattern(ledgerName)
+        : null;
       const accountCode: AccountCode =
-        resolvedCode ?? FALLBACK_BY_VOUCHER[voucherType] ?? "SUNDRY_DEBTORS";
+        exactCode ?? groupCode ?? patternCode ?? FALLBACK_BY_VOUCHER[voucherType] ?? "SUNDRY_DEBTORS";
+
+      // Track whether resolution identified this as a known account (vs party name).
+      // exactCode: known by static map. groupCode/patternCode: known by group/pattern.
+      // If none matched, the ledger name is an unknown party name.
+      const isResolvedAsKnownAccount = !!(exactCode || groupCode || patternCode);
 
       // BILLALLOCATIONS.LIST > NAME is the bill/outstanding reference in Tally,
       // not reliably the party name. Prefer PARTYLEDGERNAME for generic party
       // ledgers, and use the ledger name itself for native exports where the
       // party ledger is named directly.
       const billAllocName = extractBillAllocationName(e);
+
+      // Party name resolution:
+      // - Unknown ledger (fell through to fallback) AND resolved to party account
+      //   → the ledger name itself IS the party (native Tally naming convention)
+      // - Exact-match to a party account code (e.g. HisaabKitaab "Sundry Debtors")
+      //   → use voucher-level PARTYLEDGERNAME or BILLALLOCATIONS
+      // - Non-party account → null
       const partyName =
-        resolvedCode === undefined
+        (!isResolvedAsKnownAccount && isPartyAccountCode(accountCode))
           ? ledgerName
           : isPartyAccountCode(accountCode)
             ? partyLedgerName ?? (billAllocName && billAllocName !== reference ? billAllocName : null)
@@ -544,6 +761,22 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       });
     }
 
+    // [FIX #12] Generate a stable fingerprint for this voucher.
+    // This allows the importer to detect duplicates even for native Tally exports 
+    // that don't have a stable GUID/REMOTEID, preventing duplicate journal entries.
+    const fingerprintSource = [
+      entryDate.toISOString().slice(0, 10),
+      reference,
+      totalDebit.toFixed(2),
+      narration,
+      lines.length,
+    ].join("|");
+    // Simple non-cryptographic hash for fingerprinting
+    const fingerprint = Array.from(fingerprintSource).reduce(
+      (hash, char) => (hash << 5) - hash + char.charCodeAt(0),
+      0
+    ).toString(36);
+
     vouchers.push({
       voucherType,
       originalTypeName: typeName,
@@ -553,6 +786,7 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       lines,
       totalDebit,
       remoteId,
+      fingerprint,
       placeOfSupply,
       taxPercent: parsedTaxPercent,
       hsnCodes: parsedHsnCodes,
@@ -561,5 +795,5 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
     });
   }
 
-  return { vouchers, partyMasters, parseErrors };
+  return { vouchers, partyMasters, bankMasters, parseErrors };
 }

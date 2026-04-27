@@ -19,10 +19,21 @@ interface Props {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   onSuccess: (party: any) => void;
-  initialType?: "CUSTOMER" | "VENDOR";
+  initialType?: string;
+  allowedTypes?: string[];
 }
 
-export function QuickAddPartyModal({ isOpen, onOpenChange, onSuccess, initialType = "CUSTOMER" }: Props) {
+const TYPE_LABELS: Record<string, string> = {
+  CUSTOMER: "Customer",
+  VENDOR: "Vendor",
+  EXPENSE: "Expense",
+  INCOME: "Income",
+  ASSET: "Asset",
+  LIABILITY: "Liability",
+  EQUITY: "Equity",
+};
+
+export function QuickAddPartyModal({ isOpen, onOpenChange, onSuccess, initialType = "CUSTOMER", allowedTypes = ["CUSTOMER", "VENDOR"] }: Props) {
   const { t } = useLanguage();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -73,18 +84,18 @@ export function QuickAddPartyModal({ isOpen, onOpenChange, onSuccess, initialTyp
   }
 
   return (
-      <Modal 
-        isOpen={isOpen} 
-        onOpenChange={onOpenChange} 
-        size="md" 
-        backdrop="blur"
-        motionProps={{
-          variants: {
-            enter: { y: 0, opacity: 1, scale: 1, transition: { duration: 0.3, ease: "easeOut" } },
-            exit: { y: -20, opacity: 0, scale: 0.95, transition: { duration: 0.2, ease: "easeIn" } },
-          }
-        }}
-      >
+    <Modal
+      isOpen={isOpen}
+      onOpenChange={onOpenChange}
+      size="md"
+      backdrop="blur"
+      motionProps={{
+        variants: {
+          enter: { y: 0, opacity: 1, scale: 1, transition: { duration: 0.3, ease: "easeOut" } },
+          exit: { y: -20, opacity: 0, scale: 0.95, transition: { duration: 0.2, ease: "easeIn" } },
+        }
+      }}
+    >
       <ModalContent>
         {(onClose) => (
           <>
@@ -95,7 +106,7 @@ export function QuickAddPartyModal({ isOpen, onOpenChange, onSuccess, initialTyp
                   {error}
                 </div>
               )}
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, ease: "easeOut" }}
@@ -129,8 +140,17 @@ export function QuickAddPartyModal({ isOpen, onOpenChange, onSuccess, initialTyp
                   selectedKeys={[type]}
                   onSelectionChange={(keys) => setType(Array.from(keys)[0] as string)}
                 >
-                  <SelectItem key="CUSTOMER">{t("parties.customerType")}</SelectItem>
-                  <SelectItem key="VENDOR">{t("parties.vendorType")}</SelectItem>
+                  {allowedTypes.map((tKey) => {
+                    const translationKey = `parties.${tKey.toLowerCase()}Type` as any;
+                    const translated = t(translationKey);
+                    // If t() returns the key itself, fallback to TYPE_LABELS
+                    const label = translated === translationKey ? (TYPE_LABELS[tKey] || tKey) : translated;
+                    return (
+                      <SelectItem key={tKey}>
+                        {label}
+                      </SelectItem>
+                    );
+                  })}
                 </Select>
               </motion.div>
             </ModalBody>

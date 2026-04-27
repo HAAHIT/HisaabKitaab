@@ -627,6 +627,8 @@ export default function EditBillPage({
                               }
                             }}
                             className="min-w-[200px]"
+                            size="sm"
+                            variant="underlined"
                             placeholder={column.name}
                           />
                         ) : column.type === "number" ? (
@@ -773,16 +775,15 @@ export default function EditBillPage({
                     const isAutoDetected = !!(partyState && tenantState);
                     return (
                       <div className="flex flex-col items-end gap-0.5">
-                        <label className={`flex items-center gap-1.5 select-none ${isAutoDetected ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}>
-                          <input
-                            type="checkbox"
-                            checked={isInterState}
-                            onChange={(e) => setIsInterState(e.target.checked)}
-                            className="accent-primary"
-                            disabled={isAutoDetected}
-                          />
+                        <Checkbox
+                          isSelected={isInterState}
+                          onValueChange={setIsInterState}
+                          isDisabled={isAutoDetected}
+                          size="sm"
+                          className={isAutoDetected ? "opacity-60 cursor-not-allowed" : ""}
+                        >
                           <span className="text-xs text-default-500">Inter-state (IGST)</span>
-                        </label>
+                        </Checkbox>
                         {isAutoDetected && (
                           <span className="text-[10px] text-default-400">Auto-detected from GST Numbers</span>
                         )}

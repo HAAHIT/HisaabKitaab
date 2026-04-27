@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Button,
   Card,
@@ -12,6 +12,7 @@ import {
   Select,
   SelectItem,
   Textarea,
+  Checkbox,
 } from "@heroui/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
@@ -76,6 +77,7 @@ export default function NewBillPage() {
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingAs, setSavingAs] = useState<"DRAFT" | "FINAL" | null>(null);
+  const savingRef = useRef(false);
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   const [toast, setToast] = useState<{
     message: string;
@@ -96,21 +98,28 @@ export default function NewBillPage() {
   const [enableRoundOff, setEnableRoundOff] = useState(false);
   const [shippingAddress, setShippingAddress] = useState("");
   const [showShipTo, setShowShipTo] = useState(false);
+  const [paymentMode, setPaymentMode] = useState<"CREDIT" | "CASH" | "BANK_TRANSFER" | "UPI">("CREDIT");
+  const [bankAccounts, setBankAccounts] = useState<{ id: string; name: string; type: string; currentBalance: number }[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState<string>("");
 
   const fetchFormData = useCallback(async () => {
     setLoading(true);
     try {
-      const [templatesResponse, settingsResponse] = await Promise.all([
+      const [templatesResponse, settingsResponse, bankResponse] = await Promise.all([
         fetch("/api/templates"),
         fetch("/api/settings"),
+        fetch("/api/bank-accounts"),
       ]);
 
-      const [templatesData, settingsData] = await Promise.all([
+      const [templatesData, settingsData, bankData] = await Promise.all([
         templatesResponse.json().catch(() => ({ templates: [] })),
         settingsResponse.json().catch(() => ({ settings: null })),
+        bankResponse.json().catch(() => []),
       ]);
 
       setTemplates(templatesData.templates || []);
+      const accounts = Array.isArray(bankData) ? bankData : bankData.accounts || [];
+      setBankAccounts(accounts);
 
       if (settingsData.settings) {
         setTerms(settingsData.settings.defaultTerms || "");
@@ -292,7 +301,8 @@ export default function NewBillPage() {
     }
 
     const formErrors: Record<string, boolean> = {};
-    if (!selectedParty) {
+    const isCashSale = paymentMode !== "CREDIT";
+    if (!selectedParty && !isCashSale) {
       formErrors.partyId = true;
     }
     if (status === "FINAL" && !placeOfSupply) {
@@ -308,11 +318,21 @@ export default function NewBillPage() {
     }
 
     const currentParty = selectedParty;
-    if (!currentParty) {
-      showToast("Please select a party", "error");
-      return;
+
+    // [FIX #28] Block submission if any formula columns produced NaN
+    if (status === "FINAL") {
+      const hasNaN = rows.some(row =>
+        Object.values(row).some(v => typeof v === "number" && !Number.isFinite(v))
+      );
+      if (hasNaN) {
+        showToast("Some row values are invalid (NaN). Please check formula columns.", "error");
+        return;
+      }
     }
 
+    // [FIX #22] Double-submit protection
+    if (savingRef.current) return;
+    savingRef.current = true;
     setErrors({});
     setSavingAs(status);
 
@@ -322,11 +342,12 @@ export default function NewBillPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           templateId: selectedTemplate.id,
-          partyId: currentParty.id,
-          customerName: currentParty.name,
-          customerPhone: currentParty.phone || null,
-          customerAddress: currentParty.address || null,
-          gstin: currentParty.gstin || null,
+          partyId: currentParty && currentParty.type !== "CASH_ACCOUNT" && currentParty.type !== "BANK_ACCOUNT"
+            ? currentParty.id : null,
+          customerName: currentParty?.name || (paymentMode === "CASH" ? "Cash" : "Customer"),
+          customerPhone: currentParty?.phone || null,
+          customerAddress: currentParty?.address || null,
+          gstin: currentParty?.gstin || null,
           rows,
           subtotal,
           taxPercent: 0,
@@ -341,6 +362,7 @@ export default function NewBillPage() {
           terms: terms.trim() || null,
           status,
           date: billDate,
+          ...(paymentMode !== "CREDIT" ? { paymentMode, accountId: selectedAccountId || undefined } : {}),
         }),
       });
 
@@ -354,6 +376,7 @@ export default function NewBillPage() {
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Failed to save bill", "error");
     } finally {
+      savingRef.current = false;
       setSavingAs(null);
     }
   }
@@ -510,27 +533,40 @@ export default function NewBillPage() {
                 <PartySearch
                   value={selectedParty?.id || null}
                   onChange={(party) => {
-                    setSelectedParty(party);
-                    if (party) {
+                    if (party && (party.type === "CASH_ACCOUNT" || party.type === "BANK_ACCOUNT")) {
+                      // Bank/Cash account selected — set payment mode and account
+                      const realAccountId = party.id.replace("bank:", "");
+                      setSelectedAccountId(realAccountId);
+                      setPaymentMode(party.type === "CASH_ACCOUNT" ? "CASH" : "BANK_TRANSFER");
+                      setSelectedParty(party);
                       setErrors((prev) => ({ ...prev, partyId: false }));
-                      // Auto-fill place of supply from first 2 digits of customer GSTIN
-                      if (party.gstin && party.gstin.length >= 2) {
-                        const code = party.gstin.substring(0, 2);
-                        if (GST_STATE_CODES[code]) setPlaceOfSupply(code);
-                      }
-                      // Auto-derive interstate from GSTIN comparison
-                      const partyState = extractGstinStateCode(party.gstin);
-                      const tenantState = extractGstinStateCode(tenantGstin);
-                      if (partyState && tenantState) {
-                        setIsInterState(partyState !== tenantState);
+                    } else {
+                      setSelectedParty(party);
+                      if (party) {
+                        setErrors((prev) => ({ ...prev, partyId: false }));
+                        setPaymentMode("CREDIT");
+                        setSelectedAccountId("");
+                        if (party.gstin && party.gstin.length >= 2) {
+                          const code = party.gstin.substring(0, 2);
+                          if (GST_STATE_CODES[code]) setPlaceOfSupply(code);
+                        }
+                        const partyState = extractGstinStateCode(party.gstin);
+                        const tenantState = extractGstinStateCode(tenantGstin);
+                        if (partyState && tenantState) {
+                          setIsInterState(partyState !== tenantState);
+                        }
+                      } else {
+                        setPaymentMode("CREDIT");
+                        setSelectedAccountId("");
                       }
                     }
                   }}
                   partyType="CUSTOMER"
-                  placeholder={t("bills.selectCustomer")}
+                  placeholder="Select Party / Cash / Bank"
                   autoFocus={!selectedParty}
                   isInvalid={Boolean(errors.partyId)}
                   initialParty={preselectedParty}
+                  includeBankAccounts
                 />
 
                 {selectedParty && (
@@ -540,39 +576,58 @@ export default function NewBillPage() {
                       <Button
                         size="sm"
                         variant="light"
-                        onPress={() => setSelectedParty(null)}
+                        onPress={() => {
+                          setSelectedParty(null);
+                          setPaymentMode("CREDIT");
+                          setSelectedAccountId("");
+                        }}
                       >
                         {t("common.change")}
                       </Button>
                     </div>
 
-                    <div className="space-y-1 text-sm text-default-500">
-                      {selectedParty.phone && (
-                        <p className="flex items-center gap-2">
-                          <span>📱</span> {selectedParty.phone}
-                        </p>
-                      )}
-                      {selectedParty.address && (
-                        <p className="flex items-center gap-2">
-                          <span>📍</span> {selectedParty.address}
-                        </p>
-                      )}
-                      {selectedParty.gstin && (
-                        <p className="flex items-center gap-2">
-                          <span className="text-xs font-mono font-bold tracking-widest text-default-400">GST</span> {selectedParty.gstin}
-                        </p>
-                      )}
-                    </div>
-
-                    {selectedParty.currentBalance !== 0 && (
-                      <div className={`mt-3 pt-3 border-t border-default-200 text-sm font-medium flex items-center gap-2 ${selectedParty.currentBalance < 0 ? "text-success" : "text-danger"
-                        }`}>
-                        <div className={`w-2 h-2 rounded-full ${selectedParty.currentBalance < 0 ? "bg-success" : "bg-danger"}`} />
-                        {selectedParty.currentBalance < 0
-                          ? `To Get: ₹${Math.abs(selectedParty.currentBalance).toLocaleString("en-IN")}`
-                          : `To Pay: ₹${selectedParty.currentBalance.toLocaleString("en-IN")}`
-                        }
+                    {selectedParty.type === "CASH_ACCOUNT" || selectedParty.type === "BANK_ACCOUNT" ? (
+                      <div className="text-sm text-default-500">
+                        <Chip size="sm" color={selectedParty.type === "CASH_ACCOUNT" ? "warning" : "primary"} variant="flat">
+                          {selectedParty.type === "CASH_ACCOUNT" ? "Cash A/c" : "Bank A/c"}
+                        </Chip>
+                        {selectedParty.currentBalance !== 0 && (
+                          <span className="ml-3 text-default-400">
+                            Balance: {formatCurrency(selectedParty.currentBalance)}
+                          </span>
+                        )}
                       </div>
+                    ) : (
+                      <>
+                        <div className="space-y-1 text-sm text-default-500">
+                          {selectedParty.phone && (
+                            <p className="flex items-center gap-2">
+                              <span>📱</span> {selectedParty.phone}
+                            </p>
+                          )}
+                          {selectedParty.address && (
+                            <p className="flex items-center gap-2">
+                              <span>📍</span> {selectedParty.address}
+                            </p>
+                          )}
+                          {selectedParty.gstin && (
+                            <p className="flex items-center gap-2">
+                              <span className="text-xs font-mono font-bold tracking-widest text-default-400">GST</span> {selectedParty.gstin}
+                            </p>
+                          )}
+                        </div>
+
+                        {selectedParty.currentBalance !== 0 && (
+                          <div className={`mt-3 pt-3 border-t border-default-200 text-sm font-medium flex items-center gap-2 ${selectedParty.currentBalance < 0 ? "text-success" : "text-danger"
+                            }`}>
+                            <div className={`w-2 h-2 rounded-full ${selectedParty.currentBalance < 0 ? "bg-success" : "bg-danger"}`} />
+                            {selectedParty.currentBalance < 0
+                              ? `To Get: ₹${Math.abs(selectedParty.currentBalance).toLocaleString("en-IN")}`
+                              : `To Pay: ₹${selectedParty.currentBalance.toLocaleString("en-IN")}`
+                            }
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 )}
@@ -606,7 +661,7 @@ export default function NewBillPage() {
                     </svg>
                   }
                 >
-                  Add Row
+                  Add Row (पंक्ति जोड़ें)
                 </Button>
               </CardHeader>
               <CardBody className="overflow-x-auto p-6">
@@ -704,6 +759,8 @@ export default function NewBillPage() {
                                   }
                                 }}
                                 className="min-w-[200px]"
+                                size="sm"
+                                variant="underlined"
                                 placeholder={column.name}
                               />
                             ) : column.type === "number" ? (
@@ -712,7 +769,7 @@ export default function NewBillPage() {
                                 aria-label={`Row ${rowIndex + 1} ${column.name}`}
                                 value={String(row[column.id] || "")}
                                 onValueChange={(value) => updateCell(rowIndex, column.id, value)}
-                                variant="underlined"
+                                variant="bordered"
                                 size="sm"
                                 className="min-w-[80px]"
                               />
@@ -727,7 +784,7 @@ export default function NewBillPage() {
                                     updateCell(rowIndex, column.id, value);
                                   }
                                 }}
-                                variant="underlined"
+                                variant="bordered"
                                 size="sm"
                                 className="min-w-[120px]"
                               >
@@ -742,7 +799,7 @@ export default function NewBillPage() {
                                 aria-label={`Row ${rowIndex + 1} ${column.name}`}
                                 value={String(row[column.id] || "")}
                                 onValueChange={(value) => updateCell(rowIndex, column.id, value)}
-                                variant="underlined"
+                                variant="bordered"
                                 size="sm"
                                 className="min-w-[130px]"
                               />
@@ -752,7 +809,7 @@ export default function NewBillPage() {
                                 aria-label={`Row ${rowIndex + 1} ${column.name}`}
                                 value={String(row[column.id] || "")}
                                 onValueChange={(value) => updateCell(rowIndex, column.id, value)}
-                                variant="underlined"
+                                variant="bordered"
                                 size="sm"
                                 className="min-w-[120px]"
                               />
@@ -807,15 +864,13 @@ export default function NewBillPage() {
                   />
                   {/* Ship To Address */}
                   <div>
-                    <label className="flex items-center gap-1.5 select-none cursor-pointer mb-2">
-                      <input
-                        type="checkbox"
-                        checked={showShipTo}
-                        onChange={(e) => setShowShipTo(e.target.checked)}
-                        className="accent-primary"
-                      />
+                    <Checkbox
+                      isSelected={showShipTo}
+                      onValueChange={setShowShipTo}
+                      className="mb-2"
+                    >
                       <span className="text-sm text-default-600">Ship to a different address</span>
-                    </label>
+                    </Checkbox>
                     {showShipTo && (
                       <Textarea
                         label="Shipping Address"
@@ -851,16 +906,15 @@ export default function NewBillPage() {
                         const isAutoDetected = !!selectedParty?.gstin;
                         return (
                           <div className="flex flex-col items-end gap-0.5">
-                            <label className={`flex items-center gap-1.5 select-none ${isAutoDetected ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}>
-                              <input
-                                type="checkbox"
-                                checked={isInterState}
-                                onChange={(e) => setIsInterState(e.target.checked)}
-                                className="accent-primary"
-                                disabled={isAutoDetected}
-                              />
+                            <Checkbox
+                              isSelected={isInterState}
+                              onValueChange={setIsInterState}
+                              isDisabled={isAutoDetected}
+                              size="sm"
+                              className={isAutoDetected ? "opacity-60 cursor-not-allowed" : ""}
+                            >
                               <span className="text-xs text-default-500">Inter-state (IGST)</span>
-                            </label>
+                            </Checkbox>
                             {isAutoDetected && (
                               <span className="text-[10px] text-default-400">Auto-detected from GST Numbers</span>
                             )}
@@ -884,18 +938,71 @@ export default function NewBillPage() {
                       />
                     </div>
                     <Divider />
+                    {/* Payment Mode */}
+                    <div className="space-y-2">
+                      {selectedParty?.type === "CASH_ACCOUNT" || selectedParty?.type === "BANK_ACCOUNT" ? (
+                        <div className="flex items-center justify-between rounded-lg bg-default-100 px-3 py-2">
+                          <span className="text-sm text-default-500">Payment</span>
+                          <Chip size="sm" color="primary" variant="flat">
+                            {selectedParty.type === "CASH_ACCOUNT" ? "Cash" : "Bank Transfer"} — {selectedParty.name}
+                          </Chip>
+                        </div>
+                      ) : (
+                        <>
+                          <Select
+                            label="Payment Mode"
+                            variant="bordered"
+                            size="sm"
+                            selectedKeys={[paymentMode]}
+                            onSelectionChange={(keys) => {
+                              const mode = [...keys][0] as typeof paymentMode;
+                              setPaymentMode(mode);
+                              if (mode === "CASH") {
+                                const cashAcc = bankAccounts.find((a) => a.type === "CASH");
+                                if (cashAcc) setSelectedAccountId(cashAcc.id);
+                              } else if (mode === "BANK_TRANSFER" || mode === "UPI") {
+                                const bankAcc = bankAccounts.find((a) => a.type === "BANK");
+                                if (bankAcc) setSelectedAccountId(bankAcc.id);
+                              } else {
+                                setSelectedAccountId("");
+                              }
+                            }}
+                          >
+                            <SelectItem key="CREDIT">Credit (Party owes)</SelectItem>
+                            <SelectItem key="CASH">Cash</SelectItem>
+                            <SelectItem key="BANK_TRANSFER">Bank Transfer</SelectItem>
+                            <SelectItem key="UPI">UPI</SelectItem>
+                          </Select>
+                          {paymentMode !== "CREDIT" && bankAccounts.length > 0 && (
+                            <Select
+                              label="Account"
+                              variant="bordered"
+                              size="sm"
+                              selectedKeys={selectedAccountId ? [selectedAccountId] : []}
+                              onSelectionChange={(keys) => setSelectedAccountId([...keys][0] as string)}
+                            >
+                              {bankAccounts
+                                .filter((a) => paymentMode === "CASH" ? a.type === "CASH" : a.type === "BANK")
+                                .map((a) => (
+                                  <SelectItem key={a.id}>{a.name}</SelectItem>
+                                ))}
+                            </Select>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    <Divider />
                     {/* Round-Off Toggle */}
                     <div className="flex items-center justify-between">
-                      <label className={`flex items-center gap-1.5 select-none ${grandTotal === 0 ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
-                        <input
-                          type="checkbox"
-                          checked={enableRoundOff}
-                          onChange={(e) => setEnableRoundOff(e.target.checked)}
-                          className="accent-primary"
-                          disabled={grandTotal === 0}
-                        />
+                      <Checkbox
+                        isSelected={enableRoundOff}
+                        onValueChange={setEnableRoundOff}
+                        isDisabled={grandTotal === 0}
+                        size="sm"
+                        className={grandTotal === 0 ? 'opacity-50 cursor-not-allowed' : ''}
+                      >
                         <span className="text-xs text-default-500">Round off to nearest ₹</span>
-                      </label>
+                      </Checkbox>
                       {enableRoundOff && roundOff !== 0 && (
                         <span className={`text-sm font-mono ${roundOff > 0 ? 'text-success' : 'text-danger'}`}>
                           {roundOff > 0 ? '+' : ''}{formatCurrency(roundOff)}

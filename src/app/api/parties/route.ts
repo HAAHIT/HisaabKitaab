@@ -1,12 +1,20 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import type { Prisma, PartyType } from "@prisma/client";
-import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
+import { resolveWriteSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { isValidGstinFormat } from "@/lib/gst-helpers";
 
-const VALID_PARTY_TYPES = new Set<PartyType>(["CUSTOMER", "VENDOR"]);
+const VALID_PARTY_TYPES = new Set<PartyType>([
+  "CUSTOMER",
+  "VENDOR",
+  "EXPENSE",
+  "INCOME",
+  "ASSET",
+  "LIABILITY",
+  "EQUITY"
+]);
 
 function isPartyType(value: string | undefined): value is PartyType {
   return Boolean(value && VALID_PARTY_TYPES.has(value as PartyType));
@@ -32,20 +40,19 @@ function parseOpeningBalance(value: unknown) {
 
 // GET /api/parties — List all parties with balance info
 export async function GET(request: NextRequest) {
-  const role = request.headers.get("x-user-role");
+  // [FIX] Use JWT-verified session instead of trusting proxy headers
+  const sessionResolution = await resolveWriteSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, role } = sessionResolution.session;
 
-  if (!role || role === "CUSTOMER") {
+  if (role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantResolution = await resolveReadTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   const { searchParams } = new URL(request.url);
   const search = searchParams.get("search") || "";
   const type = searchParams.get("type") || "";
+  const typesParam = searchParams.get("types") || "";
   const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
   const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10)));
 
@@ -58,7 +65,15 @@ export async function GET(request: NextRequest) {
     ];
   }
 
-  if (type && type !== "ALL" && VALID_PARTY_TYPES.has(type as PartyType)) {
+  if (typesParam) {
+    const types = typesParam
+      .split(",")
+      .map(t => t.trim().toUpperCase())
+      .filter((t) => VALID_PARTY_TYPES.has(t as PartyType)) as PartyType[];
+    if (types.length > 0) {
+      where.type = { in: types };
+    }
+  } else if (type && type !== "ALL" && VALID_PARTY_TYPES.has(type as PartyType)) {
     where.type = type as PartyType;
   }
 
@@ -83,20 +98,14 @@ export async function POST(request: NextRequest) {
   const rateLimitResponse = await checkRateLimit(request, "parties.create", 20);
   if (rateLimitResponse) return rateLimitResponse;
 
-  const role = request.headers.get("x-user-role");
-  const userId = request.headers.get("x-user-id");
+  // [FIX] Use JWT-verified session instead of trusting proxy headers
+  const sessionResolution = await resolveWriteSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, userId, role } = sessionResolution.session;
 
-  if (!role || role === "CUSTOMER") {
+  if (role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!userId) {
-    return NextResponse.json({ error: "Missing user context" }, { status: 401 });
-  }
-  const tenantResolution = await resolveWriteTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   try {
     const body = await request.json();
@@ -167,7 +176,15 @@ export async function POST(request: NextRequest) {
     }, { isolationLevel: "RepeatableRead" });
 
     return NextResponse.json({ party }, { status: 201 });
-  } catch (error) {
+  } catch (error: any) {
+    if (error.code === "P2002") {
+      logError("parties.create.duplicate", { requestId: getRequestId(request) });
+      return NextResponse.json(
+        { error: "A party or ledger with this exact name already exists." },
+        { status: 409 }
+      );
+    }
+
     logError("parties.create.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Internal server error" },

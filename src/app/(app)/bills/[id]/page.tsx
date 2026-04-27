@@ -17,7 +17,11 @@ import {
   Skeleton,
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
+import { Printer, Pencil, CheckCircle, XCircle } from "lucide-react";
 import { BillActionBar } from "@/components/bills/BillActionBar";
+import { BillHeader } from "@/components/bills/BillHeader";
+import { BillSummary, type TaxSlab } from "@/components/bills/BillSummary";
+import { BillFooter } from "@/components/bills/BillFooter";
 import type { ColumnDef } from "@/lib/formula";
 import { shareBill } from "@/lib/share";
 import { numberToIndianWords } from "@/lib/number-to-words";
@@ -275,76 +279,115 @@ export default function BillDetailPage({
       {/* Screen UI: Hidden on Print */}
       <div className="no-print">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <Button
-              isIconOnly
-              variant="light"
-              aria-label="Back to list"
-              onPress={() => router.push(bill.party?.type === "VENDOR" ? "/purchases" : "/bills")}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-            </Button>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold font-mono">{bill.billNumber}</h1>
-                <Chip size="sm" variant="flat" color={statusColorMap[bill.status]} className="capitalize">{bill.status.toLowerCase()}</Chip>
-              </div>
-              <p className="text-default-500 text-sm">
-                {new Date(bill.createdAt).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "long", year: "numeric" })} • by {bill.creator.name}
-              </p>
-            </div>
-          </div>
+        <BillHeader
+          documentNumber={bill.billNumber}
+          documentLabel={bill.party?.type === "VENDOR" ? "Purchase Bill" : "Tax Invoice"}
+          date={new Date(bill.createdAt).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "long", year: "numeric" })}
+          status={bill.status}
+          theme="primary"
+          createdBy={bill.creator.name}
+          backPath={bill.party?.type === "VENDOR" ? "/purchases" : "/bills"}
+          actions={
+            <>
+              <Button variant="flat" size="sm" startContent={<Printer className="h-3.5 w-3.5" />} onPress={() => window.print()}>Print</Button>
+              {bill.status === "DRAFT" && (
+                <>
+                  <Button variant="bordered" size="sm" startContent={<Pencil className="h-3.5 w-3.5" />} onPress={() => router.push(`/bills/${id}/edit`)}>Edit</Button>
+                  <Button color="success" size="sm" variant="flat" startContent={<CheckCircle className="h-3.5 w-3.5" />} onPress={() => setConfirmAction("FINAL")}>Finalize</Button>
+                </>
+              )}
+              {bill.status !== "CANCELLED" && (
+                <Button color="danger" size="sm" variant="flat" startContent={<XCircle className="h-3.5 w-3.5" />} onPress={() => setConfirmAction("CANCELLED")}>Cancel</Button>
+              )}
+            </>
+          }
+        />
 
-          <div className="flex gap-2">
-            <Button variant="flat" size="sm" onPress={() => window.print()}>🖨️ Print</Button>
-            {bill.status === "DRAFT" && (
-              <>
-                <Button variant="bordered" size="sm" onPress={() => router.push(`/bills/${id}/edit`)}>✏️ Edit</Button>
-                <Button color="success" size="sm" variant="flat" onPress={() => setConfirmAction("FINAL")}>✅ Finalize</Button>
-              </>
-            )}
-            {bill.status !== "CANCELLED" && (
-              <Button color="danger" size="sm" variant="flat" onPress={() => setConfirmAction("CANCELLED")}>Cancel</Button>
-            )}
-          </div>
-        </div>
-
-        {/* Customer Details */}
-        <Card shadow="sm" className="mb-6">
-          <CardHeader className="px-6 pt-6 pb-0">
-            <h2 className="font-semibold">Customer</h2>
-          </CardHeader>
-          <CardBody className="p-6">
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
-              <div><span className="text-default-400">Name</span><p className="font-medium">{bill.customerName}</p></div>
-              {bill.customerPhone && (<div><span className="text-default-400">Phone</span><p className="font-medium">{bill.customerPhone}</p></div>)}
-              {bill.customerAddress && (<div><span className="text-default-400">Address</span><p className="font-medium">{bill.customerAddress}</p></div>)}
-              {bill.gstin && (<div><span className="text-default-400">GSTIN</span><p className="font-medium font-mono">{bill.gstin}</p></div>)}
-              {bill.placeOfSupply && (<div><span className="text-default-400">Place of Supply</span><p className="font-medium">{bill.placeOfSupply} {bill.isInterState ? <span className="text-xs text-default-400 ml-1">(Inter-State)</span> : ""}</p></div>)}
-              {bill.hsnCode && (<div><span className="text-default-400">HSN/SAC</span><p className="font-medium font-mono">{bill.hsnCode}</p></div>)}
-            </div>
-            {bill.party && (
-              <div className="mt-4 border-t border-divider pt-4">
-                <span className="text-default-400 text-sm">Linked Party Record</span>
-                <div className="mt-2 flex items-center justify-between rounded-xl border border-divider bg-default-50 px-4 py-3">
-                  <div>
-                    <p className="font-medium">{bill.party.name}</p>
-                    <p className="text-xs capitalize text-default-400">{bill.party.type.toLowerCase()}</p>
-                  </div>
-                  <Button size="sm" variant="flat" color="secondary" onPress={() => router.push(`/parties/${bill.party?.id}`)}>
-                    View Party
-                  </Button>
+        {/* Customer / Invoice Details */}
+        <div className="grid md:grid-cols-2 gap-6 mb-6">
+          {/* Party Card */}
+          <Card shadow="sm" className="border-l-4 border-primary">
+            <CardHeader className="px-6 pt-5 pb-0">
+              <h2 className="font-semibold text-sm text-default-500 uppercase tracking-wider">
+                {bill.party?.type === "VENDOR" ? "Vendor" : "Customer"}
+              </h2>
+            </CardHeader>
+            <CardBody className="p-6 pt-3">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                  <span className="text-lg font-bold text-primary">
+                    {(bill.customerName || "?")[0].toUpperCase()}
+                  </span>
+                </div>
+                <div>
+                  <p className="font-semibold text-lg">{bill.customerName}</p>
+                  {bill.customerPhone && (
+                    <p className="text-sm text-default-500">{bill.customerPhone}</p>
+                  )}
                 </div>
               </div>
-            )}
-          </CardBody>
-        </Card>
+              {bill.customerAddress && (
+                <p className="text-sm text-default-500 mt-3">{bill.customerAddress}</p>
+              )}
+              {bill.party && (
+                <Button
+                  size="sm"
+                  variant="light"
+                  color="primary"
+                  className="mt-2 -ml-2"
+                  onPress={() => router.push(`/parties/${bill.party?.id}`)}
+                >
+                  View Party →
+                </Button>
+              )}
+            </CardBody>
+          </Card>
+
+          {/* Invoice Details Card */}
+          <Card shadow="sm" className="border-l-4 border-primary">
+            <CardHeader className="px-6 pt-5 pb-0">
+              <h2 className="font-semibold text-sm text-default-500 uppercase tracking-wider">
+                Invoice Details
+              </h2>
+            </CardHeader>
+            <CardBody className="p-6 pt-3 space-y-3">
+              {bill.gstin && (
+                <div>
+                  <p className="text-xs text-default-400">GSTIN</p>
+                  <p className="font-mono font-semibold text-base">{bill.gstin}</p>
+                </div>
+              )}
+              {bill.placeOfSupply && (
+                <div>
+                  <p className="text-xs text-default-400">Place of Supply</p>
+                  <div className="font-medium">
+                    {bill.placeOfSupply}
+                    {bill.isInterState && (
+                      <Chip size="sm" variant="flat" color="warning" className="ml-2">Inter-State</Chip>
+                    )}
+                  </div>
+                </div>
+              )}
+              {bill.hsnCode && (
+                <div>
+                  <p className="text-xs text-default-400">HSN/SAC</p>
+                  <p className="font-mono font-semibold">{bill.hsnCode}</p>
+                </div>
+              )}
+              {!bill.gstin && !bill.placeOfSupply && !bill.hsnCode && (
+                <div>
+                  <p className="text-xs text-default-400">Narration</p>
+                  <p className="text-sm text-default-600">Tax Invoice #{bill.billNumber}</p>
+                </div>
+              )}
+            </CardBody>
+          </Card>
+        </div>
 
         {/* Items Table */}
         <Card shadow="sm" className="mb-6">
-          <CardHeader className="px-6 pt-6 pb-0">
-            <h2 className="font-semibold">
+          <CardHeader className="px-6 pt-5 pb-0">
+            <h2 className="font-semibold text-sm text-default-500 uppercase tracking-wider">
               Line Items
               {bill.template.name !== "__QUICK_BILL__" && (
                 <span className="ml-2 text-sm font-normal text-default-400">
@@ -357,18 +400,18 @@ export default function BillDetailPage({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b-2 border-divider">
-                  <th className="text-left py-3 px-2 text-default-500 font-semibold w-10">#</th>
+                  <th className="text-left py-3 px-2 text-default-500 font-semibold uppercase tracking-wider text-xs w-10">#</th>
                   {columns.map((col) => (
-                    <th key={col.name} className={`py-3 px-2 text-default-500 font-semibold ${col.type === "number" || col.type === "formula" ? "text-right" : "text-left"}`}>{col.name}</th>
+                    <th key={col.name} className={`py-3 px-2 text-default-500 font-semibold uppercase tracking-wider text-xs ${col.type === "number" || col.type === "formula" ? "text-right" : "text-left"}`}>{col.name}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {(bill.rows as Record<string, string | number>[]).map((row, i) => (
-                  <tr key={i} className="border-b border-divider/30">
+                  <tr key={i} className="border-b border-divider/30 hover:bg-default-50 dark:hover:bg-default-100/5 transition-colors">
                     <td className="py-3 px-2 text-default-400">{i + 1}</td>
                     {columns.map((col) => (
-                      <td key={col.name} className={`py-3 px-2 ${col.type === "number" || col.type === "formula" ? "text-right font-mono" : ""} ${col.type === "formula" ? "text-success font-medium" : ""}`}>
+                      <td key={col.name} className={`py-3 px-2 ${col.type === "number" || col.type === "formula" ? "text-right font-mono" : ""} ${col.type === "formula" ? "text-primary font-medium" : ""}`}>
                         {(col.type === "number" || col.type === "formula")
                           ? (() => {
                             const raw = row[col.id];
@@ -387,30 +430,23 @@ export default function BillDetailPage({
 
         {/* Totals & Notes */}
         <div className="grid lg:grid-cols-2 gap-6 mb-6">
-          <div className="space-y-4">
-            {bill.notes && (<Card shadow="sm"><CardBody className="p-5"><h3 className="font-semibold text-sm mb-2">Notes</h3><p className="text-sm text-default-600 whitespace-pre-line">{bill.notes}</p></CardBody></Card>)}
-            {bill.terms && (<Card shadow="sm"><CardBody className="p-5"><h3 className="font-semibold text-sm mb-2">Terms & Conditions</h3><p className="text-sm text-default-600 whitespace-pre-line">{bill.terms}</p></CardBody></Card>)}
-          </div>
-          <Card shadow="sm" className="bg-gradient-to-br from-blue-500/5 to-indigo-500/5">
-            <CardBody className="p-6">
-              <h3 className="text-lg font-semibold mb-4">Summary</h3>
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between"><span className="text-default-500">Subtotal</span><span className="font-medium">{formatCurrency(bill.subtotal)}</span></div>
-                <div className="flex justify-between"><span className="text-default-500">Tax ({bill.taxPercent}%)</span><span className="font-medium">{formatCurrency(bill.taxAmount)}</span></div>
-                {bill.roundOff !== 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-default-500">Round Off</span>
-                    <span className={`font-medium font-mono ${bill.roundOff > 0 ? 'text-success' : 'text-danger'}`}>
-                      {bill.roundOff > 0 ? '+' : ''}{formatCurrency(bill.roundOff)}
-                    </span>
-                  </div>
-                )}
-                <Divider />
-                <div className="flex justify-between"><span className="text-xl font-bold">Grand Total</span><span className="text-xl font-bold text-primary">{formatCurrency(bill.grandTotal)}</span></div>
-              </div>
-            </CardBody>
-          </Card>
+          <BillFooter
+            notes={bill.notes}
+            terms={bill.terms}
+            showActions={false}
+          />
+          <BillSummary
+            subtotal={bill.subtotal}
+            taxPercent={bill.taxPercent}
+            taxAmount={bill.taxAmount}
+            roundOff={bill.roundOff}
+            grandTotal={bill.grandTotal}
+            theme="primary"
+            showAmountInWords
+          />
         </div>
+        {/* Spacer for fixed action bar */}
+        <div className="h-24" />
       </div>
 
       <BillActionBar bill={{

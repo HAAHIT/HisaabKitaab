@@ -8,6 +8,7 @@ export const translations = {
     "nav.purchases": "Purchases",
     "nav.parties": "Parties",
     "nav.payments": "Payments",
+    "nav.banking": "Banking",
     "nav.measures": "Measures",
     "nav.upload": "Upload",
     "nav.myuploads": "My Uploads",
@@ -144,6 +145,8 @@ export const translations = {
     "payments.loadPartiesFailed": "Failed to load parties",
     "payments.markCompletedSuccess": "Payment marked as completed",
     "payments.markCompletedFailed": "Failed to mark as completed",
+    "payments.deletedSuccess": "Payment deleted successfully",
+    "payments.deleteFailed": "Failed to delete payment",
     "parties.title": "Parties",
     "parties.subtitle":
       "Manage customers and vendors from the authoritative server record.",
@@ -489,6 +492,7 @@ export const translations = {
     "nav.purchases": "खरीद",
     "nav.parties": "पार्टियां",
     "nav.payments": "भुगतान",
+    "nav.banking": "बैंकिंग (Banking)",
     "nav.measures": "माप",
     "nav.upload": "अपलोड",
     "nav.myuploads": "मेरे अपलोड",
@@ -625,6 +629,8 @@ export const translations = {
     "payments.loadPartiesFailed": "पार्टियां लोड नहीं हुईं",
     "payments.markCompletedSuccess": "भुगतान पूर्ण चिन्हित किया गया",
     "payments.markCompletedFailed": "पूर्ण चिन्हित नहीं किया जा सका",
+    "payments.deletedSuccess": "भुगतान सफलतापूर्वक हटा दिया गया",
+    "payments.deleteFailed": "भुगतान हटाने में विफल",
     "parties.title": "पार्टियां",
     "parties.subtitle":
       "ग्राहकों और विक्रेताओं को प्रामाणिक सर्वर रिकॉर्ड से प्रबंधित करें।",

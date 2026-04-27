@@ -19,7 +19,7 @@ import {
   journalForSalesBill,
 } from "@/lib/journal";
 import { NextRequest, NextResponse } from "next/server";
-import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
+import { resolveReadTenant, resolveWriteSession } from "@/lib/api-tenant";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { logError, getRequestId } from "@/lib/observability";
 import crypto from "crypto";
@@ -49,11 +49,12 @@ function normalizePaymentMode(mode: unknown): SupportedPaymentMode | null {
   return VALID_PAYMENT_MODES.has(mode) ? (mode as SupportedPaymentMode) : null;
 }
 
-function isValidBillRequest(finalTemplateId: unknown, partyId: unknown, rows: unknown): boolean {
+function isValidBillRequest(finalTemplateId: unknown, partyId: unknown, rows: unknown, hasPaymentMode: boolean): boolean {
   if (!finalTemplateId || typeof finalTemplateId !== "string" || !finalTemplateId.trim()) {
     return false;
   }
-  if (!partyId || typeof partyId !== "string" || !partyId.trim()) {
+  // partyId is optional for cash/bank sales
+  if (!hasPaymentMode && (!partyId || typeof partyId !== "string" || !partyId.trim())) {
     return false;
   }
   if (!Array.isArray(rows) || rows.length === 0) {
@@ -83,7 +84,7 @@ const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
 
 const CreateBillSchema = z.object({
   templateId: z.string().min(1),
-  partyId: z.string().min(1),
+  partyId: z.string().min(1).nullish(),
   customerName: z.string().optional(),
   customerPhone: z.string().nullish(),
   customerAddress: z.string().nullish(),
@@ -121,6 +122,7 @@ const CreateBillSchema = z.object({
   status: z.string().optional(),
   isInterState: z.boolean().optional(),
   paymentMode: z.string().optional(),
+  accountId: z.string().optional(),
   hsnCode: z.string().nullish(),
   shippingAddress: z.string().nullish(), // Ship To address
   date: z.string().optional(), // [ADDED] Allow custom issue dates
@@ -193,10 +195,6 @@ async function loadBillingSettings(tenantId: string) {
 
 // GET /api/bills — List bills with filtering
 export async function GET(request: NextRequest) {
-  const role = request.headers.get("x-user-role");
-  if (!role || role === "CUSTOMER") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
   const tenantResolution = await resolveReadTenant(request);
   if (!tenantResolution.ok) {
     return tenantResolution.response;
@@ -255,10 +253,17 @@ export async function GET(request: NextRequest) {
       where.partyId = partyId;
     }
 
+    // [FIX #19] Validate date params before passing to Prisma
     if (from || to) {
       where.createdAt = {};
-      if (from) where.createdAt.gte = new Date(from);
-      if (to) where.createdAt.lte = new Date(to);
+      if (from) {
+        const fromDate = new Date(from);
+        if (!Number.isNaN(fromDate.getTime())) where.createdAt.gte = fromDate;
+      }
+      if (to) {
+        const toDate = new Date(to);
+        if (!Number.isNaN(toDate.getTime())) where.createdAt.lte = toDate;
+      }
     }
 
     const [bills, total] = await Promise.all([
@@ -307,20 +312,16 @@ export async function POST(request: NextRequest) {
   const rateLimitResponse = await checkRateLimit(request, "bills.create", 30);
   if (rateLimitResponse) return rateLimitResponse;
 
-  const role = request.headers.get("x-user-role");
-  const userId = request.headers.get("x-user-id");
+  // [FIX #5] Use JWT-verified session instead of trusting proxy headers
+  const sessionResolution = await resolveWriteSession(request);
+  if (!sessionResolution.ok) {
+    return sessionResolution.response;
+  }
+  const { tenantId, userId, role } = sessionResolution.session;
 
-  if (!role || role === "CUSTOMER") {
+  if (role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!userId) {
-    return NextResponse.json({ error: "Missing user context" }, { status: 401 });
-  }
-  const tenantResolution = await resolveWriteTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   try {
     let rawBody: Record<string, unknown>;
@@ -409,7 +410,7 @@ export async function POST(request: NextRequest) {
       finalTemplateId = quickTemplate.id;
     }
 
-    if (!isValidBillRequest(finalTemplateId, partyId, rows)) {
+    if (!isValidBillRequest(finalTemplateId, partyId, rows, !!body.paymentMode)) {
       return NextResponse.json(
         { error: "Template, party, and at least one row are required" },
         { status: 400 }
@@ -429,24 +430,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Template not found" }, { status: 404 });
     }
 
-    const party = await prisma.party.findFirst({
-      where: {
-        id: partyId,
-        tenantId,
-        isDeleted: false,
-        isActive: true,
-      },
-      select: {
-        id: true,
-        name: true,
-        type: true,
-        phone: true,
-        address: true,
-        gstin: true,
-      },
-    });
+    const party = partyId
+      ? await prisma.party.findFirst({
+          where: {
+            id: partyId,
+            tenantId,
+            isDeleted: false,
+            isActive: true,
+          },
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            phone: true,
+            address: true,
+            gstin: true,
+          },
+        })
+      : null;
 
-    if (!party) {
+    if (partyId && !party) {
       return NextResponse.json({ error: "Party not found" }, { status: 404 });
     }
 
@@ -480,15 +483,35 @@ export async function POST(request: NextRequest) {
       }
     }
     // [G-C1] Auto-derive from GSTIN state codes; manual override is fallback only
-    const effectiveGstin = gstin || party.gstin;
+    const effectiveGstin = gstin || party?.gstin;
     const isInterState = deriveIsInterState(effectiveGstin, tenant?.gstin, body.isInterState);
     const normalizedPaymentMode = normalizePaymentMode(body.paymentMode);
 
     // Use the explicitly provided bill date if present, otherwise default to now
+    // [FIX #11] Limit backdating to 180 days to prevent altering locked GST periods
     let billDateObj = new Date();
     if (typeof date === "string" && date.trim() !== "") {
       const parsedDate = new Date(date);
       if (!Number.isNaN(parsedDate.getTime())) {
+        const maxBackdateDays = 180;
+        const minAllowedDate = new Date();
+        minAllowedDate.setDate(minAllowedDate.getDate() - maxBackdateDays);
+        if (parsedDate < minAllowedDate) {
+          return NextResponse.json(
+            { error: `Bill date cannot be more than ${maxBackdateDays} days in the past` },
+            { status: 400 }
+          );
+        }
+        // [FIX #8] Block future-dated bills — they'd land in wrong GST period
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        tomorrow.setHours(0, 0, 0, 0);
+        if (parsedDate >= tomorrow) {
+          return NextResponse.json(
+            { error: "Bill date cannot be in the future" },
+            { status: 400 }
+          );
+        }
         billDateObj = parsedDate;
       }
     }
@@ -500,7 +523,8 @@ export async function POST(request: NextRequest) {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
-    const snapshot = buildBillSnapshotFromParty(party, {
+    const nullParty = { name: customerName || "Cash", phone: null, address: null, gstin: null };
+    const snapshot = buildBillSnapshotFromParty(party ?? nullParty, {
       customerName,
       customerPhone,
       customerAddress,
@@ -533,20 +557,31 @@ export async function POST(request: NextRequest) {
       await tx.$executeRaw`SET LOCAL lock_timeout = '5s'`;
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
 
-      const existingCount = await tx.bill.count({
+      // [FIX #1] Use max bill sequence number instead of count to prevent gaps
+      // from cancelled/deleted bills causing duplicate numbers on next creation.
+      const lastBill = await tx.bill.findFirst({
         where: {
           tenantId,
+          billNumber: { startsWith: prefix },
           createdAt: { gte: monthStart, lt: nextMonthStart },
         },
+        orderBy: { billNumber: "desc" },
+        select: { billNumber: true },
       });
-      const billNumber = `${prefix}-${yearMonth}-${String(existingCount + 1).padStart(3, "0")}`;
+      let nextSeq = 1;
+      if (lastBill?.billNumber) {
+        const parts = lastBill.billNumber.split("-");
+        const lastSeq = parseInt(parts[parts.length - 1], 10);
+        if (!Number.isNaN(lastSeq)) nextSeq = lastSeq + 1;
+      }
+      const billNumber = `${prefix}-${yearMonth}-${String(nextSeq).padStart(3, "0")}`;
 
-      const createdBill = await tx.bill.create({
+      const createdBill = await (tx as any).bill.create({
         data: {
           tenantId,
           billNumber,
           templateId: template.id,
-          partyId: party.id,
+          partyId: party?.id ?? null,
           customerName: snapshot.customerName,
           customerPhone: snapshot.customerPhone,
           customerAddress: snapshot.customerAddress,
@@ -583,45 +618,50 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      const balanceChange = getPostedBillBalanceDelta(
-        party.type,
-        billStatus,
-        resolvedGrandTotal
-      );
+      if (party) {
+        const balanceChange = getPostedBillBalanceDelta(
+          party.type,
+          billStatus,
+          resolvedGrandTotal
+        );
 
-      if (balanceChange !== 0) {
-        await tx.party.update({
-          where: { id: party.id },
-          data: {
-            currentBalance: { increment: balanceChange },
-          },
-        });
+        if (balanceChange !== 0) {
+          await tx.party.update({
+            where: { id: party.id },
+            data: {
+              currentBalance: { increment: balanceChange },
+            },
+          });
+        }
       }
 
       if (billStatus === "FINAL") {
         await journalForSalesBill(tx, tenantId, {
           id: createdBill.id,
           billNumber,
-          partyId: party.id,
-          partyName: party.name,
+          partyId: party?.id ?? null,
+          partyName: party?.name ?? snapshot.customerName,
           subtotal: createdBill.subtotal.toNumber(),
           taxAmount: createdBill.taxAmount.toNumber(),
           grandTotal: createdBill.grandTotal.toNumber(),
           roundOff: roundOff || 0,
           createdBy: userId!,
-          entryDate: createdBill.date, // Use the custom bill date for accounting ledgers
+          entryDate: createdBill.date,
           isInterState,
         });
       }
 
-      if (isQuickBill && normalizedPaymentMode) {
-        const createdPayment = await tx.payment.create({
+      if (normalizedPaymentMode) {
+        const direction = party?.type === "VENDOR" ? "OUTGOING" : "INCOMING";
+
+        const createdPayment = await (tx as any).payment.create({
           data: {
             tenantId,
-            partyId: party.id,
-            direction: party.type === "CUSTOMER" ? "INCOMING" : "OUTGOING",
+            partyId: party?.id ?? null,
+            accountId: body.accountId || null,
+            direction,
             amount: resolvedGrandTotal,
-            date: billDateObj, // Payment receives the same backdated date
+            date: billDateObj,
             mode: normalizedPaymentMode,
             status: "COMPLETED",
             linkedBillId: createdBill.id,
@@ -629,21 +669,32 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        const paymentDelta = getPaymentBalanceDelta(
-          party.type as "CUSTOMER" | "VENDOR",
-          party.type === "CUSTOMER" ? "INCOMING" : "OUTGOING",
-          resolvedGrandTotal
-        );
-        await tx.party.update({
-          where: { id: party.id },
-          data: { currentBalance: { increment: paymentDelta } },
-        });
+        if (party) {
+          const paymentDelta = getPaymentBalanceDelta(
+            party.type as "CUSTOMER" | "VENDOR",
+            direction,
+            resolvedGrandTotal
+          );
+          await tx.party.update({
+            where: { id: party.id },
+            data: { currentBalance: { increment: paymentDelta } },
+          });
+        }
 
-        if (party.type === "CUSTOMER") {
+        // Update bank account balance
+        if (body.accountId) {
+          const bankBalanceChange = direction === "INCOMING" ? resolvedGrandTotal : -resolvedGrandTotal;
+          await (tx as any).bankAccount.update({
+            where: { id: body.accountId },
+            data: { currentBalance: { increment: bankBalanceChange } },
+          });
+        }
+
+        if (!party || party.type === "CUSTOMER") {
           await journalForPaymentReceived(tx, tenantId, {
             id: createdPayment.id,
-            partyId: party.id,
-            partyName: party.name,
+            partyId: party?.id ?? null,
+            partyName: party?.name ?? snapshot.customerName,
             amount: createdPayment.amount.toNumber(),
             mode: createdPayment.mode,
             date: createdPayment.date,

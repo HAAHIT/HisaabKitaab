@@ -116,9 +116,8 @@ export default function NotesListPage() {
     <div className="animate-fade-in p-4 lg:p-8">
       {toast && (
         <div
-          className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${
-            toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
-          }`}
+          className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
+            }`}
         >
           {toast.message}
         </div>
@@ -270,7 +269,13 @@ export default function NotesListPage() {
                       {group.notes.map((note) => {
                         const isCredit = note.voucherType === "CREDIT_NOTE";
                         return (
-                          <Card key={note.id} shadow="sm" className="transition hover:shadow-md">
+                          <Card
+                            key={note.id}
+                            shadow="sm"
+                            className="transition hover:shadow-md cursor-pointer"
+                            isPressable
+                            onPress={() => router.push(`/notes/${note.id}`)}
+                          >
                             <CardBody className="p-4">
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex flex-col gap-1 min-w-0">
@@ -297,7 +302,9 @@ export default function NotesListPage() {
                                   </p>
                                 </div>
                                 <div className="text-right flex-shrink-0">
-                                  <p className="text-lg font-bold">{formatCurrency(note.grandTotal)}</p>
+                                  <p className={`text-lg font-bold ${isCredit ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>
+                                    {isCredit ? `(${formatCurrency(note.grandTotal)})` : `+${formatCurrency(note.grandTotal)}`}
+                                  </p>
                                 </div>
                               </div>
                             </CardBody>

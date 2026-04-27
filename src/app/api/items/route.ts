@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
+import { resolveWriteSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import {
@@ -19,16 +19,14 @@ function canManageItems(role: string | null) {
 }
 
 export async function GET(request: NextRequest) {
-  const role = request.headers.get("x-user-role");
+  // [FIX] Use JWT-verified session instead of trusting proxy headers
+  const sessionResolution = await resolveWriteSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, role } = sessionResolution.session;
 
-  if (!canViewItems(role)) {
+  if (role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantResolution = await resolveReadTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   const { searchParams } = new URL(request.url);
   const search = searchParams.get("search") || "";
@@ -58,16 +56,14 @@ export async function POST(request: NextRequest) {
   const rateLimitResponse = await checkRateLimit(request, "items.create", 30);
   if (rateLimitResponse) return rateLimitResponse;
 
-  const role = request.headers.get("x-user-role");
+  // [FIX] Use JWT-verified session instead of trusting proxy headers
+  const sessionResolution = await resolveWriteSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, role } = sessionResolution.session;
 
-  if (!canManageItems(role)) {
+  if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantResolution = await resolveWriteTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   try {
     const body = await request.json();

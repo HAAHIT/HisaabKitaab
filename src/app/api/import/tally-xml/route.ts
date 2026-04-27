@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { resolveWriteTenant } from "@/lib/api-tenant";
+import { resolveWriteSession } from "@/lib/api-tenant";
 import { logError, logInfo, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { parseTallyXml } from "@/lib/tally-xml-import";
@@ -36,21 +36,16 @@ export async function POST(request: NextRequest) {
   );
   if (rateLimitResponse) return rateLimitResponse;
 
-  const role = request.headers.get("x-user-role");
-  const userId = request.headers.get("x-user-id");
 
-  if (role !== "ADMIN") {
+
+  // [FIX] Use JWT-verified session instead of trusting proxy headers
+  const sessionResolution = await resolveWriteSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId: tid, userId: sessionUserId, role: sessionRole } = sessionResolution.session;
+
+  if (sessionRole !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantResolution = await resolveWriteTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  const tid: string = tenantId;
 
   let xmlText: string;
   try {
@@ -59,14 +54,30 @@ export async function POST(request: NextRequest) {
     if (!file || typeof file === "string") {
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
     }
-    const bytes = file.size;
-    if (bytes > MAX_BYTES) {
+    const fileSize = file.size;
+    if (fileSize > MAX_BYTES) {
       return NextResponse.json(
         { error: `File too large (max ${MAX_BYTES / 1024 / 1024} MB)` },
         { status: 413 }
       );
     }
-    xmlText = await file.text();
+
+    // Native Tally ERP 9 exports are often UTF-16 LE encoded.
+    // Blob.text() always decodes as UTF-8, producing garbled output for UTF-16.
+    // Detect encoding via BOM and use the correct TextDecoder.
+    const rawBuffer = await file.arrayBuffer();
+    const rawBytes = new Uint8Array(rawBuffer);
+
+    if (rawBytes[0] === 0xFF && rawBytes[1] === 0xFE) {
+      // UTF-16 LE BOM
+      xmlText = new TextDecoder("utf-16le").decode(rawBytes);
+    } else if (rawBytes[0] === 0xFE && rawBytes[1] === 0xFF) {
+      // UTF-16 BE BOM
+      xmlText = new TextDecoder("utf-16be").decode(rawBytes);
+    } else {
+      // Default: UTF-8 (handles BOM-less UTF-8 and UTF-8 with BOM)
+      xmlText = new TextDecoder("utf-8").decode(rawBytes);
+    }
   } catch (err) {
     logError("import.tally-xml.read-error", {
       requestId: getRequestId(request),
@@ -95,7 +106,7 @@ export async function POST(request: NextRequest) {
   const job = await prisma.importJob.create({
     data: {
       tenantId: tid,
-      createdBy: userId,
+      createdBy: sessionUserId,
       totalItems: totalItems,
       xmlData: compressedXml,
       status: "PENDING",
@@ -109,33 +120,17 @@ export async function POST(request: NextRequest) {
     totalItems,
   });
 
-  const processResponse = await processImportJob(job.id);
-  const processPayload = await processResponse.json().catch(() => null);
-
-  if (!processResponse.ok) {
-    return NextResponse.json(
-      {
-        jobId: job.id,
-        error: processPayload?.error || "Import job failed.",
-        parseErrors: upfrontErrors,
-      },
-      { status: processResponse.status }
-    );
-  }
-
-  if (processPayload && typeof processPayload.imported === "number") {
-    return NextResponse.json({
-      ...processPayload,
-      totalDetected: processPayload.totalItems ?? totalItems,
-      parseErrors: Array.from(new Set([...upfrontErrors, ...(processPayload.parseErrors ?? [])])),
-      importErrors: [],
+  // Fire-and-forget: process in background so the UI can poll progress
+  processImportJob(job.id).catch((err) => {
+    logError("import.tally-xml.background-error", {
+      jobId: job.id,
+      error: err,
     });
-  }
+  });
 
   return NextResponse.json({
     jobId: job.id,
-    status: processPayload?.status ?? "PENDING",
-    message: processPayload?.message ?? "Import job queued successfully.",
+    status: "PENDING",
     totalDetected: totalItems,
     parseErrors: upfrontErrors,
   });

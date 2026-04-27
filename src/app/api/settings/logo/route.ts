@@ -4,29 +4,21 @@ import {
   deleteMediaAsset,
 } from "@/lib/media";
 import { prisma } from "@/lib/prisma";
-import { resolveWriteTenant } from "@/lib/api-tenant";
+import { resolveWriteSession } from "@/lib/api-tenant";
 import { serializeTenantSettings } from "@/lib/tenant-settings";
 import { logError, getRequestId } from "@/lib/observability";
 
 export const runtime = "nodejs";
 
-function isAdmin(request: Request) {
-  return request.headers.get("x-user-role") === "ADMIN";
-}
-
 export async function POST(request: NextRequest) {
-  if (!isAdmin(request)) {
+  // [FIX] Use JWT-verified session instead of trusting proxy headers
+  const sessionResolution = await resolveWriteSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, userId, role } = sessionResolution.session;
+
+  if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const userId = request.headers.get("x-user-id");
-  if (!userId) {
-    return NextResponse.json({ error: "Missing user context" }, { status: 401 });
-  }
-  const tenantResolution = await resolveWriteTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   let nextAsset:
     | Awaited<ReturnType<typeof buildMediaAssetCreateInputFromFile>>
@@ -112,18 +104,14 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  if (!isAdmin(request)) {
+  // [FIX] Use JWT-verified session instead of trusting proxy headers
+  const sessionResolution = await resolveWriteSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, userId, role } = sessionResolution.session;
+
+  if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const userId = request.headers.get("x-user-id");
-  if (!userId) {
-    return NextResponse.json({ error: "Missing user context" }, { status: 401 });
-  }
-  const tenantResolution = await resolveWriteTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   try {
     const previousTenant = await prisma.tenant.findUnique({
