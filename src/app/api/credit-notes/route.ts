@@ -24,22 +24,14 @@ const CreateNoteSchema = z.object({
   originalInvoiceNo: z.string().min(1, "Original Invoice Reference is required"),
   reasonForIssuance: z.string().min(1, "Reason for Issuance is required"),
   placeOfSupply: z.string().refine((val) => GST_STATE_CODE_SET.has(val), {
-      message: "Invalid place of supply. Must be a 2-digit GST state code.",
-    }),
+    message: "Invalid place of supply. Must be a 2-digit GST state code.",
+  }),
   noteType: z.enum(["CREDIT_NOTE", "DEBIT_NOTE"]),
   subtotal: z.number().nonnegative().default(0),
   taxAmount: z.number().nonnegative().default(0),
   grandTotal: z.number().nonnegative().default(0),
   isInterState: z.boolean().optional(),
   hsnCode: z.string().optional(),
-}).superRefine((data, ctx) => {
-  if (data.taxAmount > 0 && !data.hsnCode?.trim()) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "HSN code is required since the note contains GST elements.",
-      path: ["hsnCode"],
-    });
-  }
 });
 
 export async function GET(request: NextRequest) {
@@ -61,8 +53,8 @@ export async function GET(request: NextRequest) {
       type === "CREDIT_NOTE"
         ? ["CREDIT_NOTE"]
         : type === "DEBIT_NOTE"
-        ? ["DEBIT_NOTE"]
-        : ["CREDIT_NOTE", "DEBIT_NOTE"];
+          ? ["DEBIT_NOTE"]
+          : ["CREDIT_NOTE", "DEBIT_NOTE"];
 
     const where = {
       tenantId,
@@ -183,51 +175,51 @@ export async function POST(request: NextRequest) {
       // [FIX #4 & #5] Use createJournalEntry for validation + correct Section 170 tax rounding
       const entry = isSalesReturn
         ? await createJournalEntry(tx, {
-            tenantId,
-            entryDate: new Date(),
-            narration: `Credit Note against ${originalInvoiceNo} (${reasonForIssuance})`,
-            voucherType: "CREDIT_NOTE",
-            createdBy: userId,
-            lines: [
-              {
-                accountCode: "SUNDRY_DEBTORS",
-                debit: 0,
-                credit: grandTotal,
-                partyId: party.id,
-                partyName: party.name,
-              },
-              {
-                accountCode: "SALES",
-                debit: subtotal,
-                credit: 0,
-              },
-              // Output tax reversed (debited) — uses same rounding as sales bills
-              ...buildSalesTaxLines(taxAmount, "DEBIT", isInterState),
-            ],
-          })
+          tenantId,
+          entryDate: new Date(),
+          narration: `Credit Note against ${originalInvoiceNo} (${reasonForIssuance})`,
+          voucherType: "CREDIT_NOTE",
+          createdBy: userId,
+          lines: [
+            {
+              accountCode: "SUNDRY_DEBTORS",
+              debit: 0,
+              credit: grandTotal,
+              partyId: party.id,
+              partyName: party.name,
+            },
+            {
+              accountCode: "SALES",
+              debit: subtotal,
+              credit: 0,
+            },
+            // Output tax reversed (debited) — uses same rounding as sales bills
+            ...buildSalesTaxLines(taxAmount, "DEBIT", isInterState),
+          ],
+        })
         : await createJournalEntry(tx, {
-            tenantId,
-            entryDate: new Date(),
-            narration: `Debit Note against ${originalInvoiceNo} (${reasonForIssuance})`,
-            voucherType: "DEBIT_NOTE",
-            createdBy: userId,
-            lines: [
-              {
-                accountCode: "SUNDRY_CREDITORS",
-                debit: grandTotal,
-                credit: 0,
-                partyId: party.id,
-                partyName: party.name,
-              },
-              {
-                accountCode: "PURCHASE",
-                debit: 0,
-                credit: subtotal,
-              },
-              // Input tax reversed (credited) — uses same rounding as purchase bills
-              ...buildPurchaseTaxLines(taxAmount, "CREDIT", isInterState),
-            ],
-          });
+          tenantId,
+          entryDate: new Date(),
+          narration: `Debit Note against ${originalInvoiceNo} (${reasonForIssuance})`,
+          voucherType: "DEBIT_NOTE",
+          createdBy: userId,
+          lines: [
+            {
+              accountCode: "SUNDRY_CREDITORS",
+              debit: grandTotal,
+              credit: 0,
+              partyId: party.id,
+              partyName: party.name,
+            },
+            {
+              accountCode: "PURCHASE",
+              debit: 0,
+              credit: subtotal,
+            },
+            // Input tax reversed (credited) — uses same rounding as purchase bills
+            ...buildPurchaseTaxLines(taxAmount, "CREDIT", isInterState),
+          ],
+        });
 
       // [MCA GSR 247(E)] Audit trail
       await tx.auditLog.create({

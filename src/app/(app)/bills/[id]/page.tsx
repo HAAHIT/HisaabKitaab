@@ -17,7 +17,11 @@ import {
   Skeleton,
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
+import { Printer, Pencil, CheckCircle, XCircle } from "lucide-react";
 import { BillActionBar } from "@/components/bills/BillActionBar";
+import { BillHeader } from "@/components/bills/BillHeader";
+import { BillSummary, type TaxSlab } from "@/components/bills/BillSummary";
+import { BillFooter } from "@/components/bills/BillFooter";
 import type { ColumnDef } from "@/lib/formula";
 import { shareBill } from "@/lib/share";
 import { numberToIndianWords } from "@/lib/number-to-words";
@@ -275,40 +279,29 @@ export default function BillDetailPage({
       {/* Screen UI: Hidden on Print */}
       <div className="no-print">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <Button
-              isIconOnly
-              variant="light"
-              aria-label="Back to list"
-              onPress={() => router.push(bill.party?.type === "VENDOR" ? "/purchases" : "/bills")}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-            </Button>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold font-mono">{bill.billNumber}</h1>
-                <Chip size="sm" variant="flat" color={statusColorMap[bill.status]} className="capitalize">{bill.status.toLowerCase()}</Chip>
-              </div>
-              <p className="text-default-500 text-sm">
-                {new Date(bill.createdAt).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "long", year: "numeric" })} • by {bill.creator.name}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <Button variant="flat" size="sm" onPress={() => window.print()}>🖨️ Print</Button>
-            {bill.status === "DRAFT" && (
-              <>
-                <Button variant="bordered" size="sm" onPress={() => router.push(`/bills/${id}/edit`)}>✏️ Edit</Button>
-                <Button color="success" size="sm" variant="flat" onPress={() => setConfirmAction("FINAL")}>✅ Finalize</Button>
-              </>
-            )}
-            {bill.status !== "CANCELLED" && (
-              <Button color="danger" size="sm" variant="flat" onPress={() => setConfirmAction("CANCELLED")}>Cancel</Button>
-            )}
-          </div>
-        </div>
+        <BillHeader
+          documentNumber={bill.billNumber}
+          documentLabel={bill.party?.type === "VENDOR" ? "Purchase Bill" : "Tax Invoice"}
+          date={new Date(bill.createdAt).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "long", year: "numeric" })}
+          status={bill.status}
+          theme="primary"
+          createdBy={bill.creator.name}
+          backPath={bill.party?.type === "VENDOR" ? "/purchases" : "/bills"}
+          actions={
+            <>
+              <Button variant="flat" size="sm" startContent={<Printer className="h-3.5 w-3.5" />} onPress={() => window.print()}>Print</Button>
+              {bill.status === "DRAFT" && (
+                <>
+                  <Button variant="bordered" size="sm" startContent={<Pencil className="h-3.5 w-3.5" />} onPress={() => router.push(`/bills/${id}/edit`)}>Edit</Button>
+                  <Button color="success" size="sm" variant="flat" startContent={<CheckCircle className="h-3.5 w-3.5" />} onPress={() => setConfirmAction("FINAL")}>Finalize</Button>
+                </>
+              )}
+              {bill.status !== "CANCELLED" && (
+                <Button color="danger" size="sm" variant="flat" startContent={<XCircle className="h-3.5 w-3.5" />} onPress={() => setConfirmAction("CANCELLED")}>Cancel</Button>
+              )}
+            </>
+          }
+        />
 
         {/* Customer Details */}
         <Card shadow="sm" className="mb-6">
@@ -387,30 +380,23 @@ export default function BillDetailPage({
 
         {/* Totals & Notes */}
         <div className="grid lg:grid-cols-2 gap-6 mb-6">
-          <div className="space-y-4">
-            {bill.notes && (<Card shadow="sm"><CardBody className="p-5"><h3 className="font-semibold text-sm mb-2">Notes</h3><p className="text-sm text-default-600 whitespace-pre-line">{bill.notes}</p></CardBody></Card>)}
-            {bill.terms && (<Card shadow="sm"><CardBody className="p-5"><h3 className="font-semibold text-sm mb-2">Terms & Conditions</h3><p className="text-sm text-default-600 whitespace-pre-line">{bill.terms}</p></CardBody></Card>)}
-          </div>
-          <Card shadow="sm" className="bg-gradient-to-br from-blue-500/5 to-indigo-500/5">
-            <CardBody className="p-6">
-              <h3 className="text-lg font-semibold mb-4">Summary</h3>
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between"><span className="text-default-500">Subtotal</span><span className="font-medium">{formatCurrency(bill.subtotal)}</span></div>
-                <div className="flex justify-between"><span className="text-default-500">Tax ({bill.taxPercent}%)</span><span className="font-medium">{formatCurrency(bill.taxAmount)}</span></div>
-                {bill.roundOff !== 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-default-500">Round Off</span>
-                    <span className={`font-medium font-mono ${bill.roundOff > 0 ? 'text-success' : 'text-danger'}`}>
-                      {bill.roundOff > 0 ? '+' : ''}{formatCurrency(bill.roundOff)}
-                    </span>
-                  </div>
-                )}
-                <Divider />
-                <div className="flex justify-between"><span className="text-xl font-bold">Grand Total</span><span className="text-xl font-bold text-primary">{formatCurrency(bill.grandTotal)}</span></div>
-              </div>
-            </CardBody>
-          </Card>
+          <BillFooter
+            notes={bill.notes}
+            terms={bill.terms}
+            showActions={false}
+          />
+          <BillSummary
+            subtotal={bill.subtotal}
+            taxPercent={bill.taxPercent}
+            taxAmount={bill.taxAmount}
+            roundOff={bill.roundOff}
+            grandTotal={bill.grandTotal}
+            theme="primary"
+            showAmountInWords
+          />
         </div>
+        {/* Spacer for fixed action bar */}
+        <div className="h-24" />
       </div>
 
       <BillActionBar bill={{
