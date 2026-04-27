@@ -257,7 +257,7 @@ export function PurchaseBillForm() {
             </svg>
           </Button>
           <div>
-            <h1 className="text-2xl font-bold">New Purchase Bill</h1>
+            <h1 className="text-2xl font-bold">New Purchase Bill (नया खरीद बिल)</h1>
             <p className="mt-1 text-sm text-default-500">Record a new incoming purchase from a supplier.</p>
           </div>
         </div>
@@ -355,18 +355,18 @@ export function PurchaseBillForm() {
 
               <Card shadow="sm">
                 <CardHeader className="px-6 pt-6 pb-0">
-                  <h2 className="text-lg font-semibold">Invoice Details</h2>
+                  <h2 className="text-lg font-semibold">Invoice Details (बिल विवरण)</h2>
                 </CardHeader>
                 <CardBody className="p-6 space-y-4">
                   <Input label="Supplier Invoice No" value={supplierInvoiceNo} onValueChange={setSupplierInvoiceNo} placeholder="e.g. INV/2024/001" variant="bordered" />
-                  <Input label="Bill Date" type="date" value={billDate} onValueChange={setBillDate} variant="bordered" />
+                  <Input label="Bill Date (बिल की तारीख)" type="date" value={billDate} onValueChange={setBillDate} variant="bordered" />
                 </CardBody>
               </Card>
             </div>
 
             <Card shadow="sm" className="mb-6">
               <CardHeader className="flex items-center justify-between px-6 pt-6 pb-0">
-                <h2 className="text-lg font-semibold">Line Items</h2>
+                <h2 className="text-lg font-semibold">Line Items (आइटम विवरण)</h2>
                 <Button size="sm" variant="flat" color="primary" onPress={addRow} startContent={<svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} /></svg>}>Add Row</Button>
               </CardHeader>
               <CardBody className="overflow-x-auto p-6">

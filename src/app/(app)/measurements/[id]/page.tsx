@@ -120,9 +120,8 @@ export default function MeasurementDetailPage({
     <div className="mx-auto max-w-5xl animate-fade-in p-4 lg:p-8">
       {toast && (
         <div
-          className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${
-            toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
-          }`}
+          className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
+            }`}
         >
           {toast.message}
         </div>
@@ -151,7 +150,7 @@ export default function MeasurementDetailPage({
               src={selectedImage}
               alt="Fullscreen view"
               fill
-              unoptimized
+              quality={60}
               className="object-contain"
             />
           </div>
@@ -215,7 +214,7 @@ export default function MeasurementDetailPage({
                       src={photo.url}
                       alt={`Photo ${index + 1}`}
                       fill
-                      unoptimized
+                      quality={60}
                       className="object-cover"
                     />
                     <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 transition-opacity group-hover:opacity-100">

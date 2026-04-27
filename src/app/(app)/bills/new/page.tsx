@@ -98,21 +98,28 @@ export default function NewBillPage() {
   const [enableRoundOff, setEnableRoundOff] = useState(false);
   const [shippingAddress, setShippingAddress] = useState("");
   const [showShipTo, setShowShipTo] = useState(false);
+  const [paymentMode, setPaymentMode] = useState<"CREDIT" | "CASH" | "BANK_TRANSFER" | "UPI">("CREDIT");
+  const [bankAccounts, setBankAccounts] = useState<{ id: string; name: string; type: string; currentBalance: number }[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState<string>("");
 
   const fetchFormData = useCallback(async () => {
     setLoading(true);
     try {
-      const [templatesResponse, settingsResponse] = await Promise.all([
+      const [templatesResponse, settingsResponse, bankResponse] = await Promise.all([
         fetch("/api/templates"),
         fetch("/api/settings"),
+        fetch("/api/bank-accounts"),
       ]);
 
-      const [templatesData, settingsData] = await Promise.all([
+      const [templatesData, settingsData, bankData] = await Promise.all([
         templatesResponse.json().catch(() => ({ templates: [] })),
         settingsResponse.json().catch(() => ({ settings: null })),
+        bankResponse.json().catch(() => []),
       ]);
 
       setTemplates(templatesData.templates || []);
+      const accounts = Array.isArray(bankData) ? bankData : bankData.accounts || [];
+      setBankAccounts(accounts);
 
       if (settingsData.settings) {
         setTerms(settingsData.settings.defaultTerms || "");
@@ -294,7 +301,8 @@ export default function NewBillPage() {
     }
 
     const formErrors: Record<string, boolean> = {};
-    if (!selectedParty) {
+    const isCashSale = paymentMode !== "CREDIT";
+    if (!selectedParty && !isCashSale) {
       formErrors.partyId = true;
     }
     if (status === "FINAL" && !placeOfSupply) {
@@ -310,10 +318,6 @@ export default function NewBillPage() {
     }
 
     const currentParty = selectedParty;
-    if (!currentParty) {
-      showToast("Please select a party", "error");
-      return;
-    }
 
     // [FIX #28] Block submission if any formula columns produced NaN
     if (status === "FINAL") {
@@ -338,11 +342,12 @@ export default function NewBillPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           templateId: selectedTemplate.id,
-          partyId: currentParty.id,
-          customerName: currentParty.name,
-          customerPhone: currentParty.phone || null,
-          customerAddress: currentParty.address || null,
-          gstin: currentParty.gstin || null,
+          partyId: currentParty && currentParty.type !== "CASH_ACCOUNT" && currentParty.type !== "BANK_ACCOUNT"
+            ? currentParty.id : null,
+          customerName: currentParty?.name || (paymentMode === "CASH" ? "Cash" : "Customer"),
+          customerPhone: currentParty?.phone || null,
+          customerAddress: currentParty?.address || null,
+          gstin: currentParty?.gstin || null,
           rows,
           subtotal,
           taxPercent: 0,
@@ -357,6 +362,7 @@ export default function NewBillPage() {
           terms: terms.trim() || null,
           status,
           date: billDate,
+          ...(paymentMode !== "CREDIT" ? { paymentMode, accountId: selectedAccountId || undefined } : {}),
         }),
       });
 
@@ -527,27 +533,40 @@ export default function NewBillPage() {
                 <PartySearch
                   value={selectedParty?.id || null}
                   onChange={(party) => {
-                    setSelectedParty(party);
-                    if (party) {
+                    if (party && (party.type === "CASH_ACCOUNT" || party.type === "BANK_ACCOUNT")) {
+                      // Bank/Cash account selected — set payment mode and account
+                      const realAccountId = party.id.replace("bank:", "");
+                      setSelectedAccountId(realAccountId);
+                      setPaymentMode(party.type === "CASH_ACCOUNT" ? "CASH" : "BANK_TRANSFER");
+                      setSelectedParty(party);
                       setErrors((prev) => ({ ...prev, partyId: false }));
-                      // Auto-fill place of supply from first 2 digits of customer GSTIN
-                      if (party.gstin && party.gstin.length >= 2) {
-                        const code = party.gstin.substring(0, 2);
-                        if (GST_STATE_CODES[code]) setPlaceOfSupply(code);
-                      }
-                      // Auto-derive interstate from GSTIN comparison
-                      const partyState = extractGstinStateCode(party.gstin);
-                      const tenantState = extractGstinStateCode(tenantGstin);
-                      if (partyState && tenantState) {
-                        setIsInterState(partyState !== tenantState);
+                    } else {
+                      setSelectedParty(party);
+                      if (party) {
+                        setErrors((prev) => ({ ...prev, partyId: false }));
+                        setPaymentMode("CREDIT");
+                        setSelectedAccountId("");
+                        if (party.gstin && party.gstin.length >= 2) {
+                          const code = party.gstin.substring(0, 2);
+                          if (GST_STATE_CODES[code]) setPlaceOfSupply(code);
+                        }
+                        const partyState = extractGstinStateCode(party.gstin);
+                        const tenantState = extractGstinStateCode(tenantGstin);
+                        if (partyState && tenantState) {
+                          setIsInterState(partyState !== tenantState);
+                        }
+                      } else {
+                        setPaymentMode("CREDIT");
+                        setSelectedAccountId("");
                       }
                     }
                   }}
                   partyType="CUSTOMER"
-                  placeholder={t("bills.selectCustomer")}
+                  placeholder="Select Party / Cash / Bank"
                   autoFocus={!selectedParty}
                   isInvalid={Boolean(errors.partyId)}
                   initialParty={preselectedParty}
+                  includeBankAccounts
                 />
 
                 {selectedParty && (
@@ -557,39 +576,58 @@ export default function NewBillPage() {
                       <Button
                         size="sm"
                         variant="light"
-                        onPress={() => setSelectedParty(null)}
+                        onPress={() => {
+                          setSelectedParty(null);
+                          setPaymentMode("CREDIT");
+                          setSelectedAccountId("");
+                        }}
                       >
                         {t("common.change")}
                       </Button>
                     </div>
 
-                    <div className="space-y-1 text-sm text-default-500">
-                      {selectedParty.phone && (
-                        <p className="flex items-center gap-2">
-                          <span>📱</span> {selectedParty.phone}
-                        </p>
-                      )}
-                      {selectedParty.address && (
-                        <p className="flex items-center gap-2">
-                          <span>📍</span> {selectedParty.address}
-                        </p>
-                      )}
-                      {selectedParty.gstin && (
-                        <p className="flex items-center gap-2">
-                          <span className="text-xs font-mono font-bold tracking-widest text-default-400">GST</span> {selectedParty.gstin}
-                        </p>
-                      )}
-                    </div>
-
-                    {selectedParty.currentBalance !== 0 && (
-                      <div className={`mt-3 pt-3 border-t border-default-200 text-sm font-medium flex items-center gap-2 ${selectedParty.currentBalance < 0 ? "text-success" : "text-danger"
-                        }`}>
-                        <div className={`w-2 h-2 rounded-full ${selectedParty.currentBalance < 0 ? "bg-success" : "bg-danger"}`} />
-                        {selectedParty.currentBalance < 0
-                          ? `To Get: ₹${Math.abs(selectedParty.currentBalance).toLocaleString("en-IN")}`
-                          : `To Pay: ₹${selectedParty.currentBalance.toLocaleString("en-IN")}`
-                        }
+                    {selectedParty.type === "CASH_ACCOUNT" || selectedParty.type === "BANK_ACCOUNT" ? (
+                      <div className="text-sm text-default-500">
+                        <Chip size="sm" color={selectedParty.type === "CASH_ACCOUNT" ? "warning" : "primary"} variant="flat">
+                          {selectedParty.type === "CASH_ACCOUNT" ? "Cash A/c" : "Bank A/c"}
+                        </Chip>
+                        {selectedParty.currentBalance !== 0 && (
+                          <span className="ml-3 text-default-400">
+                            Balance: {formatCurrency(selectedParty.currentBalance)}
+                          </span>
+                        )}
                       </div>
+                    ) : (
+                      <>
+                        <div className="space-y-1 text-sm text-default-500">
+                          {selectedParty.phone && (
+                            <p className="flex items-center gap-2">
+                              <span>📱</span> {selectedParty.phone}
+                            </p>
+                          )}
+                          {selectedParty.address && (
+                            <p className="flex items-center gap-2">
+                              <span>📍</span> {selectedParty.address}
+                            </p>
+                          )}
+                          {selectedParty.gstin && (
+                            <p className="flex items-center gap-2">
+                              <span className="text-xs font-mono font-bold tracking-widest text-default-400">GST</span> {selectedParty.gstin}
+                            </p>
+                          )}
+                        </div>
+
+                        {selectedParty.currentBalance !== 0 && (
+                          <div className={`mt-3 pt-3 border-t border-default-200 text-sm font-medium flex items-center gap-2 ${selectedParty.currentBalance < 0 ? "text-success" : "text-danger"
+                            }`}>
+                            <div className={`w-2 h-2 rounded-full ${selectedParty.currentBalance < 0 ? "bg-success" : "bg-danger"}`} />
+                            {selectedParty.currentBalance < 0
+                              ? `To Get: ₹${Math.abs(selectedParty.currentBalance).toLocaleString("en-IN")}`
+                              : `To Pay: ₹${selectedParty.currentBalance.toLocaleString("en-IN")}`
+                            }
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 )}
@@ -623,7 +661,7 @@ export default function NewBillPage() {
                     </svg>
                   }
                 >
-                  Add Row
+                  Add Row (पंक्ति जोड़ें)
                 </Button>
               </CardHeader>
               <CardBody className="overflow-x-auto p-6">
@@ -898,6 +936,60 @@ export default function NewBillPage() {
                         errorMessage={errors.placeOfSupply ? "Required for final bills" : undefined}
                         className="max-w-[200px]"
                       />
+                    </div>
+                    <Divider />
+                    {/* Payment Mode */}
+                    <div className="space-y-2">
+                      {selectedParty?.type === "CASH_ACCOUNT" || selectedParty?.type === "BANK_ACCOUNT" ? (
+                        <div className="flex items-center justify-between rounded-lg bg-default-100 px-3 py-2">
+                          <span className="text-sm text-default-500">Payment</span>
+                          <Chip size="sm" color="primary" variant="flat">
+                            {selectedParty.type === "CASH_ACCOUNT" ? "Cash" : "Bank Transfer"} — {selectedParty.name}
+                          </Chip>
+                        </div>
+                      ) : (
+                        <>
+                          <Select
+                            label="Payment Mode"
+                            variant="bordered"
+                            size="sm"
+                            selectedKeys={[paymentMode]}
+                            onSelectionChange={(keys) => {
+                              const mode = [...keys][0] as typeof paymentMode;
+                              setPaymentMode(mode);
+                              if (mode === "CASH") {
+                                const cashAcc = bankAccounts.find((a) => a.type === "CASH");
+                                if (cashAcc) setSelectedAccountId(cashAcc.id);
+                              } else if (mode === "BANK_TRANSFER" || mode === "UPI") {
+                                const bankAcc = bankAccounts.find((a) => a.type === "BANK");
+                                if (bankAcc) setSelectedAccountId(bankAcc.id);
+                              } else {
+                                setSelectedAccountId("");
+                              }
+                            }}
+                          >
+                            <SelectItem key="CREDIT">Credit (Party owes)</SelectItem>
+                            <SelectItem key="CASH">Cash</SelectItem>
+                            <SelectItem key="BANK_TRANSFER">Bank Transfer</SelectItem>
+                            <SelectItem key="UPI">UPI</SelectItem>
+                          </Select>
+                          {paymentMode !== "CREDIT" && bankAccounts.length > 0 && (
+                            <Select
+                              label="Account"
+                              variant="bordered"
+                              size="sm"
+                              selectedKeys={selectedAccountId ? [selectedAccountId] : []}
+                              onSelectionChange={(keys) => setSelectedAccountId([...keys][0] as string)}
+                            >
+                              {bankAccounts
+                                .filter((a) => paymentMode === "CASH" ? a.type === "CASH" : a.type === "BANK")
+                                .map((a) => (
+                                  <SelectItem key={a.id}>{a.name}</SelectItem>
+                                ))}
+                            </Select>
+                          )}
+                        </>
+                      )}
                     </div>
                     <Divider />
                     {/* Round-Off Toggle */}

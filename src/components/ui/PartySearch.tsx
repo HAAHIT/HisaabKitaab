@@ -30,6 +30,8 @@ interface PartySearchProps {
   variant?: "flat" | "bordered" | "underlined" | "faded";
   size?: "sm" | "md" | "lg";
   label?: string;
+  /** When true, Cash/Bank accounts appear at the top of the list with type "CASH_ACCOUNT" or "BANK_ACCOUNT" */
+  includeBankAccounts?: boolean;
 }
 
 function formatSignedBalance(value: number) {
@@ -51,11 +53,13 @@ export function PartySearch({
   variant,
   size,
   label,
+  includeBankAccounts,
 }: PartySearchProps) {
   const { t } = useLanguage();
   const [parties, setParties] = useState<PartyOption[]>(
     initialParty ? [initialParty] : []
   );
+  const [bankAccountOptions, setBankAccountOptions] = useState<PartyOption[]>([]);
   const [searchTerm, setSearchTerm] = useState(initialParty?.name || "");
   const [isLoading, setIsLoading] = useState(false);
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
@@ -91,6 +95,30 @@ export function PartySearch({
     fetchParties("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partyType, filterTypes]);
+
+  useEffect(() => {
+    if (!includeBankAccounts) return;
+    async function fetchBankAccounts() {
+      try {
+        const res = await fetch("/api/bank-accounts");
+        if (!res.ok) return;
+        const data = await res.json();
+        const accounts = Array.isArray(data) ? data : data.accounts || [];
+        setBankAccountOptions(
+          accounts.map((a: { id: string; name: string; type: string; currentBalance: number }) => ({
+            id: `bank:${a.id}`,
+            name: a.name,
+            phone: null,
+            type: a.type === "CASH" ? "CASH_ACCOUNT" : "BANK_ACCOUNT",
+            currentBalance: Number(a.currentBalance),
+            address: null,
+            gstin: null,
+          }))
+        );
+      } catch { /* ignore */ }
+    }
+    fetchBankAccounts();
+  }, [includeBankAccounts]);
 
   useEffect(() => {
     if (!value) {
@@ -134,7 +162,12 @@ export function PartySearch({
   return (
     <div className="flex flex-col gap-2">
       <SearchableSelect
-        items={parties}
+        items={[
+          ...bankAccountOptions.filter(
+            (a) => !searchTerm || a.name.toLowerCase().includes(searchTerm.toLowerCase())
+          ),
+          ...parties,
+        ]}
         inputValue={searchTerm}
         onInputChange={handleInputChange}
         onSelectionChange={(party) => {
@@ -157,13 +190,19 @@ export function PartySearch({
           <div className="flex w-full items-center justify-between">
             <div className="flex flex-col">
               <span className="font-semibold">{party.name}</span>
-              {party.phone && (
+              {party.type === "CASH_ACCOUNT" || party.type === "BANK_ACCOUNT" ? (
+                <span className="text-xs text-primary">
+                  {party.type === "CASH_ACCOUNT" ? "Cash A/c" : "Bank A/c"}
+                </span>
+              ) : party.phone ? (
                 <span className="text-xs text-default-500">Phone {party.phone}</span>
-              )}
+              ) : null}
             </div>
             <div className="flex flex-col items-end">
               {Number(party.currentBalance) === 0 ? (
-                <span className="text-sm font-semibold text-default-400">Settled</span>
+                <span className="text-sm font-semibold text-default-400">
+                  {party.type === "CASH_ACCOUNT" || party.type === "BANK_ACCOUNT" ? "" : "Settled"}
+                </span>
               ) : (
                 <>
                   <span
@@ -171,9 +210,11 @@ export function PartySearch({
                   >
                     {formatSignedBalance(Number(party.currentBalance))}
                   </span>
-                  <span className="text-[10px] text-default-400">
-                    {getBalanceStatusLabel(party.type as "CUSTOMER" | "VENDOR", Number(party.currentBalance))}
-                  </span>
+                  {party.type !== "CASH_ACCOUNT" && party.type !== "BANK_ACCOUNT" && (
+                    <span className="text-[10px] text-default-400">
+                      {getBalanceStatusLabel(party.type as "CUSTOMER" | "VENDOR", Number(party.currentBalance))}
+                    </span>
+                  )}
                 </>
               )}
             </div>

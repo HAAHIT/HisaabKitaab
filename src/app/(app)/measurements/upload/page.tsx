@@ -226,9 +226,8 @@ export default function UploadMeasurementsPage() {
     <div className="mx-auto max-w-2xl animate-fade-in p-4 pb-12 lg:p-8">
       {toast && (
         <div
-          className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${
-            toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
-          }`}
+          className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
+            }`}
         >
           {toast.message}
         </div>
@@ -294,7 +293,7 @@ export default function UploadMeasurementsPage() {
                     src={photo}
                     alt={`Photo ${index + 1}`}
                     fill
-                    unoptimized
+                    quality={60}
                     className="object-cover"
                   />
                   <button
@@ -477,7 +476,7 @@ export default function UploadMeasurementsPage() {
                     src={photo}
                     alt={`Review ${index + 1}`}
                     fill
-                    unoptimized
+                    quality={60}
                     className="object-cover"
                   />
                 </div>

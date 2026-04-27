@@ -41,7 +41,7 @@ interface JournalEntryParams {
 interface SalesBillJournalInput {
   id: string;
   billNumber: string;
-  partyId: string;
+  partyId: string | null;
   partyName: string;
   subtotal: number;
   taxAmount: number;

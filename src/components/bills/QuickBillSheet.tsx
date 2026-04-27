@@ -149,9 +149,9 @@ export function QuickBillSheet({
           customerAddress: selectedParty.address || null,
           gstin: selectedParty.gstin || null,
           rows: [
-            { 
+            {
               itemId: selectedItemId || null,
-              desc: description || "Quick Bill", 
+              desc: description || "Quick Bill",
               amt: parsedAmount,
               qty: 1,
               rate: parsedAmount
@@ -267,9 +267,8 @@ export function QuickBillSheet({
           <button
             type="button"
             onClick={() => setRecordPayment((prev) => !prev)}
-            className={`shrink-0 text-xs font-medium transition-colors ${
-              recordPayment ? "text-default-400 hover:text-default-600" : "text-primary"
-            }`}
+            className={`shrink-0 text-xs font-medium transition-colors ${recordPayment ? "text-default-400 hover:text-default-600" : "text-primary"
+              }`}
           >
             {recordPayment ? "Skip" : "Record"}
           </button>

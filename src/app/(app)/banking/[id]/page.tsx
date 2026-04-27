@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
-import { headers } from "next/headers";
-import { resolveTenantIdFromRequest } from "@/lib/tenant";
+import { resolveServerSession } from "@/lib/session-server";
 import BankLedgerClient from "./BankLedgerClient";
 
 export const dynamic = "force-dynamic";
@@ -12,13 +11,13 @@ export default async function BankLedgerPage({
     params: Promise<{ id: string }>;
 }) {
     const { id } = await params;
-    const headerStore = await headers();
-    const tenantId = resolveTenantIdFromRequest({ headers: headerStore });
-    const role = headerStore.get("x-user-role");
+    const session = await resolveServerSession();
 
-    if (!tenantId) {
+    if (!session) {
         return notFound();
     }
+
+    const { tenantId, role } = session;
 
     const account = await prisma.bankAccount.findFirst({
         where: {

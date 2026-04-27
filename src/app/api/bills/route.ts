@@ -49,11 +49,12 @@ function normalizePaymentMode(mode: unknown): SupportedPaymentMode | null {
   return VALID_PAYMENT_MODES.has(mode) ? (mode as SupportedPaymentMode) : null;
 }
 
-function isValidBillRequest(finalTemplateId: unknown, partyId: unknown, rows: unknown): boolean {
+function isValidBillRequest(finalTemplateId: unknown, partyId: unknown, rows: unknown, hasPaymentMode: boolean): boolean {
   if (!finalTemplateId || typeof finalTemplateId !== "string" || !finalTemplateId.trim()) {
     return false;
   }
-  if (!partyId || typeof partyId !== "string" || !partyId.trim()) {
+  // partyId is optional for cash/bank sales
+  if (!hasPaymentMode && (!partyId || typeof partyId !== "string" || !partyId.trim())) {
     return false;
   }
   if (!Array.isArray(rows) || rows.length === 0) {
@@ -83,7 +84,7 @@ const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
 
 const CreateBillSchema = z.object({
   templateId: z.string().min(1),
-  partyId: z.string().min(1),
+  partyId: z.string().min(1).nullish(),
   customerName: z.string().optional(),
   customerPhone: z.string().nullish(),
   customerAddress: z.string().nullish(),
@@ -121,6 +122,7 @@ const CreateBillSchema = z.object({
   status: z.string().optional(),
   isInterState: z.boolean().optional(),
   paymentMode: z.string().optional(),
+  accountId: z.string().optional(),
   hsnCode: z.string().nullish(),
   shippingAddress: z.string().nullish(), // Ship To address
   date: z.string().optional(), // [ADDED] Allow custom issue dates
@@ -408,7 +410,7 @@ export async function POST(request: NextRequest) {
       finalTemplateId = quickTemplate.id;
     }
 
-    if (!isValidBillRequest(finalTemplateId, partyId, rows)) {
+    if (!isValidBillRequest(finalTemplateId, partyId, rows, !!body.paymentMode)) {
       return NextResponse.json(
         { error: "Template, party, and at least one row are required" },
         { status: 400 }
@@ -428,24 +430,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Template not found" }, { status: 404 });
     }
 
-    const party = await prisma.party.findFirst({
-      where: {
-        id: partyId,
-        tenantId,
-        isDeleted: false,
-        isActive: true,
-      },
-      select: {
-        id: true,
-        name: true,
-        type: true,
-        phone: true,
-        address: true,
-        gstin: true,
-      },
-    });
+    const party = partyId
+      ? await prisma.party.findFirst({
+          where: {
+            id: partyId,
+            tenantId,
+            isDeleted: false,
+            isActive: true,
+          },
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            phone: true,
+            address: true,
+            gstin: true,
+          },
+        })
+      : null;
 
-    if (!party) {
+    if (partyId && !party) {
       return NextResponse.json({ error: "Party not found" }, { status: 404 });
     }
 
@@ -479,7 +483,7 @@ export async function POST(request: NextRequest) {
       }
     }
     // [G-C1] Auto-derive from GSTIN state codes; manual override is fallback only
-    const effectiveGstin = gstin || party.gstin;
+    const effectiveGstin = gstin || party?.gstin;
     const isInterState = deriveIsInterState(effectiveGstin, tenant?.gstin, body.isInterState);
     const normalizedPaymentMode = normalizePaymentMode(body.paymentMode);
 
@@ -519,7 +523,8 @@ export async function POST(request: NextRequest) {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
-    const snapshot = buildBillSnapshotFromParty(party, {
+    const nullParty = { name: customerName || "Cash", phone: null, address: null, gstin: null };
+    const snapshot = buildBillSnapshotFromParty(party ?? nullParty, {
       customerName,
       customerPhone,
       customerAddress,
@@ -576,7 +581,7 @@ export async function POST(request: NextRequest) {
           tenantId,
           billNumber,
           templateId: template.id,
-          partyId: party.id,
+          partyId: party?.id ?? null,
           customerName: snapshot.customerName,
           customerPhone: snapshot.customerPhone,
           customerAddress: snapshot.customerAddress,
@@ -613,45 +618,50 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      const balanceChange = getPostedBillBalanceDelta(
-        party.type,
-        billStatus,
-        resolvedGrandTotal
-      );
+      if (party) {
+        const balanceChange = getPostedBillBalanceDelta(
+          party.type,
+          billStatus,
+          resolvedGrandTotal
+        );
 
-      if (balanceChange !== 0) {
-        await tx.party.update({
-          where: { id: party.id },
-          data: {
-            currentBalance: { increment: balanceChange },
-          },
-        });
+        if (balanceChange !== 0) {
+          await tx.party.update({
+            where: { id: party.id },
+            data: {
+              currentBalance: { increment: balanceChange },
+            },
+          });
+        }
       }
 
       if (billStatus === "FINAL") {
         await journalForSalesBill(tx, tenantId, {
           id: createdBill.id,
           billNumber,
-          partyId: party.id,
-          partyName: party.name,
+          partyId: party?.id ?? null,
+          partyName: party?.name ?? snapshot.customerName,
           subtotal: createdBill.subtotal.toNumber(),
           taxAmount: createdBill.taxAmount.toNumber(),
           grandTotal: createdBill.grandTotal.toNumber(),
           roundOff: roundOff || 0,
           createdBy: userId!,
-          entryDate: createdBill.date, // Use the custom bill date for accounting ledgers
+          entryDate: createdBill.date,
           isInterState,
         });
       }
 
-      if (isQuickBill && normalizedPaymentMode) {
+      if (normalizedPaymentMode) {
+        const direction = party?.type === "VENDOR" ? "OUTGOING" : "INCOMING";
+
         const createdPayment = await (tx as any).payment.create({
           data: {
             tenantId,
-            partyId: party.id,
-            direction: party.type === "CUSTOMER" ? "INCOMING" : "OUTGOING",
+            partyId: party?.id ?? null,
+            accountId: body.accountId || null,
+            direction,
             amount: resolvedGrandTotal,
-            date: billDateObj, // Payment receives the same backdated date
+            date: billDateObj,
             mode: normalizedPaymentMode,
             status: "COMPLETED",
             linkedBillId: createdBill.id,
@@ -659,21 +669,32 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        const paymentDelta = getPaymentBalanceDelta(
-          party.type as "CUSTOMER" | "VENDOR",
-          party.type === "CUSTOMER" ? "INCOMING" : "OUTGOING",
-          resolvedGrandTotal
-        );
-        await tx.party.update({
-          where: { id: party.id },
-          data: { currentBalance: { increment: paymentDelta } },
-        });
+        if (party) {
+          const paymentDelta = getPaymentBalanceDelta(
+            party.type as "CUSTOMER" | "VENDOR",
+            direction,
+            resolvedGrandTotal
+          );
+          await tx.party.update({
+            where: { id: party.id },
+            data: { currentBalance: { increment: paymentDelta } },
+          });
+        }
 
-        if (party.type === "CUSTOMER") {
+        // Update bank account balance
+        if (body.accountId) {
+          const bankBalanceChange = direction === "INCOMING" ? resolvedGrandTotal : -resolvedGrandTotal;
+          await (tx as any).bankAccount.update({
+            where: { id: body.accountId },
+            data: { currentBalance: { increment: bankBalanceChange } },
+          });
+        }
+
+        if (!party || party.type === "CUSTOMER") {
           await journalForPaymentReceived(tx, tenantId, {
             id: createdPayment.id,
-            partyId: party.id,
-            partyName: party.name,
+            partyId: party?.id ?? null,
+            partyName: party?.name ?? snapshot.customerName,
             amount: createdPayment.amount.toNumber(),
             mode: createdPayment.mode,
             date: createdPayment.date,

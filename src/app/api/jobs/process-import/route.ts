@@ -453,6 +453,7 @@ export async function processImportJob(jobId?: string) {
             // Find the party LEDGER line if available (cash/online sales may not have one)
             const partyLine = lines.find((l) => l.partyId);
             const isPurchase = resolvedType === "PURCHASE" || resolvedType === "DEBIT_NOTE";
+            const cashBankLine = lines.find((l) => l.accountCode === "CASH" || l.accountCode === "BANK" || l.accountCode === "UPI");
 
             // Compute grandTotal from the SALES/PURCHASE account line or total debit
             const totalDebit = lines.reduce((s, l) => s + l.debit, 0);
@@ -479,10 +480,11 @@ export async function processImportJob(jobId?: string) {
                 Amount: grandTotal,
               }];
 
+            // Issue #3 fix: use voucher index for unique bill numbers
             const createdBill = await tx.bill.create({
               data: {
                 tenantId: tid,
-                billNumber: voucher.reference ? voucher.reference : `IMP-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`,
+                billNumber: voucher.reference ? voucher.reference : `IMP-${job.id.slice(-6)}-${imported + skipped + failed}`,
                 templateId: tallyTemplateId,
                 partyId: partyLine?.partyId ?? null,
                 customerName,
@@ -512,9 +514,39 @@ export async function processImportJob(jobId?: string) {
                 newValue: JSON.stringify({ source: "tally-import" }),
               },
             });
+
+            // Issue #2 fix: create Payment record for cash/bank sales so it shows in Banking
+            if (cashBankLine) {
+              const saleAccountId = cashBankLine.ledgerName
+                ? bankAccountCache.get(cashBankLine.ledgerName) ?? null
+                : null;
+              const salePaymentAmount = Math.abs(cashBankLine.debit !== 0 ? cashBankLine.debit : cashBankLine.credit);
+              const saleMode = cashBankLine.accountCode === "CASH" ? "CASH"
+                : cashBankLine.accountCode === "UPI" ? "UPI"
+                : "BANK_TRANSFER";
+
+              const createdPayment = await tx.payment.create({
+                data: {
+                  tenantId: tid,
+                  partyId: partyLine?.partyId ?? null,
+                  accountId: saleAccountId,
+                  linkedBillId: billId,
+                  amount: salePaymentAmount,
+                  date: voucher.entryDate,
+                  direction: isPurchase ? "OUTGOING" : "INCOMING",
+                  mode: saleMode as "CASH" | "UPI" | "BANK_TRANSFER",
+                  status: "COMPLETED",
+                  referenceNo: voucher.reference || null,
+                  notes: voucher.narration,
+                  createdBy: billCreatorId,
+                }
+              });
+              paymentId = createdPayment.id;
+            }
           } else if (isPaymentOrReceipt) {
             const partyLine = lines.find((l) => l.partyId);
-            const cashBankLine = lines.find((l) => l.accountCode === "CASH" || l.accountCode === "BANK" || l.accountCode === "UPI");
+            const bankLines = lines.filter((l) => l.accountCode === "CASH" || l.accountCode === "BANK" || l.accountCode === "UPI");
+            const cashBankLine = bankLines[0];
 
             // Compute amount from party line or the cash/bank line
             const paymentAmount = partyLine
@@ -523,21 +555,41 @@ export async function processImportJob(jobId?: string) {
                 ? Math.abs(cashBankLine.debit !== 0 ? cashBankLine.debit : cashBankLine.credit)
                 : lines.reduce((s, l) => s + l.debit, 0);
 
-            const direction = resolvedType === "RECEIPT" ? "INCOMING" : "OUTGOING";
+            const isContra = resolvedType === "CONTRA";
+            const direction = resolvedType === "RECEIPT" ? "INCOMING"
+              : resolvedType === "PAYMENT" ? "OUTGOING"
+              : "OUTGOING"; // CONTRA: source debits, destination credits
+
             const mode = cashBankLine?.accountCode === "CASH" ? "CASH"
               : cashBankLine?.accountCode === "UPI" ? "UPI"
               : "BANK_TRANSFER";
 
-            // Resolve bank/cash account from cache using the ledger name
-            const accountId = cashBankLine?.ledgerName
-              ? bankAccountCache.get(cashBankLine.ledgerName) ?? null
-              : null;
+            // Resolve source bank account (debit side for CONTRA, or the cash/bank line)
+            let sourceAccountId: string | null = null;
+            let destAccountId: string | null = null;
+
+            if (isContra && bankLines.length >= 2) {
+              // Contra: debit line = destination (money goes in), credit line = source (money goes out)
+              const debitLine = bankLines.find((l) => l.debit > 0);
+              const creditLine = bankLines.find((l) => l.credit > 0);
+              sourceAccountId = creditLine?.ledgerName
+                ? bankAccountCache.get(creditLine.ledgerName) ?? null
+                : null;
+              destAccountId = debitLine?.ledgerName
+                ? bankAccountCache.get(debitLine.ledgerName) ?? null
+                : null;
+            } else {
+              sourceAccountId = cashBankLine?.ledgerName
+                ? bankAccountCache.get(cashBankLine.ledgerName) ?? null
+                : null;
+            }
 
             const createdPayment = await tx.payment.create({
               data: {
                 tenantId: tid,
                 partyId: partyLine?.partyId ?? null,
-                accountId,
+                accountId: sourceAccountId,
+                destinationAccountId: destAccountId,
                 amount: paymentAmount,
                 date: voucher.entryDate,
                 direction,
@@ -676,8 +728,66 @@ export async function processImportJob(jobId?: string) {
       try {
         await recomputePartyBalance(null, pid, tid);
       } catch (err) {
-        // Log but don't fail the import — balance can be recomputed on-demand
         logError("import.party-balance.error", { pid, jobId: job.id, error: err });
+      }
+    }
+
+    // Recompute bank account balances from their linked payments
+    const affectedBankIds = [...new Set(bankAccountCache.values())];
+    for (const bankId of affectedBankIds) {
+      try {
+        const account = await prisma.bankAccount.findUnique({
+          where: { id: bankId },
+          select: { openingBalance: true },
+        });
+        if (!account) continue;
+
+        const result = await prisma.payment.aggregate({
+          where: {
+            tenantId: tid,
+            isDeleted: false,
+            status: "COMPLETED",
+            OR: [
+              { accountId: bankId },
+              { destinationAccountId: bankId },
+            ],
+          },
+          _sum: { amount: true },
+          _count: true,
+        });
+
+        // Compute net: incoming adds, outgoing subtracts
+        const payments = await prisma.payment.findMany({
+          where: {
+            tenantId: tid,
+            isDeleted: false,
+            status: "COMPLETED",
+            OR: [
+              { accountId: bankId },
+              { destinationAccountId: bankId },
+            ],
+          },
+          select: { amount: true, direction: true, accountId: true, destinationAccountId: true },
+        });
+
+        let net = 0;
+        for (const p of payments) {
+          const amt = Number(p.amount);
+          if (p.accountId === bankId) {
+            // This is the source account
+            net += p.direction === "INCOMING" ? amt : -amt;
+          } else if (p.destinationAccountId === bankId) {
+            // This is the destination (contra transfer in)
+            net += amt;
+          }
+        }
+
+        await prisma.bankAccount.update({
+          where: { id: bankId },
+          data: { currentBalance: Number(account.openingBalance) + net },
+        });
+      } catch (err) {
+        logError("import.bank-balance.error", { bankId, jobId: job.id, error: err });
       }
     }
 
