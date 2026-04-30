@@ -73,7 +73,8 @@ export default function PaymentsListPage() {
       string,
       { label: string; payments: Payment[]; incomingTotal: number; outgoingTotal: number }
     >();
-    for (const payment of payments) {
+    // Only completed payments in month groups — pending are pinned separately
+    for (const payment of payments.filter((p) => p.status !== "EXPECTED")) {
       const d = new Date(payment.date);
       const key = `${d.getFullYear()}-${d.getMonth()}`;
       const existing = groups.get(key);
@@ -386,6 +387,18 @@ export default function PaymentsListPage() {
                     );
                   })}
                 </div>
+              </div>
+            )}
+
+            {/* §5.4: "Hua Hai" section label — only when pending also visible */}
+            {pendingPayments.length > 0 && monthlyPaymentGroups.length > 0 && (
+              <div style={{
+                display: "flex", alignItems: "center", gap: 10, marginBottom: 14,
+              }}>
+                <h2 style={{ fontSize: TYPE.bodyLarge, fontWeight: 700, color: "var(--hk-sub)", fontFamily: SG }}>
+                  Hua Hai
+                </h2>
+                <div style={{ flex: 1, height: 1, background: "var(--hk-border)" }} />
               </div>
             )}
 

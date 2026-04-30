@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   getBalanceStatusLabel,
   type SupportedPartyType,
@@ -21,6 +22,7 @@ import {
   PageHeader, GradientButton,
 } from "@/components/ui/hk-design";
 import { OverdueBanner } from "@/components/ui/OverdueBanner";
+import { normalizeIndianPhone, buildWhatsAppReminderUrl } from "@/lib/phone";
 import { useOverdueData } from "@/hooks/useOverdueData";
 
 interface Party {
@@ -47,19 +49,35 @@ async function readError(response: Response) {
 
 export default function PartiesPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { t } = useLanguage();
   const isMobile = useIsMobile();
   const overdue = useOverdueData();
+  const addNewHandled = useRef(false);
 
   const [parties, setParties] = useState<Party[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [overflowPartyId, setOverflowPartyId] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<"ALL" | "CUSTOMER" | "VENDOR">("ALL");
+  const [overdueFilter, setOverdueFilter] = useState(false);
   const [showPanel, setShowPanel] = useState(false);
   const [editingParty, setEditingParty] = useState<Party | null>(null);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+
+  // Auto-open add panel when ?addNew=true (from Smart FAB §5.5)
+  useEffect(() => {
+    if (!addNewHandled.current && searchParams.get("addNew") === "true") {
+      addNewHandled.current = true;
+      openCreate();
+    }
+  }, [searchParams]);
+
+  // Sync overdue filter from URL
+  useEffect(() => {
+    setOverdueFilter(searchParams.get("overdue") === "true");
+  }, [searchParams]);
 
   const [formName, setFormName] = useState("");
   const [formPhone, setFormPhone] = useState("");
@@ -76,6 +94,7 @@ export default function PartiesPage() {
       params.set("sortBy", "balance");
       if (search) params.set("search", search);
       if (typeFilter !== "ALL") params.set("type", typeFilter);
+      if (overdueFilter) params.set("overdue", "true");
 
       const response = await fetch(`/api/parties?${params.toString()}`);
       if (!response.ok) throw new Error(await readError(response));
@@ -91,7 +110,7 @@ export default function PartiesPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, t, typeFilter]);
+  }, [search, t, typeFilter, overdueFilter]);
 
   useEffect(() => {
     fetchParties();
@@ -314,10 +333,33 @@ export default function PartiesPage() {
           </div>
 
           {/* Search + filter */}
-          <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 10, marginBottom: overdueFilter ? 8 : 16, flexWrap: "wrap" }}>
             <SearchBox value={search} onChange={setSearch} placeholder="Party dhundho..." />
             <PillFilter options={filterOptions} value={typeFilter} onChange={setTypeFilter} />
           </div>
+
+          {/* Overdue filter active chip */}
+          {overdueFilter && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+              <div style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: "6px 12px", borderRadius: 20,
+                background: OR + "18", border: `1px solid ${OR}40`,
+                fontSize: TYPE.bodySmall, fontWeight: 700, color: OR, fontFamily: SG,
+              }}>
+                ⏰ Overdue parties sirf
+                <button
+                  onClick={() => router.replace("/parties")}
+                  aria-label="Clear overdue filter"
+                  style={{
+                    background: "none", border: "none", cursor: "pointer",
+                    color: OR, fontSize: 14, fontWeight: 700,
+                    lineHeight: 1, padding: "0 2px",
+                  }}
+                >✕</button>
+              </div>
+            </div>
+          )}
 
           {loading ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -493,7 +535,7 @@ export default function PartiesPage() {
                           {/* Call button */}
                           {party.phone && (
                             <a
-                              href={`tel:${party.phone}`}
+                              href={`tel:${normalizeIndianPhone(party.phone)}`}
                               aria-label={`Call ${party.name}`}
                               style={{
                                 width: 36,
@@ -517,7 +559,11 @@ export default function PartiesPage() {
                           {/* WhatsApp button */}
                           {party.phone && (
                             <a
-                              href={`https://wa.me/${party.phone.replace(/[^0-9]/g, "").replace(/^(?!91)/, "91")}?text=${encodeURIComponent(`Namaste ${party.name}, HisaabKitaab se: Aapka baaki ₹${Math.abs(party.currentBalance).toLocaleString("en-IN")} hai. Kripya jaldi se payment kar dein. Dhanyavaad!`)}`}
+                              href={buildWhatsAppReminderUrl({
+                                phone: party.phone,
+                                partyName: party.name,
+                                balanceAmount: Math.abs(party.currentBalance),
+                              })}
                               target="_blank"
                               rel="noopener noreferrer"
                               aria-label={`WhatsApp ${party.name}`}
