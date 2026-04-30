@@ -3,6 +3,7 @@ import { GST_STATE_CODE_SET } from "@/lib/gst-states";
 import {
   buildBillSnapshotFromParty,
   getBillBalanceDeltaForTransition,
+  asSupportedPartyType,
 } from "@/lib/accounting";
 import {
   journalForCancelledSalesBill,
@@ -567,7 +568,7 @@ export async function PATCH(
       }
 
       const balanceChange = getBillBalanceDeltaForTransition({
-        partyType: party.type,
+        partyType: asSupportedPartyType(party.type),
         previousStatus: existing.status,
         previousAmount: existing.grandTotal.toNumber(),
         nextStatus: finalStatus,
@@ -704,7 +705,7 @@ export async function DELETE(
       }
 
       const balanceChange = getBillBalanceDeltaForTransition({
-        partyType: party.type,
+        partyType: asSupportedPartyType(party.type),
         previousStatus: existing.status,
         previousAmount: existing.grandTotal.toNumber(),
         nextStatus: "CANCELLED",

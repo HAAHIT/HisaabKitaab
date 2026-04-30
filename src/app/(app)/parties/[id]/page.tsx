@@ -1,4 +1,4 @@
-import { buildPartyLedger } from "@/lib/accounting";
+import { buildPartyLedger, asSupportedPartyType } from "@/lib/accounting";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import PartyProfileClient from "./PartyProfileClient";
@@ -85,7 +85,7 @@ export default async function PartyProfilePage({
   }));
 
   const { ledger, calculatedCurrent } = buildPartyLedger({
-    partyType: party.type,
+    partyType: asSupportedPartyType(party.type),
     openingBalance: party.openingBalance.toNumber(),
     createdAt: party.createdAt,
     bills: bills.map((b: { id: string; billNumber: string; grandTotal: any; createdAt: Date }) => ({

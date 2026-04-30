@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import {
   buildPartyLedger,
   getLedgerAmountsForBalanceDelta,
+  asSupportedPartyType,
 } from "@/lib/accounting";
 import { resolveReadTenant } from "@/lib/api-tenant";
 import {
@@ -124,7 +125,7 @@ export async function GET(request: NextRequest) {
   ]);
 
   const { ledger } = buildPartyLedger({
-    partyType: party.type,
+    partyType: asSupportedPartyType(party.type),
     openingBalance: party.openingBalance.toNumber(),
     createdAt: party.createdAt,
     bills: bills.map((b) => ({ ...b, grandTotal: b.grandTotal.toNumber() })),
@@ -141,7 +142,7 @@ export async function GET(request: NextRequest) {
     break;
   }
 
-  const openingRow = getLedgerAmountsForBalanceDelta(party.type, openingBalance);
+  const openingRow = getLedgerAmountsForBalanceDelta(asSupportedPartyType(party.type), openingBalance);
   const rangedLedger = ledger.filter(
     (entry) =>
       entry.date.getTime() >= fromDate.getTime() &&

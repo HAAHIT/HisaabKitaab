@@ -4,10 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useInstallPrompt } from "@/hooks/useInstallPrompt";
-import {
-  ONBOARDING_DISMISSED_KEY,
-  SetupWizard,
-} from "@/components/onboarding/SetupWizard";
+import { SetupWizard } from "@/components/onboarding/SetupWizard";
 import { Button, Skeleton } from "@heroui/react";
 import { OR, PU, GR, AM, SG, IN, TYPE } from "@/components/ui/hk-design";
 import { OverdueBanner } from "@/components/ui/OverdueBanner";
@@ -44,6 +41,7 @@ interface DashboardData {
     currentBalance: number;
     type: string;
   }[];
+  isOnboardingComplete: boolean;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -570,9 +568,12 @@ export default function DashboardPage() {
         d.topParties = pd.parties ?? [];
       }
       setData(d);
+      setShowOnboarding(!d.isOnboardingComplete);
+      setOnboardingReady(true);
     } catch (err: unknown) {
       if (err instanceof Error && err.name === "AbortError") return;
       setError("Network connection interrupted");
+      setOnboardingReady(true);
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
@@ -583,41 +584,7 @@ export default function DashboardPage() {
     return () => { abortControllerRef.current?.abort(); };
   }, [fetchDashboard]);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    let mounted = true;
-    async function checkOnboarding() {
-      try {
-        const dismissed =
-          typeof window !== "undefined" &&
-          window.localStorage.getItem(ONBOARDING_DISMISSED_KEY) === "1";
-        if (dismissed) {
-          if (mounted) { setShowOnboarding(false); setOnboardingReady(true); }
-          return;
-        }
-        const [pr, tr] = await Promise.all([
-          fetch("/api/parties?limit=1", { signal: controller.signal }),
-          fetch("/api/templates?limit=1", { signal: controller.signal }),
-        ]);
-        if (!pr.ok || !tr.ok) {
-          if (mounted) { setShowOnboarding(false); setOnboardingReady(true); }
-          return;
-        }
-        const [pd, td] = await Promise.all([
-          pr.json().catch(() => ({ parties: [] })),
-          tr.json().catch(() => ({ templates: [] })),
-        ]);
-        if (!mounted) return;
-        setShowOnboarding(!pd.parties?.length && !td.templates?.length);
-        setOnboardingReady(true);
-      } catch (err: unknown) {
-        if (err instanceof Error && err.name === "AbortError") return;
-        if (mounted) { setShowOnboarding(false); setOnboardingReady(true); }
-      }
-    }
-    checkOnboarding();
-    return () => { mounted = false; controller.abort(); };
-  }, []);
+
 
   if (loading || !onboardingReady) {
     return (
@@ -655,7 +622,12 @@ export default function DashboardPage() {
 
   if (!data) return null;
 
-  const today = new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  const now = new Date();
+  const today = now.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  
+  const m = now.getMonth();
+  const d = now.getDate();
+  const showTallyNudge = (m % 3 === 2 && d >= 15) || (m % 3 === 0 && d <= 15);
 
   return (
     <div style={{
@@ -681,6 +653,32 @@ export default function DashboardPage() {
             <Button size="sm" variant="flat" onPress={() => setBannerDismissed(true)}>✕</Button>
             <Button size="sm" color="primary" variant="flat" onPress={promptInstall}>Install</Button>
           </div>
+        </div>
+      )}
+
+      {/* Tally Quarterly Nudge */}
+      {showTallyNudge && (
+        <div style={{
+          marginBottom: 16, padding: isMobile ? "10px 14px" : "12px 16px", borderRadius: 14,
+          background: "linear-gradient(135deg, rgba(247,96,0,0.1) 0%, rgba(123,94,246,0.1) 100%)", 
+          border: `1px solid var(--hk-border)`,
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+          cursor: "pointer",
+        }} onClick={() => router.push("/settings/tally-export")}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ fontSize: 20 }}>📁</span>
+            <div>
+              <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG }}>
+                Quarter end aa raha hai
+              </p>
+              <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--hk-sub)", marginTop: 2 }}>
+                Tally file CA ko bhejo
+              </p>
+            </div>
+          </div>
+          <span style={{ color: "var(--hk-text)", fontWeight: 700, fontSize: 14 }}>
+            Bhejo →
+          </span>
         </div>
       )}
 

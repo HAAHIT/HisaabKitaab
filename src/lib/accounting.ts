@@ -1,6 +1,12 @@
 import { roundTo2 } from "./journal-reporting";
 
 export type SupportedPartyType = "CUSTOMER" | "VENDOR";
+
+/** Runtime guard — throws if a party type is not supported for accounting operations. */
+export function asSupportedPartyType(type: string): SupportedPartyType {
+  if (type === "CUSTOMER" || type === "VENDOR") return type;
+  throw new Error(`Unsupported party type for accounting: ${type}`);
+}
 export type SupportedPayDirection = "INCOMING" | "OUTGOING";
 export type SupportedBillStatus = "DRAFT" | "FINAL" | "CANCELLED";
 export type PartyLedgerEntryType = "BILL" | "PAYMENT" | "OPENING" | "NOTE";

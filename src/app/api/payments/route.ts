@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 import {
   getPaymentBalanceDelta,
   getSettlementDirectionForParty,
+  asSupportedPartyType,
 } from "@/lib/accounting";
 import {
   journalForPaymentMade,
@@ -221,7 +222,7 @@ export async function POST(request: NextRequest) {
         }
 
         resolvedPartyId = linkedBill.partyId;
-        if (type !== getSettlementDirectionForParty(linkedBill.party.type)) {
+        if (type !== getSettlementDirectionForParty(asSupportedPartyType(linkedBill.party.type))) {
           throw new Error("Linked bill payments must use the settlement direction for that party");
         }
       }
@@ -266,7 +267,7 @@ export async function POST(request: NextRequest) {
 
       if (paymentStatus === "COMPLETED") {
         const balanceChange = getPaymentBalanceDelta(
-          party.type,
+          asSupportedPartyType(party.type),
           type,
           normalizedAmount
         );
@@ -380,8 +381,12 @@ export async function PATCH(request: NextRequest) {
         include: { party: { select: { name: true, type: true } } },
       });
 
+      if (!payment.party || !payment.partyId) {
+        throw new Error("Payment has no linked party — cannot complete");
+      }
+
       const balanceChange = getPaymentBalanceDelta(
-        payment.party.type,
+        asSupportedPartyType(payment.party.type),
         payment.direction,
         payment.amount.toNumber()
       );
@@ -392,6 +397,10 @@ export async function PATCH(request: NextRequest) {
           currentBalance: { increment: balanceChange },
         },
       });
+
+      if (!updated.party || !updated.party.name) {
+        throw new Error("Payment party missing after update");
+      }
 
       if (payment.direction === "INCOMING") {
         await journalForPaymentReceived(tx, tenantId, {

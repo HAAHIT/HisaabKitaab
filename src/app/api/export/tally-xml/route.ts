@@ -100,20 +100,18 @@ function extractHsnRatePairs(
 }
 
 /**
- * GET /api/export/tally-xml
+ * POST /api/export/tally-xml
  *
- * Query params:
+ * Body params:
  *   from        YYYY-MM-DD  start of date range (IST)
  *   to          YYYY-MM-DD  end of date range (IST)
- *   type        "vouchers" | "masters" | "all"  (default: "all")
+ *   include     { sales, purchases, receipts, payments, ledgers, journals }
  *
  * Returns a single Tally-importable XML file.
- * Import party masters first, then vouchers — or use type=all to get both
- * in one file (masters first, then vouchers).
  *
  * Access: ADMIN and ACCOUNTANT only.
  */
-export async function GET(request: NextRequest) {
+export async function POST(request: NextRequest) {
   const role = request.headers.get("x-user-role");
 
   if (role !== "ADMIN" && role !== "ACCOUNTANT") {
@@ -125,21 +123,39 @@ export async function GET(request: NextRequest) {
   }
   const tenantId = tenantResolution.tenantId;
 
-  const { searchParams } = new URL(request.url);
-  const from = searchParams.get("from");
-  const to = searchParams.get("to");
-  const type = searchParams.get("type") || "all";
+  interface ExportBody {
+    from?: unknown;
+    to?: unknown;
+    include?: {
+      sales?: boolean;
+      purchases?: boolean;
+      receipts?: boolean;
+      payments?: boolean;
+      ledgers?: boolean;
+      journals?: boolean;
+    };
+  }
+  let body: ExportBody = {};
+  try {
+    body = await request.json();
+  } catch (e) {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const from = typeof body.from === "string" ? body.from : undefined;
+  const to = typeof body.to === "string" ? body.to : undefined;
+  const include = body.include || {
+    sales: true,
+    purchases: true,
+    receipts: true,
+    payments: true,
+    ledgers: true,
+    journals: false,
+  };
 
   if (!from || !to) {
     return NextResponse.json(
       { error: "Date range (from, to) is required" },
-      { status: 400 }
-    );
-  }
-
-  if (!["vouchers", "masters", "all"].includes(type)) {
-    return NextResponse.json(
-      { error: "type must be one of: vouchers, masters, all" },
       { status: 400 }
     );
   }
@@ -182,7 +198,14 @@ export async function GET(request: NextRequest) {
     // ── Party masters ────────────────────────────────────────────────────────
     let allMastersToExport: TallyPartyMaster[] = [];
 
-    if (type === "masters" || type === "all") {
+    const hasVouchers =
+      include.sales ||
+      include.purchases ||
+      include.receipts ||
+      include.payments ||
+      include.journals;
+
+    if (include.ledgers) {
       const parties = await prisma.party.findMany({
         where: { tenantId, isDeleted: false },
         select: {
@@ -215,20 +238,42 @@ export async function GET(request: NextRequest) {
 
       allMastersToExport = [...standardLedgers, ...fetchedParties];
 
-      if (type === "masters") {
+      if (!hasVouchers) {
         xml = buildTallyPartyMasterXml(allMastersToExport, companyName);
         return xmlResponse(xml, `tally_masters_${from}_to_${to}.xml`);
       }
     }
 
     // ── Vouchers ─────────────────────────────────────────────────────────────
-    if (type === "vouchers" || type === "all") {
+    if (hasVouchers) {
+      // Build filter for voucher types based on include options
+      const voucherTypes: any[] = [];
+      if (include.sales) {
+        voucherTypes.push("SALES", "CREDIT_NOTE");
+      }
+      if (include.purchases) {
+        voucherTypes.push("PURCHASE", "DEBIT_NOTE");
+      }
+      if (include.receipts) {
+        voucherTypes.push("RECEIPT");
+      }
+      if (include.payments) {
+        voucherTypes.push("PAYMENT");
+      }
+      if (include.journals) {
+        voucherTypes.push("JOURNAL");
+      }
+
       // [P2] Pagination guard: refuse date ranges that would produce >5000 vouchers
       // in a single request to prevent OOM crashes on large books.
       // Callers should split large ranges by quarter or month.
       const MAX_VOUCHERS = 5_000;
       const voucherCount = await prisma.journalEntry.count({
-        where: { tenantId, entryDate: { gte: fromDate, lte: toDate } },
+        where: {
+          tenantId,
+          entryDate: { gte: fromDate, lte: toDate },
+          voucherType: { in: voucherTypes },
+        },
       });
 
       if (voucherCount > MAX_VOUCHERS) {
@@ -249,6 +294,7 @@ export async function GET(request: NextRequest) {
         where: {
           tenantId,
           entryDate: { gte: fromDate, lte: toDate },
+          voucherType: { in: voucherTypes },
         },
         orderBy: [{ entryDate: "asc" }, { createdAt: "asc" }],
         select: {
@@ -379,7 +425,7 @@ export async function GET(request: NextRequest) {
           ? `<!-- WARNING: ${hsnMissingCount} voucher(s) have tax > 0% but no HSN/SAC code. GSTR-1 Table 12 may be incomplete. -->`
           : "";
 
-      if (type === "vouchers") {
+      if (!include.ledgers) {
         let voucherXml = buildTallyVoucherXml(vouchers, companyName);
         if (hsnWarningComment) {
           voucherXml = voucherXml.replace(

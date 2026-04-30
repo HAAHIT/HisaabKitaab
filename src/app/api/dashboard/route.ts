@@ -126,6 +126,13 @@ export async function GET(request: NextRequest) {
     const payable = Math.abs(payableParties._sum.currentBalance?.toNumber() ?? 0);
     const collectedThisMonth = monthPayments._sum.amount || 0;
 
+    // [HOTFIX] Using $queryRaw to bypass Prisma client validation cache issues in Next.js Turbopack
+    // until the dev server is fully restarted. The column exists in the DB.
+    const tenantSettingsResult = await prisma.$queryRaw<{ isOnboardingComplete: boolean }[]>`
+      SELECT "isOnboardingComplete" FROM "Tenant" WHERE id = ${tenantId}
+    `;
+    const tenantSettings = tenantSettingsResult[0] ?? { isOnboardingComplete: false };
+
     return NextResponse.json({
       summary: {
         receivable,
@@ -139,6 +146,7 @@ export async function GET(request: NextRequest) {
       cashFlow,
       recentPayments,
       billStats,
+      isOnboardingComplete: tenantSettings?.isOnboardingComplete ?? false,
     });
   } catch (error) {
     logError("dashboard.error", { requestId: getRequestId(request), error });

@@ -388,153 +388,50 @@ export default function ReportsClient({
         </Card>
       </div>
 
-      <Card shadow="sm" className="border border-amber-500/20">
-        <CardBody className="p-6 space-y-4">
-          <div className="flex items-start gap-3">
-            <div className="flex-1">
-              <h3 className="text-lg font-semibold">{t("reports.tallyExport")}</h3>
-              <p className="text-sm text-default-500">{t("reports.tallyExportDesc")}</p>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card shadow="sm" className="border border-amber-500/20">
+          <CardBody className="p-6 flex flex-col justify-between items-start gap-4">
+            <div className="flex items-start gap-3 w-full">
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold">{t("reports.tallyExport")}</h3>
+                <p className="text-sm text-default-500 mt-1">{t("reports.tallyExportDesc")}</p>
+              </div>
+              <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                Tally
+              </span>
             </div>
-            <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-              Tally
-            </span>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-[1fr,auto]">
-            <Select
-              label={t("reports.tallyExportType")}
-              selectedKeys={[tallyExportType]}
-              onSelectionChange={(keys) => {
-                const next = Array.from(keys)[0];
-                if (next === "all" || next === "masters" || next === "vouchers") {
-                  setTallyExportType(next);
-                }
-              }}
-              variant="bordered"
+            <Button
+              color="warning"
+              className="bg-gradient-to-r from-[#f76000] to-[#7b5ef6] text-white font-semibold shadow-md w-full sm:w-auto"
+              onPress={() => window.location.href = "/settings/tally-export"}
             >
-              <SelectItem key="all">{t("reports.tallyAll")}</SelectItem>
-              <SelectItem key="masters">{t("reports.tallyMasters")}</SelectItem>
-              <SelectItem key="vouchers">{t("reports.tallyVouchers")}</SelectItem>
-            </Select>
+              Send to CA →
+            </Button>
+          </CardBody>
+        </Card>
 
-            <div className="flex items-end">
-              <Button
-                color="warning"
-                variant="flat"
-                className="font-semibold"
-                isDisabled={exportBlocked}
-                onPress={() =>
-                  downloadFile(
-                    buildDownloadUrl("/api/export/tally-xml", {
-                      from,
-                      to,
-                      type: tallyExportType,
-                    })
-                  )
-                }
-              >
-                {t("reports.downloadXML")}
-              </Button>
-            </div>
-          </div>
-
-          <p className="text-xs text-default-400">{t("reports.tallyHelp")}</p>
-        </CardBody>
-      </Card>
-
-      <Card shadow="sm" className="border border-amber-500/20">
-        <CardBody className="p-6 space-y-4">
-          <div className="flex items-start gap-3">
-            <div className="flex-1">
-              <h3 className="text-lg font-semibold">{t("reports.tallyImport")}</h3>
-              <p className="text-sm text-default-500">{t("reports.tallyImportDesc")}</p>
-            </div>
-            <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-              Tally
-            </span>
-          </div>
-
-          <div className="flex items-end gap-3">
-            <div className="flex-1">
-              <input
-                type="file"
-                accept=".xml,text/xml,application/xml"
-                className="w-full cursor-pointer rounded-xl border border-default-200 bg-default-50 px-3 py-2 text-sm file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-primary/10 file:px-3 file:py-1 file:text-sm file:font-medium file:text-primary"
-                onChange={(e) => {
-                  setImportFile(e.target.files?.[0] ?? null);
-                  setImportResult(null);
-                  setImportError(null);
-                }}
-              />
+        <Card shadow="sm" className="border border-amber-500/20">
+          <CardBody className="p-6 flex flex-col justify-between items-start gap-4">
+            <div className="flex items-start gap-3 w-full">
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold">{t("reports.tallyImport")}</h3>
+                <p className="text-sm text-default-500 mt-1">{t("reports.tallyImportDesc")}</p>
+              </div>
+              <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                Tally
+              </span>
             </div>
             <Button
               color="warning"
               variant="flat"
-              className="font-semibold shrink-0"
-              isDisabled={!importFile || importing}
-              isLoading={importing && !importJobId}
-              onPress={handleImport}
+              className="font-semibold w-full sm:w-auto"
+              onPress={() => window.location.href = "/settings/tally-import"}
             >
-              Import
+              Start Import →
             </Button>
-          </div>
-
-          {importJobId && (
-            <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm space-y-1">
-              <p className="font-medium text-primary">Import {jobProgress.status.toLowerCase()}...</p>
-              <div className="w-full bg-default-200 rounded-full h-2.5 dark:bg-default-700 mt-2">
-                <div
-                  className="bg-primary h-2.5 rounded-full"
-                  style={{ width: `${Math.max(5, (jobProgress.processed / (jobProgress.total || 1)) * 100)}%` }}
-                ></div>
-              </div>
-              <p className="text-default-500 mt-1">
-                Processed {jobProgress.processed} of {jobProgress.total} items
-              </p>
-            </div>
-          )}
-
-          {importError && (
-            <p className="rounded-xl border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger">
-              {importError}
-            </p>
-          )}
-
-          {importResult && (
-            <div className="rounded-xl border border-success/20 bg-success/5 px-4 py-3 text-sm space-y-1">
-              <p className="font-medium text-success">Import complete</p>
-              <p className="text-default-500">
-                {importResult.imported} vouchers imported · {importResult.skipped} skipped (duplicates) · {importResult.partiesCreated} parties created
-                {importResult.failed > 0 && (
-                  <span className="text-danger"> · {importResult.failed} failed</span>
-                )}
-              </p>
-              {importResult.parseErrors.length > 0 && (
-                <details className="mt-2">
-                  <summary className="cursor-pointer text-xs text-default-400">
-                    {importResult.parseErrors.length} parse warning(s)
-                  </summary>
-                  <ul className="mt-1 space-y-0.5 text-xs text-default-500">
-                    {importResult.parseErrors.map((e, i) => <li key={i}>{e}</li>)}
-                  </ul>
-                </details>
-              )}
-              {importResult.importErrors.length > 0 && (
-                <details className="mt-2">
-                  <summary className="cursor-pointer text-xs text-danger">
-                    {importResult.importErrors.length} import error(s)
-                  </summary>
-                  <ul className="mt-1 space-y-0.5 text-xs text-danger/80">
-                    {importResult.importErrors.map((e, i) => <li key={i}>{e}</li>)}
-                  </ul>
-                </details>
-              )}
-            </div>
-          )}
-
-          <p className="text-xs text-default-400">{t("reports.tallyImportHelp")}</p>
-        </CardBody>
-      </Card>
+          </CardBody>
+        </Card>
+      </div>
 
       <Card shadow="sm">
         <CardBody className="space-y-4 p-6">

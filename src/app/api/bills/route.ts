@@ -12,6 +12,7 @@ import {
   buildBillSnapshotFromParty,
   getPostedBillBalanceDelta,
   getPaymentBalanceDelta,
+  asSupportedPartyType,
 } from "@/lib/accounting";
 import {
   journalForPaymentMade,
@@ -582,7 +583,7 @@ export async function POST(request: NextRequest) {
       });
 
       const balanceChange = getPostedBillBalanceDelta(
-        party.type,
+        asSupportedPartyType(party.type),
         billStatus,
         resolvedGrandTotal
       );

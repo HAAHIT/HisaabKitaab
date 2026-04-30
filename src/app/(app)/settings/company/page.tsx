@@ -495,6 +495,32 @@ export default function CompanySettingsPage() {
             />
           </section>
 
+          <section>
+            <h2 className="mb-4 border-b border-divider pb-2 text-lg font-semibold">
+              Tally Integration
+            </h2>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-2xl border border-divider p-4 flex flex-col justify-between items-start gap-4">
+                <div>
+                  <h3 className="font-semibold">Tally ko Bhejo</h3>
+                  <p className="text-sm text-default-500">Export vouchers and party balances to a Tally XML file for your CA.</p>
+                </div>
+                <Button variant="flat" color="primary" onPress={() => router.push("/settings/tally-export")}>
+                  Start Export
+                </Button>
+              </div>
+              <div className="rounded-2xl border border-divider p-4 flex flex-col justify-between items-start gap-4">
+                <div>
+                  <h3 className="font-semibold">Tally se Laao</h3>
+                  <p className="text-sm text-default-500">Import historical vouchers and party balances from Tally into HisaabKitaab.</p>
+                </div>
+                <Button variant="flat" onPress={() => router.push("/settings/tally-import")}>
+                  Start Import
+                </Button>
+              </div>
+            </div>
+          </section>
+
           <div className="flex justify-end gap-3 border-t border-divider pt-4">
             <Button
               color="primary"

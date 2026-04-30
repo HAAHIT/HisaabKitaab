@@ -14,6 +14,7 @@
     "journal:backfill": "npx tsx scripts/backfill-journal.ts",
     "media:migrate": "npx tsx scripts/migrate-legacy-media.ts",
     "postinstall": "prisma generate",
+    "clean": "node -e \"fs.rmSync('.next', { recursive: true, force: true })\"",
     "test": "vitest"
   },
   "overrides": {

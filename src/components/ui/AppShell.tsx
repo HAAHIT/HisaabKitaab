@@ -420,6 +420,16 @@ export default function AppShell({
                   Settings
                 </DropdownItem>
               ) : null) as never}
+              {(user.role === "ADMIN" || user.role === "ACCOUNTANT" ? (
+                <DropdownItem key="tally-export" textValue="Tally ko Bhejo" onPress={() => router.push("/settings/tally-export")}>
+                  Tally Export
+                </DropdownItem>
+              ) : null) as never}
+              {(user.role === "ADMIN" ? (
+                <DropdownItem key="tally-import" textValue="Tally se Laao" onPress={() => router.push("/settings/tally-import")}>
+                  Tally Import
+                </DropdownItem>
+              ) : null) as never}
               <DropdownItem key="more" textValue="More" onPress={() => setMoreSheetOpen(true)}>
                 More screens
               </DropdownItem>

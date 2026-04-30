@@ -1,37 +1,22 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Button, Card, CardBody, Input } from "@heroui/react";
+import { Button, Card, CardBody, Input, Select, SelectItem } from "@heroui/react";
 import { useRouter } from "next/navigation";
-import { useLanguage } from "@/contexts/LanguageContext";
 
-export const ONBOARDING_DISMISSED_KEY = "doorcraft-onboarding-dismissed";
+// Indian states list
+const INDIAN_STATES = [
+  "Andaman and Nicobar Islands", "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar",
+  "Chandigarh", "Chhattisgarh", "Dadra and Nagar Haveli and Daman and Diu", "Delhi", "Goa",
+  "Gujarat", "Haryana", "Himachal Pradesh", "Jammu and Kashmir", "Jharkhand", "Karnataka",
+  "Kerala", "Ladakh", "Lakshadweep", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya",
+  "Mizoram", "Nagaland", "Odisha", "Puducherry", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu",
+  "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal"
+];
+
+const BUSINESS_TYPES = ["Retail", "Wholesale", "Manufacturing", "Service", "Other"];
 
 type WizardStep = 0 | 1 | 2 | 3;
-type TemplatePreset = "simple" | "detailed";
-
-const SIMPLE_TEMPLATE_COLUMNS = [
-  { id: "item", name: "Item", type: "text", position: 0 },
-  { id: "amount", name: "Amount", type: "number", position: 1 },
-] as const;
-
-const DETAILED_TEMPLATE_COLUMNS = [
-  { id: "item", name: "Item", type: "text", position: 0 },
-  { id: "qty", name: "Qty", type: "number", position: 1 },
-  { id: "rate", name: "Rate", type: "number", position: 2 },
-  {
-    id: "amount",
-    name: "Amount",
-    type: "formula",
-    formula: "{qty} * {rate}",
-    position: 3,
-  },
-] as const;
-
-async function readError(response: Response) {
-  const payload = await response.json().catch(() => null);
-  return payload?.error || "Request failed";
-}
 
 interface SetupWizardProps {
   onComplete: () => void;
@@ -39,316 +24,276 @@ interface SetupWizardProps {
 
 export function SetupWizard({ onComplete }: SetupWizardProps) {
   const router = useRouter();
-  const { t } = useLanguage();
   const [step, setStep] = useState<WizardStep>(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Step 1
   const [businessName, setBusinessName] = useState("");
-  const [businessPhone, setBusinessPhone] = useState("");
-  const [businessGstin, setBusinessGstin] = useState("");
-  const [templatePreset, setTemplatePreset] =
-    useState<TemplatePreset>("simple");
-  const [customerName, setCustomerName] = useState("");
-  const [customerPhone, setCustomerPhone] = useState("");
+  const [businessType, setBusinessType] = useState("Retail");
+  const [stateName, setStateName] = useState("");
+  const [city, setCity] = useState("");
 
-  const steps = useMemo(
-    () => [
-      t("onboarding.stepBusiness"),
-      t("onboarding.stepTemplate"),
-      t("onboarding.stepCustomer"),
-      t("onboarding.stepDone"),
-    ],
-    [t]
-  );
+  // Step 2
+  const [gstin, setGstin] = useState("");
 
-  function dismiss() {
-    window.localStorage.setItem(ONBOARDING_DISMISSED_KEY, "1");
-    onComplete();
-  }
+  const steps = ["Business", "GSTIN", "Import Data", "Done"];
 
-  async function finalizeSetup() {
-    setSaving(true);
+  async function saveBusinessBasics() {
+    if (!businessName.trim() || !stateName.trim()) {
+      setError("Business Name aur State zaroori hai.");
+      return false;
+    }
     setError(null);
-
+    setSaving(true);
     try {
-      if (businessName.trim() || businessPhone.trim() || businessGstin.trim()) {
-        const settingsResponse = await fetch("/api/settings", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            companyName: businessName.trim() || undefined,
-            companyPhone: businessPhone.trim() || undefined,
-            companyGstin: businessGstin.trim() || undefined,
-          }),
-        });
-
-        if (!settingsResponse.ok) {
-          throw new Error(await readError(settingsResponse));
-        }
-      }
-
-      const templateResponse = await fetch("/api/templates", {
-        method: "POST",
+      // Build address roughly from city and state
+      const address = [city.trim(), stateName].filter(Boolean).join(", ");
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name:
-            templatePreset === "simple"
-              ? t("onboarding.template.simple")
-              : t("onboarding.template.detailed"),
-          columns:
-            templatePreset === "simple"
-              ? SIMPLE_TEMPLATE_COLUMNS
-              : DETAILED_TEMPLATE_COLUMNS,
+          companyName: businessName.trim(),
+          companyAddress: address || undefined,
+          businessType: businessType,
         }),
       });
-
-      if (!templateResponse.ok) {
-        throw new Error(await readError(templateResponse));
-      }
-
-      if (customerName.trim()) {
-        const partyResponse = await fetch("/api/parties", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: customerName.trim(),
-            phone: customerPhone.trim() || null,
-            type: "CUSTOMER",
-            openingBalance: 0,
-          }),
-        });
-
-        if (!partyResponse.ok) {
-          throw new Error(await readError(partyResponse));
-        }
-      }
-
-      setStep(3);
-      window.localStorage.setItem(ONBOARDING_DISMISSED_KEY, "1");
-    } catch (setupError) {
-      setError(
-        setupError instanceof Error
-          ? setupError.message
-          : "Failed to finish setup"
-      );
+      if (!res.ok) throw new Error("Failed to save business details.");
+      setStep(1);
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error saving data");
+      return false;
     } finally {
       setSaving(false);
     }
   }
 
-  function goToBills() {
+  async function saveGstinAndFinish() {
+    setSaving(true);
+    setError(null);
+    try {
+      // First save GSTIN
+      if (gstin.trim()) {
+        const resGst = await fetch("/api/settings", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ companyGstin: gstin.trim(), taxRegistrationType: "REGISTERED" }),
+        });
+        if (!resGst.ok) throw new Error("Failed to save GSTIN.");
+      }
+
+      // Then mark onboarding complete
+      const resFinish = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isOnboardingComplete: true }),
+      });
+      if (!resFinish.ok) throw new Error("Failed to finalize setup.");
+
+      setStep(2); // Go to Tally Hook
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error finalizing setup");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleSkipTally() {
+    setStep(3); // Go to success
+  }
+
+  function handleGoToTally() {
     onComplete();
-    router.push("/bills/new");
+    router.push("/settings/tally-import");
+  }
+
+  function finishWizard() {
+    onComplete();
+    router.push("/dashboard");
   }
 
   return (
-    <div className="mx-auto max-w-4xl animate-fade-in p-4 lg:p-8">
-      <Card shadow="sm" className="overflow-hidden">
-        <CardBody className="gap-6 p-0">
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-6 text-white">
-            <p className="text-sm font-medium uppercase tracking-[0.25em] text-white/70">
+    <div className="mx-auto max-w-4xl animate-fade-in p-4 lg:p-8" style={{ minHeight: "100vh", display: "flex", alignItems: "center" }}>
+      <Card shadow="sm" className="w-full overflow-hidden" style={{ borderRadius: 24, border: "1px solid var(--hk-border)", background: "var(--hk-card)" }}>
+        <CardBody className="gap-0 p-0">
+          <div style={{ background: "linear-gradient(135deg, #f76000, #7b5ef6)", padding: "40px", color: "white" }}>
+            <p style={{ fontSize: 13, fontWeight: 700, letterSpacing: "2px", textTransform: "uppercase", opacity: 0.8, fontFamily: "var(--font-space-grotesk)" }}>
               DoorCraft Pro
             </p>
-            <h1 className="mt-2 text-3xl font-bold">{t("onboarding.title")}</h1>
-            <p className="mt-2 text-sm text-white/80">{t("onboarding.subtitle")}</p>
+            <h1 style={{ marginTop: 8, fontSize: 36, fontWeight: 700, fontFamily: "var(--font-space-grotesk)", letterSpacing: "-1px" }}>
+              Apna Karobaar Shuru Karo
+            </h1>
+            <p style={{ marginTop: 8, fontSize: 16, opacity: 0.9 }}>
+              Welcome to HisaabKitaab. Let's get your shop set up in 2 minutes.
+            </p>
           </div>
 
-          <div className="px-6">
-            <div className="grid gap-3 md:grid-cols-4">
+          <div className="px-6 py-4 border-b border-divider">
+            <div className="flex gap-2">
               {steps.map((label, index) => (
-                <div
-                  key={label}
-                  className={`rounded-2xl border px-4 py-3 text-sm transition ${
-                    index === step
-                      ? "border-primary bg-primary/10 text-primary"
-                      : index < step
-                        ? "border-success/30 bg-success/10 text-success-700"
-                        : "border-divider bg-default-50 text-default-500"
-                  }`}
-                >
-                  <p className="font-semibold">{label}</p>
+                <div key={label} className="flex-1">
+                  <div style={{
+                    height: 6, borderRadius: 3, transition: "background 0.3s",
+                    background: index <= step ? "linear-gradient(135deg, #f76000, #7b5ef6)" : "var(--hk-border)"
+                  }} />
+                  <p style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: index <= step ? "var(--hk-text)" : "var(--hk-sub)", fontFamily: "var(--font-inter)" }}>
+                    {label}
+                  </p>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="px-6 pb-6">
+          <div className="p-8">
             {step === 0 && (
-              <div className="space-y-4">
+              <div className="space-y-6 animate-fade-in">
                 <div>
-                  <h2 className="text-xl font-semibold">{steps[0]}</h2>
-                  <p className="mt-1 text-sm text-default-500">
-                    {t("onboarding.businessPrompt")}
-                  </p>
+                  <h2 style={{ fontSize: 24, fontWeight: 700, fontFamily: "var(--font-space-grotesk)" }}>Basic Details</h2>
+                  <p className="text-default-500 mt-1">What does your business do?</p>
                 </div>
-                <div className="grid gap-4 md:grid-cols-2">
+                
+                <div className="grid gap-6 md:grid-cols-2">
                   <Input
-                    label={t("company.businessName")}
+                    label="Business ka naam *"
+                    placeholder="E.g. Sharma Traders"
                     value={businessName}
                     onValueChange={setBusinessName}
                     variant="bordered"
+                    size="lg"
                   />
-                  <Input
-                    label={t("company.companyPhone")}
-                    value={businessPhone}
-                    onValueChange={setBusinessPhone}
+                  <Select
+                    label="Business kya karta hai?"
+                    selectedKeys={[businessType]}
+                    onSelectionChange={(k) => setBusinessType(Array.from(k)[0] as string)}
                     variant="bordered"
+                    size="lg"
+                  >
+                    {BUSINESS_TYPES.map(t => <SelectItem key={t}>{t}</SelectItem>)}
+                  </Select>
+                  <Select
+                    label="State *"
+                    selectedKeys={stateName ? [stateName] : []}
+                    onSelectionChange={(k) => setStateName(Array.from(k)[0] as string)}
+                    variant="bordered"
+                    size="lg"
+                  >
+                    {INDIAN_STATES.map(s => <SelectItem key={s}>{s}</SelectItem>)}
+                  </Select>
+                  <Input
+                    label="City"
+                    placeholder="E.g. Mumbai"
+                    value={city}
+                    onValueChange={setCity}
+                    variant="bordered"
+                    size="lg"
                   />
                 </div>
-                <Input
-                  label={t("company.gstin")}
-                  value={businessGstin}
-                  onValueChange={setBusinessGstin}
-                  variant="bordered"
-                />
+
+                {error && <p className="text-danger text-sm">{error}</p>}
+
+                <div className="flex justify-end pt-4 border-t border-divider">
+                  <Button 
+                    className="px-8 font-semibold text-white" 
+                    style={{ background: "linear-gradient(135deg, #f76000, #7b5ef6)", borderRadius: 12 }}
+                    onPress={saveBusinessBasics}
+                    isLoading={saving}
+                  >
+                    Aage Badho →
+                  </Button>
+                </div>
               </div>
             )}
 
             {step === 1 && (
-              <div className="space-y-4">
+              <div className="space-y-6 animate-fade-in">
                 <div>
-                  <h2 className="text-xl font-semibold">{steps[1]}</h2>
-                  <p className="mt-1 text-sm text-default-500">
-                    {t("onboarding.templatePrompt")}
-                  </p>
+                  <h2 style={{ fontSize: 24, fontWeight: 700, fontFamily: "var(--font-space-grotesk)" }}>GSTIN Details</h2>
+                  <p className="text-default-500 mt-1">Optional, but highly recommended for B2B billing.</p>
                 </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  {(["simple", "detailed"] as TemplatePreset[]).map((preset) => {
-                    const isSelected = preset === templatePreset;
-                    const hintKey =
-                      preset === "simple"
-                        ? "onboarding.template.simpleHint"
-                        : "onboarding.template.detailedHint";
-                    const titleKey =
-                      preset === "simple"
-                        ? "onboarding.template.simple"
-                        : "onboarding.template.detailed";
+                
+                <div className="max-w-md">
+                  <Input
+                    label="GSTIN Number"
+                    placeholder="E.g. 27AAAAA0000A1Z5"
+                    value={gstin}
+                    onValueChange={setGstin}
+                    variant="bordered"
+                    size="lg"
+                    description="Don't have it handy? You can skip this and add it later in settings."
+                  />
+                </div>
 
-                    return (
-                      <button
-                        key={preset}
-                        type="button"
-                        onClick={() => setTemplatePreset(preset)}
-                        className={`rounded-3xl border p-5 text-left transition ${
-                          isSelected
-                            ? "border-primary bg-primary/10 shadow-lg shadow-primary/10"
-                            : "border-divider hover:border-primary/40 hover:bg-default-50"
-                        }`}
-                      >
-                        <p className="text-lg font-semibold">{t(titleKey as never)}</p>
-                        <p className="mt-2 text-sm text-default-500">
-                          {t(hintKey as never)}
-                        </p>
-                      </button>
-                    );
-                  })}
+                {error && <p className="text-danger text-sm">{error}</p>}
+
+                <div className="flex justify-between pt-4 border-t border-divider">
+                  <Button variant="light" onPress={() => setStep(0)} isDisabled={saving}>← Peeche</Button>
+                  <div className="flex gap-3">
+                    <Button variant="flat" onPress={() => { setGstin(""); saveGstinAndFinish(); }} isDisabled={saving}>
+                      Skip Kar Do
+                    </Button>
+                    <Button 
+                      className="px-8 font-semibold text-white" 
+                      style={{ background: "linear-gradient(135deg, #f76000, #7b5ef6)", borderRadius: 12 }}
+                      onPress={saveGstinAndFinish}
+                      isLoading={saving}
+                    >
+                      Save & Next →
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}
 
             {step === 2 && (
-              <div className="space-y-4">
-                <div>
-                  <h2 className="text-xl font-semibold">{steps[2]}</h2>
-                  <p className="mt-1 text-sm text-default-500">
-                    {t("onboarding.customerPrompt")}
-                  </p>
-                </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Input
-                    label={t("onboarding.customerName")}
-                    value={customerName}
-                    onValueChange={setCustomerName}
-                    variant="bordered"
-                  />
-                  <Input
-                    label={t("onboarding.customerPhone")}
-                    value={customerPhone}
-                    onValueChange={setCustomerPhone}
-                    variant="bordered"
-                  />
+              <div className="space-y-6 animate-fade-in text-center py-8">
+                <span style={{ fontSize: 64 }}>📥</span>
+                <h2 style={{ fontSize: 28, fontWeight: 700, fontFamily: "var(--font-space-grotesk)", marginTop: 16 }}>
+                  Already using Tally?
+                </h2>
+                <p className="text-default-500 max-w-md mx-auto">
+                  You can securely import all your existing vouchers and party ledgers directly from your Tally XML export.
+                </p>
+
+                <div className="flex justify-center gap-4 mt-8">
+                  <Button variant="flat" size="lg" className="px-8 font-semibold" onPress={handleSkipTally}>
+                    Skip for now
+                  </Button>
+                  <Button 
+                    size="lg"
+                    className="px-8 font-semibold text-white shadow-lg" 
+                    style={{ background: "linear-gradient(135deg, #f76000, #7b5ef6)", borderRadius: 12 }}
+                    onPress={handleGoToTally}
+                  >
+                    Tally se Laao →
+                  </Button>
                 </div>
               </div>
             )}
 
             {step === 3 && (
-              <div className="space-y-4 text-center">
-                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-success/10 text-success">
-                  <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      d="M5 13l4 4L19 7"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                    />
-                  </svg>
-                </div>
-                <div>
-                  <h2 className="text-2xl font-semibold">
-                    {t("onboarding.completeTitle")}
-                  </h2>
-                  <p className="mt-2 text-sm text-default-500">
-                    {t("onboarding.completeSubtitle")}
-                  </p>
+              <div className="space-y-6 animate-fade-in text-center py-8">
+                <span style={{ fontSize: 64 }}>🎉</span>
+                <h2 style={{ fontSize: 28, fontWeight: 700, fontFamily: "var(--font-space-grotesk)", marginTop: 16 }}>
+                  Sab Set Hai!
+                </h2>
+                <p className="text-default-500 max-w-md mx-auto">
+                  Your business is now set up and ready to go. You can start creating bills immediately.
+                </p>
+
+                <div className="flex justify-center mt-8">
+                  <Button 
+                    size="lg"
+                    className="px-12 font-bold text-white shadow-lg" 
+                    style={{ background: "linear-gradient(135deg, #7b5ef6, #f76000)", borderRadius: 12, height: 56, fontSize: 18 }}
+                    onPress={finishWizard}
+                  >
+                    Dashboard Pe Jao
+                  </Button>
                 </div>
               </div>
             )}
 
-            {error && (
-              <p className="mt-4 rounded-2xl border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger">
-                {error}
-              </p>
-            )}
-
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <Button variant="light" onPress={dismiss}>
-                {t("onboarding.skip")}
-              </Button>
-
-              <div className="flex gap-3">
-                {step > 0 && step < 3 && (
-                  <Button variant="flat" onPress={() => setStep((current) => (current - 1) as WizardStep)}>
-                    {t("onboarding.back")}
-                  </Button>
-                )}
-
-                {step < 2 && (
-                  <Button
-                    color="primary"
-                    className="bg-gradient-to-r from-blue-600 to-indigo-600 font-semibold"
-                    onPress={() => setStep((current) => (current + 1) as WizardStep)}
-                  >
-                    {t("onboarding.next")}
-                  </Button>
-                )}
-
-                {step === 2 && (
-                  <Button
-                    color="primary"
-                    className="bg-gradient-to-r from-blue-600 to-indigo-600 font-semibold"
-                    onPress={finalizeSetup}
-                    isLoading={saving}
-                  >
-                    {t("onboarding.next")}
-                  </Button>
-                )}
-
-                {step === 3 && (
-                  <>
-                    <Button variant="flat" onPress={onComplete}>
-                      {t("onboarding.finish")}
-                    </Button>
-                    <Button
-                      color="primary"
-                      className="bg-gradient-to-r from-blue-600 to-indigo-600 font-semibold"
-                      onPress={goToBills}
-                    >
-                      {t("onboarding.createBill")}
-                    </Button>
-                  </>
-                )}
-              </div>
-            </div>
           </div>
         </CardBody>
       </Card>

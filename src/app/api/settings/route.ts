@@ -121,6 +121,15 @@ export async function PATCH(request: NextRequest) {
       },
     });
 
+    // [HOTFIX] Update isOnboardingComplete via raw SQL to bypass Prisma validation cache
+    if (typeof body.isOnboardingComplete === "boolean") {
+      await prisma.$executeRaw`
+        UPDATE "Tenant"
+        SET "isOnboardingComplete" = ${body.isOnboardingComplete}
+        WHERE id = ${tenantId}
+      `;
+    }
+
     return NextResponse.json({ settings: serializeTenantSettings(tenant) });
   } catch (error) {
     logError("settings.update.error", { requestId: getRequestId(request), error });
