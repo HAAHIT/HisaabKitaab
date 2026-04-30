@@ -254,7 +254,12 @@ export async function GET(request: NextRequest) {
       if (to) where.createdAt.lte = new Date(to);
     }
 
-    const [bills, total] = await Promise.all([
+    // Current month boundaries for summary
+    const now = new Date();
+    const summaryMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const summaryMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+    const [bills, total, kulBilledAgg, milaAgg] = await Promise.all([
       prisma.bill.findMany({
         where,
         orderBy: { createdAt: "desc" },
@@ -278,13 +283,31 @@ export async function GET(request: NextRequest) {
         },
       }),
       prisma.bill.count({ where }),
+      // Total billed (FINAL only, current month)
+      prisma.bill.aggregate({
+        where: { tenantId, isDeleted: false, status: "FINAL", createdAt: { gte: summaryMonthStart, lt: summaryMonthEnd } },
+        _sum: { grandTotal: true },
+      }),
+      // Total collected (payments linked to FINAL bills, current month)
+      prisma.payment.aggregate({
+        where: {
+          tenantId, isDeleted: false, direction: "INCOMING", status: "COMPLETED",
+          date: { gte: summaryMonthStart, lt: summaryMonthEnd },
+        },
+        _sum: { amount: true },
+      }),
     ]);
+
+    const kulBilled = kulBilledAgg._sum.grandTotal?.toNumber() ?? 0;
+    const mila = milaAgg._sum.amount?.toNumber() ?? 0;
+    const baaki = Math.max(0, kulBilled - mila);
 
     return NextResponse.json({
       bills,
       total,
       page,
       totalPages: Math.max(1, Math.ceil(total / limit)),
+      summary: { kulBilled, mila, baaki },
     });
   } catch (error) {
     logError("bills.list.error", { requestId: getRequestId(request), error });

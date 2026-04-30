@@ -79,172 +79,386 @@ export default function RegisterPage() {
     });
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 px-4 py-10 text-foreground dark:from-zinc-950 dark:via-zinc-900 dark:to-blue-950">
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 h-80 w-80 rounded-full bg-blue-400/20 blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-indigo-400/20 blur-3xl" />
-      </div>
+  const inputGroupStyle: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    padding: "0 16px",
+    height: 48,
+    borderRadius: 12,
+    border: "1.5px solid var(--hk-border)",
+    background: "var(--hk-input)",
+    transition: "border-color 0.15s",
+  };
 
-      <div className="relative mx-auto w-full max-w-md rounded-3xl border border-white/60 bg-white/95 shadow-2xl shadow-blue-950/10 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95">
-        <div className="flex flex-col items-center gap-3 px-6 pb-4 pt-8 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 shadow-lg shadow-blue-500/25">
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    background: "transparent",
+    border: "none",
+    outline: "none",
+    fontSize: 15,
+    fontWeight: 500,
+    color: "var(--hk-text)",
+    fontFamily: "var(--font-space-grotesk), sans-serif",
+  };
+
+  const labelStyle: React.CSSProperties = {
+    display: "block",
+    fontSize: 14,
+    fontWeight: 600,
+    color: "var(--hk-sub)",
+    marginBottom: 8,
+    fontFamily: "var(--font-space-grotesk), sans-serif",
+  };
+
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "var(--hk-bg)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "24px 16px",
+        position: "relative",
+        overflow: "hidden",
+        fontFamily: "var(--font-space-grotesk), sans-serif",
+      }}
+    >
+      {/* Background decorative blurs */}
+      <div
+        style={{
+          position: "absolute",
+          top: -120,
+          right: -120,
+          width: 320,
+          height: 320,
+          borderRadius: "50%",
+          background: "rgba(247, 96, 0, 0.12)",
+          filter: "blur(80px)",
+          pointerEvents: "none",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          bottom: -120,
+          left: -120,
+          width: 320,
+          height: 320,
+          borderRadius: "50%",
+          background: "rgba(123, 94, 246, 0.12)",
+          filter: "blur(80px)",
+          pointerEvents: "none",
+        }}
+      />
+
+      {/* Card */}
+      <div
+        style={{
+          position: "relative",
+          width: "100%",
+          maxWidth: 420,
+          background: "var(--hk-card)",
+          borderRadius: 24,
+          border: "1px solid var(--hk-border)",
+          boxShadow: "0 20px 60px rgba(0,0,0,0.12)",
+          overflow: "hidden",
+        }}
+      >
+        {/* Header */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 14,
+            padding: "36px 28px 24px",
+            textAlign: "center",
+          }}
+        >
+          {/* HK Logo */}
+          <div
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: 16,
+              background: "linear-gradient(135deg, #f76000, #7b5ef6)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 8px 24px rgba(247, 96, 0, 0.3)",
+            }}
+          >
             <svg
-              className="h-9 w-9 text-white"
-              fill="none"
-              stroke="currentColor"
+              width="28"
+              height="28"
               viewBox="0 0 24 24"
+              fill="none"
+              stroke="white"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M12 4v16m8-8H4"
-              />
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
           </div>
-          <div className="space-y-1">
-            <h1 className="text-3xl font-bold tracking-tight text-blue-600">
+          <div>
+            <h1
+              style={{
+                fontSize: 28,
+                fontWeight: 700,
+                letterSpacing: "-0.5px",
+                background: "linear-gradient(135deg, #f76000, #7b5ef6)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text",
+                lineHeight: 1.2,
+                fontFamily: "var(--font-space-grotesk), sans-serif",
+              }}
+            >
               {t("register.title")}
             </h1>
-            <p className="text-sm text-gray-400 dark:text-zinc-400">
+            <p
+              style={{
+                fontSize: 14,
+                fontWeight: 500,
+                color: "var(--hk-sub)",
+                marginTop: 6,
+                fontFamily: "var(--font-space-grotesk), sans-serif",
+              }}
+            >
               {t("register.subtitle")}
             </p>
           </div>
         </div>
 
-        <div className="border-t border-gray-100 px-6 pb-8 pt-5 dark:border-zinc-800">
-          <div className="mb-5 flex justify-end">
+        {/* Form */}
+        <div
+          style={{
+            borderTop: "1px solid var(--hk-border)",
+            padding: "24px 28px 32px",
+          }}
+        >
+          {/* Language switch */}
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 20 }}>
             <a
               href={languageSwitchUrl}
-              className="inline-flex min-h-10 min-w-16 items-center justify-center rounded-xl bg-primary/10 px-4 text-sm font-semibold text-primary shadow-sm transition hover:bg-primary/15"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                minHeight: 36,
+                minWidth: 56,
+                padding: "0 14px",
+                borderRadius: 10,
+                background: "rgba(123, 94, 246, 0.12)",
+                color: "#7b5ef6",
+                fontSize: 13,
+                fontWeight: 700,
+                fontFamily: "var(--font-space-grotesk), sans-serif",
+                textDecoration: "none",
+                transition: "background 0.15s",
+              }}
             >
               {nextLanguage.toUpperCase()}
             </a>
           </div>
 
-          <form onSubmit={onSubmit} className="flex flex-col gap-4">
-            
-            <label htmlFor="company-input" className="space-y-1.5">
-              <span className="text-sm font-medium text-gray-600 dark:text-zinc-300">
-                {t("register.companyName")}
-              </span>
-              <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white dark:border-zinc-700 dark:bg-zinc-800 px-4 py-3 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20">
+          <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {/* Company Name */}
+            <label htmlFor="company-input" style={{ display: "block" }}>
+              <span style={labelStyle}>{t("register.companyName")}</span>
+              <div className="hk-login-input-group" style={inputGroupStyle}>
                 <input
                   id="company-input"
                   name="companyName"
                   type="text"
                   required
-                  className="w-full bg-transparent text-base outline-none placeholder:text-gray-400 dark:placeholder:text-zinc-500"
+                  style={inputStyle}
                   placeholder={t("register.companyNamePlaceholder")}
                 />
               </div>
             </label>
 
-            <label htmlFor="name-input" className="space-y-1.5">
-              <span className="text-sm font-medium text-gray-600 dark:text-zinc-300">
-                {t("register.name")}
-              </span>
-              <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white dark:border-zinc-700 dark:bg-zinc-800 px-4 py-3 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20">
+            {/* Full Name */}
+            <label htmlFor="name-input" style={{ display: "block" }}>
+              <span style={labelStyle}>{t("register.name")}</span>
+              <div className="hk-login-input-group" style={inputGroupStyle}>
                 <input
                   id="name-input"
                   name="name"
                   type="text"
                   required
                   autoComplete="name"
-                  className="w-full bg-transparent text-base outline-none placeholder:text-gray-400 dark:placeholder:text-zinc-500"
+                  style={inputStyle}
                   placeholder={t("register.namePlaceholder")}
                 />
               </div>
             </label>
 
-            <label htmlFor="credential-input" className="space-y-1.5">
-              <span className="text-sm font-medium text-gray-600 dark:text-zinc-300">
-                {t("login.credentialLabel")}
-              </span>
-              <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white dark:border-zinc-700 dark:bg-zinc-800 px-4 py-3 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20">
+            {/* Credential */}
+            <label htmlFor="credential-input" style={{ display: "block" }}>
+              <span style={labelStyle}>{t("login.credentialLabel")}</span>
+              <div className="hk-login-input-group" style={inputGroupStyle}>
                 <input
                   id="credential-input"
                   name="credential"
                   type="text"
                   required
-                  className="w-full bg-transparent text-base outline-none placeholder:text-gray-400 dark:placeholder:text-zinc-500"
+                  style={inputStyle}
                   placeholder={t("login.credentialPlaceholder")}
                 />
               </div>
             </label>
 
-            <label htmlFor="password-input" className="space-y-1.5">
-              <span className="text-sm font-medium text-gray-600 dark:text-zinc-300">
-                {t("login.passwordLabel")}
-              </span>
-              <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white dark:border-zinc-700 dark:bg-zinc-800 px-4 py-3 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20">
+            {/* Password */}
+            <label htmlFor="password-input" style={{ display: "block" }}>
+              <span style={labelStyle}>{t("login.passwordLabel")}</span>
+              <div className="hk-login-input-group" style={inputGroupStyle}>
                 <input
                   id="password-input"
                   name="password"
                   type={showPassword ? "text" : "password"}
                   required
                   minLength={12}
-                  className="w-full bg-transparent text-base outline-none placeholder:text-gray-400 dark:placeholder:text-zinc-500"
+                  style={inputStyle}
                   placeholder={t("login.passwordPlaceholder")}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   aria-label={showPassword ? t("common.hide") : t("common.show")}
-                  className="shrink-0 rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
+                  style={{
+                    flexShrink: 0,
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    border: "none",
+                    background: "transparent",
+                    color: "var(--hk-sub)",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
                 >
                   <span className="sr-only">{showPassword ? t("common.hide") : t("common.show")}</span>
                   {showPassword ? (
-                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                    <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round">
+                      <path d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
                     </svg>
                   ) : (
-                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round">
+                      <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                     </svg>
                   )}
                 </button>
               </div>
             </label>
 
+            {/* Error */}
             {errorMessage && (
               <p
-                className="rounded-xl border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger"
+                style={{
+                  padding: "12px 16px",
+                  borderRadius: 12,
+                  border: "1px solid rgba(247, 96, 0, 0.25)",
+                  background: "rgba(247, 96, 0, 0.08)",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "#f76000",
+                  fontFamily: "var(--font-space-grotesk), sans-serif",
+                }}
                 aria-live="polite"
               >
                 {errorMessage}
               </p>
             )}
 
+            {/* Submit */}
             <button
               type="submit"
               disabled={isPending}
-              className="mt-2 inline-flex h-12 cursor-pointer items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 text-base font-semibold text-white shadow-lg shadow-blue-500/25 transition hover:opacity-95 disabled:opacity-70 disabled:cursor-not-allowed"
+              style={{
+                marginTop: 4,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 10,
+                height: 50,
+                borderRadius: 14,
+                background: "linear-gradient(135deg, #f76000, #7b5ef6)",
+                color: "#fff",
+                fontSize: 16,
+                fontWeight: 700,
+                fontFamily: "var(--font-space-grotesk), sans-serif",
+                border: "none",
+                cursor: isPending ? "not-allowed" : "pointer",
+                boxShadow: "0 6px 20px rgba(247, 96, 0, 0.3)",
+                opacity: isPending ? 0.7 : 1,
+                transition: "opacity 0.15s, transform 0.15s",
+              }}
             >
               {isPending && (
-                <div className="relative h-5 w-5 flex-shrink-0" aria-hidden="true">
-                  <i className="absolute h-full w-full rounded-full border-2 border-b-current border-l-transparent border-r-transparent border-t-transparent border-solid animate-spinner-ease-spin" />
-                  <i className="absolute h-full w-full rounded-full border-2 border-b-current border-l-transparent border-r-transparent border-t-transparent border-dotted opacity-75 animate-spinner-linear-spin" />
-                </div>
+                <span
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: "50%",
+                    border: "2.5px solid rgba(255,255,255,0.3)",
+                    borderTopColor: "white",
+                    display: "inline-block",
+                    animation: "hk-spin 0.7s linear infinite",
+                  }}
+                />
               )}
               <span>{isPending ? t("register.signingUp") : t("register.signUp")}</span>
             </button>
           </form>
 
-          <div className="mt-6 text-center text-sm text-gray-500 dark:text-zinc-400">
-             {t("register.hasAccount")}{" "}
+          {/* Login link */}
+          <div
+            style={{
+              marginTop: 24,
+              textAlign: "center",
+              fontSize: 14,
+              fontWeight: 500,
+              color: "var(--hk-sub)",
+              fontFamily: "var(--font-space-grotesk), sans-serif",
+            }}
+          >
+            {t("register.hasAccount")}{" "}
             <a
               href="/login"
-              className="font-semibold text-primary transition hover:underline"
+              style={{
+                fontWeight: 700,
+                color: "#f76000",
+                textDecoration: "none",
+              }}
             >
               {t("register.login")}
             </a>
           </div>
-
         </div>
       </div>
+
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+            @keyframes hk-spin {
+              from { transform: rotate(0deg); }
+              to { transform: rotate(360deg); }
+            }
+            .hk-login-input-group:focus-within {
+              border-color: #f76000 !important;
+              box-shadow: 0 0 0 3px rgba(247, 96, 0, 0.1);
+            }
+          `,
+        }}
+      />
     </div>
   );
 }

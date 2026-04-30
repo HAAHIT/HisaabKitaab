@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
       monthPayments,
       recentPayments,
       overdueCount,
+      overdueAggregate,
       billStats,
     ] = await Promise.all([
       prisma.party.aggregate({
@@ -66,6 +67,14 @@ export async function GET(request: NextRequest) {
           payments: { none: { isDeleted: false, date: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } } },
         },
       }),
+      // Aggregate total overdue amount + fetch top overdue party for banner
+      prisma.party.aggregate({
+        where: {
+          tenantId, currentBalance: { lt: 0 }, isActive: true, isDeleted: false,
+          payments: { none: { isDeleted: false, date: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } } },
+        },
+        _sum: { currentBalance: true },
+      }),
       prisma.bill.groupBy({
         by: ["status"],
         where: { tenantId, isDeleted: false },
@@ -73,6 +82,20 @@ export async function GET(request: NextRequest) {
         _sum: { grandTotal: true },
       }),
     ]);
+
+    // When count is small, fetch the top overdue party name for personalized banner
+    let topOverduePartyName: string | null = null;
+    if (overdueCount > 0 && overdueCount <= 3) {
+      const topParty = await prisma.party.findFirst({
+        where: {
+          tenantId, currentBalance: { lt: 0 }, isActive: true, isDeleted: false,
+          payments: { none: { isDeleted: false, date: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } } },
+        },
+        orderBy: { currentBalance: "asc" },
+        select: { name: true },
+      });
+      topOverduePartyName = topParty?.name ?? null;
+    }
 
     const cashFlowResults = [];
     for (const { mStart, mEnd } of monthDetails) {
@@ -110,6 +133,8 @@ export async function GET(request: NextRequest) {
         collectedThisMonth,
         netBalance: receivable - payable,
         overdueCount,
+        overdueAmount: Math.abs(overdueAggregate._sum.currentBalance?.toNumber() ?? 0),
+        overdueParty: topOverduePartyName,
       },
       cashFlow,
       recentPayments,

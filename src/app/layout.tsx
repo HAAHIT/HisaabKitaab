@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Space_Grotesk } from "next/font/google";
 import { cookies } from "next/headers";
 import { Providers } from "./providers";
 import {
@@ -11,6 +11,12 @@ import "./globals.css";
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
+});
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-space-grotesk",
+  weight: ["400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -33,7 +39,7 @@ export default async function RootLayout({
   return (
     <html
       lang={language}
-      className={`${inter.variable} h-full`}
+      className={`${inter.variable} ${spaceGrotesk.variable} h-full`}
       data-scroll-behavior="smooth"
       suppressHydrationWarning
     >

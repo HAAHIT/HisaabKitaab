@@ -46,6 +46,8 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const search = searchParams.get("search") || "";
   const type = searchParams.get("type") || "";
+  const sortBy = searchParams.get("sortBy") || "balance"; // "balance" or "name"
+  const overdueFilter = searchParams.get("overdue") === "true";
 
   const where: Prisma.PartyWhereInput = { isActive: true, isDeleted: false, tenantId };
 
@@ -60,9 +62,25 @@ export async function GET(request: NextRequest) {
     where.type = type as PartyType;
   }
 
+  // §5.3: Overdue filter — parties with negative balance and no payment in 30 days
+  if (overdueFilter) {
+    where.currentBalance = { lt: 0 };
+    where.payments = {
+      none: {
+        isDeleted: false,
+        date: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+      },
+    };
+  }
+
+  const orderBy: Prisma.PartyOrderByWithRelationInput =
+    sortBy === "name"
+      ? { name: "asc" }
+      : { currentBalance: "asc" }; // Most negative (biggest debtors) first
+
   const parties = await prisma.party.findMany({
     where,
-    orderBy: { name: "asc" },
+    orderBy,
     include: {
       _count: { select: { payments: true } },
     },

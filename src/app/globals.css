@@ -7,7 +7,46 @@
 /* ── Custom Theme ─────────────────────────────────────── */
 @theme inline {
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-grotesk: "Space Grotesk", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", "Fira Code", monospace;
+}
+
+/* ── HisaabKitaab Design Tokens ───────────────────────── */
+:root {
+  --hk-orange: #f76000;
+  --hk-purple: #7b5ef6;
+  --hk-green:  #00ca88;
+  --hk-amber:  #ffb020;
+
+  /* Light theme surface tokens */
+  --hk-bg:          #eef0f8;
+  --hk-nav:         #ffffff;
+  --hk-card:        #ffffff;
+  --hk-border:      rgba(0,0,0,0.07);
+  --hk-text:        #0d0d1b;
+  --hk-sub:         #666a82;
+  --hk-muted:       #aab0c8;
+  --hk-pill:        rgba(0,0,0,0.05);
+  --hk-pill-active: #e8eaf5;
+  --hk-badge:       rgba(0,0,0,0.05);
+  --hk-line:        rgba(0,0,0,0.05);
+  --hk-input:       rgba(0,0,0,0.04);
+}
+
+.dark {
+  /* Dark theme surface tokens */
+  --hk-bg:          #0d0d1b;
+  --hk-nav:         #111120;
+  --hk-card:        #161628;
+  --hk-border:      rgba(255,255,255,0.07);
+  --hk-text:        #e2e4f0;
+  --hk-sub:         #888ea8;
+  --hk-muted:       #40445a;
+  --hk-pill:        rgba(255,255,255,0.07);
+  --hk-pill-active: #1e1e3a;
+  --hk-badge:       rgba(255,255,255,0.06);
+  --hk-line:        rgba(255,255,255,0.05);
+  --hk-input:       rgba(255,255,255,0.04);
 }
 
 /* ── Base Styles ──────────────────────────────────────── */
@@ -17,6 +56,8 @@ html {
 
 body {
   font-family: var(--font-sans);
+  font-size: 16px;          /* readable baseline for 40+ users */
+  line-height: 1.5;          /* generous body line-height */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -60,6 +101,30 @@ body {
   background: rgba(255, 255, 255, 0.08) !important;
   border-color: rgba(255, 255, 255, 0.1) !important;
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* ── HK Dashboard Card ────────────────────────────────── */
+.hk-card {
+  background: var(--hk-card);
+  border-radius: 20px;
+  border: 1px solid var(--hk-border);
+  padding: 20px;
+  transition: background 0.25s;
+}
+
+.hk-bg {
+  background: var(--hk-bg);
+}
+
+.font-grotesk {
+  font-family: var(--font-grotesk);
+}
+
+@keyframes hk-spin {
+  to { transform: rotate(360deg); }
+}
+.hk-spin {
+  animation: hk-spin 0.7s linear infinite;
 }
 
 /* ── Animations ───────────────────────────────────────── */
@@ -139,9 +204,9 @@ dialog[open] {
   }
 }
 
-/* ── Content area padding to account for bottom nav ─── */
+/* ── Content area padding to account for bottom nav (76px tall) ─── */
 @media (max-width: 1023px) {
   .main-content-area {
-    padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px) + 1rem);
+    padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px) + 1rem);
   }
 }

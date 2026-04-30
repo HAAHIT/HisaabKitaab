@@ -3,15 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   getBalanceStatusLabel,
-  getPartyBalanceColor,
-  formatPartyBalance,
   type SupportedPartyType,
 } from "@/lib/accounting";
 import {
   Button,
-  Card,
-  CardBody,
-  Chip,
   Input,
   Select,
   SelectItem,
@@ -19,8 +14,14 @@ import {
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { EmptyState } from "@/components/ui/empty-state";
-import { Users } from "@/components/ui/icons";
+import {
+  OR, PU, GR, SG, IN, TYPE,
+  fmt, fmtFull, useIsMobile,
+  HKCard, HKToast, SearchBox, PillFilter,
+  PageHeader, GradientButton,
+} from "@/components/ui/hk-design";
+import { OverdueBanner } from "@/components/ui/OverdueBanner";
+import { useOverdueData } from "@/hooks/useOverdueData";
 
 interface Party {
   id: string;
@@ -47,17 +48,18 @@ async function readError(response: Response) {
 export default function PartiesPage() {
   const router = useRouter();
   const { t } = useLanguage();
+  const isMobile = useIsMobile();
+  const overdue = useOverdueData();
+
   const [parties, setParties] = useState<Party[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState("ALL");
+  const [overflowPartyId, setOverflowPartyId] = useState<string | null>(null);
+  const [typeFilter, setTypeFilter] = useState<"ALL" | "CUSTOMER" | "VENDOR">("ALL");
   const [showPanel, setShowPanel] = useState(false);
   const [editingParty, setEditingParty] = useState<Party | null>(null);
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState<{
-    message: string;
-    type: "success" | "error";
-  } | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const [formName, setFormName] = useState("");
   const [formPhone, setFormPhone] = useState("");
@@ -71,17 +73,12 @@ export default function PartiesPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (search) {
-        params.set("search", search);
-      }
-      if (typeFilter !== "ALL") {
-        params.set("type", typeFilter);
-      }
+      params.set("sortBy", "balance");
+      if (search) params.set("search", search);
+      if (typeFilter !== "ALL") params.set("type", typeFilter);
 
       const response = await fetch(`/api/parties?${params.toString()}`);
-      if (!response.ok) {
-        throw new Error(await readError(response));
-      }
+      if (!response.ok) throw new Error(await readError(response));
 
       const data = await response.json();
       setParties((data.parties || []) as Party[]);
@@ -95,12 +92,6 @@ export default function PartiesPage() {
       setLoading(false);
     }
   }, [search, t, typeFilter]);
-
-  const typeOptions = [
-    { key: "ALL", label: t("parties.filter.all") },
-    { key: "CUSTOMER", label: t("parties.filter.customers") },
-    { key: "VENDOR", label: t("parties.filter.vendors") },
-  ];
 
   useEffect(() => {
     fetchParties();
@@ -167,14 +158,9 @@ export default function PartiesPage() {
             }),
           });
 
-      if (!response.ok) {
-        throw new Error(await readError(response));
-      }
+      if (!response.ok) throw new Error(await readError(response));
 
-      showToast(
-        editingParty ? t("parties.updated") : t("parties.created"),
-        "success"
-      );
+      showToast(editingParty ? t("parties.updated") : t("parties.created"), "success");
       setShowPanel(false);
       await fetchParties();
     } catch (error) {
@@ -185,16 +171,10 @@ export default function PartiesPage() {
   }
 
   async function handleDelete(party: Party) {
-    if (!confirm(`${t("parties.archiveConfirm")} "${party.name}"?`)) {
-      return;
-    }
-
+    if (!confirm(`${t("parties.archiveConfirm")} "${party.name}"?`)) return;
     try {
       const response = await fetch(`/api/parties/${party.id}`, { method: "DELETE" });
-      if (!response.ok) {
-        throw new Error(await readError(response));
-      }
-
+      if (!response.ok) throw new Error(await readError(response));
       showToast(t("parties.archived"), "success");
       await fetchParties();
     } catch (error) {
@@ -205,303 +185,667 @@ export default function PartiesPage() {
     }
   }
 
+  // Lena Baki = parties owe us (customer with negative balance), Dena Baki = we owe (vendor with negative balance)
+  const lenaTotal = parties
+    .filter((p) => p.type === "CUSTOMER" && p.currentBalance < 0)
+    .reduce((s, p) => s + Math.abs(p.currentBalance), 0);
+  const denaTotal = parties
+    .filter((p) => p.type === "VENDOR" && p.currentBalance < 0)
+    .reduce((s, p) => s + Math.abs(p.currentBalance), 0);
+  const lenaCount = parties.filter((p) => p.type === "CUSTOMER" && p.currentBalance < 0).length;
+  const denaCount = parties.filter((p) => p.type === "VENDOR" && p.currentBalance < 0).length;
+
+  const filterOptions = [
+    { key: "ALL" as const, label: "Sab" },
+    { key: "CUSTOMER" as const, label: "Grahak" },
+    { key: "VENDOR" as const, label: "Supplier" },
+  ];
+
   return (
     <>
-      <div className="relative animate-fade-in p-4 lg:p-8">
-        {toast && (
+      <div
+        style={{
+          background: "var(--hk-bg)",
+          minHeight: "100%",
+          paddingBottom: 0,
+          fontFamily: SG,
+        }}
+      >
+        {toast && <HKToast message={toast.message} type={toast.type} />}
+
+        <PageHeader
+          title="Udhar Khata"
+          subtitle="Party-wise hisaab"
+          isMobile={isMobile}
+          action={<GradientButton onClick={openCreate}>+ Party Jodo</GradientButton>}
+        />
+
+        <div style={{ padding: isMobile ? "0 14px" : "0 28px", maxWidth: 1440, margin: "0 auto" }}>
+          {/* Overdue banner */}
+          <OverdueBanner
+            overdueCount={overdue.overdueCount}
+            overdueAmount={overdue.overdueAmount}
+            overdueParty={overdue.overdueParty}
+          />
+
+          {/* Lena/Dena summary */}
           <div
-            className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${
-              toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
-            }`}
-          >
-            {toast.message}
-          </div>
-        )}
-
-        <div className="mb-6 flex items-center justify-between">
-        <div>
-            <h1 className="text-2xl font-bold">{t("parties.title")}</h1>
-            <p className="mt-1 text-sm text-default-500">
-              {t("parties.subtitle")}
-            </p>
-          </div>
-          <Button
-            color="primary"
-            className="bg-gradient-to-r from-blue-600 to-indigo-600 font-semibold shadow-lg shadow-blue-500/25"
-            onPress={openCreate}
-            startContent={
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  d="M12 4v16m8-8H4"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                />
-              </svg>
-            }
-          >
-            {t("parties.add")}
-          </Button>
-        </div>
-
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row">
-          <Input
-            aria-label={t("parties.searchPlaceholder")}
-            placeholder={t("parties.searchPlaceholder")}
-            value={search}
-            onValueChange={setSearch}
-            variant="bordered"
-            className="flex-1"
-            startContent={
-              <svg className="h-4 w-4 text-default-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                />
-              </svg>
-            }
-          />
-          <Select
-            aria-label={t("parties.filter.all")}
-            placeholder={t("parties.filter.all")}
-            selectedKeys={new Set([typeFilter])}
-            onSelectionChange={(keys) => {
-              const value = Array.from(keys)[0] as string;
-              if (value) {
-                setTypeFilter(value);
-              }
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 10,
+              marginBottom: 16,
             }}
-            variant="bordered"
-            className="w-44"
           >
-            {typeOptions.map((option) => (
-              <SelectItem key={option.key}>{option.label}</SelectItem>
-            ))}
-          </Select>
-        </div>
-
-        {loading ? (
-          <div className="space-y-3">
-            {[1, 2, 3].map((item) => (
-              <Skeleton key={item} className="h-20 rounded-xl" />
-            ))}
+            <div
+              style={{
+                padding: "18px 20px",
+                borderRadius: 16,
+                background: GR + "14",
+                border: `1px solid ${GR}28`,
+              }}
+            >
+              <p
+                style={{
+                  fontSize: TYPE.caption,
+                  fontWeight: 700,
+                  color: GR,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.6px",
+                  marginBottom: 6,
+                  fontFamily: SG,
+                }}
+              >
+                ↑ Lena Baki
+              </p>
+              <p
+                style={{
+                  fontSize: isMobile ? TYPE.numMedium + 4 : TYPE.numLarge,
+                  fontWeight: 800,
+                  color: "var(--hk-text)",
+                  fontFamily: IN,
+                  letterSpacing: "-0.5px",
+                  lineHeight: 1.1,
+                }}
+              >
+                {fmtFull(lenaTotal)}
+              </p>
+              <p style={{ fontSize: TYPE.bodySmall, fontWeight: 600, color: GR, marginTop: 6, fontFamily: SG }}>
+                {lenaCount} {lenaCount === 1 ? "party" : "parties"} se milna hai
+              </p>
+            </div>
+            <div
+              style={{
+                padding: "18px 20px",
+                borderRadius: 16,
+                background: OR + "14",
+                border: `1px solid ${OR}28`,
+              }}
+            >
+              <p
+                style={{
+                  fontSize: TYPE.caption,
+                  fontWeight: 700,
+                  color: OR,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.6px",
+                  marginBottom: 6,
+                  fontFamily: SG,
+                }}
+              >
+                ↓ Dena Baki
+              </p>
+              <p
+                style={{
+                  fontSize: isMobile ? TYPE.numMedium + 4 : TYPE.numLarge,
+                  fontWeight: 800,
+                  color: "var(--hk-text)",
+                  fontFamily: IN,
+                  letterSpacing: "-0.5px",
+                  lineHeight: 1.1,
+                }}
+              >
+                {fmtFull(denaTotal)}
+              </p>
+              <p style={{ fontSize: TYPE.bodySmall, fontWeight: 600, color: OR, marginTop: 6, fontFamily: SG }}>
+                {denaCount} {denaCount === 1 ? "party" : "parties"} ko dena hai
+              </p>
+            </div>
           </div>
-        ) : parties.length === 0 ? (
-          <EmptyState
-            icon={Users}
-            title={t("parties.empty")}
-            description={search || typeFilter !== "ALL" ? "Try adjusting your search criteria." : "No parties found. Add your first customer or vendor to get started."}
-            actionLabel={!search && typeFilter === "ALL" ? t("parties.addFirst") : undefined}
-            onAction={!search && typeFilter === "ALL" ? openCreate : undefined}
-            className="mt-8"
-          />
-        ) : (
-          <div className="space-y-3">
-            {parties.map((party) => (
-              <Card key={party.id} shadow="sm" className="transition hover:shadow-md">
-                <CardBody className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex flex-1 flex-col gap-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold">{party.name}</span>
-                        <Chip
-                          size="sm"
-                          variant="flat"
-                          color={party.type === "CUSTOMER" ? "primary" : "secondary"}
-                          className="capitalize"
-                        >
-                          {party.type.toLowerCase()}
-                        </Chip>
-                      </div>
-                      <div className="flex gap-3 text-xs text-default-400">
-                        {party.phone && <span>{party.phone}</span>}
-                        {party.email && <span>{party.email}</span>}
-                        {party._count && <span>{party._count.payments} payment(s)</span>}
-                      </div>
+
+          {/* Search + filter */}
+          <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+            <SearchBox value={search} onChange={setSearch} placeholder="Party dhundho..." />
+            <PillFilter options={filterOptions} value={typeFilter} onChange={setTypeFilter} />
+          </div>
+
+          {loading ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-20 rounded-2xl" />
+              ))}
+            </div>
+          ) : parties.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--hk-sub)" }}>
+              <div style={{ fontSize: 52, marginBottom: 16 }}>👥</div>
+              <p
+                style={{
+                  fontWeight: 700,
+                  fontSize: TYPE.h2,
+                  color: "var(--hk-text)",
+                  marginBottom: 8,
+                  fontFamily: SG,
+                }}
+              >
+                {search || typeFilter !== "ALL" ? "Koi party nahi mili" : "Abhi tak koi party nahi"}
+              </p>
+              <p style={{ fontSize: TYPE.body, fontWeight: 500, fontFamily: SG, marginBottom: 20 }}>
+                {search || typeFilter !== "ALL"
+                  ? "Search badlo ya nayi party jodo"
+                  : "Pehli party jodke hisaab shuru karo"}
+              </p>
+              {!search && typeFilter === "ALL" && (
+                <GradientButton onClick={openCreate}>+ Pehli Party Jodo</GradientButton>
+              )}
+            </div>
+          ) : (
+            <HKCard style={{ padding: "0 16px" }}>
+              {parties.map((party, i) => {
+                const isLena = party.currentBalance < 0;
+                const color = isLena ? GR : OR;
+                const initials = party.name
+                  .split(" ")
+                  .map((n) => n[0])
+                  .join("")
+                  .slice(0, 2)
+                  .toUpperCase();
+                return (
+                  <div
+                    key={party.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 14,
+                      padding: "16px 0",
+                      borderBottom:
+                        i < parties.length - 1 ? "1px solid var(--hk-border)" : "none",
+                      minHeight: 72,
+                    }}
+                  >
+                    <div
+                      onClick={() => router.push(`/parties/${party.id}`)}
+                      style={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: 13,
+                        background: color + "20",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                        cursor: "pointer",
+                      }}
+                    >
+                      <span style={{ fontSize: TYPE.body, fontWeight: 800, color, fontFamily: IN }}>
+                        {initials}
+                      </span>
                     </div>
-
-                    <div className="flex items-center gap-3">
-                      <div className="text-right">
-                        <p className={`text-lg font-bold ${getPartyBalanceColor(party.type as SupportedPartyType, party.currentBalance)}`}>
-                          {formatPartyBalance(party.currentBalance)}
-                        </p>
-                        <p className="text-xs text-default-400">
-                          {getBalanceStatusLabel(
-                            party.type as SupportedPartyType,
-                            roundBalance(party.currentBalance)
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "flex-start",
+                          gap: 12,
+                        }}
+                      >
+                        <div
+                          onClick={() => router.push(`/parties/${party.id}`)}
+                          style={{ cursor: "pointer", minWidth: 0, flex: 1 }}
+                        >
+                          <p
+                            style={{
+                              fontSize: TYPE.bodyLarge,
+                              fontWeight: 700,
+                              color: "var(--hk-text)",
+                              marginBottom: 5,
+                              fontFamily: SG,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {party.name}
+                          </p>
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: 8,
+                              alignItems: "center",
+                              flexWrap: "wrap",
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontSize: TYPE.chip,
+                                fontWeight: 700,
+                                color: party.type === "CUSTOMER" ? PU : "var(--hk-sub)",
+                                background:
+                                  party.type === "CUSTOMER" ? PU + "18" : "var(--hk-badge)",
+                                padding: "3px 9px",
+                                borderRadius: 6,
+                                fontFamily: SG,
+                              }}
+                            >
+                              {party.type === "CUSTOMER" ? "Grahak" : "Supplier"}
+                            </span>
+                            {party.phone && (
+                              <span
+                                style={{
+                                  fontSize: TYPE.bodySmall,
+                                  fontWeight: 500,
+                                  color: "var(--hk-sub)",
+                                  fontFamily: SG,
+                                }}
+                              >
+                                {party.phone}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: "right", flexShrink: 0 }}>
+                          <p
+                            style={{
+                              fontSize: TYPE.numMedium,
+                              fontWeight: 800,
+                              color,
+                              fontFamily: IN,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {isLena ? "+" : "-"}
+                            {fmt(Math.abs(party.currentBalance))}
+                          </p>
+                          <p
+                            style={{
+                              fontSize: TYPE.caption,
+                              fontWeight: 600,
+                              color: "var(--hk-sub)",
+                              marginTop: 4,
+                              fontFamily: SG,
+                            }}
+                          >
+                            {getBalanceStatusLabel(
+                              party.type as SupportedPartyType,
+                              roundBalance(party.currentBalance)
+                            )}
+                          </p>
+                        </div>
+                        {/* Call / WhatsApp / Overflow (§5.3) */}
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 6,
+                            alignItems: "center",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {/* Call button */}
+                          {party.phone && (
+                            <a
+                              href={`tel:${party.phone}`}
+                              aria-label={`Call ${party.name}`}
+                              style={{
+                                width: 36,
+                                height: 36,
+                                borderRadius: 10,
+                                border: "1px solid var(--hk-border)",
+                                background: GR + "14",
+                                color: GR,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                cursor: "pointer",
+                                textDecoration: "none",
+                              }}
+                            >
+                              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round">
+                                <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z" />
+                              </svg>
+                            </a>
                           )}
-                        </p>
-                      </div>
-
-                      <div className="mt-3 flex items-center gap-2 md:mt-0">
-                        <Button
-                          size="sm"
-                          color="secondary"
-                          variant="flat"
-                          onPress={() => router.push(`/parties/${party.id}`)}
-                          className="font-medium md:mr-2"
-                        >
-                          {t("parties.viewProfile")}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="flat"
-                          isIconOnly
-                          aria-label={`Edit ${party.name}`}
-                          onPress={() => openEdit(party)}
-                        >
-                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path
-                              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={1.5}
-                            />
-                          </svg>
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="flat"
-                          color="danger"
-                          isIconOnly
-                          aria-label={`Delete ${party.name}`}
-                          onPress={() => handleDelete(party)}
-                        >
-                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path
-                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={1.5}
-                            />
-                          </svg>
-                        </Button>
+                          {/* WhatsApp button */}
+                          {party.phone && (
+                            <a
+                              href={`https://wa.me/${party.phone.replace(/[^0-9]/g, "").replace(/^(?!91)/, "91")}?text=${encodeURIComponent(`Namaste ${party.name}, HisaabKitaab se: Aapka baaki ₹${Math.abs(party.currentBalance).toLocaleString("en-IN")} hai. Kripya jaldi se payment kar dein. Dhanyavaad!`)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              aria-label={`WhatsApp ${party.name}`}
+                              style={{
+                                width: 36,
+                                height: 36,
+                                borderRadius: 10,
+                                border: "1px solid var(--hk-border)",
+                                background: "#25D36614",
+                                color: "#25D366",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                cursor: "pointer",
+                                textDecoration: "none",
+                              }}
+                            >
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
+                                <path d="M12 2C6.477 2 2 6.477 2 12c0 1.89.525 3.66 1.438 5.168L2 22l4.832-1.438A9.955 9.955 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18a8 8 0 01-4.243-1.214l-.257-.154-2.952.877.877-2.952-.154-.257A8 8 0 1112 20z" />
+                              </svg>
+                            </a>
+                          )}
+                          {/* Overflow menu */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOverflowPartyId(overflowPartyId === party.id ? null : party.id);
+                            }}
+                            aria-label={`More actions for ${party.name}`}
+                            style={{
+                              width: 36,
+                              height: 36,
+                              borderRadius: 10,
+                              border: "1px solid var(--hk-border)",
+                              background: "var(--hk-badge)",
+                              color: "var(--hk-sub)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              cursor: "pointer",
+                              position: "relative",
+                            }}
+                          >
+                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round">
+                              <circle cx="12" cy="5" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="12" cy="19" r="1" />
+                            </svg>
+                            {overflowPartyId === party.id && (
+                              <div
+                                style={{
+                                  position: "absolute",
+                                  top: "100%",
+                                  right: 0,
+                                  marginTop: 4,
+                                  background: "var(--hk-card)",
+                                  border: "1px solid var(--hk-border)",
+                                  borderRadius: 12,
+                                  boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
+                                  zIndex: 10,
+                                  minWidth: 140,
+                                  overflow: "hidden",
+                                }}
+                              >
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setOverflowPartyId(null); openEdit(party); }}
+                                  style={{
+                                    width: "100%", padding: "10px 14px",
+                                    display: "flex", alignItems: "center", gap: 8,
+                                    background: "transparent", border: "none", cursor: "pointer",
+                                    fontSize: 14, fontWeight: 600, color: "var(--hk-text)", fontFamily: SG,
+                                  }}
+                                >
+                                  ✏️ Edit
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setOverflowPartyId(null); handleDelete(party); }}
+                                  style={{
+                                    width: "100%", padding: "10px 14px",
+                                    display: "flex", alignItems: "center", gap: 8,
+                                    background: "transparent", border: "none", cursor: "pointer",
+                                    fontSize: 14, fontWeight: 600, color: OR, fontFamily: SG,
+                                  }}
+                                >
+                                  🗑️ Delete
+                                </button>
+                              </div>
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </CardBody>
-              </Card>
-            ))}
-          </div>
-        )}
+                );
+              })}
+            </HKCard>
+          )}
+        </div>
       </div>
 
+      {/* ── Slide-in edit panel ─────────────────────────────────────────── */}
       {showPanel && (
         <>
-          <div className="fixed inset-0 z-50 bg-black/40" onClick={() => setShowPanel(false)} />
           <div
-            className="fixed bottom-0 right-0 top-0 z-50 w-full max-w-md overflow-y-auto bg-background shadow-2xl animate-[slideInRight_0.3s_ease-out]"
+            onClick={() => setShowPanel(false)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.55)",
+              zIndex: 499,
+              backdropFilter: "blur(4px)",
+              WebkitBackdropFilter: "blur(4px)",
+            }}
+          />
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              right: 0,
+              bottom: 0,
+              width: isMobile ? "100%" : 480,
+              zIndex: 500,
+              display: "flex",
+              flexDirection: "column",
+              background: "var(--hk-card)",
+              borderLeft: "1px solid var(--hk-border)",
+              boxShadow: "-16px 0 48px rgba(0,0,0,0.35)",
+              fontFamily: SG,
+              animation: "slideInRight 0.3s ease-out",
+            }}
           >
-            <div className="p-6">
-              <div className="mb-6 flex items-center justify-between">
-                <h2 className="text-xl font-bold">
-                  {editingParty ? t("parties.editTitle") : t("parties.createTitle")}
-                </h2>
-                <Button
-                  isIconOnly
-                  variant="light"
-                  size="sm"
-                  aria-label="Close panel"
-                  onPress={() => setShowPanel(false)}
+            {/* Header */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "16px 20px",
+                borderBottom: "1px solid var(--hk-border)",
+                flexShrink: 0,
+              }}
+            >
+              <button
+                onClick={() => setShowPanel(false)}
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 9,
+                  border: "1px solid var(--hk-border)",
+                  background: "var(--hk-badge)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  color: "var(--hk-sub)",
+                  flexShrink: 0,
+                }}
+                aria-label="Close panel"
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
                 >
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      d="M6 18L18 6M6 6l12 12"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                    />
-                  </svg>
-                </Button>
-              </div>
-
-              <div className="flex flex-col gap-4">
-                <Input
-                  label={t("parties.nameLabel")}
-                  placeholder={t("parties.namePlaceholder")}
-                  value={formName}
-                  onValueChange={setFormName}
-                  variant="bordered"
-                  isRequired
-                />
-                <Input
-                  label={t("parties.phoneLabel")}
-                  placeholder={t("bills.phonePlaceholder")}
-                  value={formPhone}
-                  onValueChange={setFormPhone}
-                  variant="bordered"
-                  type="tel"
-                />
-                <Input
-                  label={t("parties.emailLabel")}
-                  placeholder={t("parties.emailPlaceholder")}
-                  value={formEmail}
-                  onValueChange={setFormEmail}
-                  variant="bordered"
-                  type="email"
-                />
-                <Input
-                  label={t("parties.addressLabel")}
-                  placeholder={t("bills.addressPlaceholder")}
-                  value={formAddress}
-                  onValueChange={setFormAddress}
-                  variant="bordered"
-                />
-                <Input
-                  label={t("parties.gstinLabel")}
-                  placeholder={t("bills.gstinPlaceholder")}
-                  value={formGstin}
-                  onValueChange={setFormGstin}
-                  variant="bordered"
-                />
-                <Select
-                  label={t("parties.typeLabel")}
-                  placeholder={t("parties.typeLabel")}
-                  selectedKeys={new Set([formType])}
-                  onSelectionChange={(keys) => {
-                    const value = Array.from(keys)[0] as string;
-                    if (value) {
-                      setFormType(value);
-                    }
+                  <path d="m15 18-6-6 6-6" />
+                </svg>
+              </button>
+              <div>
+                <h2
+                  style={{
+                    fontSize: TYPE.h2,
+                    fontWeight: 700,
+                    color: "var(--hk-text)",
+                    letterSpacing: "-0.3px",
+                    fontFamily: SG,
                   }}
-                  variant="bordered"
                 >
-                  <SelectItem key="CUSTOMER">{t("parties.customerType")}</SelectItem>
-                  <SelectItem key="VENDOR">{t("parties.vendorType")}</SelectItem>
-                </Select>
-
-                {!editingParty && (
-                  <Input
-                    label={t("parties.openingBalance")}
-                    placeholder="0"
-                    type="number"
-                    value={formBalance}
-                    onValueChange={setFormBalance}
-                    variant="bordered"
-                    description={
-                      formType === "CUSTOMER"
-                        ? t("parties.customerBalanceHelp")
-                        : t("parties.vendorBalanceHelp")
-                    }
-                  />
-                )}
-
-                <div className="pt-4 flex gap-3">
-                  <Button variant="flat" className="flex-1" onPress={() => setShowPanel(false)}>
-                    {t("common.cancel")}
-                  </Button>
-                  <Button
-                    color="primary"
-                    className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600"
-                    onPress={handleSave}
-                    isLoading={saving}
-                  >
-                    {editingParty ? t("parties.updateParty") : t("parties.createParty")}
-                  </Button>
-                </div>
+                  {editingParty ? "Party Edit Karo" : "Nayi Party Jodo"}
+                </h2>
+                <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--hk-sub)", marginTop: 3, fontFamily: SG }}>
+                  {editingParty ? "Details update karo" : "Grahak ya supplier add karo"}
+                </p>
               </div>
+            </div>
+
+            {/* Body */}
+            <div
+              style={{
+                flex: 1,
+                overflowY: "auto",
+                padding: "16px 20px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 14,
+              }}
+            >
+              <Input
+                label="Naam"
+                placeholder={t("parties.namePlaceholder")}
+                value={formName}
+                onValueChange={setFormName}
+                variant="bordered"
+                isRequired
+              />
+              <Input
+                label="Phone"
+                placeholder={t("bills.phonePlaceholder")}
+                value={formPhone}
+                onValueChange={setFormPhone}
+                variant="bordered"
+                type="tel"
+              />
+              <Input
+                label="Email"
+                placeholder={t("parties.emailPlaceholder")}
+                value={formEmail}
+                onValueChange={setFormEmail}
+                variant="bordered"
+                type="email"
+              />
+              <Input
+                label="Pata"
+                placeholder={t("bills.addressPlaceholder")}
+                value={formAddress}
+                onValueChange={setFormAddress}
+                variant="bordered"
+              />
+              <Input
+                label="GSTIN"
+                placeholder={t("bills.gstinPlaceholder")}
+                value={formGstin}
+                onValueChange={setFormGstin}
+                variant="bordered"
+              />
+              <Select
+                label="Type"
+                placeholder="Grahak ya Supplier"
+                selectedKeys={new Set([formType])}
+                onSelectionChange={(keys) => {
+                  const value = Array.from(keys)[0] as string;
+                  if (value) setFormType(value);
+                }}
+                variant="bordered"
+              >
+                <SelectItem key="CUSTOMER">Grahak (Customer)</SelectItem>
+                <SelectItem key="VENDOR">Supplier (Vendor)</SelectItem>
+              </Select>
+              {!editingParty && (
+                <Input
+                  label="Opening Balance"
+                  placeholder="0"
+                  type="number"
+                  value={formBalance}
+                  onValueChange={setFormBalance}
+                  variant="bordered"
+                  description={
+                    formType === "CUSTOMER"
+                      ? t("parties.customerBalanceHelp")
+                      : t("parties.vendorBalanceHelp")
+                  }
+                />
+              )}
+            </div>
+
+            {/* Footer actions */}
+            <div
+              style={{
+                padding: "14px 20px",
+                borderTop: "1px solid var(--hk-border)",
+                display: "flex",
+                gap: 10,
+                flexShrink: 0,
+              }}
+            >
+              <Button
+                variant="flat"
+                style={{ flex: 1 }}
+                onPress={() => setShowPanel(false)}
+              >
+                Cancel
+              </Button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                style={{
+                  flex: 2,
+                  minHeight: 48,
+                  padding: "0 20px",
+                  borderRadius: 14,
+                  background: `linear-gradient(135deg, ${OR}, ${PU})`,
+                  color: "#fff",
+                  fontWeight: 700,
+                  fontSize: TYPE.body,
+                  cursor: saving ? "not-allowed" : "pointer",
+                  border: "none",
+                  fontFamily: SG,
+                  boxShadow: `0 4px 16px ${OR}44`,
+                  opacity: saving ? 0.7 : 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                }}
+              >
+                {saving ? (
+                  <>
+                    <span
+                      style={{
+                        width: 18,
+                        height: 18,
+                        borderRadius: "50%",
+                        border: "2.5px solid rgba(255,255,255,0.3)",
+                        borderTopColor: "white",
+                        display: "inline-block",
+                        animation: "hk-spin 0.7s linear infinite",
+                      }}
+                    />{" "}
+                    Saving...
+                  </>
+                ) : editingParty ? (
+                  "Update Karo ✓"
+                ) : (
+                  "Party Jodo ✓"
+                )}
+              </button>
             </div>
           </div>
         </>
