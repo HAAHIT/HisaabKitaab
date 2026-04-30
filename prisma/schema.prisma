@@ -365,7 +365,7 @@ model ImportJob {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model BankAccount {
-  id                                                String      @id
+  id                                                String      @id @default(cuid())
   tenantId                                          String
   name                                              String
   type                                              AccountType
