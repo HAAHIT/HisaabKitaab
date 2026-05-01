@@ -31,6 +31,7 @@ model Tenant {
   parties              Party[]
   payments             Payment[]
   users                User[]
+  bankStatements       BankStatement[]
 }
 
 model User {
@@ -232,6 +233,7 @@ model Payment {
   linkedBill                                            Bill?         @relation(fields: [linkedBillId], references: [id])
   party                                                 Party?        @relation(fields: [partyId], references: [id])
   tenant                                                Tenant        @relation(fields: [tenantId], references: [id])
+  bankStatementRows                                     BankStatementRow[]
 
   @@index([tenantId])
   @@index([tenantId, partyId])
@@ -380,6 +382,7 @@ model BankAccount {
   Tenant                                            Tenant      @relation(fields: [tenantId], references: [id])
   Payment_Payment_accountIdToBankAccount            Payment[]   @relation("Payment_accountIdToBankAccount")
   Payment_Payment_destinationAccountIdToBankAccount Payment[]   @relation("Payment_destinationAccountIdToBankAccount")
+  bankStatements                                    BankStatement[]
 
   @@unique([tenantId, name])
   @@index([tenantId])
@@ -481,4 +484,53 @@ enum JobStatus {
 enum AccountType {
   BANK
   CASH
+}
+
+// ── §5.10 Bank Reconciliation ─────────────────────────────────────────────────
+
+enum BankRowStatus {
+  PENDING
+  AUTO_MATCHED
+  MANUALLY_CATEGORIZED
+  IGNORED
+  AMBIGUOUS
+}
+
+model BankStatement {
+  id             String             @id @default(cuid())
+  tenantId       String
+  bankAccountId  String
+  periodFrom     DateTime
+  periodTo       DateTime
+  uploadedAt     DateTime           @default(now())
+  rowCount       Int
+  matchedCount   Int                @default(0)
+  unmatchedCount Int                @default(0)
+  isReconciled   Boolean            @default(false)
+  tenant         Tenant             @relation(fields: [tenantId], references: [id])
+  bankAccount    BankAccount        @relation(fields: [bankAccountId], references: [id])
+  rows           BankStatementRow[]
+
+  @@index([tenantId])
+  @@index([tenantId, bankAccountId])
+}
+
+model BankStatementRow {
+  id               String         @id @default(cuid())
+  tenantId         String
+  statementId      String
+  date             DateTime
+  description      String
+  amount           Decimal        @db.Decimal(19, 4)
+  direction        PayDirection
+  rawLine          String
+  matchedPaymentId String?
+  status           BankRowStatus  @default(PENDING)
+  category         String?
+  statement        BankStatement  @relation(fields: [statementId], references: [id])
+  matchedPayment   Payment?       @relation(fields: [matchedPaymentId], references: [id])
+
+  @@index([tenantId])
+  @@index([statementId])
+  @@unique([statementId, date, amount, description])
 }

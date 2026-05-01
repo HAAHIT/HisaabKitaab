@@ -430,6 +430,11 @@ export default function AppShell({
                   Tally Import
                 </DropdownItem>
               ) : null) as never}
+              {(user.role === "ADMIN" || user.role === "ACCOUNTANT" ? (
+                <DropdownItem key="reconcile" textValue="Bank Reconciliation" onPress={() => router.push("/settings/reconcile")}>
+                  Bank Reconciliation
+                </DropdownItem>
+              ) : null) as never}
               <DropdownItem key="more" textValue="More" onPress={() => setMoreSheetOpen(true)}>
                 More screens
               </DropdownItem>
@@ -533,6 +538,7 @@ export default function AppShell({
                 { label: "Users", href: "/settings/users" },
                 { label: "Templates", href: "/settings/templates" },
                 { label: "Items", href: "/settings/items" },
+                { label: "Bank Reconciliation", href: "/settings/reconcile" },
               ].map((s) => (
                 <button
                   key={s.href}
