@@ -15,7 +15,7 @@ import { QuickBillSheet } from "@/components/bills/QuickBillSheet";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { TranslationKey } from "@/lib/i18n/translations";
 import { FEATURE_FLAGS, type FeatureFlagKey } from "@/lib/feature-flags";
-import { TYPE, TOUCH } from "./hk-design";
+import { TYPE, TOUCH, OR } from "./hk-design";
 
 interface UserSession {
   userId: string;
@@ -295,7 +295,6 @@ export default function AppShell({
     return pathname.startsWith(href);
   }
 
-  const currentTabLabel = primaryTabs.find((tab) => isActive(tab.href))?.label ?? "HisaabKitaab";
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--hk-bg)", transition: "background 0.25s" }}>
@@ -345,33 +344,6 @@ export default function AppShell({
             );
           })}
         </div>
-
-        {/* Mobile: hamburger + current screen title */}
-        <button
-          className="lg:hidden"
-          onClick={() => setMoreSheetOpen(true)}
-          aria-label="Open navigation menu"
-          style={{
-            width: 40, height: 40, borderRadius: 10,
-            border: "1px solid var(--hk-border)",
-            background: "var(--hk-badge)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            color: "var(--hk-sub)", cursor: "pointer", flexShrink: 0,
-          }}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <line x1="4" y1="6" x2="20" y2="6" />
-            <line x1="4" y1="12" x2="20" y2="12" />
-            <line x1="4" y1="18" x2="20" y2="18" />
-          </svg>
-        </button>
-        <span className="lg:hidden" style={{
-          flex: 1, fontSize: TYPE.bodyLarge, fontWeight: 700,
-          color: "var(--hk-text)", fontFamily: "var(--font-space-grotesk)",
-          letterSpacing: "-0.3px",
-        }}>
-          {currentTabLabel}
-        </span>
 
         {/* Right controls */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, marginLeft: "auto" }}>
@@ -458,6 +430,72 @@ export default function AppShell({
         {children}
       </main>
 
+      {/* ── Mobile Bottom Nav ──────────────────────────────── */}
+      <nav
+        className="lg:hidden"
+        style={{
+          position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 200,
+          background: "var(--hk-nav)",
+          borderTop: "1px solid var(--hk-border)",
+          backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
+          display: "flex", alignItems: "stretch",
+          paddingBottom: "env(safe-area-inset-bottom, 0px)",
+          height: "calc(60px + env(safe-area-inset-bottom, 0px))",
+        }}
+      >
+        {primaryTabs.map((tab) => {
+          const active = isActive(tab.href);
+          return (
+            <button
+              key={tab.href}
+              onClick={() => router.push(tab.href)}
+              style={{
+                flex: 1, display: "flex", flexDirection: "column",
+                alignItems: "center", justifyContent: "center", gap: 4,
+                background: "none", border: "none", cursor: "pointer",
+                color: active ? OR : "var(--hk-sub)",
+                padding: "8px 4px 0",
+                transition: "color 0.15s",
+              }}
+            >
+              <span style={{ display: "flex", opacity: active ? 1 : 0.6, transition: "opacity 0.15s" }}>
+                {tab.icon}
+              </span>
+              <span style={{
+                fontSize: 10, fontWeight: active ? 700 : 500,
+                fontFamily: "var(--font-space-grotesk)",
+                letterSpacing: active ? "0px" : "0.1px",
+                lineHeight: 1,
+              }}>
+                {tab.label}
+              </span>
+            </button>
+          );
+        })}
+
+        {/* More tab */}
+        <button
+          onClick={() => setMoreSheetOpen(true)}
+          style={{
+            flex: 1, display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center", gap: 4,
+            background: "none", border: "none", cursor: "pointer",
+            color: "var(--hk-sub)", padding: "8px 4px 0",
+          }}
+        >
+          <span style={{ display: "flex", opacity: 0.6 }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+              <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+              <circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+            </svg>
+          </span>
+          <span style={{ fontSize: 10, fontWeight: 500, fontFamily: "var(--font-space-grotesk)", lineHeight: 1 }}>
+            More
+          </span>
+        </button>
+      </nav>
+
       {/* ── More Sheet ─────────────────────────────────────── */}
       <BottomSheet isOpen={moreSheetOpen} onClose={() => setMoreSheetOpen(false)} title="Menu">
         <div className="space-y-1">
@@ -495,27 +533,6 @@ export default function AppShell({
               </div>
             </button>
           )}
-
-          {/* Primary navigation */}
-          {primaryTabs.map((tab) => {
-            const active = isActive(tab.href);
-            return (
-              <button
-                key={tab.href}
-                onClick={() => { setMoreSheetOpen(false); router.push(tab.href); }}
-                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-default-100 transition text-left"
-                style={{
-                  background: active ? "var(--hk-badge)" : undefined,
-                  fontWeight: active ? 700 : undefined,
-                }}
-              >
-                <span style={{ color: active ? "#f76000" : "var(--hk-sub)" }}>{tab.icon}</span>
-                <span className="font-medium" style={{ color: active ? "var(--hk-text)" : undefined }}>{tab.label}</span>
-              </button>
-            );
-          })}
-
-          <div className="h-px bg-divider my-2" />
 
           {/* Secondary navigation */}
           {moreItems.map((item) => (
