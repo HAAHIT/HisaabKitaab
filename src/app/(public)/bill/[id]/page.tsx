@@ -252,18 +252,30 @@ export default async function PublicBillPage(
             </tr>
           </thead>
           <tbody>
-            {(bill.rows as Record<string,string|number>[]).map((row, ri) => (
-              <tr key={ri} style={{ borderBottom:"1px solid #ddd", background:ri%2===1?"#fafafa":"white" }}>
-                <td style={TD({ center:true, muted:true })}>{ri+1}</td>
-                {cols.map((col, ci) => (
-                  <td key={col.id} style={TD({ right:col.type==="number"||col.type==="formula", bold:col.type==="formula", last:ci===cols.length-1 })}>
-                    {(col.type==="number"||col.type==="formula")
-                      ? typeof row[col.id]==="number" ? formatVal(col.name, row[col.id] as number) : row[col.id]||"—"
-                      : row[col.id]||"—"}
-                  </td>
-                ))}
-              </tr>
-            ))}
+            {(bill.rows as Record<string,string|number>[]).map((row, ri) => {
+              const rowHsn = typeof row._hsnCode === "string" && row._hsnCode.trim() ? row._hsnCode.trim() : null;
+              const firstTextColId = cols.find(c => c.type !== "number" && c.type !== "formula")?.id ?? null;
+              return (
+                <tr key={ri} style={{ borderBottom:"1px solid #ddd", background:ri%2===1?"#fafafa":"white" }}>
+                  <td style={TD({ center:true, muted:true })}>{ri+1}</td>
+                  {cols.map((col, ci) => (
+                    <td key={col.id} style={TD({ right:col.type==="number"||col.type==="formula", bold:col.type==="formula", last:ci===cols.length-1 })}>
+                      {(col.type==="number"||col.type==="formula")
+                        ? typeof row[col.id]==="number" ? formatVal(col.name, row[col.id] as number) : row[col.id]||"—"
+                        : <>
+                            {row[col.id]||"—"}
+                            {rowHsn && col.id === firstTextColId && (
+                              <span style={{ display:"block", fontSize:9, color:"#888", marginTop:1 }}>
+                                HSN/SAC: {rowHsn}
+                              </span>
+                            )}
+                          </>
+                      }
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
 
             {/* Blank filler */}
             {(bill.rows as unknown[]).length < 5 && Array.from({length:5-(bill.rows as unknown[]).length}).map((_,i) => (
