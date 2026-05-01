@@ -15,7 +15,7 @@ import { QuickBillSheet } from "@/components/bills/QuickBillSheet";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { TranslationKey } from "@/lib/i18n/translations";
 import { FEATURE_FLAGS, type FeatureFlagKey } from "@/lib/feature-flags";
-import { TYPE, TOUCH, OR } from "./hk-design";
+import { TYPE, TOUCH } from "./hk-design";
 
 interface UserSession {
   userId: string;
@@ -319,10 +319,13 @@ export default function AppShell({
           </span>
         </div>
 
-        {/* Desktop pill tabs */}
-        <div className="hidden lg:flex" style={{
+        {/* Nav tabs — always visible, scroll on small screens */}
+        <div style={{
+          display: "flex",
           background: "var(--hk-pill)", borderRadius: 12, padding: 5,
           gap: 3, margin: "0 auto",
+          overflowX: "auto", flexShrink: 1,
+          scrollbarWidth: "none",
         }}>
           {primaryTabs.map((tab) => {
             const active = isActive(tab.href);
@@ -331,12 +334,13 @@ export default function AppShell({
                 key={tab.href}
                 onClick={() => router.push(tab.href)}
                 style={{
-                  minHeight: 38,
-                  padding: "0 22px", borderRadius: 9, border: "none", cursor: "pointer",
+                  minHeight: 38, whiteSpace: "nowrap",
+                  padding: "0 18px", borderRadius: 9, border: "none", cursor: "pointer",
                   fontSize: TYPE.body, fontWeight: active ? 700 : 600,
                   color: active ? "var(--hk-text)" : "var(--hk-sub)",
                   background: active ? "var(--hk-pill-active)" : "transparent",
                   transition: "all 0.15s", fontFamily: "var(--font-space-grotesk)",
+                  flexShrink: 0,
                 }}
               >
                 {tab.label}
@@ -429,72 +433,6 @@ export default function AppShell({
       <main className="main-content-area" style={{ minHeight: "calc(100vh - 64px)" }}>
         {children}
       </main>
-
-      {/* ── Mobile Bottom Nav ──────────────────────────────── */}
-      <nav
-        className="lg:hidden"
-        style={{
-          position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 200,
-          background: "var(--hk-nav)",
-          borderTop: "1px solid var(--hk-border)",
-          backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
-          display: "flex", alignItems: "stretch",
-          paddingBottom: "env(safe-area-inset-bottom, 0px)",
-          height: "calc(60px + env(safe-area-inset-bottom, 0px))",
-        }}
-      >
-        {primaryTabs.map((tab) => {
-          const active = isActive(tab.href);
-          return (
-            <button
-              key={tab.href}
-              onClick={() => router.push(tab.href)}
-              style={{
-                flex: 1, display: "flex", flexDirection: "column",
-                alignItems: "center", justifyContent: "center", gap: 4,
-                background: "none", border: "none", cursor: "pointer",
-                color: active ? OR : "var(--hk-sub)",
-                padding: "8px 4px 0",
-                transition: "color 0.15s",
-              }}
-            >
-              <span style={{ display: "flex", opacity: active ? 1 : 0.6, transition: "opacity 0.15s" }}>
-                {tab.icon}
-              </span>
-              <span style={{
-                fontSize: 10, fontWeight: active ? 700 : 500,
-                fontFamily: "var(--font-space-grotesk)",
-                letterSpacing: active ? "0px" : "0.1px",
-                lineHeight: 1,
-              }}>
-                {tab.label}
-              </span>
-            </button>
-          );
-        })}
-
-        {/* More tab */}
-        <button
-          onClick={() => setMoreSheetOpen(true)}
-          style={{
-            flex: 1, display: "flex", flexDirection: "column",
-            alignItems: "center", justifyContent: "center", gap: 4,
-            background: "none", border: "none", cursor: "pointer",
-            color: "var(--hk-sub)", padding: "8px 4px 0",
-          }}
-        >
-          <span style={{ display: "flex", opacity: 0.6 }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none"/>
-              <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/>
-              <circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none"/>
-            </svg>
-          </span>
-          <span style={{ fontSize: 10, fontWeight: 500, fontFamily: "var(--font-space-grotesk)", lineHeight: 1 }}>
-            More
-          </span>
-        </button>
-      </nav>
 
       {/* ── More Sheet ─────────────────────────────────────── */}
       <BottomSheet isOpen={moreSheetOpen} onClose={() => setMoreSheetOpen(false)} title="Menu">
