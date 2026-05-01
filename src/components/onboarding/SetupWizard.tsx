@@ -440,38 +440,6 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
           </div>
         )}
 
-        {/* Desktop: top bar showing step count */}
-        {!isMobile && (
-          <div style={{
-            padding: "18px 48px",
-            borderBottom: "1px solid var(--hk-border)",
-            background: "var(--hk-card)",
-            flexShrink: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}>
-            <div>
-              <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG, margin: 0 }}>
-                Step {step + 1} of {TOTAL_STEPS}
-              </p>
-              <p style={{ fontSize: TYPE.bodyLarge, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, margin: "2px 0 0" }}>
-                {STEP_META[step].label}
-              </p>
-            </div>
-            {/* Mini progress dots */}
-            <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-              {STEP_META.map((_, i) => (
-                <div key={i} style={{
-                  width: i === step ? 20 : 8, height: 8, borderRadius: 4,
-                  background: i < step ? GR : i === step ? OR : "var(--hk-border)",
-                  transition: "all 0.3s",
-                }} />
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* ── Form scroll area ──────────────────────────────────── */}
         <div style={{
           flex: 1,
