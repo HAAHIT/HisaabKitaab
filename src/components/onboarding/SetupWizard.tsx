@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Button, Input, Select, SelectItem } from "@heroui/react";
 import { useRouter } from "next/navigation";
+import { useTheme } from "next-themes";
 import { OR, PU, GR, AM, SG, IN, TYPE } from "@/components/ui/hk-design";
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -97,10 +98,14 @@ async function apiPatch(url: string, body: object) {
 
 export function SetupWizard({ onComplete }: SetupWizardProps) {
   const router = useRouter();
+  const { resolvedTheme, setTheme } = useTheme();
+  const [themeMounted, setThemeMounted] = useState(false);
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => setThemeMounted(true), []);
 
   // Responsive detection
   useEffect(() => {
@@ -269,7 +274,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ height: "100vh", overflow: "hidden", background: "var(--hk-bg)", display: "flex", fontFamily: SG }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "var(--hk-bg)", display: "flex", fontFamily: SG }}>
 
       {/* ═══════════════════════════════════════════════════════════
           LEFT SIDEBAR — step list (desktop only)
@@ -386,11 +391,33 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
             })}
           </div>
 
-          {/* Footer note */}
-          <div style={{ padding: "16px 24px", borderTop: "1px solid var(--hk-border)", flexShrink: 0 }}>
+          {/* Footer: note + theme toggle */}
+          <div style={{ padding: "14px 20px", borderTop: "1px solid var(--hk-border)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
             <p style={{ fontSize: TYPE.caption, color: "var(--hk-muted)", fontFamily: SG, lineHeight: 1.5, margin: 0 }}>
-              Sab kuch baad mein Settings<br />mein edit kar sakte ho.
+              Baad mein Settings mein<br />edit kar sakte ho.
             </p>
+            {themeMounted && (
+              <button
+                onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+                title={resolvedTheme === "dark" ? "Light mode" : "Dark mode"}
+                style={{
+                  width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                  border: "1px solid var(--hk-border)", background: "var(--hk-badge)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  color: "var(--hk-sub)", cursor: "pointer",
+                }}
+              >
+                {resolvedTheme === "dark" ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                  </svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                  </svg>
+                )}
+              </button>
+            )}
           </div>
         </div>
       )}
