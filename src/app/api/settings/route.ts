@@ -82,7 +82,7 @@ export async function PATCH(request: NextRequest) {
     const companyEmail = normalizeOptionalString(body.companyEmail);
     const companyGstin = normalizeOptionalString(body.companyGstin);
 
-    const newSettings = mergeTenantSettings(existingTenant.settings as Record<string, unknown> | null, {
+    const nextSettings: Parameters<typeof mergeTenantSettings>[1] = {
       companyName,
       companyAddress: normalizeString(body.companyAddress),
       companyPhone: normalizeString(body.companyPhone),
@@ -93,10 +93,13 @@ export async function PATCH(request: NextRequest) {
       billPrefix: normalizeString(body.billPrefix, "BILL"),
       upiId: normalizeString(body.upiId),
       businessType: normalizeBusinessType(body.businessType),
-      taxRegistrationType: normalizeTaxRegistrationType(
-        body.taxRegistrationType
-      ),
-    });
+      taxRegistrationType: normalizeTaxRegistrationType(body.taxRegistrationType),
+    };
+    // Only update defaultTemplateId when explicitly provided in body
+    if ("defaultTemplateId" in body) {
+      nextSettings.defaultTemplateId = normalizeOptionalString(body.defaultTemplateId);
+    }
+    const newSettings = mergeTenantSettings(existingTenant.settings as Record<string, unknown> | null, nextSettings);
 
     const tenant = await prisma.tenant.update({
       where: { id: tenantId },

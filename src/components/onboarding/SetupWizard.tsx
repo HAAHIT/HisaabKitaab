@@ -27,19 +27,73 @@ const BANKS = [
 
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z][Z][0-9A-Z]$/;
 
-const TOTAL_STEPS = 7;
-
 const STEP_META = [
   { label: "Business",  desc: "Naam aur jagah"           },
   { label: "GSTIN",     desc: "Tax registration"          },
   { label: "Bank",      desc: "Account details"           },
   { label: "Parties",   desc: "Grahak & Suppliers"        },
   { label: "Items",     desc: "Jo bechte ho"              },
+  { label: "Template",  desc: "Default bill format"       },
   { label: "CA",        desc: "Accountant contact"        },
   { label: "Done",      desc: "Sab set!"                  },
 ];
 
-const SKIPPABLE = [false, true, true, true, true, true, false];
+const TOTAL_STEPS = 8;
+const SKIPPABLE = [false, true, true, true, true, true, true, false];
+
+// Preset templates shown during onboarding — user picks one, wizard creates it
+const PRESET_TEMPLATES = [
+  {
+    id: "standard",
+    label: "Standard Invoice",
+    desc: "Description · Qty · Rate · Amount",
+    icon: "📄",
+    columns: [
+      { id: "description", name: "Description", type: "text" },
+      { id: "qty",         name: "Qty",         type: "number" },
+      { id: "rate",        name: "Rate (₹)",    type: "number" },
+      { id: "amount",      name: "Amount (₹)",  type: "formula", formula: "qty*rate" },
+    ],
+  },
+  {
+    id: "gst",
+    label: "GST Invoice",
+    desc: "Item · HSN · Qty · Rate · GST% · Total",
+    icon: "🧾",
+    columns: [
+      { id: "item",    name: "Item",       type: "text" },
+      { id: "hsn",     name: "HSN Code",   type: "text" },
+      { id: "qty",     name: "Qty",        type: "number" },
+      { id: "rate",    name: "Rate (₹)",   type: "number" },
+      { id: "taxable", name: "Taxable (₹)", type: "formula", formula: "qty*rate" },
+    ],
+  },
+  {
+    id: "service",
+    label: "Service Invoice",
+    desc: "Service · Hours · Rate · Amount",
+    icon: "🛠️",
+    columns: [
+      { id: "service", name: "Service",    type: "text" },
+      { id: "hours",   name: "Hours",      type: "number" },
+      { id: "rate",    name: "Rate (₹/hr)", type: "number" },
+      { id: "amount",  name: "Amount (₹)", type: "formula", formula: "hours*rate" },
+    ],
+  },
+  {
+    id: "material",
+    label: "Material Supply",
+    desc: "Item · Unit · Qty · Rate · Total",
+    icon: "📦",
+    columns: [
+      { id: "item",   name: "Item",       type: "text" },
+      { id: "unit",   name: "Unit",       type: "text" },
+      { id: "qty",    name: "Qty",        type: "number" },
+      { id: "rate",   name: "Rate (₹)",   type: "number" },
+      { id: "total",  name: "Total (₹)",  type: "formula", formula: "qty*rate" },
+    ],
+  },
+] as const;
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -141,7 +195,10 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
   const [addItemRate, setAddItemRate] = useState("");
   const [addItemHsn, setAddItemHsn] = useState("");
 
-  // Step 5 — CA contact
+  // Step 5 — Template selection
+  const [selectedPreset, setSelectedPreset] = useState<string>("standard");
+
+  // Step 6 — CA contact
   const [caName, setCaName] = useState("");
   const [caEmail, setCaEmail] = useState("");
   const [caPhone, setCaPhone] = useState("");
@@ -214,6 +271,28 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
     finally { setSaving(false); }
   }
 
+  async function saveStep5Template() {
+    setError(null);
+    setSaving(true);
+    try {
+      const preset = PRESET_TEMPLATES.find((p) => p.id === selectedPreset);
+      if (!preset) return true;
+      // Create the template
+      const res = await apiFetch("/api/templates", { name: preset.label, columns: preset.columns });
+      const templateId: string = res.template?.id;
+      if (templateId) {
+        // Save as default
+        await apiPatch("/api/settings", { defaultTemplateId: templateId });
+      }
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Template save failed");
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function saveStep6() {
     setError(null);
     if (!caName && !caEmail && !caPhone) return true;
@@ -241,7 +320,8 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
     else if (step === 2) ok = await saveStep3();
     else if (step === 3) ok = await saveStep4();
     else if (step === 4) ok = await saveStep5();
-    else if (step === 5) ok = await saveStep6();
+    else if (step === 5) ok = await saveStep5Template();
+    else if (step === 6) ok = await saveStep6();
     if (ok) setStep((s) => Math.min(s + 1, TOTAL_STEPS - 1) as typeof s);
   }
 
@@ -627,8 +707,73 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
               </div>
             )}
 
-            {/* ── Step 5: CA Contact ──────────────────────────── */}
+            {/* ── Step 5: Template ────────────────────────────── */}
             {step === 5 && (
+              <div>
+                <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 6, marginTop: 0 }}>
+                  Bill ka Format Chuno
+                </h2>
+                <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", marginBottom: 28, fontFamily: SG }}>
+                  Ye default template har naye bill mein auto-select hoga. Baad mein Settings mein change kar sakte ho.
+                </p>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {PRESET_TEMPLATES.map((preset) => {
+                    const active = selectedPreset === preset.id;
+                    return (
+                      <button
+                        key={preset.id}
+                        onClick={() => setSelectedPreset(preset.id)}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 16,
+                          padding: "16px 18px", borderRadius: 14, textAlign: "left",
+                          border: `2px solid ${active ? OR : "var(--hk-border)"}`,
+                          background: active ? OR + "0a" : "var(--hk-card)",
+                          cursor: "pointer", transition: "all 0.15s", width: "100%",
+                        }}
+                      >
+                        {/* Selection indicator */}
+                        <div style={{
+                          width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
+                          border: `2px solid ${active ? OR : "var(--hk-border)"}`,
+                          background: active ? OR : "transparent",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          transition: "all 0.15s",
+                        }}>
+                          {active && <span style={{ color: "white", fontSize: 12, lineHeight: 1 }}>✓</span>}
+                        </div>
+
+                        {/* Icon */}
+                        <span style={{ fontSize: 28, lineHeight: 1, flexShrink: 0 }}>{preset.icon}</span>
+
+                        {/* Label */}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{
+                            fontSize: TYPE.bodyLarge, fontWeight: active ? 700 : 600,
+                            color: active ? OR : "var(--hk-text)", fontFamily: SG, margin: 0,
+                          }}>
+                            {preset.label}
+                          </p>
+                          <p style={{
+                            fontSize: TYPE.bodySmall, color: "var(--hk-sub)",
+                            fontFamily: SG, marginTop: 3,
+                          }}>
+                            {preset.desc}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <p style={{ fontSize: TYPE.caption, color: "var(--hk-muted)", fontFamily: SG, marginTop: 16 }}>
+                  Columns baad mein Settings → Templates mein edit ho sakta hai.
+                </p>
+              </div>
+            )}
+
+            {/* ── Step 6: CA Contact ──────────────────────────── */}
+            {step === 6 && (
               <div>
                 <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 6, marginTop: 0 }}>
                   CA ka Contact
@@ -644,8 +789,8 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
               </div>
             )}
 
-            {/* ── Step 6: Done ────────────────────────────────── */}
-            {step === 6 && (
+            {/* ── Step 7: Done ────────────────────────────────── */}
+            {step === 7 && (
               <div>
                 <div style={{ textAlign: isMobile ? "center" : "left", marginBottom: 32 }}>
                   <p style={{ fontSize: 56, marginBottom: 16, lineHeight: 1 }}>🎉</p>
@@ -668,6 +813,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                       { label: "Banks added",    value: String(banks.filter((b) => b.bankName).length) },
                       { label: "Parties added",  value: String(parties.length) },
                       { label: "Items added",    value: String(items.length) },
+                      { label: "Bill Template",  value: PRESET_TEMPLATES.find((p) => p.id === selectedPreset)?.label || "Skip kiya" },
                       { label: "CA",             value: caName || caEmail || "Skip kiya" },
                     ].map((row, idx, arr) => (
                       <div key={row.label} style={{

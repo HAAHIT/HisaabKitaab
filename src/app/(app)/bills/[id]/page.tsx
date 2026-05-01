@@ -3,12 +3,8 @@
 import { useState, useEffect, use } from "react";
 import Image from "next/image";
 import {
-  Card,
-  CardBody,
-  CardHeader,
   Button,
   Chip,
-  Divider,
   Modal,
   ModalBody,
   ModalContent,
@@ -20,6 +16,9 @@ import { useRouter } from "next/navigation";
 import { BillActionBar } from "@/components/bills/BillActionBar";
 import type { ColumnDef } from "@/lib/formula";
 import { shareBill } from "@/lib/share";
+import { GST_STATE_CODES } from "@/lib/gst-states";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface BillDetail {
   id: string;
@@ -27,12 +26,8 @@ interface BillDetail {
   partyId: string | null;
   isInterState?: boolean;
   party: {
-    id: string;
-    name: string;
-    type: "CUSTOMER" | "VENDOR";
-    phone: string | null;
-    address: string | null;
-    gstin: string | null;
+    id: string; name: string; type: "CUSTOMER" | "VENDOR";
+    phone: string | null; address: string | null; gstin: string | null;
   } | null;
   customerName: string;
   customerPhone: string | null;
@@ -49,10 +44,7 @@ interface BillDetail {
   hsnCode: string | null;
   status: string;
   createdAt: string;
-  template: {
-    name: string;
-    columns: ColumnDef[];
-  };
+  template: { name: string; columns: ColumnDef[] };
   creator: { name: string };
 }
 
@@ -66,506 +58,541 @@ interface CompanySettings {
   upiId?: string | null;
 }
 
-const statusColorMap: Record<
-  string,
-  "default" | "primary" | "success" | "danger"
-> = {
-  DRAFT: "default",
-  FINAL: "success",
-  CANCELLED: "danger",
-};
+// ─── Utilities ────────────────────────────────────────────────────────────────
 
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 2,
-  }).format(n);
+const ONES = ["","One","Two","Three","Four","Five","Six","Seven","Eight","Nine",
+  "Ten","Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"];
+const TENS = ["","","Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety"];
+
+function w(n: number): string {
+  if (!n) return "";
+  if (n < 20) return ONES[n];
+  if (n < 100) return TENS[Math.floor(n/10)] + (n%10 ? " " + ONES[n%10] : "");
+  return ONES[Math.floor(n/100)] + " Hundred" + (n%100 ? " and " + w(n%100) : "");
+}
+function numberToWords(amount: number): string {
+  const n = Math.round(amount);
+  if (!n) return "Zero Rupees Only";
+  const cr=Math.floor(n/1e7), lk=Math.floor((n%1e7)/1e5), th=Math.floor((n%1e5)/1e3), rm=n%1e3;
+  return "Indian Rupees " +
+    [(cr?w(cr)+" Crore ":""),(lk?w(lk)+" Lakh ":""),(th?w(th)+" Thousand ":""),(rm?w(rm):" ")].join("").trim() +
+    " Only.";
 }
 
-function formatColumnValue(colName: string, value: number): string {
-  const lower = colName.toLowerCase();
-  const isCurrency =
-    lower.includes("rate") ||
-    lower.includes("price") ||
-    lower.includes("amount") ||
-    lower.includes("total") ||
-    lower.includes("₹") ||
-    lower.includes("rs");
-
-  if (isCurrency) return formatCurrency(value);
-  
-  return new Intl.NumberFormat("en-IN", {
-    maximumFractionDigits: 2,
-  }).format(value);
+function formatINR(n: number) {
+  return new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:2}).format(n);
+}
+function formatVal(colName: string, value: number): string {
+  const l = colName.toLowerCase();
+  return (l.includes("rate")||l.includes("price")||l.includes("amount")||l.includes("total")||l.includes("₹")||l.includes("rs"))
+    ? formatINR(value)
+    : new Intl.NumberFormat("en-IN",{maximumFractionDigits:2}).format(value);
+}
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-IN",{day:"2-digit",month:"2-digit",year:"numeric"});
+}
+function stateName(code: string|null) {
+  if (!code) return "";
+  return GST_STATE_CODES[code] ? `${GST_STATE_CODES[code]}` : code;
 }
 
+const STATUS_COLOR: Record<string,"default"|"primary"|"success"|"danger"> =
+  { DRAFT:"default", FINAL:"success", CANCELLED:"danger" };
 
-export default function BillDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+// Print CSS injected via useEffect to avoid React insertBefore crash
+const PRINT_CSS = `
+@media print {
+  @page { margin: 8mm; size: A4 portrait; }
+  body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .no-print { display: none !important; }
+  .bill-bg { background: white !important; padding: 0 !important; }
+  .bill-paper { box-shadow: none !important; border-radius: 0 !important; max-width: 100% !important; width: 100% !important; }
+}
+`;
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export default function BillDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const { id } = use(params);
-  const [bill, setBill] = useState<BillDetail | null>(null);
-  const [settings, setSettings] = useState<CompanySettings | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState<{
-    message: string;
-    type: "success" | "error";
-  } | null>(null);
-  const [confirmAction, setConfirmAction] = useState<"FINAL" | "CANCELLED" | null>(null);
+
+  const [bill,          setBill]          = useState<BillDetail | null>(null);
+  const [settings,      setSettings]      = useState<CompanySettings | null>(null);
+  const [loading,       setLoading]       = useState(true);
+  const [toast,         setToast]         = useState<{ message: string; type: "success"|"error" }|null>(null);
+  const [confirmAction, setConfirmAction] = useState<"FINAL"|"CANCELLED"|null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
-  function showToast(message: string, type: "success" | "error") {
-    setToast({ message, type });
+  // Inject print CSS without touching JSX (avoids insertBefore crash)
+  useEffect(() => {
+    const el = document.createElement("style");
+    el.setAttribute("data-hk-print", "1");
+    el.textContent = PRINT_CSS;
+    document.head.appendChild(el);
+    return () => { document.head.removeChild(el); };
+  }, []);
+
+  function showToast(msg: string, type: "success"|"error") {
+    setToast({ message: msg, type });
     setTimeout(() => setToast(null), 3000);
   }
 
   useEffect(() => {
-    async function loadData() {
+    (async () => {
       try {
-        const [billRes, settingsRes] = await Promise.all([
-          fetch(`/api/bills/${id}`),
-          fetch("/api/settings"),
-        ]);
-
-        if (billRes.ok) {
-          const { bill: serverBill } = await billRes.json();
-          setBill(serverBill);
-        }
-
-        if (settingsRes.ok) {
-          const { settings: serverSettings } = await settingsRes.json();
-          setSettings(serverSettings);
-        }
-      } catch {
-        // non-critical — loading state handles the empty case
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadData();
+        const [bRes, sRes] = await Promise.all([fetch(`/api/bills/${id}`), fetch("/api/settings")]);
+        if (bRes.ok) setBill((await bRes.json()).bill);
+        if (sRes.ok) setSettings((await sRes.json()).settings);
+      } finally { setLoading(false); }
+    })();
   }, [id]);
 
-  async function executeStatusChange(status: "FINAL" | "CANCELLED") {
+  async function execStatus(status: "FINAL"|"CANCELLED") {
     if (!bill) return;
-    const currentBill = bill;
     setActionLoading(true);
     try {
-      const method = status === "CANCELLED" ? "DELETE" : "PATCH";
-      const body =
-        status === "CANCELLED"
-          ? undefined
-          : JSON.stringify({
-              partyId: currentBill.partyId,
-              customerName: currentBill.customerName,
-              customerPhone: currentBill.customerPhone,
-              customerAddress: currentBill.customerAddress,
-              gstin: currentBill.gstin,
-              rows: currentBill.rows,
-              notes: currentBill.notes,
-              terms: currentBill.terms,
-              taxPercent: currentBill.taxPercent,
-              subtotal: currentBill.subtotal,
-              taxAmount: currentBill.taxAmount,
-              grandTotal: currentBill.grandTotal,
-              isInterState: currentBill.isInterState === true,
-              status,
-            });
-      const headers: Record<string, string> = {};
-      if (body) headers["Content-Type"] = "application/json";
-
-      const res = await fetch(`/api/bills/${id}`, { method, headers, body });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error);
-      }
-
+      const del = status === "CANCELLED";
+      const res = await fetch(`/api/bills/${id}`, {
+        method: del ? "DELETE" : "PATCH",
+        headers: del ? {} : { "Content-Type": "application/json" },
+        body: del ? undefined : JSON.stringify({
+          partyId: bill.partyId, customerName: bill.customerName,
+          customerPhone: bill.customerPhone, customerAddress: bill.customerAddress,
+          gstin: bill.gstin, rows: bill.rows, notes: bill.notes, terms: bill.terms,
+          taxPercent: bill.taxPercent, subtotal: bill.subtotal,
+          taxAmount: bill.taxAmount, grandTotal: bill.grandTotal,
+          isInterState: bill.isInterState === true, status,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
       showToast(status === "FINAL" ? "Bill finalized!" : "Bill cancelled", "success");
-      const updated = await fetch(`/api/bills/${id}`).then((r) => r.json());
-      setBill(updated.bill);
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "Action failed", "error");
-    } finally {
-      setActionLoading(false);
-      setConfirmAction(null);
-    }
+      setBill((await fetch(`/api/bills/${id}`).then(r => r.json())).bill);
+    } catch (e) { showToast(e instanceof Error ? e.message : "Failed", "error"); }
+    finally { setActionLoading(false); setConfirmAction(null); }
   }
 
   async function handleShare() {
-    if (!bill || bill.status !== "FINAL") {
-      return;
-    }
-
-    const didShare = await shareBill({
-      billNumber: bill.billNumber,
-      customerName: bill.customerName,
-      grandTotal: bill.grandTotal,
-      customerPhone: bill.customerPhone,
+    if (!bill || bill.status !== "FINAL") return;
+    await shareBill({
+      billNumber: bill.billNumber, customerName: bill.customerName,
+      grandTotal: bill.grandTotal, customerPhone: bill.customerPhone,
       companyName: settings?.companyName || "My Business",
       companyUpiId: settings?.upiId || null,
       billUrl: `${window.location.origin}/api/bills/${bill.id}/public`,
     });
-
-    if (didShare) {
-      showToast("Share flow opened", "success");
-    }
   }
 
-  if (loading) {
-    return (
-      <div className="p-4 lg:p-8 space-y-4">
-        <Skeleton className="h-8 w-48 rounded-lg" />
-        <Skeleton className="h-60 w-full rounded-xl" />
-        <Skeleton className="h-40 w-full rounded-xl" />
-      </div>
-    );
-  }
+  // ── Guards ────────────────────────────────────────────────────────────────
 
-  if (!bill) {
-    return (
-      <div className="p-4 lg:p-8">
-        <Card>
-          <CardBody className="text-center py-16">
-            <p className="text-lg font-medium">Bill not found</p>
-            <Button
-              className="mt-3"
-              variant="flat"
-              onPress={() => router.push("/bills")}
-            >
-              Back to List
-            </Button>
-          </CardBody>
-        </Card>
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="p-6 space-y-4">
+      <Skeleton className="h-10 w-64 rounded-lg" />
+      <Skeleton className="h-[700px] w-full rounded-xl" />
+    </div>
+  );
 
-  const columns = bill.template.columns as ColumnDef[];
+  if (!bill) return (
+    <div className="p-8 text-center">
+      <p className="text-lg font-medium mb-3">Bill not found</p>
+      <Button variant="flat" onPress={() => router.push("/bills")}>Back to List</Button>
+    </div>
+  );
+
+  // ── Derived ───────────────────────────────────────────────────────────────
+
+  const cols     = bill.template.columns as ColumnDef[];
+  const isIS     = bill.isInterState === true;
+  const halfRate = bill.taxPercent / 2;
+  const halfTax  = Math.round((bill.taxAmount / 2) * 100) / 100;
+  const cgst     = halfTax;
+  const sgst     = Math.round((bill.taxAmount - halfTax) * 100) / 100;
+  const supply   = bill.placeOfSupply ? stateName(bill.placeOfSupply) : "";
+  const supplyFull = bill.placeOfSupply ? `${supply} (${bill.placeOfSupply})` : "";
+
+  // Find the last "amount" column to anchor sub-total alignment
+  const lastNumCol = [...cols].reverse().find(c => c.type === "formula" || c.type === "number");
+  const numColCount = cols.filter(c => c.type === "number" || c.type === "formula").length;
+
+  // ── GST invoice render ────────────────────────────────────────────────────
 
   return (
-    <div className="p-4 lg:p-8 animate-fade-in max-w-5xl mx-auto">
-      <style jsx global>{`
-        @media print {
-          @page { margin: 15mm; size: auto; }
-          body { background: white !important; font-size: 12pt; }
-          .no-print { display: none !important; }
-        }
-      `}</style>
-
+    <>
+      {/* Toast */}
       {toast && (
-        <div
-          className={`fixed top-4 right-4 z-[100] px-4 py-3 rounded-xl shadow-lg animate-slide-up no-print ${
-            toast.type === "success"
-              ? "bg-success text-white"
-              : "bg-danger text-white"
-          }`}
-        >
+        <div className={`no-print fixed top-4 right-4 z-[100] px-4 py-3 rounded-xl shadow-lg ${toast.type==="success"?"bg-success text-white":"bg-danger text-white"}`}>
           {toast.message}
         </div>
       )}
 
-      {/* Screen UI: Hidden on Print */}
-      <div className="no-print">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <Button
-              isIconOnly
-              variant="light"
-              aria-label="Back to list"
-              onPress={() => router.push(bill.party?.type === "VENDOR" ? "/purchases" : "/bills")}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+      {/* ── Screen toolbar ──────────────────────────────────────────────────── */}
+      <div className="no-print sticky top-0 z-20 border-b border-default-200 bg-background/95 backdrop-blur-md">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <Button isIconOnly size="sm" variant="light"
+              onPress={() => router.push(bill.party?.type==="VENDOR" ? "/purchases" : "/bills")}>
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+              </svg>
             </Button>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold font-mono">{bill.billNumber}</h1>
-                <Chip size="sm" variant="flat" color={statusColorMap[bill.status]} className="capitalize">{bill.status.toLowerCase()}</Chip>
-              </div>
-              <p className="text-default-500 text-sm">
-                {new Date(bill.createdAt).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "long", year: "numeric" })} • by {bill.creator.name}
-              </p>
-            </div>
+            <span className="font-bold font-mono truncate">{bill.billNumber}</span>
+            <Chip size="sm" variant="flat" color={STATUS_COLOR[bill.status]}>{bill.status}</Chip>
+            <span className="hidden sm:block text-xs text-default-400">{fmtDate(bill.createdAt)} · {bill.creator.name}</span>
           </div>
-
-          <div className="flex gap-2">
-            <Button variant="flat" size="sm" onPress={() => window.print()}>🖨️ Print</Button>
-            {bill.status === "DRAFT" && (
-              <>
-                <Button variant="bordered" size="sm" onPress={() => router.push(`/bills/${id}/edit`)}>✏️ Edit</Button>
-                <Button color="success" size="sm" variant="flat" onPress={() => setConfirmAction("FINAL")}>✅ Finalize</Button>
-              </>
-            )}
-            {bill.status !== "CANCELLED" && (
-              <Button color="danger" size="sm" variant="flat" onPress={() => setConfirmAction("CANCELLED")}>Cancel</Button>
+          <div className="flex shrink-0 gap-2">
+            <Button size="sm" variant="flat" onPress={() => window.print()}
+              startContent={
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6v-8z"/>
+                </svg>
+              }>
+              Print / PDF
+            </Button>
+            {bill.status==="DRAFT" && <>
+              <Button size="sm" variant="bordered" onPress={() => router.push(`/bills/${id}/edit`)}
+                startContent={
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                  </svg>
+                }>
+                Edit
+              </Button>
+              <Button size="sm" color="success" variant="flat" onPress={() => setConfirmAction("FINAL")}
+                startContent={
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/>
+                  </svg>
+                }>
+                Finalize
+              </Button>
+            </>}
+            {bill.status!=="CANCELLED" && (
+              <Button size="sm" color="danger" variant="flat" onPress={() => setConfirmAction("CANCELLED")}>Cancel</Button>
             )}
           </div>
-        </div>
-
-        {/* Customer Details */}
-        <Card shadow="sm" className="mb-6">
-          <CardHeader className="px-6 pt-6 pb-0">
-            <h2 className="font-semibold">Customer</h2>
-          </CardHeader>
-          <CardBody className="p-6">
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
-              <div><span className="text-default-400">Name</span><p className="font-medium">{bill.customerName}</p></div>
-              {bill.customerPhone && (<div><span className="text-default-400">Phone</span><p className="font-medium">{bill.customerPhone}</p></div>)}
-              {bill.customerAddress && (<div><span className="text-default-400">Address</span><p className="font-medium">{bill.customerAddress}</p></div>)}
-              {bill.gstin && (<div><span className="text-default-400">GSTIN</span><p className="font-medium font-mono">{bill.gstin}</p></div>)}
-              {bill.placeOfSupply && (<div><span className="text-default-400">Place of Supply</span><p className="font-medium">{bill.placeOfSupply} {bill.isInterState ? <span className="text-xs text-default-400 ml-1">(Inter-State)</span> : ""}</p></div>)}
-              {bill.hsnCode && (<div><span className="text-default-400">HSN/SAC</span><p className="font-medium font-mono">{bill.hsnCode}</p></div>)}
-            </div>
-            {bill.party && (
-              <div className="mt-4 border-t border-divider pt-4">
-                <span className="text-default-400 text-sm">Linked Party Record</span>
-                <div className="mt-2 flex items-center justify-between rounded-xl border border-divider bg-default-50 px-4 py-3">
-                  <div>
-                    <p className="font-medium">{bill.party.name}</p>
-                    <p className="text-xs capitalize text-default-400">{bill.party.type.toLowerCase()}</p>
-                  </div>
-                  <Button size="sm" variant="flat" color="secondary" onPress={() => router.push(`/parties/${bill.party?.id}`)}>
-                    View Party
-                  </Button>
-                </div>
-              </div>
-            )}
-          </CardBody>
-        </Card>
-
-        {/* Items Table */}
-        <Card shadow="sm" className="mb-6">
-          <CardHeader className="px-6 pt-6 pb-0">
-            <h2 className="font-semibold">
-              Line Items
-              {bill.template.name !== "__QUICK_BILL__" && (
-                <span className="ml-2 text-sm font-normal text-default-400">
-                  ({bill.template.name})
-                </span>
-              )}
-            </h2>
-          </CardHeader>
-          <CardBody className="p-6 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b-2 border-divider">
-                  <th className="text-left py-3 px-2 text-default-500 font-semibold w-10">#</th>
-                  {columns.map((col) => (
-                    <th key={col.name} className={`py-3 px-2 text-default-500 font-semibold ${col.type === "number" || col.type === "formula" ? "text-right" : "text-left"}`}>{col.name}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {(bill.rows as Record<string, string | number>[]).map((row, i) => (
-                  <tr key={i} className="border-b border-divider/30">
-                    <td className="py-3 px-2 text-default-400">{i + 1}</td>
-                    {columns.map((col) => (
-                      <td key={col.name} className={`py-3 px-2 ${col.type === "number" || col.type === "formula" ? "text-right font-mono" : ""} ${col.type === "formula" ? "text-success font-medium" : ""}`}>
-                        {col.type === "number" || col.type === "formula" ? typeof row[col.id] === "number" ? formatColumnValue(col.name, row[col.id] as number) : row[col.id] || "—" : row[col.id] || "—"}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </CardBody>
-        </Card>
-
-        {/* Totals & Notes */}
-        <div className="grid lg:grid-cols-2 gap-6 mb-6">
-          <div className="space-y-4">
-            {bill.notes && (<Card shadow="sm"><CardBody className="p-5"><h3 className="font-semibold text-sm mb-2">Notes</h3><p className="text-sm text-default-600 whitespace-pre-line">{bill.notes}</p></CardBody></Card>)}
-            {bill.terms && (<Card shadow="sm"><CardBody className="p-5"><h3 className="font-semibold text-sm mb-2">Terms & Conditions</h3><p className="text-sm text-default-600 whitespace-pre-line">{bill.terms}</p></CardBody></Card>)}
-          </div>
-          <Card shadow="sm" className="bg-gradient-to-br from-blue-500/5 to-indigo-500/5">
-            <CardBody className="p-6">
-              <h3 className="text-lg font-semibold mb-4">Summary</h3>
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between"><span className="text-default-500">Subtotal</span><span className="font-medium">{formatCurrency(bill.subtotal)}</span></div>
-                <div className="flex justify-between"><span className="text-default-500">Tax ({bill.taxPercent}%)</span><span className="font-medium">{formatCurrency(bill.taxAmount)}</span></div>
-                <Divider />
-                <div className="flex justify-between"><span className="text-xl font-bold">Grand Total</span><span className="text-xl font-bold text-primary">{formatCurrency(bill.grandTotal)}</span></div>
-              </div>
-            </CardBody>
-          </Card>
         </div>
       </div>
 
-      <BillActionBar bill={{
-        id: bill.id,
-        billNumber: bill.billNumber,
-        customerName: bill.customerName,
-        grandTotal: bill.grandTotal,
-        status: bill.status,
-        customerPhone: bill.customerPhone,
-        partyId: bill.partyId,
-      }} onShare={handleShare} />
+      {/* ── Invoice document ────────────────────────────────────────────────── */}
+      <div className="bill-bg bg-zinc-200 dark:bg-zinc-800 min-h-screen py-8 px-3">
+        <div
+          className="bill-paper mx-auto"
+          style={{
+            maxWidth: 860,
+            background: "white",
+            color: "#111",
+            fontFamily: '"Arial","Helvetica",sans-serif',
+            fontSize: 12,
+            border: "1.5px solid #888",
+            boxShadow: "0 8px 40px rgba(0,0,0,0.18)",
+          }}
+        >
 
-      {/* Confirm action modal */}
-      <Modal
-        isOpen={confirmAction !== null}
-        onClose={() => setConfirmAction(null)}
-        size="sm"
-      >
+          {/* ══ HEADER ════════════════════════════════════════════════════════ */}
+          {/* Top meta strip */}
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"6px 14px", borderBottom:"1px solid #ccc", fontSize:10 }}>
+            <span style={{ fontWeight:700, letterSpacing:1, textTransform:"uppercase", color:"#555" }}>Tax Invoice</span>
+            <span style={{ color:"#555" }}>Subject to {supply || "local"} Jurisdiction</span>
+          </div>
+
+          {/* Company nameplate */}
+          <div style={{ textAlign:"center", padding:"14px 20px 10px", borderBottom:"1.5px solid #333" }}>
+            {settings?.companyLogo && (
+              <div style={{ marginBottom:8 }}>
+                <Image src={settings.companyLogo} alt="Logo" width={80} height={80} unoptimized
+                  style={{ height:60, width:"auto", objectFit:"contain", display:"inline-block" }} />
+              </div>
+            )}
+            <div style={{ fontWeight:900, fontSize:28, letterSpacing:0.5, color:"#111", lineHeight:1 }}>
+              {settings?.companyName || "—"}
+            </div>
+            {settings?.companyAddress && (
+              <div style={{ fontSize:11, color:"#444", marginTop:5, lineHeight:1.4 }}>
+                {settings.companyAddress.replace(/\n/g," · ")}
+                {settings?.companyPhone ? `  ·  Mo: ${settings.companyPhone}` : ""}
+                {settings?.companyEmail ? `  ·  ${settings.companyEmail}` : ""}
+              </div>
+            )}
+            {settings?.companyGstin && (
+              <div style={{ fontSize:11, fontWeight:700, marginTop:4, letterSpacing:0.5 }}>
+                GST NO : {settings.companyGstin}
+              </div>
+            )}
+          </div>
+
+          {/* ══ PARTY + INVOICE META ══════════════════════════════════════════ */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", borderBottom:"1.5px solid #333" }}>
+            {/* Party */}
+            <div style={{ padding:"10px 14px", borderRight:"1px solid #999", fontSize:11 }}>
+              <div style={{ fontWeight:700, marginBottom:5, fontSize:11 }}>Party Name &amp; Address :</div>
+              <div style={{ fontWeight:800, fontSize:13 }}>{bill.customerName}</div>
+              {bill.customerAddress && (
+                <div style={{ color:"#444", lineHeight:1.5, marginTop:3, whiteSpace:"pre-line" }}>{bill.customerAddress}</div>
+              )}
+              {bill.customerPhone && <div style={{ marginTop:3 }}>Ph: {bill.customerPhone}</div>}
+              {bill.gstin && (
+                <div style={{ marginTop:5, fontWeight:700 }}>GST No: <span style={{ fontFamily:"monospace" }}>{bill.gstin}</span></div>
+              )}
+              {bill.placeOfSupply && (
+                <div style={{ marginTop:3, color:"#555" }}>
+                  State: {supplyFull}
+                  {" · "}
+                  <span style={{ fontWeight:700, color: isIS ? "#b45309" : "#047857" }}>
+                    {isIS ? "Inter-State" : "Intra-State"}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Invoice meta */}
+            <div style={{ padding:"10px 14px", fontSize:11 }}>
+              {[
+                ["Invoice No", bill.billNumber],
+                ["Date", fmtDate(bill.createdAt)],
+                ...(bill.hsnCode ? [["HSN / SAC", bill.hsnCode]] : []),
+                ...(bill.placeOfSupply ? [["Place of Supply", supplyFull]] : []),
+                ...(bill.terms ? [["Payment Terms", bill.terms]] : []),
+              ].map(([label, val]) => (
+                <div key={label} style={{ display:"flex", gap:8, marginBottom:5, alignItems:"flex-start" }}>
+                  <span style={{ minWidth:110, fontWeight:700, color:"#333" }}>{label}</span>
+                  <span style={{ color:"#111" }}>: &nbsp;{val}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ══ ITEMS TABLE ═══════════════════════════════════════════════════ */}
+          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+            <thead>
+              <tr style={{ background:"#f5f5f5", borderBottom:"1.5px solid #333", borderTop:"none" }}>
+                <th style={TH({ w:32, center:true })}>S.No</th>
+                {cols.map((col, i) => (
+                  <th key={col.id} style={TH({ right: col.type==="number"||col.type==="formula", last: i===cols.length-1 })}>
+                    {col.name}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(bill.rows as Record<string,string|number>[]).map((row, ri) => (
+                <tr key={ri} style={{ borderBottom:"1px solid #ddd" }}>
+                  <td style={TD({ center:true, muted:true })}>{ri+1}</td>
+                  {cols.map((col, ci) => (
+                    <td key={col.id} style={TD({
+                      right: col.type==="number"||col.type==="formula",
+                      bold: col.type==="formula",
+                      last: ci===cols.length-1,
+                    })}>
+                      {(col.type==="number"||col.type==="formula")
+                        ? typeof row[col.id]==="number" ? formatVal(col.name, row[col.id] as number) : row[col.id]||"—"
+                        : row[col.id]||"—"}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+
+              {/* Blank padding rows */}
+              {bill.rows.length < 6 && Array.from({length: 6-bill.rows.length}).map((_,i) => (
+                <tr key={`pad-${i}`} style={{ borderBottom:"1px solid #e8e8e8", height:28 }}>
+                  <td style={TD({ center:true })}> </td>
+                  {cols.map((col, ci) => (
+                    <td key={col.id} style={TD({ right:col.type==="number"||col.type==="formula", last:ci===cols.length-1 })}> </td>
+                  ))}
+                </tr>
+              ))}
+
+              {/* ── Sub-total + Tax rows ── */}
+              {(() => {
+                // How many text cols to span
+                const textCols = cols.length - numColCount;
+                const spanLeft = 1 + textCols; // S.No + text cols
+                const taxRows = isIS
+                  ? [["IGST", `@ ${bill.taxPercent}%`, formatINR(bill.taxAmount)]]
+                  : [
+                      ["OUTPUT CENTRAL GST", `(CGST) @ ${halfRate}%`, formatINR(cgst)],
+                      ["OUTPUT STATE GST",   `(SGST) @ ${halfRate}%`, formatINR(sgst)],
+                    ];
+                return (
+                  <>
+                    {/* Sub Total */}
+                    <tr style={{ borderTop:"1.5px solid #555", borderBottom:"1px solid #ddd" }}>
+                      <td colSpan={spanLeft} style={{ ...TD({}), borderRight:"1px solid #ccc" }}> </td>
+                      {numColCount > 1 && Array.from({length:numColCount-1}).map((_,i) => (
+                        <td key={i} style={{ ...TD({ right:true }), borderRight:"1px solid #ccc" }}> </td>
+                      ))}
+                      <td style={{ ...TD({ right:true, last:true, bold:false }), background:"#fafafa" }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", gap:16 }}>
+                          <span style={{ color:"#555", fontWeight:600 }}>Sub Total</span>
+                          <span style={{ fontFamily:"monospace", fontWeight:700 }}>{formatINR(bill.subtotal)}</span>
+                        </div>
+                      </td>
+                    </tr>
+                    {/* Tax rows */}
+                    {taxRows.map(([label, rate, amt]) => (
+                      <tr key={label} style={{ borderBottom:"1px solid #e5e5e5" }}>
+                        <td colSpan={spanLeft} style={{ ...TD({}), borderRight:"1px solid #ccc" }}> </td>
+                        {numColCount > 1 && Array.from({length:numColCount-1}).map((_,i) => (
+                          <td key={i} style={{ ...TD({ right:true }), borderRight:"1px solid #ccc" }}> </td>
+                        ))}
+                        <td style={{ ...TD({ right:true, last:true }), background:"#fffbf5" }}>
+                          <div style={{ display:"flex", justifyContent:"space-between", gap:16 }}>
+                            <span style={{ color:"#6b4c00", fontSize:11, fontWeight:600 }}>{label} {rate}</span>
+                            <span style={{ fontFamily:"monospace" }}>{amt}</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </>
+                );
+              })()}
+
+              {/* ── Grand Total row ── */}
+              <tr style={{ background:"#1e3a5f", borderTop:"2px solid #1e3a5f" }}>
+                <td colSpan={1} style={{ padding:"10px 10px", color:"white", fontWeight:900, fontSize:14, textAlign:"center", borderRight:"1px solid rgba(255,255,255,0.2)" }}>
+                  Total
+                </td>
+                {cols.map((col, ci) => {
+                  const isLast = ci===cols.length-1;
+                  const isNum  = col.type==="number"||col.type==="formula";
+                  const isLastVal = col === lastNumCol;
+                  return (
+                    <td key={col.id} style={{
+                      padding:"10px 12px",
+                      textAlign: isNum ? "right" : "left",
+                      color:"white",
+                      fontFamily: isNum ? "monospace" : "inherit",
+                      fontWeight: isLastVal ? 900 : 400,
+                      fontSize: isLastVal ? 16 : 13,
+                      borderRight: isLast ? "none" : "1px solid rgba(255,255,255,0.2)",
+                    }}>
+                      {isLastVal ? formatINR(bill.grandTotal) : " "}
+                    </td>
+                  );
+                })}
+              </tr>
+            </tbody>
+          </table>
+
+          {/* ══ AMOUNT IN WORDS ═══════════════════════════════════════════════ */}
+          <div style={{ padding:"10px 14px", borderTop:"1.5px solid #333", borderBottom:"1px solid #ccc", fontSize:12 }}>
+            <span style={{ fontWeight:700 }}>Rs. in words : </span>
+            <span>{numberToWords(bill.grandTotal)}</span>
+          </div>
+
+          {/* Notes / Declaration */}
+          {(bill.notes || bill.terms) && (
+            <div style={{ padding:"8px 14px", borderBottom:"1px solid #ccc", fontSize:11, color:"#444" }}>
+              {bill.notes && <div><span style={{ fontWeight:700 }}>Declaration / Notes : </span>{bill.notes}</div>}
+              {bill.terms && !bill.notes && <div><span style={{ fontWeight:700 }}>Terms : </span>{bill.terms}</div>}
+            </div>
+          )}
+
+          {/* ══ FOOTER ════════════════════════════════════════════════════════ */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", borderTop:"1.5px solid #333" }}>
+            {/* Bank / UPI details */}
+            <div style={{ padding:"12px 14px", borderRight:"1px solid #999", fontSize:11 }}>
+              <div style={{ fontWeight:800, marginBottom:8, fontSize:12 }}>Company&apos;s Bank Details</div>
+              {settings?.upiId
+                ? <>
+                    <div><span style={{ fontWeight:700 }}>UPI ID :</span> {settings.upiId}</div>
+                    <div style={{ marginTop:6, fontSize:10, color:"#777" }}>Scan &amp; Pay via any UPI app</div>
+                  </>
+                : <div style={{ color:"#999", fontSize:10 }}>Contact us for payment details.</div>
+              }
+              {bill.notes && bill.terms && (
+                <div style={{ marginTop:10, fontSize:10, color:"#666" }}>
+                  <span style={{ fontWeight:700 }}>Terms : </span>{bill.terms}
+                </div>
+              )}
+            </div>
+
+            {/* Signatures */}
+            <div style={{ padding:"12px 14px", fontSize:11 }}>
+              <div style={{ fontWeight:800, marginBottom:32, textAlign:"right" }}>
+                for {settings?.companyName || "—"}
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", marginTop:24 }}>
+                <div style={{ textAlign:"center" }}>
+                  <div style={{ width:110, borderTop:"1.5px solid #888", paddingTop:4, fontSize:10, color:"#666", textTransform:"uppercase", letterSpacing:0.5 }}>
+                    Customer Seal &amp; Signature
+                  </div>
+                </div>
+                <div style={{ textAlign:"center" }}>
+                  <div style={{ width:110, borderTop:"1.5px solid #888", paddingTop:4, fontSize:10, color:"#666", textTransform:"uppercase", letterSpacing:0.5 }}>
+                    Authorised Signatory
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ══ GENERATED BY ══════════════════════════════════════════════════ */}
+          <div style={{ borderTop:"1px solid #ccc", padding:"6px 14px", background:"#f9f9f9", display:"flex", justifyContent:"space-between", fontSize:9, color:"#aaa", letterSpacing:0.3 }}>
+            <span>E &amp; O.E.</span>
+            <span>
+              This is a computer-generated invoice by{" "}
+              <strong style={{ color:"#777" }}>HisaabKitaab</strong>
+              {" "}· No physical signature required
+            </span>
+          </div>
+
+        </div>{/* /bill-paper */}
+      </div>{/* /bill-bg */}
+
+      {/* ── Action bar ──────────────────────────────────────────────────────── */}
+      <BillActionBar
+        bill={{ id:bill.id, billNumber:bill.billNumber, customerName:bill.customerName, grandTotal:bill.grandTotal, status:bill.status, customerPhone:bill.customerPhone, partyId:bill.partyId }}
+        onShare={handleShare}
+      />
+
+      {/* ── Confirm modal ───────────────────────────────────────────────────── */}
+      <Modal isOpen={confirmAction!==null} onClose={()=>setConfirmAction(null)} size="sm">
         <ModalContent>
-          <ModalHeader>
-            {confirmAction === "FINAL" ? "Finalize Bill" : "Cancel Bill"}
-          </ModalHeader>
+          <ModalHeader>{confirmAction==="FINAL" ? "Finalize Bill" : "Cancel Bill"}</ModalHeader>
           <ModalBody>
             <p className="text-sm text-default-600">
-              {confirmAction === "FINAL"
+              {confirmAction==="FINAL"
                 ? "This will lock the bill and record it in your books. It cannot be edited after finalization."
                 : "This will permanently cancel the bill and reverse any balance changes."}
             </p>
           </ModalBody>
           <ModalFooter>
-            <Button variant="flat" onPress={() => setConfirmAction(null)}>
-              Go back
-            </Button>
-            <Button
-              color={confirmAction === "FINAL" ? "success" : "danger"}
-              isLoading={actionLoading}
-              onPress={() => confirmAction && executeStatusChange(confirmAction)}
-            >
-              {confirmAction === "FINAL" ? "Yes, Finalize" : "Yes, Cancel Bill"}
+            <Button variant="flat" onPress={()=>setConfirmAction(null)}>Go back</Button>
+            <Button color={confirmAction==="FINAL"?"success":"danger"} isLoading={actionLoading}
+              onPress={()=>confirmAction&&execStatus(confirmAction)}>
+              {confirmAction==="FINAL"?"Yes, Finalize":"Yes, Cancel Bill"}
             </Button>
           </ModalFooter>
         </ModalContent>
       </Modal>
-
-      {/* Print-Only Professional Layout */}
-      <div className="hidden print:block p-0 text-black">
-        {/* Invoice Header */}
-        <div className="flex justify-between items-start border-b-2 border-black pb-8 mb-8">
-          <div className="flex gap-6 items-center">
-            {settings?.companyLogo && (
-              <Image
-                src={settings.companyLogo}
-                alt="Logo"
-                width={96}
-                height={96}
-                unoptimized
-                className="h-24 w-24 object-contain"
-              />
-            )}
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight uppercase">{settings?.companyName || "INVOICE"}</h1>
-              <div className="text-sm mt-2 whitespace-pre-line leading-relaxed opacity-80">
-                {settings?.companyAddress}
-                {settings?.companyPhone && `\nPhone: ${settings.companyPhone}`}
-                {settings?.companyEmail && `\nEmail: ${settings.companyEmail}`}
-                {settings?.companyGstin && `\nGSTIN: ${settings.companyGstin}`}
-              </div>
-            </div>
-          </div>
-          <div className="text-right">
-            <h2 className="text-4xl font-black text-gray-200 uppercase mb-2">Invoice</h2>
-            <div className="space-y-1">
-              <p className="text-lg font-bold font-mono">{bill.billNumber}</p>
-              <p className="text-sm text-gray-600">
-                Date: {new Date(bill.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" })}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Client Section */}
-        <div className="grid grid-cols-2 gap-12 mb-10">
-          <div>
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Bill To</h3>
-            <div className="space-y-1">
-              <p className="text-xl font-bold">{bill.customerName}</p>
-              <div className="text-sm text-gray-600 whitespace-pre-line leading-relaxed">
-                {bill.customerAddress}
-                {bill.customerPhone && `\nPhone: ${bill.customerPhone}`}
-                {bill.gstin && `\nGSTIN: ${bill.gstin}`}
-                {bill.placeOfSupply && `\nPlace of Supply: ${bill.placeOfSupply} ${bill.isInterState ? "(Inter-State)" : ""}`}
-                {bill.hsnCode && `\nHSN/SAC: ${bill.hsnCode}`}
-              </div>
-            </div>
-          </div>
-          <div className="text-right">
-            {/* Optional extra info like Due Date could go here */}
-          </div>
-        </div>
-
-        {/* Line Items Table */}
-        <table className="w-full mb-10 border-collapse">
-          <thead>
-            <tr className="bg-gray-100 text-gray-700">
-              <th className="py-3 px-4 text-left font-bold text-xs uppercase border border-gray-200">#</th>
-              {columns.map(col => (
-                <th key={col.id} className={`py-3 px-4 font-bold text-xs uppercase border border-gray-200 ${col.type === "number" || col.type === "formula" ? "text-right" : "text-left"}`}>
-                  {col.name}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {bill.rows.map((row, i) => (
-              <tr key={i}>
-                <td className="py-3 px-4 border border-gray-100 text-sm text-gray-500">{i + 1}</td>
-                {columns.map(col => (
-                  <td key={col.id} className={`py-3 px-4 border border-gray-100 text-sm ${col.type === "number" || col.type === "formula" ? "text-right font-mono" : ""}`}>
-                    {col.type === "number" || col.type === "formula" 
-                      ? typeof row[col.id] === "number" ? formatColumnValue(col.name, row[col.id] as number) : row[col.id] || "—"
-                      : row[col.id] || "—"}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {/* Totals & Notes */}
-        <div className="grid grid-cols-2 gap-12 pt-4">
-          <div className="space-y-6">
-            {bill.notes && (
-              <div>
-                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 font-mono">Invoice Notes</h4>
-                <p className="text-sm text-gray-600 italic whitespace-pre-line">{bill.notes}</p>
-              </div>
-            )}
-            {bill.terms && (
-              <div>
-                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Terms & Conditions</h4>
-                <p className="text-[10px] text-gray-500 leading-relaxed whitespace-pre-line">{bill.terms}</p>
-              </div>
-            )}
-          </div>
-          <div>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center px-4 py-2 border-b border-gray-100 italic">
-                <span className="text-sm text-gray-600">Subtotal</span>
-                <span className="text-sm font-medium">{formatCurrency(bill.subtotal)}</span>
-              </div>
-              <div className="flex justify-between items-center px-4 py-2 border-b border-gray-100">
-                <span className="text-sm text-gray-600">Tax ({bill.taxPercent}%)</span>
-                <span className="text-sm font-medium">{formatCurrency(bill.taxAmount)}</span>
-              </div>
-              <div className="flex justify-between items-center px-4 py-4 bg-gray-900 text-white rounded-lg shadow-xl translate-x-1 shadow-gray-200">
-                <span className="text-lg font-bold tracking-tight px-2">Grand Total</span>
-                <span className="text-2xl font-black px-2">{formatCurrency(bill.grandTotal)}</span>
-              </div>
-            </div>
-            
-            <div className="mt-12 text-center border-t border-gray-100 pt-8">
-              <div className="w-32 h-12 border-b border-gray-300 mx-auto mb-2 opacity-30"></div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Authorized Signature</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Print Footer */}
-        <div className="fixed bottom-0 left-0 right-0 border-t border-gray-100 pt-4 flex justify-between items-center text-[8px] text-gray-400 uppercase tracking-widest font-mono">
-          <div>Generated by HisaabKitaab CMS</div>
-          <div>Page 1 of 1</div>
-        </div>
-      </div>
-    </div>
+    </>
   );
+}
+
+// ─── Table cell style helpers ─────────────────────────────────────────────────
+
+function TH({ w: width, center, right, last }: { w?: number; center?: boolean; right?: boolean; last?: boolean }): React.CSSProperties {
+  return {
+    padding: "8px 12px",
+    fontWeight: 700,
+    fontSize: 11,
+    color: "#222",
+    textAlign: center ? "center" : right ? "right" : "left",
+    borderBottom: "1.5px solid #333",
+    borderRight: last ? "none" : "1px solid #ccc",
+    background: "#f0f0f0",
+    whiteSpace: "nowrap",
+    ...(width ? { width } : {}),
+  };
+}
+
+function TD({ center, right, bold, muted, last }: { center?: boolean; right?: boolean; bold?: boolean; muted?: boolean; last?: boolean }): React.CSSProperties {
+  return {
+    padding: "8px 12px",
+    verticalAlign: "middle",
+    textAlign: center ? "center" : right ? "right" : "left",
+    fontFamily: right ? "monospace" : "inherit",
+    fontWeight: bold ? 700 : 400,
+    color: muted ? "#888" : "#111",
+    borderRight: last ? "none" : "1px solid #ddd",
+  };
 }

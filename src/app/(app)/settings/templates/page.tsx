@@ -24,17 +24,26 @@ export default function TemplatesPage() {
   const router = useRouter();
   const { t } = useLanguage();
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [defaultTemplateId, setDefaultTemplateId] = useState<string | null>(null);
+  const [settingDefault, setSettingDefault] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error";
   } | null>(null);
 
-  const fetchTemplates = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     try {
-      const res = await fetch("/api/templates");
-      const data = await res.json();
-      setTemplates(data.templates || []);
+      const [templatesRes, settingsRes] = await Promise.all([
+        fetch("/api/templates"),
+        fetch("/api/settings"),
+      ]);
+      const [templatesData, settingsData] = await Promise.all([
+        templatesRes.json(),
+        settingsRes.json(),
+      ]);
+      setTemplates(templatesData.templates || []);
+      setDefaultTemplateId(settingsData.settings?.defaultTemplateId || null);
     } catch {
       showToast(t("templates.fetchFailed"), "error");
     } finally {
@@ -43,12 +52,34 @@ export default function TemplatesPage() {
   }, [t]);
 
   useEffect(() => {
-    fetchTemplates();
-  }, [fetchTemplates]);
+    fetchData();
+  }, [fetchData]);
 
   function showToast(message: string, type: "success" | "error") {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
+  }
+
+  async function handleSetDefault(id: string) {
+    setSettingDefault(id);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ defaultTemplateId: id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setDefaultTemplateId(id);
+      showToast("Default template updated", "success");
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : "Failed to update default",
+        "error"
+      );
+    } finally {
+      setSettingDefault(null);
+    }
   }
 
   async function handleDelete(id: string) {
@@ -58,7 +89,9 @@ export default function TemplatesPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       showToast(t("templates.deleted"), "success");
-      fetchTemplates();
+      // If the deleted template was the default, clear it
+      if (defaultTemplateId === id) setDefaultTemplateId(null);
+      fetchData();
     } catch (err) {
       showToast(
         err instanceof Error ? err.message : t("templates.deleteFailed"),
@@ -155,64 +188,85 @@ export default function TemplatesPage() {
         </Card>
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {templates.map((template) => (
-            <Card
-              key={template.id}
-              shadow="sm"
-              className="hover:shadow-md transition"
-            >
-              <CardBody className="p-5">
-                <h3 className="text-lg font-semibold mb-2">{template.name}</h3>
-                <div className="flex flex-wrap gap-1 mb-3">
-                  {(
-                    template.columns as { name: string; type: string }[]
-                  ).map((col, i) => (
-                    <Chip
-                      key={i}
+          {templates.map((template) => {
+            const isDefault = template.id === defaultTemplateId;
+            return (
+              <Card
+                key={template.id}
+                shadow="sm"
+                className={`transition ${isDefault ? "ring-2 ring-primary/40" : "hover:shadow-md"}`}
+              >
+                <CardBody className="p-5">
+                  <div className="flex items-start justify-between mb-2 gap-2">
+                    <h3 className="text-lg font-semibold">{template.name}</h3>
+                    {isDefault && (
+                      <Chip size="sm" color="primary" variant="flat" className="shrink-0">
+                        Default
+                      </Chip>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1 mb-3">
+                    {(
+                      template.columns as { name: string; type: string }[]
+                    ).map((col, i) => (
+                      <Chip
+                        key={i}
+                        size="sm"
+                        variant="flat"
+                        color={
+                          col.type === "formula"
+                            ? "warning"
+                            : col.type === "number"
+                              ? "primary"
+                              : "default"
+                        }
+                      >
+                        {col.name}
+                      </Chip>
+                    ))}
+                  </div>
+                  <p className="text-xs text-default-400">
+                    {template._count.bills} bill(s) •{" "}
+                    {new Date(template.createdAt).toLocaleDateString("en-IN", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </p>
+                </CardBody>
+                <CardFooter className="gap-2 pt-0">
+                  {!isDefault && (
+                    <Button
                       size="sm"
                       variant="flat"
-                      color={
-                        col.type === "formula"
-                          ? "warning"
-                          : col.type === "number"
-                            ? "primary"
-                            : "default"
-                      }
+                      color="primary"
+                      isLoading={settingDefault === template.id}
+                      onPress={() => handleSetDefault(template.id)}
                     >
-                      {col.name}
-                    </Chip>
-                  ))}
-                </div>
-                <p className="text-xs text-default-400">
-                  {template._count.bills} bill(s) •{" "}
-                  {new Date(template.createdAt).toLocaleDateString("en-IN", {
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                  })}
-                </p>
-              </CardBody>
-              <CardFooter className="gap-2 pt-0">
-                <Button
-                  size="sm"
-                  variant="flat"
-                  onPress={() =>
-                    router.push(`/settings/templates/${template.id}`)
-                  }
-                >
-                  {t("templates.edit")}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="flat"
-                  color="danger"
-                  onPress={() => handleDelete(template.id)}
-                >
-                  {t("common.delete")}
-                </Button>
-              </CardFooter>
-            </Card>
-          ))}
+                      Set as Default
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="flat"
+                    onPress={() =>
+                      router.push(`/settings/templates/${template.id}`)
+                    }
+                  >
+                    {t("templates.edit")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="flat"
+                    color="danger"
+                    onPress={() => handleDelete(template.id)}
+                  >
+                    {t("common.delete")}
+                  </Button>
+                </CardFooter>
+              </Card>
+            );
+          })}
         </div>
       )}
     </div>

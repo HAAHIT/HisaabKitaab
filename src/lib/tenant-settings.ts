@@ -103,6 +103,7 @@ export function serializeTenantSettings(tenant: TenantSettingsSource) {
     taxRegistrationType: normalizeTaxRegistrationType(
       settings.taxRegistrationType
     ),
+    defaultTemplateId: normalizeOptionalString(settings.defaultTemplateId),
   };
 }
 
@@ -120,6 +121,7 @@ export function mergeTenantSettings(
     upiId: string | null;
     businessType: BusinessType;
     taxRegistrationType: TaxRegistrationType;
+    defaultTemplateId: string | null;
   }>
 ) {
   const existing = getFlatTenantSettings(currentSettings);
@@ -147,5 +149,9 @@ export function mergeTenantSettings(
     taxRegistrationType:
       nextSettings.taxRegistrationType ??
       normalizeTaxRegistrationType(existing.taxRegistrationType),
+    defaultTemplateId:
+      "defaultTemplateId" in nextSettings
+        ? nextSettings.defaultTemplateId ?? null
+        : normalizeOptionalString(existing.defaultTemplateId),
   };
 }

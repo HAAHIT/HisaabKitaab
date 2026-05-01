@@ -72,6 +72,9 @@ export default function NewBillPage() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [parties, setParties] = useState<PartyOption[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  const [defaultTemplateId, setDefaultTemplateId] = useState<string | null>(null);
+  // Only show the template picker when the user explicitly clicks "Change Template"
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [savingAs, setSavingAs] = useState<"DRAFT" | "FINAL" | null>(null);
   const [errors, setErrors] = useState<Record<string, boolean>>({});
@@ -113,6 +116,7 @@ export default function NewBillPage() {
       if (settingsData.settings) {
         setTaxPercent(settingsData.settings.defaultTaxPercent || 18);
         setTerms(settingsData.settings.defaultTerms || "");
+        setDefaultTemplateId(settingsData.settings.defaultTemplateId || null);
       }
     } catch {
       showToast("Failed to load bill form data", "error");
@@ -145,13 +149,21 @@ export default function NewBillPage() {
 
     setSelectedTemplate(template);
     setRows([buildEmptyRow(template)]);
+    setTemplatePickerOpen(false);
   }, [templates]);
 
   useEffect(() => {
-    if (templates.length === 1 && !selectedTemplate) {
-      selectTemplate(templates[0].id);
+    if (selectedTemplate || templates.length === 0) return;
+    // Use the saved default if it exists and is valid
+    if (defaultTemplateId) {
+      const found = templates.find((t) => t.id === defaultTemplateId);
+      if (found) { selectTemplate(found.id); return; }
     }
-  }, [selectTemplate, selectedTemplate, templates]);
+    // No default configured — silently pick the first template so the
+    // user lands directly on the bill form (they can still change via
+    // the "Change Template" button that appears once a template is active)
+    selectTemplate(templates[0].id);
+  }, [selectTemplate, selectedTemplate, templates, defaultTemplateId]);
 
   function addRow() {
     if (!selectedTemplate) {
@@ -362,10 +374,19 @@ export default function NewBillPage() {
           </div>
         </div>
 
-        {!selectedTemplate && (
+        {/* Template picker — only shown when user explicitly requests a change,
+            or when there are genuinely no templates yet (first-run empty state) */}
+        {(templatePickerOpen || (!loading && !selectedTemplate && templates.length === 0)) && (
           <Card shadow="sm" className="mb-6">
             <CardBody className="p-6">
-              <h2 className="mb-4 text-lg font-semibold">Choose Template</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold">Choose Template</h2>
+                {templatePickerOpen && (
+                  <Button size="sm" variant="light" onPress={() => setTemplatePickerOpen(false)}>
+                    Cancel
+                  </Button>
+                )}
+              </div>
               {loading ? (
                 <p className="text-default-400">Loading templates...</p>
               ) : templates.length === 0 ? (
@@ -451,10 +472,7 @@ export default function NewBillPage() {
               <Button
                 size="sm"
                 variant="light"
-                onPress={() => {
-                  setSelectedTemplate(null);
-                  setRows([]);
-                }}
+                onPress={() => setTemplatePickerOpen(true)}
               >
                 Change Template
               </Button>
