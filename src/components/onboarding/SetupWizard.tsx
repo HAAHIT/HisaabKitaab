@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button, Input, Select, SelectItem } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { OR, PU, GR, AM, SG, IN, TYPE } from "@/components/ui/hk-design";
@@ -27,6 +27,18 @@ const BANKS = [
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z][Z][0-9A-Z]$/;
 
 const TOTAL_STEPS = 7;
+
+const STEP_META = [
+  { label: "Business",  desc: "Naam aur jagah"           },
+  { label: "GSTIN",     desc: "Tax registration"          },
+  { label: "Bank",      desc: "Account details"           },
+  { label: "Parties",   desc: "Grahak & Suppliers"        },
+  { label: "Items",     desc: "Jo bechte ho"              },
+  { label: "CA",        desc: "Accountant contact"        },
+  { label: "Done",      desc: "Sab set!"                  },
+];
+
+const SKIPPABLE = [false, true, true, true, true, true, false];
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -88,39 +100,48 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
 
-  // Step 1 — Business basics
+  // Responsive detection
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 900);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  // Step 0 — Business basics
   const [businessName, setBusinessName] = useState("");
   const [businessType, setBusinessType] = useState("Retail");
   const [stateName, setStateName] = useState("");
   const [city, setCity] = useState("");
 
-  // Step 2 — GSTIN
+  // Step 1 — GSTIN
   const [gstin, setGstin] = useState("");
   const [gstinValidState, setGstinValidState] = useState<"" | "valid" | "invalid">("");
 
-  // Step 3 — Bank accounts
+  // Step 2 — Bank accounts
   const [banks, setBanks] = useState<BankEntry[]>([{ bankName: "", accountNumber: "", openingBalance: "0" }]);
 
-  // Step 4 — Parties
+  // Step 3 — Parties
   const [parties, setParties] = useState<PartyEntry[]>([]);
   const [addPartyName, setAddPartyName] = useState("");
   const [addPartyPhone, setAddPartyPhone] = useState("");
   const [addPartyType, setAddPartyType] = useState<"CUSTOMER" | "VENDOR">("CUSTOMER");
 
-  // Step 5 — Items
+  // Step 4 — Items
   const [items, setItems] = useState<ItemEntry[]>([]);
   const [addItemName, setAddItemName] = useState("");
   const [addItemUnit, setAddItemUnit] = useState("pcs");
   const [addItemRate, setAddItemRate] = useState("");
   const [addItemHsn, setAddItemHsn] = useState("");
 
-  // Step 6 — CA contact
+  // Step 5 — CA contact
   const [caName, setCaName] = useState("");
   const [caEmail, setCaEmail] = useState("");
   const [caPhone, setCaPhone] = useState("");
 
-  // ── GSTIN validation ────────────────────────────────────────────────────────
+  // ── GSTIN validation ──────────────────────────────────────────────────────
   function onGstinChange(v: string) {
     const upper = v.toUpperCase().replace(/\s/g, "");
     setGstin(upper);
@@ -128,73 +149,42 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
     setGstinValidState(GSTIN_RE.test(upper) ? "valid" : "invalid");
   }
 
-  // ── Step savers ─────────────────────────────────────────────────────────────
+  // ── Step savers ───────────────────────────────────────────────────────────
 
   async function saveStep1() {
     if (!businessName.trim()) { setError("Business ka naam zaroori hai."); return false; }
     if (!stateName) { setError("State select karo."); return false; }
-    setError(null);
-    setSaving(true);
+    setError(null); setSaving(true);
     try {
       const address = [city.trim(), stateName].filter(Boolean).join(", ");
-      await apiPatch("/api/settings", {
-        companyName: businessName.trim(),
-        companyAddress: address || undefined,
-        businessType,
-      });
+      await apiPatch("/api/settings", { companyName: businessName.trim(), companyAddress: address || undefined, businessType });
       return true;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
-      return false;
-    } finally {
-      setSaving(false);
-    }
+    } catch (err) { setError(err instanceof Error ? err.message : "Save failed"); return false; }
+    finally { setSaving(false); }
   }
 
   async function saveStep2() {
-    if (gstin && gstinValidState === "invalid") {
-      setError("GSTIN format sahi nahi hai.");
-      return false;
-    }
-    setError(null);
-    setSaving(true);
+    if (gstin && gstinValidState === "invalid") { setError("GSTIN format sahi nahi hai."); return false; }
+    setError(null); setSaving(true);
     try {
-      if (gstin.trim()) {
-        await apiPatch("/api/settings", {
-          companyGstin: gstin.trim(),
-          taxRegistrationType: "REGISTERED",
-        });
-      }
+      if (gstin.trim()) await apiPatch("/api/settings", { companyGstin: gstin.trim(), taxRegistrationType: "REGISTERED" });
       return true;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
-      return false;
-    } finally {
-      setSaving(false);
-    }
+    } catch (err) { setError(err instanceof Error ? err.message : "Save failed"); return false; }
+    finally { setSaving(false); }
   }
 
   async function saveStep3() {
     setError(null);
     const validBanks = banks.filter((b) => b.bankName.trim());
-    if (!validBanks.length) return true; // Step is skippable
+    if (!validBanks.length) return true;
     setSaving(true);
     try {
       for (const bank of validBanks) {
-        await apiFetch("/api/bank-accounts", {
-          name: bank.bankName.trim(),
-          accountNumber: bank.accountNumber.trim() || null,
-          openingBalance: Number(bank.openingBalance) || 0,
-          type: "BANK",
-        });
+        await apiFetch("/api/bank-accounts", { name: bank.bankName.trim(), accountNumber: bank.accountNumber.trim() || null, openingBalance: Number(bank.openingBalance) || 0, type: "BANK" });
       }
       return true;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Bank save failed");
-      return false;
-    } finally {
-      setSaving(false);
-    }
+    } catch (err) { setError(err instanceof Error ? err.message : "Bank save failed"); return false; }
+    finally { setSaving(false); }
   }
 
   async function saveStep4() {
@@ -202,20 +192,10 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
     if (!parties.length) return true;
     setSaving(true);
     try {
-      for (const p of parties) {
-        await apiFetch("/api/parties", {
-          name: p.name,
-          phone: p.phone || null,
-          type: p.type,
-        });
-      }
+      for (const p of parties) await apiFetch("/api/parties", { name: p.name, phone: p.phone || null, type: p.type });
       return true;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Party save failed");
-      return false;
-    } finally {
-      setSaving(false);
-    }
+    } catch (err) { setError(err instanceof Error ? err.message : "Party save failed"); return false; }
+    finally { setSaving(false); }
   }
 
   async function saveStep5() {
@@ -223,21 +203,10 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
     if (!items.length) return true;
     setSaving(true);
     try {
-      for (const it of items) {
-        await apiFetch("/api/items", {
-          name: it.name,
-          unit: it.unit,
-          rate: Number(it.rate) || 0,
-          hsnCode: it.hsnCode || null,
-        });
-      }
+      for (const it of items) await apiFetch("/api/items", { name: it.name, unit: it.unit, rate: Number(it.rate) || 0, hsnCode: it.hsnCode || null });
       return true;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Item save failed");
-      return false;
-    } finally {
-      setSaving(false);
-    }
+    } catch (err) { setError(err instanceof Error ? err.message : "Item save failed"); return false; }
+    finally { setSaving(false); }
   }
 
   async function saveStep6() {
@@ -245,35 +214,20 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
     if (!caName && !caEmail && !caPhone) return true;
     setSaving(true);
     try {
-      await apiPatch("/api/settings", {
-        caName: caName.trim() || undefined,
-        caEmail: caEmail.trim() || undefined,
-        caPhone: caPhone.trim() || undefined,
-      });
+      await apiPatch("/api/settings", { caName: caName.trim() || undefined, caEmail: caEmail.trim() || undefined, caPhone: caPhone.trim() || undefined });
       return true;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
-      return false;
-    } finally {
-      setSaving(false);
-    }
+    } catch (err) { setError(err instanceof Error ? err.message : "Save failed"); return false; }
+    finally { setSaving(false); }
   }
 
   async function finishWizard() {
-    setSaving(true);
-    setError(null);
-    try {
-      await apiFetch("/api/onboarding/complete", {});
-      onComplete();
-      router.push("/dashboard");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Finish failed");
-    } finally {
-      setSaving(false);
-    }
+    setSaving(true); setError(null);
+    try { await apiFetch("/api/onboarding/complete", {}); onComplete(); router.push("/dashboard"); }
+    catch (err) { setError(err instanceof Error ? err.message : "Finish failed"); }
+    finally { setSaving(false); }
   }
 
-  // ── Navigation ───────────────────────────────────────────────────────────────
+  // ── Navigation ────────────────────────────────────────────────────────────
 
   async function goNext() {
     let ok = true;
@@ -286,24 +240,16 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
     if (ok) setStep((s) => Math.min(s + 1, TOTAL_STEPS - 1) as typeof s);
   }
 
-  function goBack() {
-    setError(null);
-    setStep((s) => Math.max(s - 1, 0) as typeof s);
-  }
+  function goBack() { setError(null); setStep((s) => Math.max(s - 1, 0) as typeof s); }
+  function skipAndNext() { setError(null); setStep((s) => Math.min(s + 1, TOTAL_STEPS - 1) as typeof s); }
 
-  async function skipAndNext() {
-    setError(null);
-    setStep((s) => Math.min(s + 1, TOTAL_STEPS - 1) as typeof s);
-  }
-
-  // ── Party / Item inline add helpers ─────────────────────────────────────────
+  // ── Inline add helpers ────────────────────────────────────────────────────
 
   function addParty() {
     if (!addPartyName.trim()) return;
     setParties((p) => [...p, { name: addPartyName.trim(), phone: addPartyPhone.trim(), type: addPartyType }]);
     setAddPartyName(""); setAddPartyPhone(""); setAddPartyType("CUSTOMER");
   }
-
   function removeParty(i: number) { setParties((p) => p.filter((_, idx) => idx !== i)); }
 
   function addItem() {
@@ -311,370 +257,537 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
     setItems((it) => [...it, { name: addItemName.trim(), unit: addItemUnit, rate: addItemRate, hsnCode: addItemHsn }]);
     setAddItemName(""); setAddItemUnit("pcs"); setAddItemRate(""); setAddItemHsn("");
   }
-
   function removeItem(i: number) { setItems((it) => it.filter((_, idx) => idx !== i)); }
 
   function addBankRow() { setBanks((b) => [...b, { bankName: "", accountNumber: "", openingBalance: "0" }]); }
   function removeBankRow(i: number) { setBanks((b) => b.filter((_, idx) => idx !== i)); }
 
-  // ── Render ───────────────────────────────────────────────────────────────────
+  // ── Shared styles ─────────────────────────────────────────────────────────
 
-  const stepLabels = ["Business", "GSTIN", "Bank", "Parties", "Items", "CA", "Done"];
-  const skippable = [false, true, true, true, true, true, false];
+  const contentPad = isMobile ? "28px 20px" : "40px 48px";
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "var(--hk-bg)",
-        display: "flex",
-        flexDirection: "column",
-        fontFamily: SG,
-      }}
-    >
-      {/* Header */}
-      <div
-        style={{
-          background: `linear-gradient(135deg, ${OR}, ${PU})`,
-          padding: "28px 24px 24px",
-          color: "white",
-        }}
-      >
-        <p style={{ fontSize: TYPE.caption, fontWeight: 700, letterSpacing: "2px", textTransform: "uppercase", opacity: 0.85, fontFamily: SG }}>
-          HisaabKitaab
-        </p>
-        <h1 style={{ marginTop: 6, fontSize: 28, fontWeight: 800, fontFamily: SG, letterSpacing: "-0.5px", lineHeight: 1.2 }}>
-          Apna Karobaar Shuru Karo
-        </h1>
-      </div>
+    <div style={{ minHeight: "100vh", background: "var(--hk-bg)", display: "flex", fontFamily: SG }}>
 
-      {/* Progress bar */}
-      <div style={{ padding: "16px 24px 0", background: "var(--hk-card)", borderBottom: "1px solid var(--hk-border)" }}>
-        <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-          {stepLabels.map((label, i) => (
-            <div key={label} style={{ flex: 1, textAlign: "center" }}>
-              <div style={{
-                height: 5, borderRadius: 3,
-                background: i <= step ? `linear-gradient(90deg, ${OR}, ${PU})` : "var(--hk-border)",
-                transition: "background 0.3s",
-                marginBottom: 5,
-              }} />
-              <p style={{
-                fontSize: 10, fontWeight: 600,
-                color: i === step ? "var(--hk-text)" : "var(--hk-sub)",
-                fontFamily: SG, whiteSpace: "nowrap",
-              }}>
-                {label}
-              </p>
-            </div>
-          ))}
-        </div>
-        <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG, paddingBottom: 10 }}>
-          Step {step + 1} of {TOTAL_STEPS}
-        </p>
-      </div>
-
-      {/* Content */}
-      <div style={{ flex: 1, padding: "28px 24px", maxWidth: 520, width: "100%", margin: "0 auto" }}>
-
-        {/* ── Step 1: Business basics ─────────────────────────────── */}
-        {step === 0 && (
-          <div>
-            <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 6 }}>Business ki Details</h2>
-            <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", marginBottom: 24, fontFamily: SG }}>Apna karobaar ka naam aur jagah batao.</p>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <Input label="Business ka naam *" placeholder="Jaise: Sharma Traders" value={businessName} onValueChange={setBusinessName} variant="bordered" size="lg" />
-              <Select label="Business kya karta hai?" selectedKeys={[businessType]} onSelectionChange={(k) => setBusinessType(Array.from(k)[0] as string)} variant="bordered" size="lg">
-                {BUSINESS_TYPES.map((t) => <SelectItem key={t}>{t}</SelectItem>)}
-              </Select>
-              <Select label="State *" selectedKeys={stateName ? [stateName] : []} onSelectionChange={(k) => setStateName(Array.from(k)[0] as string)} variant="bordered" size="lg">
-                {INDIAN_STATES.map((s) => <SelectItem key={s}>{s}</SelectItem>)}
-              </Select>
-              <Input label="City" placeholder="Jaise: Mumbai" value={city} onValueChange={setCity} variant="bordered" size="lg" />
-            </div>
+      {/* ═══════════════════════════════════════════════════════════
+          LEFT SIDEBAR — step list (desktop only)
+      ═══════════════════════════════════════════════════════════ */}
+      {!isMobile && (
+        <div style={{
+          width: 288,
+          flexShrink: 0,
+          minHeight: "100vh",
+          background: "var(--hk-card)",
+          borderRight: "1.5px solid var(--hk-border)",
+          display: "flex",
+          flexDirection: "column",
+          position: "sticky",
+          top: 0,
+          height: "100vh",
+          overflowY: "auto",
+        }}>
+          {/* Brand header */}
+          <div style={{
+            background: `linear-gradient(150deg, ${OR} 0%, #c44de0 55%, ${PU} 100%)`,
+            padding: "36px 28px 32px",
+            color: "white",
+            flexShrink: 0,
+          }}>
+            <p style={{
+              fontSize: 10, fontWeight: 800, letterSpacing: "2.5px",
+              textTransform: "uppercase", opacity: 0.9, fontFamily: SG, margin: 0,
+            }}>
+              HisaabKitaab
+            </p>
+            <h1 style={{
+              marginTop: 10, fontSize: 22, fontWeight: 800,
+              fontFamily: SG, letterSpacing: "-0.3px", lineHeight: 1.3, margin: "10px 0 0",
+            }}>
+              Apna Karobaar<br />Shuru Karo
+            </h1>
+            <p style={{ marginTop: 10, fontSize: TYPE.bodySmall, opacity: 0.75, fontFamily: SG }}>
+              Sirf 5 minute mein setup taiyaar
+            </p>
           </div>
-        )}
 
-        {/* ── Step 2: GSTIN ───────────────────────────────────────── */}
-        {step === 1 && (
-          <div>
-            <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 6 }}>GSTIN hai?</h2>
-            <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", marginBottom: 24, fontFamily: SG }}>Optional, but bills mein zaroori hota hai. Baad mein bhi add kar sakte ho.</p>
+          {/* Step list */}
+          <div style={{ flex: 1, padding: "24px 20px" }}>
+            {STEP_META.map((meta, i) => {
+              const isComplete = i < step;
+              const isActive   = i === step;
 
-            <Input
-              label="GSTIN Number"
-              placeholder="27AAAAA0000A1Z5"
-              value={gstin}
-              onValueChange={onGstinChange}
-              variant="bordered"
-              size="lg"
-              color={gstinValidState === "invalid" ? "danger" : gstinValidState === "valid" ? "success" : "default"}
-              description={gstinValidState === "valid" ? "✓ Valid GSTIN format" : gstinValidState === "invalid" ? "Format sahi nahi — 15 characters hone chahiye" : ""}
-            />
-          </div>
-        )}
+              return (
+                <div key={i}>
+                  <div style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: 14,
+                    padding: "11px 12px",
+                    borderRadius: 12,
+                    background: isActive ? OR + "12" : "transparent",
+                    transition: "background 0.2s",
+                  }}>
+                    {/* Circle indicator */}
+                    <div style={{
+                      width: 30, height: 30, borderRadius: "50%", flexShrink: 0, marginTop: 1,
+                      background: isComplete
+                        ? GR
+                        : isActive
+                        ? `linear-gradient(135deg, ${OR}, ${PU})`
+                        : "transparent",
+                      border: `2px solid ${isComplete ? GR : isActive ? "transparent" : "var(--hk-border)"}`,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      boxShadow: isActive ? `0 2px 10px ${OR}44` : "none",
+                      transition: "all 0.25s",
+                    }}>
+                      {isComplete
+                        ? <span style={{ color: "white", fontSize: 13, fontWeight: 800, lineHeight: 1 }}>✓</span>
+                        : <span style={{
+                            color: isActive ? "white" : "var(--hk-muted)",
+                            fontSize: 11, fontWeight: 800, fontFamily: IN,
+                          }}>{i + 1}</span>
+                      }
+                    </div>
 
-        {/* ── Step 3: Bank account ─────────────────────────────────── */}
-        {step === 2 && (
-          <div>
-            <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 6 }}>Bank Account Jodo</h2>
-            <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", marginBottom: 24, fontFamily: SG }}>Month-end reconciliation ke liye helpful hoga. Skip kar sakte ho.</p>
+                    {/* Label + status */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{
+                        fontSize: TYPE.body,
+                        fontWeight: isActive ? 700 : isComplete ? 600 : 500,
+                        color: isComplete ? GR : isActive ? "var(--hk-text)" : "var(--hk-sub)",
+                        fontFamily: SG, margin: 0, lineHeight: 1.3,
+                      }}>
+                        {meta.label}
+                      </p>
+                      <p style={{
+                        fontSize: TYPE.caption,
+                        color: isComplete ? GR + "bb" : isActive ? OR : "var(--hk-muted)",
+                        fontFamily: SG, marginTop: 2,
+                      }}>
+                        {isComplete ? "Ho gaya ✓" : isActive ? "Abhi yahan ho" : meta.desc}
+                      </p>
+                    </div>
+                  </div>
 
-            {banks.map((bank, i) => (
-              <div key={i} style={{ marginBottom: 16, padding: "16px", borderRadius: 12, border: "1px solid var(--hk-border)", background: "var(--hk-card)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                  <p style={{ fontSize: TYPE.body, fontWeight: 700, fontFamily: SG }}>Account {i + 1}</p>
-                  {banks.length > 1 && (
-                    <button onClick={() => removeBankRow(i)} style={{ background: "none", border: "none", cursor: "pointer", color: OR, fontSize: 14 }}>✕ Hatao</button>
+                  {/* Connector line between steps */}
+                  {i < STEP_META.length - 1 && (
+                    <div style={{
+                      width: 2, height: 10,
+                      marginLeft: 26, marginTop: 1, marginBottom: 1,
+                      background: i < step ? GR + "55" : "var(--hk-border)",
+                      borderRadius: 1,
+                      transition: "background 0.3s",
+                    }} />
                   )}
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  <Select label="Bank" selectedKeys={bank.bankName ? [bank.bankName] : []} onSelectionChange={(k) => setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, bankName: Array.from(k)[0] as string } : b))} variant="bordered">
-                    {BANKS.map((b) => <SelectItem key={b}>{b}</SelectItem>)}
-                  </Select>
-                  <Input label="Account number (optional)" placeholder="XXXX XXXX XXXX" value={bank.accountNumber} onValueChange={(v) => setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, accountNumber: v } : b))} variant="bordered" />
-                  <Input label="Opening balance (₹)" type="number" value={bank.openingBalance} onValueChange={(v) => setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, openingBalance: v } : b))} variant="bordered" />
-                </div>
-              </div>
-            ))}
-
-            <button
-              onClick={addBankRow}
-              style={{
-                width: "100%", padding: "12px", borderRadius: 12,
-                border: `1.5px dashed var(--hk-border)`, background: "transparent",
-                cursor: "pointer", color: PU, fontSize: TYPE.body, fontWeight: 700, fontFamily: SG,
-              }}
-            >
-              + Aur Account Jodo
-            </button>
+              );
+            })}
           </div>
-        )}
 
-        {/* ── Step 4: Parties ──────────────────────────────────────── */}
-        {step === 3 && (
-          <div>
-            <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 6 }}>Customers / Suppliers</h2>
-            <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", marginBottom: 24, fontFamily: SG }}>Pehle kuch logon ko add karo, ya baad mein Udhar Khata mein karo.</p>
-
-            {/* Added parties list */}
-            {parties.map((p, i) => (
-              <div key={i} style={{
-                display: "flex", alignItems: "center", gap: 12, marginBottom: 10,
-                padding: "12px 16px", borderRadius: 10,
-                background: (p.type === "CUSTOMER" ? PU : OR) + "14",
-                border: `1px solid ${(p.type === "CUSTOMER" ? PU : OR)}22`,
-              }}>
-                <div style={{ flex: 1 }}>
-                  <p style={{ fontSize: TYPE.body, fontWeight: 700, fontFamily: SG }}>{p.name}</p>
-                  <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG }}>{p.type === "CUSTOMER" ? "Grahak" : "Supplier"}{p.phone ? ` · ${p.phone}` : ""}</p>
-                </div>
-                <button onClick={() => removeParty(i)} style={{ background: "none", border: "none", cursor: "pointer", color: OR, fontSize: 14 }}>✕</button>
-              </div>
-            ))}
-
-            {/* Add form */}
-            <div style={{ padding: "16px", borderRadius: 12, border: "1px solid var(--hk-border)", background: "var(--hk-card)", marginTop: parties.length ? 12 : 0 }}>
-              <p style={{ fontSize: TYPE.bodySmall, fontWeight: 700, textTransform: "uppercase", color: "var(--hk-sub)", letterSpacing: "0.5px", marginBottom: 12, fontFamily: SG }}>Nayi party add karo</p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <Input label="Naam *" value={addPartyName} onValueChange={setAddPartyName} variant="bordered" />
-                <Input label="Phone (optional)" value={addPartyPhone} onValueChange={setAddPartyPhone} variant="bordered" type="tel" />
-                <div style={{ display: "flex", gap: 8 }}>
-                  {(["CUSTOMER", "VENDOR"] as const).map((t) => (
-                    <button key={t} onClick={() => setAddPartyType(t)} style={{
-                      flex: 1, padding: "10px", borderRadius: 8, border: `1.5px solid ${addPartyType === t ? (t === "CUSTOMER" ? PU : OR) : "var(--hk-border)"}`,
-                      background: addPartyType === t ? (t === "CUSTOMER" ? PU + "18" : OR + "18") : "transparent",
-                      color: addPartyType === t ? (t === "CUSTOMER" ? PU : OR) : "var(--hk-sub)",
-                      fontSize: TYPE.bodySmall, fontWeight: 700, cursor: "pointer", fontFamily: SG,
-                    }}>
-                      {t === "CUSTOMER" ? "Grahak" : "Supplier"}
-                    </button>
-                  ))}
-                </div>
-                <button onClick={addParty} style={{
-                  padding: "12px", borderRadius: 10, border: "none",
-                  background: `linear-gradient(135deg, ${OR}, ${PU})`,
-                  color: "white", fontSize: TYPE.body, fontWeight: 700, cursor: "pointer", fontFamily: SG,
-                }}>+ Jodo</button>
-              </div>
-            </div>
-
-            {/* Tally import deeplink */}
-            <div style={{ marginTop: 14, textAlign: "center" }}>
-              <a href="/settings/tally-import" style={{ fontSize: TYPE.bodySmall, fontWeight: 600, color: PU, fontFamily: SG }}>
-                📥 Ya Tally se import karo →
-              </a>
-            </div>
-          </div>
-        )}
-
-        {/* ── Step 5: Items / SKUs ─────────────────────────────────── */}
-        {step === 4 && (
-          <div>
-            <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 6 }}>Items / Saman</h2>
-            <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", marginBottom: 24, fontFamily: SG }}>Jo cheezein tum bechte ho. Bills mein fast pick karne ke liye. Skip bhi kar sakte ho.</p>
-
-            {items.map((it, i) => (
-              <div key={i} style={{
-                display: "flex", alignItems: "center", gap: 12, marginBottom: 10,
-                padding: "12px 16px", borderRadius: 10,
-                background: GR + "10", border: `1px solid ${GR}22`,
-              }}>
-                <div style={{ flex: 1 }}>
-                  <p style={{ fontSize: TYPE.body, fontWeight: 700, fontFamily: SG }}>{it.name}</p>
-                  <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG }}>
-                    {it.unit} · ₹{it.rate || "0"}{it.hsnCode ? ` · HSN ${it.hsnCode}` : ""}
-                  </p>
-                </div>
-                <button onClick={() => removeItem(i)} style={{ background: "none", border: "none", cursor: "pointer", color: OR, fontSize: 14 }}>✕</button>
-              </div>
-            ))}
-
-            <div style={{ padding: "16px", borderRadius: 12, border: "1px solid var(--hk-border)", background: "var(--hk-card)", marginTop: items.length ? 12 : 0 }}>
-              <p style={{ fontSize: TYPE.bodySmall, fontWeight: 700, textTransform: "uppercase", color: "var(--hk-sub)", letterSpacing: "0.5px", marginBottom: 12, fontFamily: SG }}>Naya item add karo</p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <Input label="Item ka naam *" value={addItemName} onValueChange={setAddItemName} variant="bordered" />
-                <div style={{ display: "flex", gap: 10 }}>
-                  <Input label="Unit" value={addItemUnit} onValueChange={setAddItemUnit} variant="bordered" placeholder="pcs / kg / m" style={{ flex: 1 }} />
-                  <Input label="Rate (₹)" type="number" value={addItemRate} onValueChange={setAddItemRate} variant="bordered" style={{ flex: 1 }} />
-                </div>
-                <Input label="HSN Code (optional)" value={addItemHsn} onValueChange={setAddItemHsn} variant="bordered" placeholder="E.g. 5208" />
-                <button onClick={addItem} style={{
-                  padding: "12px", borderRadius: 10, border: "none",
-                  background: `linear-gradient(135deg, ${GR}, ${PU})`,
-                  color: "white", fontSize: TYPE.body, fontWeight: 700, cursor: "pointer", fontFamily: SG,
-                }}>+ Jodo</button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── Step 6: CA Contact ───────────────────────────────────── */}
-        {step === 5 && (
-          <div>
-            <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 6 }}>CA ka Contact</h2>
-            <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", marginBottom: 24, fontFamily: SG }}>
-              Tally file bhejna hoga toh CA ka email auto-fill ho jayega. Skip bhi kar sakte ho.
+          {/* Footer note */}
+          <div style={{ padding: "16px 24px", borderTop: "1px solid var(--hk-border)", flexShrink: 0 }}>
+            <p style={{ fontSize: TYPE.caption, color: "var(--hk-muted)", fontFamily: SG, lineHeight: 1.5, margin: 0 }}>
+              Sab kuch baad mein Settings<br />mein edit kar sakte ho.
             </p>
+          </div>
+        </div>
+      )}
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <Input label="CA ka naam" value={caName} onValueChange={setCaName} variant="bordered" size="lg" placeholder="Jaise: Pradeep Sharma" />
-              <Input label="CA ka email" type="email" value={caEmail} onValueChange={setCaEmail} variant="bordered" size="lg" placeholder="ca@example.com" />
-              <Input label="CA ka phone" type="tel" value={caPhone} onValueChange={setCaPhone} variant="bordered" size="lg" placeholder="+91 98765 43210" />
-            </div>
+      {/* ═══════════════════════════════════════════════════════════
+          RIGHT PANEL — form content
+      ═══════════════════════════════════════════════════════════ */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: "100vh", overflow: "hidden" }}>
+
+        {/* Mobile: gradient header */}
+        {isMobile && (
+          <div style={{
+            background: `linear-gradient(135deg, ${OR}, ${PU})`,
+            padding: "24px 20px 20px",
+            color: "white",
+            flexShrink: 0,
+          }}>
+            <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: "2px", textTransform: "uppercase", opacity: 0.85, fontFamily: SG, margin: 0 }}>
+              HisaabKitaab
+            </p>
+            <h1 style={{ fontSize: 22, fontWeight: 800, fontFamily: SG, marginTop: 6, marginBottom: 0 }}>
+              Apna Karobaar Shuru Karo
+            </h1>
           </div>
         )}
 
-        {/* ── Step 7: Done ─────────────────────────────────────────── */}
-        {step === 6 && (
-          <div style={{ textAlign: "center", paddingTop: 16 }}>
-            <p style={{ fontSize: 64, marginBottom: 20 }}>🎉</p>
-            <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 10 }}>Sab Set Hai!</h2>
-            <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", fontFamily: SG, marginBottom: 28 }}>
-              Business details, GSTIN, bank accounts — sab save ho gaya. Pehla bill banao aur shuru karo!
-            </p>
-
-            <div style={{ background: "var(--hk-card)", borderRadius: 14, border: "1px solid var(--hk-border)", padding: "20px", marginBottom: 28, textAlign: "left" }}>
-              <p style={{ fontSize: TYPE.bodySmall, fontWeight: 700, textTransform: "uppercase", color: "var(--hk-sub)", letterSpacing: "0.5px", fontFamily: SG, marginBottom: 14 }}>Summary</p>
-              {[
-                { label: "Business", value: businessName || "—" },
-                { label: "State", value: stateName || "—" },
-                { label: "GSTIN", value: gstin || "Skip kiya" },
-                { label: "Banks added", value: banks.filter((b) => b.bankName).length.toString() },
-                { label: "Parties added", value: parties.length.toString() },
-                { label: "Items added", value: items.length.toString() },
-                { label: "CA", value: caName || caEmail || "Skip kiya" },
-              ].map((row) => (
-                <div key={row.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 10, marginBottom: 10, borderBottom: "1px solid var(--hk-border)" }}>
-                  <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", fontFamily: SG }}>{row.label}</p>
-                  <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, textAlign: "right", maxWidth: "60%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.value}</p>
-                </div>
+        {/* Mobile: step progress strip */}
+        {isMobile && (
+          <div style={{
+            padding: "12px 20px 10px",
+            background: "var(--hk-card)",
+            borderBottom: "1px solid var(--hk-border)",
+            flexShrink: 0,
+          }}>
+            <div style={{ display: "flex", gap: 3, marginBottom: 8 }}>
+              {STEP_META.map((_, i) => (
+                <div key={i} style={{
+                  flex: 1, height: 4, borderRadius: 2,
+                  background: i < step ? GR : i === step ? OR : "var(--hk-border)",
+                  transition: "background 0.3s",
+                }} />
               ))}
             </div>
-
-            <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG, marginBottom: 20 }}>
-              Settings mein sab kuch baad mein edit kar sakte ho.
+            <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG, margin: 0 }}>
+              Step {step + 1} of {TOTAL_STEPS} · <strong style={{ color: "var(--hk-text)" }}>{STEP_META[step].label}</strong>
             </p>
           </div>
         )}
 
-        {/* Error */}
-        {error && (
-          <div style={{ marginTop: 16, padding: "12px 16px", borderRadius: 10, background: OR + "14", border: `1px solid ${OR}33`, color: OR, fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG }}>
-            ⚠ {error}
+        {/* Desktop: top bar showing step count */}
+        {!isMobile && (
+          <div style={{
+            padding: "18px 48px",
+            borderBottom: "1px solid var(--hk-border)",
+            background: "var(--hk-card)",
+            flexShrink: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}>
+            <div>
+              <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG, margin: 0 }}>
+                Step {step + 1} of {TOTAL_STEPS}
+              </p>
+              <p style={{ fontSize: TYPE.bodyLarge, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, margin: "2px 0 0" }}>
+                {STEP_META[step].label}
+              </p>
+            </div>
+            {/* Mini progress dots */}
+            <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
+              {STEP_META.map((_, i) => (
+                <div key={i} style={{
+                  width: i === step ? 20 : 8, height: 8, borderRadius: 4,
+                  background: i < step ? GR : i === step ? OR : "var(--hk-border)",
+                  transition: "all 0.3s",
+                }} />
+              ))}
+            </div>
           </div>
         )}
-      </div>
 
-      {/* Sticky bottom nav */}
-      <div style={{
-        position: "sticky", bottom: 0,
-        background: "var(--hk-card)", borderTop: "1px solid var(--hk-border)",
-        padding: "16px 24px",
-        display: "flex", justifyContent: "space-between", alignItems: "center",
-        gap: 12,
-      }}>
-        <button
-          onClick={goBack}
-          disabled={step === 0 || saving}
-          style={{
-            padding: "14px 20px", borderRadius: 12, border: "1px solid var(--hk-border)",
-            background: "transparent", color: "var(--hk-text)", fontSize: TYPE.body,
-            fontWeight: 700, cursor: step === 0 ? "default" : "pointer",
-            opacity: step === 0 ? 0 : 1, fontFamily: SG,
-            minHeight: 48,
-          }}
-        >
-          ← Peeche
-        </button>
+        {/* ── Form scroll area ──────────────────────────────────── */}
+        <div style={{
+          flex: 1,
+          overflowY: "auto",
+          padding: contentPad,
+        }}>
+          <div style={{ maxWidth: 540, width: "100%" }}>
 
-        <div style={{ display: "flex", gap: 10 }}>
-          {skippable[step] && step < TOTAL_STEPS - 1 && (
-            <button
-              onClick={skipAndNext}
-              disabled={saving}
-              style={{
-                padding: "14px 20px", borderRadius: 12, border: "1px solid var(--hk-border)",
-                background: "transparent", color: "var(--hk-sub)", fontSize: TYPE.body,
-                fontWeight: 600, cursor: "pointer", fontFamily: SG, minHeight: 48,
-              }}
-            >
-              Skip
-            </button>
-          )}
+            {/* ── Step 0: Business basics ──────────────────────── */}
+            {step === 0 && (
+              <div>
+                <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 6, marginTop: 0 }}>
+                  Business ki Details
+                </h2>
+                <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", marginBottom: 28, fontFamily: SG }}>
+                  Apna karobaar ka naam aur jagah batao.
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  <Input label="Business ka naam *" placeholder="Jaise: Sharma Traders" value={businessName} onValueChange={setBusinessName} variant="bordered" size="lg" />
+                  <Select label="Business kya karta hai?" selectedKeys={[businessType]} onSelectionChange={(k) => setBusinessType(Array.from(k)[0] as string)} variant="bordered" size="lg">
+                    {BUSINESS_TYPES.map((t) => <SelectItem key={t}>{t}</SelectItem>)}
+                  </Select>
+                  <Select label="State *" selectedKeys={stateName ? [stateName] : []} onSelectionChange={(k) => setStateName(Array.from(k)[0] as string)} variant="bordered" size="lg">
+                    {INDIAN_STATES.map((s) => <SelectItem key={s}>{s}</SelectItem>)}
+                  </Select>
+                  <Input label="City" placeholder="Jaise: Mumbai" value={city} onValueChange={setCity} variant="bordered" size="lg" />
+                </div>
+              </div>
+            )}
 
-          {step < TOTAL_STEPS - 1 ? (
-            <button
-              onClick={goNext}
-              disabled={saving}
-              style={{
-                padding: "14px 28px", borderRadius: 12, border: "none",
-                background: `linear-gradient(135deg, ${OR}, ${PU})`,
-                color: "white", fontSize: TYPE.body, fontWeight: 700,
-                cursor: saving ? "wait" : "pointer", opacity: saving ? 0.7 : 1,
-                fontFamily: SG, minHeight: 48,
-              }}
-            >
-              {saving ? "..." : "Aage Badho →"}
-            </button>
-          ) : (
-            <button
-              onClick={finishWizard}
-              disabled={saving}
-              style={{
-                padding: "14px 28px", borderRadius: 12, border: "none",
-                background: `linear-gradient(135deg, ${GR}, ${PU})`,
-                color: "white", fontSize: TYPE.body, fontWeight: 700,
-                cursor: saving ? "wait" : "pointer", opacity: saving ? 0.7 : 1,
-                fontFamily: SG, minHeight: 48,
-              }}
-            >
-              {saving ? "..." : "Karobaar Shuru Karo ✓"}
-            </button>
-          )}
+            {/* ── Step 1: GSTIN ───────────────────────────────── */}
+            {step === 1 && (
+              <div>
+                <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 6, marginTop: 0 }}>
+                  GSTIN hai?
+                </h2>
+                <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", marginBottom: 28, fontFamily: SG }}>
+                  Optional, par bills mein zaroori hota hai. Baad mein bhi add kar sakte ho.
+                </p>
+                <Input
+                  label="GSTIN Number"
+                  placeholder="27AAAAA0000A1Z5"
+                  value={gstin}
+                  onValueChange={onGstinChange}
+                  variant="bordered"
+                  size="lg"
+                  color={gstinValidState === "invalid" ? "danger" : gstinValidState === "valid" ? "success" : "default"}
+                  description={
+                    gstinValidState === "valid" ? "✓ Valid GSTIN format"
+                    : gstinValidState === "invalid" ? "Format sahi nahi — 15 characters hone chahiye"
+                    : ""
+                  }
+                />
+              </div>
+            )}
+
+            {/* ── Step 2: Bank account ─────────────────────────── */}
+            {step === 2 && (
+              <div>
+                <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 6, marginTop: 0 }}>
+                  Bank Account Jodo
+                </h2>
+                <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", marginBottom: 28, fontFamily: SG }}>
+                  Month-end reconciliation ke liye helpful hoga. Skip kar sakte ho.
+                </p>
+                {banks.map((bank, i) => (
+                  <div key={i} style={{ marginBottom: 16, padding: "16px", borderRadius: 14, border: "1.5px solid var(--hk-border)", background: "var(--hk-card)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+                      <p style={{ fontSize: TYPE.body, fontWeight: 700, fontFamily: SG, margin: 0 }}>Account {i + 1}</p>
+                      {banks.length > 1 && (
+                        <button onClick={() => removeBankRow(i)} style={{ background: "none", border: "none", cursor: "pointer", color: OR, fontSize: TYPE.bodySmall, fontFamily: SG }}>✕ Hatao</button>
+                      )}
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      <Select label="Bank" selectedKeys={bank.bankName ? [bank.bankName] : []} onSelectionChange={(k) => setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, bankName: Array.from(k)[0] as string } : b))} variant="bordered">
+                        {BANKS.map((b) => <SelectItem key={b}>{b}</SelectItem>)}
+                      </Select>
+                      <Input label="Account number (optional)" placeholder="XXXX XXXX XXXX" value={bank.accountNumber} onValueChange={(v) => setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, accountNumber: v } : b))} variant="bordered" />
+                      <Input label="Opening balance (₹)" type="number" value={bank.openingBalance} onValueChange={(v) => setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, openingBalance: v } : b))} variant="bordered" />
+                    </div>
+                  </div>
+                ))}
+                <button onClick={addBankRow} style={{ width: "100%", padding: "13px", borderRadius: 12, border: `1.5px dashed var(--hk-border)`, background: "transparent", cursor: "pointer", color: PU, fontSize: TYPE.body, fontWeight: 700, fontFamily: SG }}>
+                  + Aur Account Jodo
+                </button>
+              </div>
+            )}
+
+            {/* ── Step 3: Parties ─────────────────────────────── */}
+            {step === 3 && (
+              <div>
+                <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 6, marginTop: 0 }}>
+                  Customers / Suppliers
+                </h2>
+                <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", marginBottom: 28, fontFamily: SG }}>
+                  Kuch logon ko add karo, ya baad mein Udhar Khata mein karo.
+                </p>
+                {parties.map((p, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10, padding: "12px 16px", borderRadius: 10, background: (p.type === "CUSTOMER" ? PU : OR) + "14", border: `1px solid ${(p.type === "CUSTOMER" ? PU : OR)}22` }}>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontSize: TYPE.body, fontWeight: 700, fontFamily: SG, margin: 0 }}>{p.name}</p>
+                      <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG, marginTop: 2 }}>{p.type === "CUSTOMER" ? "Grahak" : "Supplier"}{p.phone ? ` · ${p.phone}` : ""}</p>
+                    </div>
+                    <button onClick={() => removeParty(i)} style={{ background: "none", border: "none", cursor: "pointer", color: OR, fontSize: 14 }}>✕</button>
+                  </div>
+                ))}
+                <div style={{ padding: "16px", borderRadius: 14, border: "1.5px solid var(--hk-border)", background: "var(--hk-card)", marginTop: parties.length ? 12 : 0 }}>
+                  <p style={{ fontSize: TYPE.caption, fontWeight: 700, textTransform: "uppercase", color: "var(--hk-sub)", letterSpacing: "0.5px", marginBottom: 12, fontFamily: SG }}>Nayi party add karo</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <Input label="Naam *" value={addPartyName} onValueChange={setAddPartyName} variant="bordered" />
+                    <Input label="Phone (optional)" value={addPartyPhone} onValueChange={setAddPartyPhone} variant="bordered" type="tel" />
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {(["CUSTOMER", "VENDOR"] as const).map((t) => (
+                        <button key={t} onClick={() => setAddPartyType(t)} style={{ flex: 1, padding: "10px", borderRadius: 8, border: `1.5px solid ${addPartyType === t ? (t === "CUSTOMER" ? PU : OR) : "var(--hk-border)"}`, background: addPartyType === t ? (t === "CUSTOMER" ? PU + "18" : OR + "18") : "transparent", color: addPartyType === t ? (t === "CUSTOMER" ? PU : OR) : "var(--hk-sub)", fontSize: TYPE.bodySmall, fontWeight: 700, cursor: "pointer", fontFamily: SG }}>
+                          {t === "CUSTOMER" ? "Grahak" : "Supplier"}
+                        </button>
+                      ))}
+                    </div>
+                    <button onClick={addParty} style={{ padding: "12px", borderRadius: 10, border: "none", background: `linear-gradient(135deg, ${OR}, ${PU})`, color: "white", fontSize: TYPE.body, fontWeight: 700, cursor: "pointer", fontFamily: SG }}>+ Jodo</button>
+                  </div>
+                </div>
+                <div style={{ marginTop: 14, textAlign: "center" }}>
+                  <a href="/settings/tally-import" style={{ fontSize: TYPE.bodySmall, fontWeight: 600, color: PU, fontFamily: SG }}>📥 Ya Tally se import karo →</a>
+                </div>
+              </div>
+            )}
+
+            {/* ── Step 4: Items ───────────────────────────────── */}
+            {step === 4 && (
+              <div>
+                <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 6, marginTop: 0 }}>
+                  Items / Saman
+                </h2>
+                <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", marginBottom: 28, fontFamily: SG }}>
+                  Jo cheezein tum bechte ho — bills mein fast pick ke liye.
+                </p>
+                {items.map((it, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10, padding: "12px 16px", borderRadius: 10, background: GR + "10", border: `1px solid ${GR}22` }}>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontSize: TYPE.body, fontWeight: 700, fontFamily: SG, margin: 0 }}>{it.name}</p>
+                      <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG, marginTop: 2 }}>{it.unit} · ₹{it.rate || "0"}{it.hsnCode ? ` · HSN ${it.hsnCode}` : ""}</p>
+                    </div>
+                    <button onClick={() => removeItem(i)} style={{ background: "none", border: "none", cursor: "pointer", color: OR, fontSize: 14 }}>✕</button>
+                  </div>
+                ))}
+                <div style={{ padding: "16px", borderRadius: 14, border: "1.5px solid var(--hk-border)", background: "var(--hk-card)", marginTop: items.length ? 12 : 0 }}>
+                  <p style={{ fontSize: TYPE.caption, fontWeight: 700, textTransform: "uppercase", color: "var(--hk-sub)", letterSpacing: "0.5px", marginBottom: 12, fontFamily: SG }}>Naya item add karo</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <Input label="Item ka naam *" value={addItemName} onValueChange={setAddItemName} variant="bordered" />
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <Input label="Unit" value={addItemUnit} onValueChange={setAddItemUnit} variant="bordered" placeholder="pcs / kg / m" style={{ flex: 1 }} />
+                      <Input label="Rate (₹)" type="number" value={addItemRate} onValueChange={setAddItemRate} variant="bordered" style={{ flex: 1 }} />
+                    </div>
+                    <Input label="HSN Code (optional)" value={addItemHsn} onValueChange={setAddItemHsn} variant="bordered" placeholder="E.g. 5208" />
+                    <button onClick={addItem} style={{ padding: "12px", borderRadius: 10, border: "none", background: `linear-gradient(135deg, ${GR}, ${PU})`, color: "white", fontSize: TYPE.body, fontWeight: 700, cursor: "pointer", fontFamily: SG }}>+ Jodo</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── Step 5: CA Contact ──────────────────────────── */}
+            {step === 5 && (
+              <div>
+                <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 6, marginTop: 0 }}>
+                  CA ka Contact
+                </h2>
+                <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", marginBottom: 28, fontFamily: SG }}>
+                  Tally file bhejna hoga toh CA ka email auto-fill ho jayega.
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  <Input label="CA ka naam" value={caName} onValueChange={setCaName} variant="bordered" size="lg" placeholder="Jaise: Pradeep Sharma" />
+                  <Input label="CA ka email" type="email" value={caEmail} onValueChange={setCaEmail} variant="bordered" size="lg" placeholder="ca@example.com" />
+                  <Input label="CA ka phone" type="tel" value={caPhone} onValueChange={setCaPhone} variant="bordered" size="lg" placeholder="+91 98765 43210" />
+                </div>
+              </div>
+            )}
+
+            {/* ── Step 6: Done ────────────────────────────────── */}
+            {step === 6 && (
+              <div>
+                <div style={{ textAlign: isMobile ? "center" : "left", marginBottom: 32 }}>
+                  <p style={{ fontSize: 56, marginBottom: 16, lineHeight: 1 }}>🎉</p>
+                  <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 8, marginTop: 0 }}>Sab Set Hai!</h2>
+                  <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", fontFamily: SG }}>
+                    Business details, GSTIN, bank accounts — sab save ho gaya. Pehla bill banao aur shuru karo!
+                  </p>
+                </div>
+
+                {/* Summary card */}
+                <div style={{ background: "var(--hk-card)", borderRadius: 16, border: "1.5px solid var(--hk-border)", overflow: "hidden" }}>
+                  <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--hk-border)", background: OR + "08" }}>
+                    <p style={{ fontSize: TYPE.caption, fontWeight: 800, textTransform: "uppercase", color: OR, letterSpacing: "1px", fontFamily: SG, margin: 0 }}>Setup Summary</p>
+                  </div>
+                  <div style={{ padding: "4px 0" }}>
+                    {[
+                      { label: "Business",      value: businessName || "—" },
+                      { label: "State",          value: stateName || "—" },
+                      { label: "GSTIN",          value: gstin || "Skip kiya" },
+                      { label: "Banks added",    value: String(banks.filter((b) => b.bankName).length) },
+                      { label: "Parties added",  value: String(parties.length) },
+                      { label: "Items added",    value: String(items.length) },
+                      { label: "CA",             value: caName || caEmail || "Skip kiya" },
+                    ].map((row, idx, arr) => (
+                      <div key={row.label} style={{
+                        display: "flex", justifyContent: "space-between", alignItems: "center",
+                        padding: "13px 20px",
+                        borderBottom: idx < arr.length - 1 ? "1px solid var(--hk-border)" : "none",
+                      }}>
+                        <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", fontFamily: SG, margin: 0 }}>{row.label}</p>
+                        <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, margin: 0, maxWidth: "55%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "right" }}>{row.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-muted)", fontFamily: SG, marginTop: 16 }}>
+                  Settings mein sab kuch baad mein edit kar sakte ho.
+                </p>
+              </div>
+            )}
+
+            {/* Error banner */}
+            {error && (
+              <div style={{
+                marginTop: 20, padding: "13px 16px", borderRadius: 10,
+                background: OR + "12", border: `1px solid ${OR}33`,
+                color: OR, fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG,
+              }}>
+                ⚠ {error}
+              </div>
+            )}
+
+          </div>{/* /maxWidth wrapper */}
+        </div>{/* /scroll area */}
+
+        {/* ── Bottom nav ─────────────────────────────────────── */}
+        <div style={{
+          flexShrink: 0,
+          background: "var(--hk-card)",
+          borderTop: "1.5px solid var(--hk-border)",
+          padding: isMobile ? "14px 20px" : "18px 48px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 12,
+        }}>
+          {/* Back */}
+          <button
+            onClick={goBack}
+            disabled={step === 0 || saving}
+            style={{
+              padding: "13px 22px", borderRadius: 12,
+              border: "1.5px solid var(--hk-border)",
+              background: "transparent", color: "var(--hk-text)",
+              fontSize: TYPE.body, fontWeight: 700, cursor: step === 0 ? "default" : "pointer",
+              opacity: step === 0 ? 0 : 1, fontFamily: SG, minHeight: 48,
+              transition: "opacity 0.2s",
+            }}
+          >
+            ← Peeche
+          </button>
+
+          {/* Right actions */}
+          <div style={{ display: "flex", gap: 10 }}>
+            {SKIPPABLE[step] && step < TOTAL_STEPS - 1 && (
+              <button
+                onClick={skipAndNext}
+                disabled={saving}
+                style={{
+                  padding: "13px 20px", borderRadius: 12,
+                  border: "1.5px solid var(--hk-border)",
+                  background: "transparent", color: "var(--hk-sub)",
+                  fontSize: TYPE.body, fontWeight: 600, cursor: "pointer",
+                  fontFamily: SG, minHeight: 48,
+                }}
+              >
+                Skip
+              </button>
+            )}
+
+            {step < TOTAL_STEPS - 1 ? (
+              <button
+                onClick={goNext}
+                disabled={saving}
+                style={{
+                  padding: "13px 28px", borderRadius: 12, border: "none",
+                  background: saving ? "var(--hk-border)" : `linear-gradient(135deg, ${OR}, ${PU})`,
+                  color: "white", fontSize: TYPE.body, fontWeight: 700,
+                  cursor: saving ? "wait" : "pointer",
+                  fontFamily: SG, minHeight: 48,
+                  boxShadow: saving ? "none" : `0 4px 16px ${OR}44`,
+                  transition: "box-shadow 0.2s",
+                }}
+              >
+                {saving ? "..." : "Aage Badho →"}
+              </button>
+            ) : (
+              <button
+                onClick={finishWizard}
+                disabled={saving}
+                style={{
+                  padding: "13px 28px", borderRadius: 12, border: "none",
+                  background: saving ? "var(--hk-border)" : `linear-gradient(135deg, ${GR}, ${PU})`,
+                  color: "white", fontSize: TYPE.body, fontWeight: 700,
+                  cursor: saving ? "wait" : "pointer",
+                  fontFamily: SG, minHeight: 48,
+                  boxShadow: saving ? "none" : `0 4px 16px ${GR}55`,
+                }}
+              >
+                {saving ? "..." : "Karobaar Shuru Karo ✓"}
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+
+      </div>{/* /right panel */}
     </div>
   );
 }
