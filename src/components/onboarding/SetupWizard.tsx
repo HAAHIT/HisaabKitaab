@@ -269,7 +269,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--hk-bg)", display: "flex", fontFamily: SG }}>
+    <div style={{ height: "100vh", overflow: "hidden", background: "var(--hk-bg)", display: "flex", fontFamily: SG }}>
 
       {/* ═══════════════════════════════════════════════════════════
           LEFT SIDEBAR — step list (desktop only)
@@ -398,7 +398,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
       {/* ═══════════════════════════════════════════════════════════
           RIGHT PANEL — form content
       ═══════════════════════════════════════════════════════════ */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: "100vh", overflow: "hidden" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
 
         {/* Mobile: gradient header */}
         {isMobile && (
