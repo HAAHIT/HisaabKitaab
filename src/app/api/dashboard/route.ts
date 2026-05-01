@@ -20,6 +20,8 @@ export async function GET(request: NextRequest) {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonthEnd = monthStart;
 
     // Monthly cash flow intervals (last 6 months)
     const monthDetails = Array.from({ length: 6 }, (_, i) => {
@@ -38,10 +40,14 @@ export async function GET(request: NextRequest) {
       receivableParties,
       payableParties,
       monthPayments,
+      lastMonthPayments,
       recentPayments,
       overdueCount,
       overdueAggregate,
       billStats,
+      thisMonthBillStats,
+      thisMonthBilledAgg,
+      lastMonthBilledAgg,
     ] = await Promise.all([
       prisma.party.aggregate({
         where: { tenantId, type: "CUSTOMER", currentBalance: { lt: 0 }, isActive: true, isDeleted: false },
@@ -53,6 +59,10 @@ export async function GET(request: NextRequest) {
       }),
       prisma.payment.aggregate({
         where: { tenantId, direction: "INCOMING", status: "COMPLETED", date: { gte: monthStart, lt: monthEnd } },
+        _sum: { amount: true },
+      }),
+      prisma.payment.aggregate({
+        where: { tenantId, direction: "INCOMING", status: "COMPLETED", date: { gte: lastMonthStart, lt: lastMonthEnd } },
         _sum: { amount: true },
       }),
       prisma.payment.findMany({
@@ -75,10 +85,28 @@ export async function GET(request: NextRequest) {
         },
         _sum: { currentBalance: true },
       }),
+      // All-time bill stats by status (for charts)
       prisma.bill.groupBy({
         by: ["status"],
         where: { tenantId, isDeleted: false },
         _count: true,
+        _sum: { grandTotal: true },
+      }),
+      // This month bill stats by status (for BillsBarCard "Is Mahine")
+      prisma.bill.groupBy({
+        by: ["status"],
+        where: { tenantId, isDeleted: false, createdAt: { gte: monthStart, lt: monthEnd } },
+        _count: true,
+        _sum: { grandTotal: true },
+      }),
+      // This month FINAL bills total (for OverviewCard "Kul Billed")
+      prisma.bill.aggregate({
+        where: { tenantId, isDeleted: false, status: "FINAL", createdAt: { gte: monthStart, lt: monthEnd } },
+        _sum: { grandTotal: true },
+      }),
+      // Last month FINAL bills total (for MoM delta)
+      prisma.bill.aggregate({
+        where: { tenantId, isDeleted: false, status: "FINAL", createdAt: { gte: lastMonthStart, lt: lastMonthEnd } },
         _sum: { grandTotal: true },
       }),
     ]);
@@ -124,7 +152,10 @@ export async function GET(request: NextRequest) {
 
     const receivable = Math.abs(receivableParties._sum.currentBalance?.toNumber() ?? 0);
     const payable = Math.abs(payableParties._sum.currentBalance?.toNumber() ?? 0);
-    const collectedThisMonth = monthPayments._sum.amount || 0;
+    const collectedThisMonth = monthPayments._sum.amount?.toNumber() ?? 0;
+    const collectedLastMonth = lastMonthPayments._sum.amount?.toNumber() ?? 0;
+    const thisMonthBilledTotal = thisMonthBilledAgg._sum.grandTotal?.toNumber() ?? 0;
+    const lastMonthBilledTotal = lastMonthBilledAgg._sum.grandTotal?.toNumber() ?? 0;
 
     // [HOTFIX] Using $queryRaw to bypass Prisma client validation cache issues in Next.js Turbopack
     // until the dev server is fully restarted. The column exists in the DB.
@@ -138,6 +169,9 @@ export async function GET(request: NextRequest) {
         receivable,
         payable,
         collectedThisMonth,
+        collectedLastMonth,
+        thisMonthBilledTotal,
+        lastMonthBilledTotal,
         netBalance: receivable - payable,
         overdueCount,
         overdueAmount: Math.abs(overdueAggregate._sum.currentBalance?.toNumber() ?? 0),
@@ -146,6 +180,7 @@ export async function GET(request: NextRequest) {
       cashFlow,
       recentPayments,
       billStats,
+      thisMonthBillStats,
       isOnboardingComplete: tenantSettings?.isOnboardingComplete ?? false,
     });
   } catch (error) {

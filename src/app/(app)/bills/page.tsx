@@ -13,6 +13,28 @@ import {
 import { OverdueBanner } from "@/components/ui/OverdueBanner";
 import { useOverdueData } from "@/hooks/useOverdueData";
 
+type DatePreset = "ALL" | "THIS_MONTH" | "LAST_MONTH" | "LAST_3M" | "CUSTOM";
+
+function getPresetRange(preset: DatePreset): { from: string; to: string } | null {
+  const now = new Date();
+  if (preset === "THIS_MONTH") {
+    const from = new Date(now.getFullYear(), now.getMonth(), 1);
+    const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
+  }
+  if (preset === "LAST_MONTH") {
+    const from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const to = new Date(now.getFullYear(), now.getMonth(), 0);
+    return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
+  }
+  if (preset === "LAST_3M") {
+    const from = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+    const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
+  }
+  return null;
+}
+
 interface Bill {
   id: string;
   billNumber: string;
@@ -38,6 +60,9 @@ export default function BillsListPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "DRAFT" | "FINAL" | "CANCELLED">("ALL");
+  const [datePreset, setDatePreset] = useState<DatePreset>("ALL");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [collapsedMonths, setCollapsedMonths] = useState<Record<string, boolean>>({});
@@ -77,6 +102,13 @@ export default function BillsListPage() {
       if (statusFilter !== "ALL") params.set("status", statusFilter);
       params.set("page", String(page));
 
+      // Date range — preset takes priority, custom used when CUSTOM selected
+      const range = datePreset !== "CUSTOM" ? getPresetRange(datePreset) : null;
+      const effectiveFrom = range ? range.from : (datePreset === "CUSTOM" ? customFrom : "");
+      const effectiveTo = range ? range.to : (datePreset === "CUSTOM" ? customTo : "");
+      if (effectiveFrom) params.set("from", effectiveFrom + "T00:00:00.000Z");
+      if (effectiveTo) params.set("to", effectiveTo + "T23:59:59.999Z");
+
       const response = await fetch(`/api/bills?${params.toString()}`);
       if (!response.ok) throw new Error(await readError(response));
 
@@ -97,7 +129,7 @@ export default function BillsListPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, statusFilter, t]);
+  }, [page, search, statusFilter, datePreset, customFrom, customTo, t]);
 
   useEffect(() => {
     fetchBills();
@@ -197,6 +229,96 @@ export default function BillsListPage() {
               <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--hk-sub)", marginTop: 4, fontFamily: SG }}>{item.sub}</p>
             </div>
           ))}
+        </div>
+
+        {/* Date range filter */}
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: datePreset === "CUSTOM" ? 8 : 0 }}>
+            {(
+              [
+                { key: "ALL" as DatePreset, label: "Sab Time" },
+                { key: "THIS_MONTH" as DatePreset, label: "Is Mahine" },
+                { key: "LAST_MONTH" as DatePreset, label: "Pichle Mahine" },
+                { key: "LAST_3M" as DatePreset, label: "Teen Mahine" },
+                { key: "CUSTOM" as DatePreset, label: "Custom" },
+              ] as { key: DatePreset; label: string }[]
+            ).map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => { setDatePreset(opt.key); setPage(1); }}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: 20,
+                  border: "1.5px solid",
+                  borderColor: datePreset === opt.key ? "var(--hk-primary)" : "var(--hk-border)",
+                  background: datePreset === opt.key ? "var(--hk-primary)" : "var(--hk-card)",
+                  color: datePreset === opt.key ? "#fff" : "var(--hk-sub)",
+                  fontSize: TYPE.bodySmall,
+                  fontWeight: 600,
+                  fontFamily: SG,
+                  cursor: "pointer",
+                  transition: "all 0.15s",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          {datePreset === "CUSTOM" && (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <input
+                type="date"
+                value={customFrom}
+                onChange={(e) => { setCustomFrom(e.target.value); setPage(1); }}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 10,
+                  border: "1.5px solid var(--hk-border)",
+                  background: "var(--hk-card)",
+                  color: "var(--hk-text)",
+                  fontSize: TYPE.bodySmall,
+                  fontFamily: SG,
+                  cursor: "pointer",
+                  outline: "none",
+                }}
+              />
+              <span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG }}>se</span>
+              <input
+                type="date"
+                value={customTo}
+                onChange={(e) => { setCustomTo(e.target.value); setPage(1); }}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 10,
+                  border: "1.5px solid var(--hk-border)",
+                  background: "var(--hk-card)",
+                  color: "var(--hk-text)",
+                  fontSize: TYPE.bodySmall,
+                  fontFamily: SG,
+                  cursor: "pointer",
+                  outline: "none",
+                }}
+              />
+              {(customFrom || customTo) && (
+                <button
+                  onClick={() => { setCustomFrom(""); setCustomTo(""); setPage(1); }}
+                  style={{
+                    padding: "5px 12px",
+                    borderRadius: 10,
+                    border: "1.5px solid var(--hk-border)",
+                    background: "transparent",
+                    color: "var(--hk-sub)",
+                    fontSize: TYPE.bodySmall,
+                    fontFamily: SG,
+                    cursor: "pointer",
+                  }}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Search + filter */}

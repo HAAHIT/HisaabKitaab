@@ -16,6 +16,9 @@ interface DashboardData {
     receivable: number;
     payable: number;
     collectedThisMonth: number;
+    collectedLastMonth?: number;
+    thisMonthBilledTotal?: number;
+    lastMonthBilledTotal?: number;
     netBalance: number;
     overdueCount: number;
     overdueAmount: number;
@@ -31,6 +34,11 @@ interface DashboardData {
     party: { name: string; type: string };
   }[];
   billStats: {
+    status: string;
+    _count: number;
+    _sum: { grandTotal: number | null };
+  }[];
+  thisMonthBillStats?: {
     status: string;
     _count: number;
     _sum: { grandTotal: number | null };
@@ -135,21 +143,40 @@ function areaPath(P: { x: number; y: number }[], H: number): string {
 
 // ── Overview Card ─────────────────────────────────────────────────────────────
 
+function momDelta(current: number, last: number): number | null {
+  if (!last) return null;
+  return Math.round(((current - last) / last) * 100);
+}
+
 function OverviewCard({ data, isMobile }: { data: DashboardData; isMobile: boolean }) {
-  const cashFlow = data.cashFlow ?? [];
+  const allCashFlow = data.cashFlow ?? [];
+  const [chartMonths, setChartMonths] = useState(6);
+  const cashFlow = chartMonths >= allCashFlow.length ? allCashFlow : allCashFlow.slice(allCashFlow.length - chartMonths);
   const [activeIdx, setActiveIdx] = useState(Math.max(cashFlow.length - 1, 0));
+  // Reset active index when chart window changes
+  useEffect(() => { setActiveIdx(Math.max(cashFlow.length - 1, 0)); }, [cashFlow.length]);
+
   const W = 560, H = isMobile ? 110 : 148;
   const maxVal = Math.max(...cashFlow.flatMap((d) => [d.received, d.paid]), 1);
   const bPts = makePts(cashFlow as { [key: string]: unknown }[], "received", W, H, maxVal);
   const cPts = makePts(cashFlow as { [key: string]: unknown }[], "paid", W, H, maxVal);
 
-  const billTotal = data.billStats?.reduce((a, b) => a + Number(b._sum.grandTotal || 0), 0) ?? 0;
   const s = data.summary;
+  const thisMonthBilled = s.thisMonthBilledTotal ?? 0;
+  const lastMonthBilled = s.lastMonthBilledTotal ?? 0;
+  const collectedDelta = momDelta(s.collectedThisMonth, s.collectedLastMonth ?? 0);
+  const billedDelta = momDelta(thisMonthBilled, lastMonthBilled);
 
   const metrics = [
-    { label: "Kul Billed", value: billTotal, color: PU, delta: 18 },
-    { label: "Mila", value: s.collectedThisMonth, color: OR, delta: 12 },
-    { label: "Baaki", value: Math.abs(s.receivable), color: GR, delta: -4 },
+    { label: "Kul Billed", sub: "is mahine", value: thisMonthBilled, color: PU, delta: billedDelta },
+    { label: "Mila", sub: "collected", value: s.collectedThisMonth, color: OR, delta: collectedDelta },
+    { label: "Baaki", sub: "outstanding", value: Math.abs(s.receivable), color: GR, delta: null },
+  ];
+
+  const timeFilters: { label: string; months: number }[] = [
+    { label: "1M", months: 1 },
+    { label: "3M", months: 3 },
+    { label: "6M", months: 6 },
   ];
 
   return (
@@ -162,26 +189,27 @@ function OverviewCard({ data, isMobile }: { data: DashboardData; isMobile: boole
               borderRight: i < 2 ? "1px solid var(--hk-border)" : "none",
               paddingLeft: i > 0 ? (isMobile ? 10 : 22) : 0,
             }}>
-              <p style={{ color: "var(--hk-sub)", fontSize: TYPE.label, fontWeight: 600, fontFamily: SG, marginBottom: 6 }}>{m.label}</p>
+              <p style={{ color: "var(--hk-sub)", fontSize: TYPE.label, fontWeight: 600, fontFamily: SG, marginBottom: 2 }}>{m.label}</p>
+              <p style={{ color: "var(--hk-sub)", fontSize: TYPE.caption, fontWeight: 500, fontFamily: SG, marginBottom: 4 }}>{m.sub}</p>
               <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
                 <span style={{ fontSize: isMobile ? TYPE.numMedium + 4 : TYPE.numLarge, fontWeight: 800, color: "var(--hk-text)", fontFamily: IN, letterSpacing: "-1px", lineHeight: 1 }}>
                   {fmt(m.value)}
                 </span>
-                <DeltaBadge val={m.delta} color={m.color} />
+                {m.delta !== null && <DeltaBadge val={m.delta} color={m.color} />}
               </div>
             </div>
           ))}
         </div>
         {!isMobile && (
           <div style={{ display: "flex", gap: 5, flexShrink: 0, marginLeft: 16 }}>
-            {["1M", "3M", "6M", "1Y"].map((f) => (
-              <button key={f} style={{
+            {timeFilters.map((f) => (
+              <button key={f.label} onClick={() => setChartMonths(f.months)} style={{
                 minHeight: 36, padding: "0 14px", borderRadius: 9,
-                border: `1px solid ${f === "6M" ? OR : "var(--hk-border)"}`,
-                background: f === "6M" ? OR : "var(--hk-badge)",
-                color: f === "6M" ? "#fff" : "var(--hk-sub)",
+                border: `1px solid ${chartMonths === f.months ? OR : "var(--hk-border)"}`,
+                background: chartMonths === f.months ? OR : "var(--hk-badge)",
+                color: chartMonths === f.months ? "#fff" : "var(--hk-sub)",
                 fontSize: TYPE.bodySmall, fontWeight: 700, fontFamily: SG, cursor: "pointer",
-              }}>{f}</button>
+              }}>{f.label}</button>
             ))}
           </div>
         )}
@@ -253,7 +281,8 @@ function OverviewCard({ data, isMobile }: { data: DashboardData; isMobile: boole
 // ── Bills Bar Card ────────────────────────────────────────────────────────────
 
 function BillsBarCard({ data, onNavigate }: { data: DashboardData; onNavigate: () => void }) {
-  const stats = data.billStats ?? [];
+  // Use this-month stats for the "Is Mahine" card; fall back to all-time if API is older
+  const stats = data.thisMonthBillStats ?? data.billStats ?? [];
   const finalCount = stats.find((s) => s.status === "FINAL")?._count ?? 0;
   const draftCount = stats.find((s) => s.status === "DRAFT")?._count ?? 0;
   const cancelCount = stats.find((s) => s.status === "CANCELLED")?._count ?? 0;
