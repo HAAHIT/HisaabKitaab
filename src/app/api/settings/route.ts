@@ -94,6 +94,10 @@ export async function PATCH(request: NextRequest) {
       upiId: normalizeString(body.upiId),
       businessType: normalizeBusinessType(body.businessType),
       taxRegistrationType: normalizeTaxRegistrationType(body.taxRegistrationType),
+      bankName: normalizeString(body.bankName),
+      bankAccountNumber: normalizeString(body.bankAccountNumber),
+      bankBranch: normalizeString(body.bankBranch),
+      bankIfscCode: normalizeString(body.bankIfscCode),
     };
     // Only update defaultTemplateId when explicitly provided in body
     if ("defaultTemplateId" in body) {

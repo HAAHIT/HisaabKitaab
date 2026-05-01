@@ -56,6 +56,10 @@ interface CompanySettings {
   companyGstin: string | null;
   companyLogo: string | null;
   upiId?: string | null;
+  bankName?: string | null;
+  bankAccountNumber?: string | null;
+  bankBranch?: string | null;
+  bankIfscCode?: string | null;
 }
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
@@ -178,7 +182,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
       grandTotal: bill.grandTotal, customerPhone: bill.customerPhone,
       companyName: settings?.companyName || "My Business",
       companyUpiId: settings?.upiId || null,
-      billUrl: `${window.location.origin}/api/bills/${bill.id}/public`,
+      billUrl: `${window.location.origin}/bill/${bill.id}`,
     });
   }
 
@@ -491,17 +495,21 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
             {/* Bank / UPI details */}
             <div style={{ padding:"12px 14px", borderRight:"1px solid #999", fontSize:11 }}>
               <div style={{ fontWeight:800, marginBottom:8, fontSize:12 }}>Company&apos;s Bank Details</div>
-              {settings?.upiId
-                ? <>
-                    <div><span style={{ fontWeight:700 }}>UPI ID :</span> {settings.upiId}</div>
-                    <div style={{ marginTop:6, fontSize:10, color:"#777" }}>Scan &amp; Pay via any UPI app</div>
-                  </>
-                : <div style={{ color:"#999", fontSize:10 }}>Contact us for payment details.</div>
-              }
-              {bill.notes && bill.terms && (
-                <div style={{ marginTop:10, fontSize:10, color:"#666" }}>
-                  <span style={{ fontWeight:700 }}>Terms : </span>{bill.terms}
+              {settings?.bankName || settings?.bankAccountNumber ? (
+                <div style={{ lineHeight:1.8 }}>
+                  {settings.bankName && <div><span style={{ fontWeight:700 }}>Bank Name :</span> {settings.bankName}</div>}
+                  {settings.bankAccountNumber && <div><span style={{ fontWeight:700 }}>A/c Number :</span> <span style={{ fontFamily:"monospace" }}>{settings.bankAccountNumber}</span></div>}
+                  {settings.bankBranch && <div><span style={{ fontWeight:700 }}>Branch :</span> {settings.bankBranch}</div>}
+                  {settings.bankIfscCode && <div><span style={{ fontWeight:700 }}>IFSC Code :</span> <span style={{ fontFamily:"monospace" }}>{settings.bankIfscCode}</span></div>}
+                  {settings.upiId && <div style={{ marginTop:4 }}><span style={{ fontWeight:700 }}>UPI ID :</span> {settings.upiId}</div>}
                 </div>
+              ) : settings?.upiId ? (
+                <>
+                  <div><span style={{ fontWeight:700 }}>UPI ID :</span> {settings.upiId}</div>
+                  <div style={{ marginTop:4, fontSize:10, color:"#777" }}>Scan &amp; Pay via any UPI app</div>
+                </>
+              ) : (
+                <div style={{ color:"#999", fontSize:10 }}>Contact us for payment details.</div>
               )}
             </div>
 

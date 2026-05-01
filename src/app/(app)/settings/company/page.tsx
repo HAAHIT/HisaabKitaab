@@ -48,8 +48,11 @@ export default function CompanySettingsPage() {
   const [billPrefix, setBillPrefix] = useState("BILL");
   const [upiId, setUpiId] = useState("");
   const [businessType, setBusinessType] = useState("INDIVIDUAL");
-  const [taxRegistrationType, setTaxRegistrationType] =
-    useState("REGISTERED");
+  const [taxRegistrationType, setTaxRegistrationType] = useState("REGISTERED");
+  const [bankName, setBankName] = useState("");
+  const [bankAccountNumber, setBankAccountNumber] = useState("");
+  const [bankBranch, setBankBranch] = useState("");
+  const [bankIfscCode, setBankIfscCode] = useState("");
 
   const revokeObjectUrl = useCallback((url: string | null) => {
     if (url?.startsWith("blob:")) {
@@ -74,6 +77,10 @@ export default function CompanySettingsPage() {
     setUpiId(settings?.upiId || "");
     setBusinessType(settings?.businessType || "INDIVIDUAL");
     setTaxRegistrationType(settings?.taxRegistrationType || "REGISTERED");
+    setBankName(settings?.bankName || "");
+    setBankAccountNumber(settings?.bankAccountNumber || "");
+    setBankBranch(settings?.bankBranch || "");
+    setBankIfscCode(settings?.bankIfscCode || "");
     setPendingLogoFile(null);
     setLogoRemoved(false);
     setPendingLogoPreviewUrl((currentUrl) => {
@@ -152,6 +159,10 @@ export default function CompanySettingsPage() {
         upiId,
         businessType,
         taxRegistrationType,
+        bankName,
+        bankAccountNumber,
+        bankBranch,
+        bankIfscCode,
       };
 
       const response = await fetch("/api/settings", {
@@ -464,14 +475,6 @@ export default function CompanySettingsPage() {
                 endContent={<span className="text-default-400">%</span>}
                 description={t("bills.autoTaxNote")}
               />
-              <Input
-                label={t("company.upiId")}
-                placeholder={t("company.upiIdPlaceholder")}
-                description={t("company.upiIdDescription")}
-                value={upiId}
-                onValueChange={setUpiId}
-                variant="bordered"
-              />
               <div className="rounded-2xl border border-divider bg-default-50/80 p-4 text-sm text-default-500">
                 <p className="font-medium text-default-700">
                   {t("company.taxRegistrationType")}
@@ -493,6 +496,55 @@ export default function CompanySettingsPage() {
               variant="bordered"
               minRows={3}
             />
+          </section>
+
+          <section>
+            <h2 className="mb-4 border-b border-divider pb-2 text-lg font-semibold">
+              Bank Account Details
+            </h2>
+            <p className="mb-4 text-sm text-default-500">
+              Shown on every invoice footer. Helps customers pay you via NEFT / IMPS.
+            </p>
+            <div className="grid gap-4 md:grid-cols-2">
+              <Input
+                label="Bank Name"
+                placeholder="e.g. HDFC Bank"
+                value={bankName}
+                onValueChange={setBankName}
+                variant="bordered"
+              />
+              <Input
+                label="Account Number"
+                placeholder="e.g. 50100123456789"
+                value={bankAccountNumber}
+                onValueChange={setBankAccountNumber}
+                variant="bordered"
+                classNames={{ input: "font-mono" }}
+              />
+              <Input
+                label="Branch"
+                placeholder="e.g. Andheri West, Mumbai"
+                value={bankBranch}
+                onValueChange={setBankBranch}
+                variant="bordered"
+              />
+              <Input
+                label="IFSC Code"
+                placeholder="e.g. HDFC0001234"
+                value={bankIfscCode}
+                onValueChange={(v) => setBankIfscCode(v.toUpperCase())}
+                variant="bordered"
+                classNames={{ input: "font-mono uppercase" }}
+              />
+              <Input
+                label={t("company.upiId")}
+                placeholder={t("company.upiIdPlaceholder")}
+                description={t("company.upiIdDescription")}
+                value={upiId}
+                onValueChange={setUpiId}
+                variant="bordered"
+              />
+            </div>
           </section>
 
           <section>

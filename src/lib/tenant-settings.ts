@@ -104,6 +104,11 @@ export function serializeTenantSettings(tenant: TenantSettingsSource) {
       settings.taxRegistrationType
     ),
     defaultTemplateId: normalizeOptionalString(settings.defaultTemplateId),
+    // Bank account details (shown on invoice footer)
+    bankName: normalizeString(settings.bankName),
+    bankAccountNumber: normalizeString(settings.bankAccountNumber),
+    bankBranch: normalizeString(settings.bankBranch),
+    bankIfscCode: normalizeString(settings.bankIfscCode),
   };
 }
 
@@ -122,6 +127,10 @@ export function mergeTenantSettings(
     businessType: BusinessType;
     taxRegistrationType: TaxRegistrationType;
     defaultTemplateId: string | null;
+    bankName: string | null;
+    bankAccountNumber: string | null;
+    bankBranch: string | null;
+    bankIfscCode: string | null;
   }>
 ) {
   const existing = getFlatTenantSettings(currentSettings);
@@ -153,5 +162,9 @@ export function mergeTenantSettings(
       "defaultTemplateId" in nextSettings
         ? nextSettings.defaultTemplateId ?? null
         : normalizeOptionalString(existing.defaultTemplateId),
+    bankName: nextSettings.bankName ?? normalizeString(existing.bankName),
+    bankAccountNumber: nextSettings.bankAccountNumber ?? normalizeString(existing.bankAccountNumber),
+    bankBranch: nextSettings.bankBranch ?? normalizeString(existing.bankBranch),
+    bankIfscCode: nextSettings.bankIfscCode ?? normalizeString(existing.bankIfscCode),
   };
 }
