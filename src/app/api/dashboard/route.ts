@@ -1,20 +1,17 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { logError, getRequestId } from "@/lib/observability";
-import { resolveReadTenant } from "@/lib/api-tenant";
+import { resolveSession } from "@/lib/api-tenant";
 
 // GET /api/dashboard — Dashboard aggregated data
 export async function GET(request: NextRequest) {
-  const role = request.headers.get("x-user-role");
+  const sessionResolution = await resolveSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, role } = sessionResolution.session;
 
-  if (!role || role === "CUSTOMER") {
+  if (role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantResolution = await resolveReadTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   try {
     const now = new Date();
@@ -157,12 +154,10 @@ export async function GET(request: NextRequest) {
     const thisMonthBilledTotal = thisMonthBilledAgg._sum.grandTotal?.toNumber() ?? 0;
     const lastMonthBilledTotal = lastMonthBilledAgg._sum.grandTotal?.toNumber() ?? 0;
 
-    // [HOTFIX] Using $queryRaw to bypass Prisma client validation cache issues in Next.js Turbopack
-    // until the dev server is fully restarted. The column exists in the DB.
-    const tenantSettingsResult = await prisma.$queryRaw<{ isOnboardingComplete: boolean }[]>`
-      SELECT "isOnboardingComplete" FROM "Tenant" WHERE id = ${tenantId}
-    `;
-    const tenantSettings = tenantSettingsResult[0] ?? { isOnboardingComplete: false };
+    const tenantSettings = await prisma.tenant.findFirst({
+      where: { id: tenantId },
+      select: { isOnboardingComplete: true },
+    });
 
     return NextResponse.json({
       summary: {

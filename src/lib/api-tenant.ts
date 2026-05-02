@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { TENANT_CONTEXT_MISSING_MESSAGE } from "@/lib/tenant";
 import { resolveVerifiedTenantId } from "@/lib/session-server";
+import { verifyToken, type SessionPayload } from "@/lib/auth";
 
 type TenantResolution =
   | {
@@ -59,6 +60,37 @@ export async function resolveWriteTenant(
     ok: true,
     tenantId,
   };
+}
+
+type SessionResolution =
+  | { ok: true; session: SessionPayload }
+  | { ok: false; response: NextResponse<{ error: string }> };
+
+const COOKIE_NAME = "hisaabkitaab-session";
+
+/**
+ * Verifies the JWT cookie and returns the full session (tenantId, userId, role).
+ * Use this for any route that needs role or userId alongside tenantId.
+ * Never trust x-user-role / x-user-id proxy headers for auth decisions.
+ */
+export async function resolveSession(
+  request: NextRequest
+): Promise<SessionResolution> {
+  const token = request.cookies.get(COOKIE_NAME)?.value;
+  if (!token) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+    };
+  }
+  const session = await verifyToken(token);
+  if (!session) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+    };
+  }
+  return { ok: true, session };
 }
 
 /**

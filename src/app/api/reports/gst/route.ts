@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { resolveReadTenant } from "@/lib/api-tenant";
+import { resolveSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 
 interface RowRecord { [key: string]: unknown }
@@ -41,14 +41,13 @@ interface B2bParty {
 
 // GET /api/reports/gst?from=YYYY-MM-DD&to=YYYY-MM-DD
 export async function GET(request: NextRequest) {
-  const role = request.headers.get("x-user-role");
-  if (!role || role === "CUSTOMER") {
+  const sessionResolution = await resolveSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, role } = sessionResolution.session;
+
+  if (role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-
-  const tenantResolution = await resolveReadTenant(request);
-  if (!tenantResolution.ok) return tenantResolution.response;
-  const tenantId = tenantResolution.tenantId;
 
   try {
     const { searchParams } = new URL(request.url);
