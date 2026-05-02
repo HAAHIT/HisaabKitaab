@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getBalanceStatusLabel,
   getSettlementDirectionForParty,
@@ -17,7 +17,7 @@ import {
   Select,
   SelectItem,
 } from "@heroui/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 interface Party {
   id: string;
@@ -67,6 +67,9 @@ async function readError(response: Response) {
 
 export default function RecordPaymentPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const preselectedPartyId = searchParams.get("partyId");
+  const didPreselect = useRef(false);
   const [parties, setParties] = useState<Party[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -109,6 +112,17 @@ export default function RecordPaymentPage() {
   useEffect(() => {
     fetchParties();
   }, [fetchParties]);
+
+  // Pre-select party from URL param once parties are loaded
+  useEffect(() => {
+    if (!didPreselect.current && preselectedPartyId && parties.length > 0) {
+      const found = parties.find((p) => p.id === preselectedPartyId);
+      if (found) {
+        didPreselect.current = true;
+        setPartyId(preselectedPartyId);
+      }
+    }
+  }, [preselectedPartyId, parties]);
 
   useEffect(() => {
     if (!partyId) {
