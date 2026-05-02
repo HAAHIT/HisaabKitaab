@@ -24,6 +24,52 @@ interface ReportsClientProps {
   parties: { id: string; name: string; type: string }[];
 }
 
+interface GstMonthRow {
+  month: string;
+  b2bCount: number;
+  b2cCount: number;
+  taxableValue: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  grandTotal: number;
+}
+
+interface GstHsnRow {
+  hsnCode: string;
+  taxableValue: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  grandTotal: number;
+  invoiceCount: number;
+}
+
+interface GstB2bRow {
+  partyName: string;
+  gstin: string;
+  invoiceCount: number;
+  taxableValue: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  grandTotal: number;
+}
+
+interface GstReport {
+  totalBills: number;
+  totals: {
+    taxableValue: number;
+    cgst: number;
+    sgst: number;
+    igst: number;
+    grandTotal: number;
+  };
+  monthWise: GstMonthRow[];
+  hsnSummary: GstHsnRow[];
+  b2bParties: GstB2bRow[];
+}
+
 interface TrialBalancePreview {
   rows: {
     accountCode: string;
@@ -47,6 +93,12 @@ function buildDownloadUrl(path: string, params: Record<string, string>) {
 
 function downloadFile(url: string) {
   window.open(url, "_blank", "noopener,noreferrer");
+}
+
+function inr(n: number): string {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency", currency: "INR", maximumFractionDigits: 0,
+  }).format(n);
 }
 
 type TallyImportResult = {
@@ -79,6 +131,10 @@ export default function ReportsClient({
   const [jobProgress, setJobProgress] = useState({ processed: 0, total: 0, status: "" });
   const [preview, setPreview] = useState<TrialBalancePreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [gstReport, setGstReport] = useState<GstReport | null>(null);
+  const [gstLoading, setGstLoading] = useState(false);
+  const [gstError, setGstError] = useState<string | null>(null);
+  const [gstTab, setGstTab] = useState<"month" | "hsn" | "b2b">("month");
 
   const exportBlocked = unbalancedCount > 0;
 
@@ -167,6 +223,38 @@ export default function ReportsClient({
 
     return () => controller.abort();
   }, [exportBlocked, from, t, to]);
+
+  useEffect(() => {
+    if (!from || !to) return;
+    const controller = new AbortController();
+    setGstLoading(true);
+    setGstError(null);
+
+    void fetch(
+      buildDownloadUrl("/api/reports/gst", { from, to }),
+      { signal: controller.signal }
+    )
+      .then(async (res) => {
+        if (!res.ok) {
+          const p = await res.json().catch(() => null);
+          throw new Error(p?.error || "Failed to load GST report");
+        }
+        return res.json() as Promise<GstReport>;
+      })
+      .then((data) => {
+        startTransition(() => {
+          setGstReport(data);
+          setGstLoading(false);
+        });
+      })
+      .catch((err) => {
+        if (controller.signal.aborted) return;
+        setGstError(err instanceof Error ? err.message : "Error loading GST data");
+        setGstLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [from, to]);
 
   useEffect(() => {
     if (!importJobId) return;
@@ -314,6 +402,182 @@ export default function ReportsClient({
               variant="bordered"
             />
           </div>
+        </CardBody>
+      </Card>
+
+      {/* ── GST Summary Report ──────────────────────────────────────────────── */}
+      <Card shadow="sm">
+        <CardBody className="p-6 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">GST Sales Summary</h2>
+              <p className="text-sm text-default-500 mt-0.5">
+                FINAL bills only · GSTR-1 reference data
+              </p>
+            </div>
+            {gstReport && (
+              <div className="flex flex-wrap gap-4 text-sm">
+                <span className="text-default-500">
+                  <span className="font-bold text-foreground">{gstReport.totalBills}</span> invoices
+                </span>
+                <span className="text-default-500">
+                  Taxable: <span className="font-bold text-foreground">{inr(gstReport.totals.taxableValue)}</span>
+                </span>
+                <span className="text-default-500">
+                  CGST: <span className="font-semibold">{inr(gstReport.totals.cgst)}</span>
+                </span>
+                <span className="text-default-500">
+                  SGST: <span className="font-semibold">{inr(gstReport.totals.sgst)}</span>
+                </span>
+                {gstReport.totals.igst > 0 && (
+                  <span className="text-default-500">
+                    IGST: <span className="font-semibold">{inr(gstReport.totals.igst)}</span>
+                  </span>
+                )}
+                <span className="text-default-500">
+                  Grand Total: <span className="font-bold text-foreground">{inr(gstReport.totals.grandTotal)}</span>
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Tab switcher */}
+          <div className="flex gap-2 border-b border-divider pb-1">
+            {(["month", "hsn", "b2b"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setGstTab(tab)}
+                className={`px-3 py-1.5 text-sm font-semibold rounded-t transition-colors ${
+                  gstTab === tab
+                    ? "border-b-2 border-primary text-primary bg-primary/5"
+                    : "text-default-500 hover:text-foreground"
+                }`}
+              >
+                {tab === "month" ? "Month-wise" : tab === "hsn" ? "HSN Summary" : "B2B Parties"}
+              </button>
+            ))}
+          </div>
+
+          {gstLoading ? (
+            <div className="grid gap-2">
+              {[1, 2, 3].map((i) => <Skeleton key={i} className="h-10 rounded-xl" />)}
+            </div>
+          ) : gstError ? (
+            <p className="text-sm text-danger">{gstError}</p>
+          ) : !gstReport || gstReport.totalBills === 0 ? (
+            <p className="text-sm text-default-500 py-4 text-center">
+              No final bills found in this period
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              {gstTab === "month" && (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-divider text-xs text-default-500 uppercase tracking-wide">
+                      <th className="py-2 pr-4 text-left font-semibold">Month</th>
+                      <th className="py-2 pr-4 text-right font-semibold">B2B</th>
+                      <th className="py-2 pr-4 text-right font-semibold">B2C</th>
+                      <th className="py-2 pr-4 text-right font-semibold">Taxable Value</th>
+                      <th className="py-2 pr-4 text-right font-semibold">CGST</th>
+                      <th className="py-2 pr-4 text-right font-semibold">SGST</th>
+                      <th className="py-2 pr-4 text-right font-semibold">IGST</th>
+                      <th className="py-2 text-right font-semibold">Grand Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {gstReport.monthWise.map((row) => (
+                      <tr key={row.month} className="border-b border-divider/40 hover:bg-default-50">
+                        <td className="py-2.5 pr-4 font-medium">{row.month}</td>
+                        <td className="py-2.5 pr-4 text-right text-default-500">{row.b2bCount}</td>
+                        <td className="py-2.5 pr-4 text-right text-default-500">{row.b2cCount}</td>
+                        <td className="py-2.5 pr-4 text-right">{inr(row.taxableValue)}</td>
+                        <td className="py-2.5 pr-4 text-right text-default-600">{inr(row.cgst)}</td>
+                        <td className="py-2.5 pr-4 text-right text-default-600">{inr(row.sgst)}</td>
+                        <td className="py-2.5 pr-4 text-right text-default-600">{row.igst > 0 ? inr(row.igst) : "—"}</td>
+                        <td className="py-2.5 text-right font-bold">{inr(row.grandTotal)}</td>
+                      </tr>
+                    ))}
+                    <tr className="border-t-2 border-divider bg-default-50 font-bold">
+                      <td className="py-2.5 pr-4">Total</td>
+                      <td className="py-2.5 pr-4 text-right">{gstReport.monthWise.reduce((s, r) => s + r.b2bCount, 0)}</td>
+                      <td className="py-2.5 pr-4 text-right">{gstReport.monthWise.reduce((s, r) => s + r.b2cCount, 0)}</td>
+                      <td className="py-2.5 pr-4 text-right">{inr(gstReport.totals.taxableValue)}</td>
+                      <td className="py-2.5 pr-4 text-right">{inr(gstReport.totals.cgst)}</td>
+                      <td className="py-2.5 pr-4 text-right">{inr(gstReport.totals.sgst)}</td>
+                      <td className="py-2.5 pr-4 text-right">{gstReport.totals.igst > 0 ? inr(gstReport.totals.igst) : "—"}</td>
+                      <td className="py-2.5 text-right">{inr(gstReport.totals.grandTotal)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              )}
+
+              {gstTab === "hsn" && (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-divider text-xs text-default-500 uppercase tracking-wide">
+                      <th className="py-2 pr-4 text-left font-semibold">HSN/SAC Code</th>
+                      <th className="py-2 pr-4 text-right font-semibold">Invoices</th>
+                      <th className="py-2 pr-4 text-right font-semibold">Taxable Value</th>
+                      <th className="py-2 pr-4 text-right font-semibold">CGST</th>
+                      <th className="py-2 pr-4 text-right font-semibold">SGST</th>
+                      <th className="py-2 pr-4 text-right font-semibold">IGST</th>
+                      <th className="py-2 text-right font-semibold">Grand Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {gstReport.hsnSummary.map((row) => (
+                      <tr key={row.hsnCode} className="border-b border-divider/40 hover:bg-default-50">
+                        <td className="py-2.5 pr-4 font-mono font-semibold">{row.hsnCode}</td>
+                        <td className="py-2.5 pr-4 text-right text-default-500">{row.invoiceCount}</td>
+                        <td className="py-2.5 pr-4 text-right">{inr(row.taxableValue)}</td>
+                        <td className="py-2.5 pr-4 text-right text-default-600">{inr(row.cgst)}</td>
+                        <td className="py-2.5 pr-4 text-right text-default-600">{inr(row.sgst)}</td>
+                        <td className="py-2.5 pr-4 text-right text-default-600">{row.igst > 0 ? inr(row.igst) : "—"}</td>
+                        <td className="py-2.5 text-right font-bold">{inr(row.grandTotal)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              {gstTab === "b2b" && (
+                gstReport.b2bParties.length === 0 ? (
+                  <p className="text-sm text-default-500 py-4 text-center">
+                    No B2B parties (GSTIN-registered buyers) found in this period
+                  </p>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-divider text-xs text-default-500 uppercase tracking-wide">
+                        <th className="py-2 pr-4 text-left font-semibold">Party</th>
+                        <th className="py-2 pr-4 text-left font-semibold">GSTIN</th>
+                        <th className="py-2 pr-4 text-right font-semibold">Invoices</th>
+                        <th className="py-2 pr-4 text-right font-semibold">Taxable Value</th>
+                        <th className="py-2 pr-4 text-right font-semibold">CGST</th>
+                        <th className="py-2 pr-4 text-right font-semibold">SGST</th>
+                        <th className="py-2 pr-4 text-right font-semibold">IGST</th>
+                        <th className="py-2 text-right font-semibold">Grand Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {gstReport.b2bParties.map((row) => (
+                        <tr key={row.gstin} className="border-b border-divider/40 hover:bg-default-50">
+                          <td className="py-2.5 pr-4 font-medium">{row.partyName}</td>
+                          <td className="py-2.5 pr-4 font-mono text-xs text-default-500">{row.gstin}</td>
+                          <td className="py-2.5 pr-4 text-right text-default-500">{row.invoiceCount}</td>
+                          <td className="py-2.5 pr-4 text-right">{inr(row.taxableValue)}</td>
+                          <td className="py-2.5 pr-4 text-right text-default-600">{inr(row.cgst)}</td>
+                          <td className="py-2.5 pr-4 text-right text-default-600">{inr(row.sgst)}</td>
+                          <td className="py-2.5 pr-4 text-right text-default-600">{row.igst > 0 ? inr(row.igst) : "—"}</td>
+                          <td className="py-2.5 text-right font-bold">{inr(row.grandTotal)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )
+              )}
+            </div>
+          )}
         </CardBody>
       </Card>
 
