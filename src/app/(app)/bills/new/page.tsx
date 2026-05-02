@@ -18,6 +18,7 @@ import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { evaluateRow, type ColumnDef } from "@/lib/formula";
 import { GST_STATE_CODES } from "@/lib/gst-states";
+import ItemCatalogPicker from "@/components/bills/ItemCatalogPicker";
 
 interface Template {
   id: string;
@@ -92,6 +93,7 @@ export default function NewBillPage() {
   const [placeOfSupply, setPlaceOfSupply] = useState("");
   const [hsnCode, setHsnCode] = useState("");
   const [hsnPerRow, setHsnPerRow] = useState(false);
+  const [showCatalogPicker, setShowCatalogPicker] = useState(false);
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("");
   const [didAutoFocusRow, setDidAutoFocusRow] = useState(false);
@@ -207,6 +209,20 @@ export default function NewBillPage() {
       nextRows[rowIndex] = { ...nextRows[rowIndex], _hsnCode: value };
       return nextRows;
     });
+  }
+
+  function handleCatalogSelect(
+    rowData: Record<string, string | number>,
+    taxRate: number | null
+  ) {
+    if (!selectedTemplate) return;
+    const baseRow = buildEmptyRow(selectedTemplate);
+    const merged = { ...baseRow, ...rowData };
+    const evaluated = evaluateRow(merged, selectedTemplate.columns);
+    setRows((prev) => [...prev, evaluated]);
+    if (taxRate !== null) setTaxPercent(taxRate);
+    if (rowData._hsnCode && String(rowData._hsnCode).trim()) setHsnPerRow(true);
+    setShowCatalogPicker(false);
   }
 
   const { subtotal, taxAmount, grandTotal } = useMemo(() => {
@@ -584,6 +600,19 @@ export default function NewBillPage() {
                   <Button
                     size="sm"
                     variant="flat"
+                    color="secondary"
+                    onPress={() => setShowCatalogPicker(true)}
+                    startContent={
+                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round">
+                        <path d="M20 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M16 3H8l-2 4h12l-2-4z"/>
+                      </svg>
+                    }
+                  >
+                    Catalogue
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="flat"
                     color="primary"
                     onPress={addRow}
                     startContent={
@@ -879,6 +908,14 @@ export default function NewBillPage() {
           </>
         )}
       </div>
+
+      {showCatalogPicker && selectedTemplate && (
+        <ItemCatalogPicker
+          columns={selectedTemplate.columns}
+          onSelect={handleCatalogSelect}
+          onClose={() => setShowCatalogPicker(false)}
+        />
+      )}
     </>
   );
 }

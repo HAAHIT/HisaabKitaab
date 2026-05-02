@@ -302,14 +302,16 @@ export default function AppShell({
       <header style={{
         height: 64, background: "var(--hk-nav)",
         borderBottom: "1px solid var(--hk-border)",
-        display: "flex", alignItems: "center",
-        padding: "0 20px", gap: 14,
+        display: "grid",
+        gridTemplateColumns: "1fr auto 1fr",
+        alignItems: "center",
+        padding: "0 20px",
         position: "sticky", top: 0, zIndex: 200,
         backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
         transition: "background 0.25s",
       }}>
-        {/* Logo */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+        {/* Left — Logo */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <HKLogo />
           <span className="hidden lg:block" style={{
             fontSize: TYPE.bodyLarge, fontWeight: 700, color: "var(--hk-text)",
@@ -319,13 +321,11 @@ export default function AppShell({
           </span>
         </div>
 
-        {/* Nav tabs — always visible, scroll on small screens */}
+        {/* Center — Nav tabs, truly centered */}
         <div style={{
           display: "flex",
-          background: "var(--hk-pill)", borderRadius: 12, padding: 5,
-          gap: 3, margin: "0 auto",
-          overflowX: "auto", flexShrink: 1,
-          scrollbarWidth: "none",
+          background: "var(--hk-pill)", borderRadius: 12, padding: 4,
+          gap: 2, overflowX: "auto", scrollbarWidth: "none",
         }}>
           {primaryTabs.map((tab) => {
             const active = isActive(tab.href);
@@ -334,9 +334,9 @@ export default function AppShell({
                 key={tab.href}
                 onClick={() => router.push(tab.href)}
                 style={{
-                  minHeight: 38, whiteSpace: "nowrap",
-                  padding: "0 18px", borderRadius: 9, border: "none", cursor: "pointer",
-                  fontSize: TYPE.body, fontWeight: active ? 700 : 600,
+                  minHeight: 36, whiteSpace: "nowrap",
+                  padding: "0 16px", borderRadius: 8, border: "none", cursor: "pointer",
+                  fontSize: TYPE.body, fontWeight: active ? 700 : 500,
                   color: active ? "var(--hk-text)" : "var(--hk-sub)",
                   background: active ? "var(--hk-pill-active)" : "transparent",
                   transition: "all 0.15s", fontFamily: "var(--font-space-grotesk)",
@@ -349,8 +349,8 @@ export default function AppShell({
           })}
         </div>
 
-        {/* Right controls */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, marginLeft: "auto" }}>
+        {/* Right — Controls */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "flex-end" }}>
           {canQuickBill && (
             <button
               onClick={openSmartFab}
