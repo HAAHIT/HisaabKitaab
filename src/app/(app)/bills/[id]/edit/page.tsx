@@ -118,6 +118,7 @@ export default function EditBillPage({
   const [isInterState, setIsInterState] = useState(false);
   const [placeOfSupply, setPlaceOfSupply] = useState("");
   const [hsnCode, setHsnCode] = useState("");
+  const [hsnPerRow, setHsnPerRow] = useState(false);
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("");
 
@@ -151,7 +152,13 @@ export default function EditBillPage({
       setCustomerPhone(nextBill.customerPhone || "");
       setCustomerAddress(nextBill.customerAddress || "");
       setGstin(nextBill.gstin || "");
-      setRows(Array.isArray(nextBill.rows) ? nextBill.rows : []);
+      const loadedRows = Array.isArray(nextBill.rows) ? nextBill.rows : [];
+      setRows(loadedRows);
+      // Auto-enable per-row HSN mode if any existing row already has _hsnCode
+      const hasRowHsn = loadedRows.some(
+        (r) => typeof r._hsnCode === "string" && (r._hsnCode as string).trim()
+      );
+      if (hasRowHsn) setHsnPerRow(true);
       setNotes(nextBill.notes || "");
       setTerms(nextBill.terms || "");
       setTaxPercent(nextBill.taxPercent);
@@ -232,6 +239,14 @@ export default function EditBillPage({
         nextRows[rowIndex] = evaluateRow(nextRows[rowIndex], selectedTemplate.columns);
       }
 
+      return nextRows;
+    });
+  }
+
+  function updateRowHsn(rowIndex: number, value: string) {
+    setRows((currentRows) => {
+      const nextRows = [...currentRows];
+      nextRows[rowIndex] = { ...nextRows[rowIndex], _hsnCode: value };
       return nextRows;
     });
   }
@@ -499,30 +514,48 @@ export default function EditBillPage({
                 ))}
               </Select>
             </div>
-            <Button
-              size="sm"
-              variant="flat"
-              color="primary"
-              onPress={addRow}
-              startContent={
-                <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    d="M12 4v16m8-8H4"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                  />
-                </svg>
-              }
-            >
-              Add Row
-            </Button>
+            <div className="flex items-center gap-2">
+              {taxPercent > 0 && (
+                <Button
+                  size="sm"
+                  variant={hsnPerRow ? "flat" : "light"}
+                  color={hsnPerRow ? "secondary" : "default"}
+                  onPress={() => setHsnPerRow((v) => !v)}
+                  title="Add HSN/SAC code per line item for GSTR-1 Table 12"
+                >
+                  HSN per row
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="flat"
+                color="primary"
+                onPress={addRow}
+                startContent={
+                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      d="M12 4v16m8-8H4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                    />
+                  </svg>
+                }
+              >
+                Add Row
+              </Button>
+            </div>
           </CardHeader>
           <CardBody className="overflow-x-auto p-6">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-divider">
                   <th className="w-10 px-2 py-3 text-left font-medium text-default-500">#</th>
+                  {hsnPerRow && taxPercent > 0 && (
+                    <th className="px-2 py-3 text-left font-medium text-default-500 text-xs whitespace-nowrap">
+                      HSN/SAC
+                    </th>
+                  )}
                   {selectedTemplate.columns.map((column) => (
                     <th
                       key={column.id}
@@ -546,6 +579,20 @@ export default function EditBillPage({
                     className="border-b border-divider/30 hover:bg-default-50 dark:hover:bg-default-100/5"
                   >
                     <td className="px-2 py-2 text-default-400">{rowIndex + 1}</td>
+                    {hsnPerRow && taxPercent > 0 && (
+                      <td className="px-2 py-2">
+                        <Input
+                          type="text"
+                          aria-label={`Row ${rowIndex + 1} HSN/SAC code`}
+                          placeholder="e.g. 9983"
+                          value={String(row._hsnCode || "")}
+                          onValueChange={(value) => updateRowHsn(rowIndex, value)}
+                          variant="underlined"
+                          size="sm"
+                          className="min-w-[80px] max-w-[100px]"
+                        />
+                      </td>
+                    )}
                     {selectedTemplate.columns.map((column) => (
                       <td key={column.id} className="px-2 py-2">
                         {column.type === "formula" ? (
@@ -691,6 +738,7 @@ export default function EditBillPage({
                     <span className="text-xs text-default-500">Inter-state (IGST)</span>
                   </label>
                 </div>
+                {!hsnPerRow && (
                 <div className="flex items-center justify-between gap-3">
                   <span className="shrink-0 text-sm text-default-500">HSN/SAC Code</span>
                   <Input
@@ -703,6 +751,12 @@ export default function EditBillPage({
                     className="max-w-[200px]"
                   />
                 </div>
+                )}
+                {hsnPerRow && taxPercent > 0 && (
+                  <p className="text-xs text-default-400">
+                    HSN/SAC entered per row above (GSTR-1 Table 12)
+                  </p>
+                )}
                 <Divider />
                 <div className="flex justify-between">
                   <span className="text-lg font-bold">Grand Total</span>
