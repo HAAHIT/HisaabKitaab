@@ -86,6 +86,7 @@ export default function PartiesPage() {
   const [formGstin, setFormGstin] = useState("");
   const [formType, setFormType] = useState("CUSTOMER");
   const [formBalance, setFormBalance] = useState("0");
+  const [companyName, setCompanyName] = useState("");
 
   const fetchParties = useCallback(async () => {
     setLoading(true);
@@ -96,11 +97,18 @@ export default function PartiesPage() {
       if (typeFilter !== "ALL") params.set("type", typeFilter);
       if (overdueFilter) params.set("overdue", "true");
 
-      const response = await fetch(`/api/parties?${params.toString()}`);
+      const [response, settingsRes] = await Promise.all([
+        fetch(`/api/parties?${params.toString()}`),
+        companyName ? Promise.resolve(null) : fetch("/api/settings"),
+      ]);
       if (!response.ok) throw new Error(await readError(response));
 
       const data = await response.json();
       setParties((data.parties || []) as Party[]);
+      if (settingsRes) {
+        const s = await settingsRes.json().catch(() => null);
+        if (s?.settings?.companyName) setCompanyName(s.settings.companyName as string);
+      }
     } catch (error) {
       setParties([]);
       setToast({
@@ -563,6 +571,7 @@ export default function PartiesPage() {
                                 phone: party.phone,
                                 partyName: party.name,
                                 balanceAmount: Math.abs(party.currentBalance),
+                                tenantName: companyName || undefined,
                               })}
                               target="_blank"
                               rel="noopener noreferrer"
@@ -628,6 +637,31 @@ export default function PartiesPage() {
                                 }}
                               >
                                 <button
+                                  onClick={(e) => { e.stopPropagation(); setOverflowPartyId(null); router.push(`/bills/new?partyId=${party.id}`); }}
+                                  style={{
+                                    width: "100%", padding: "10px 14px",
+                                    display: "flex", alignItems: "center", gap: 8,
+                                    background: "transparent", border: "none", cursor: "pointer",
+                                    fontSize: 14, fontWeight: 600, color: "var(--hk-text)", fontFamily: SG,
+                                  }}
+                                >
+                                  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                                  Naya Bill
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setOverflowPartyId(null); router.push(`/payments/new?partyId=${party.id}`); }}
+                                  style={{
+                                    width: "100%", padding: "10px 14px",
+                                    display: "flex", alignItems: "center", gap: 8,
+                                    background: "transparent", border: "none", cursor: "pointer",
+                                    fontSize: 14, fontWeight: 600, color: "var(--hk-text)", fontFamily: SG,
+                                  }}
+                                >
+                                  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                                  Payment Record
+                                </button>
+                                <div style={{ height: 1, background: "var(--hk-border)", margin: "4px 0" }} />
+                                <button
                                   onClick={(e) => { e.stopPropagation(); setOverflowPartyId(null); openEdit(party); }}
                                   style={{
                                     width: "100%", padding: "10px 14px",
@@ -636,7 +670,8 @@ export default function PartiesPage() {
                                     fontSize: 14, fontWeight: 600, color: "var(--hk-text)", fontFamily: SG,
                                   }}
                                 >
-                                  ✏️ Edit
+                                  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                  Edit
                                 </button>
                                 <button
                                   onClick={(e) => { e.stopPropagation(); setOverflowPartyId(null); handleDelete(party); }}
@@ -647,7 +682,8 @@ export default function PartiesPage() {
                                     fontSize: 14, fontWeight: 600, color: OR, fontFamily: SG,
                                   }}
                                 >
-                                  🗑️ Delete
+                                  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                                  Delete
                                 </button>
                               </div>
                             )}
