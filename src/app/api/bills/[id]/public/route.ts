@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { serializeTenantSettings } from "@/lib/tenant-settings";
+import { resolvePublicTenant } from "@/lib/api-tenant";
 
 // GET /api/bills/:id/public
 // Public endpoint — returns a FINAL bill with company info for rendering.
@@ -15,10 +16,14 @@ export async function GET(
   const rateLimitResponse = await checkRateLimit(request, "bills.public", 60);
   if (rateLimitResponse) return rateLimitResponse;
 
+  const tenantResolution = resolvePublicTenant(request);
+  if (!tenantResolution.ok) return tenantResolution.response;
+  const tenantId = tenantResolution.tenantId;
+
   const { id } = await params;
 
   const bill = await prisma.bill.findFirst({
-    where: { id, status: "FINAL", isDeleted: false },
+    where: { id, tenantId, status: "FINAL", isDeleted: false },
     select: {
       id: true,
       billNumber: true,

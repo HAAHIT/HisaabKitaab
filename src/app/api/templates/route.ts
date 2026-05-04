@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
+import { resolveSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { NextRequest, NextResponse } from "next/server";
@@ -8,16 +8,13 @@ export const runtime = "nodejs";
 
 // GET /api/templates — List all templates
 export async function GET(request: NextRequest) {
-  const role = request.headers.get("x-user-role");
+  const sessionResolution = await resolveSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, role } = sessionResolution.session;
 
-  if (!role || role === "CUSTOMER") {
+  if (role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantResolution = await resolveReadTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   const templates = await prisma.billTemplate.findMany({
     where: {
@@ -43,20 +40,13 @@ export async function POST(request: NextRequest) {
   const rateLimitResponse = await checkRateLimit(request, "templates.create", 10);
   if (rateLimitResponse) return rateLimitResponse;
 
-  const role = request.headers.get("x-user-role");
-  const userId = request.headers.get("x-user-id");
+  const sessionResolution = await resolveSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, userId, role } = sessionResolution.session;
 
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!userId) {
-    return NextResponse.json({ error: "Missing user context" }, { status: 401 });
-  }
-  const tenantResolution = await resolveWriteTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   try {
     const body = await request.json();

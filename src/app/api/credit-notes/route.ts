@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { GST_STATE_CODE_SET } from "@/lib/gst-states";
 import { NextRequest, NextResponse } from "next/server";
-import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
+import { resolveSession } from "@/lib/api-tenant";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { logError, getRequestId } from "@/lib/observability";
 import crypto from "crypto";
@@ -38,15 +38,13 @@ const CreateNoteSchema = z.object({
 });
 
 export async function GET(request: NextRequest) {
-  const role = request.headers.get("x-user-role");
-  if (!role || role === "CUSTOMER") {
+  const sessionResolution = await resolveSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, role } = sessionResolution.session;
+
+  if (role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantResolution = await resolveReadTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   try {
     const { searchParams } = new URL(request.url);
@@ -117,20 +115,13 @@ export async function POST(request: NextRequest) {
   const rateLimitResponse = await checkRateLimit(request, "notes.create", 30);
   if (rateLimitResponse) return rateLimitResponse;
 
-  const role = request.headers.get("x-user-role");
-  const userId = request.headers.get("x-user-id");
+  const sessionResolution = await resolveSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, userId, role } = sessionResolution.session;
 
-  if (!role || role === "CUSTOMER") {
+  if (role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!userId) {
-    return NextResponse.json({ error: "Missing user context" }, { status: 401 });
-  }
-  const tenantResolution = await resolveWriteTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   try {
     const rawBody = await request.json();

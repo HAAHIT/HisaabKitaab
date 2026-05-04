@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { resolveWriteTenant } from "@/lib/api-tenant";
+import { resolveSession } from "@/lib/api-tenant";
 import { logError, logInfo, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { parseTallyXml } from "@/lib/tally-xml-import";
@@ -41,20 +41,14 @@ export async function POST(request: NextRequest) {
   );
   if (rateLimitResponse) return rateLimitResponse;
 
-  const role = request.headers.get("x-user-role");
-  const userId = request.headers.get("x-user-id");
+  const sessionResolution = await resolveSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, userId, role } = sessionResolution.session;
 
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantResolution = await resolveWriteTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+
   const actorId: string = userId;
   const tid: string = tenantId;
 
@@ -72,7 +66,14 @@ export async function POST(request: NextRequest) {
         { status: 413 }
       );
     }
-    xmlText = await file.text();
+    // [M-4] Tally ERP 9 exports XML in UTF-16 LE with BOM. Blob.text() assumes
+    // UTF-8 and will produce mojibake. Use TextDecoder with BOM sniffing instead.
+    const arrayBuffer = await file.arrayBuffer();
+    const uint8 = new Uint8Array(arrayBuffer);
+    const hasUtf16LeBom = uint8[0] === 0xFF && uint8[1] === 0xFE;
+    const hasUtf16BeBom = uint8[0] === 0xFE && uint8[1] === 0xFF;
+    const encoding = hasUtf16LeBom ? "utf-16le" : hasUtf16BeBom ? "utf-16be" : "utf-8";
+    xmlText = new TextDecoder(encoding).decode(arrayBuffer);
   } catch (err) {
     logError("import.tally-xml.read-error", {
       requestId: getRequestId(request),
@@ -86,12 +87,14 @@ export async function POST(request: NextRequest) {
   const compressedXml = "gzip:" + gzipSync(Buffer.from(xmlText, "utf-8")).toString("base64");
 
   // Create the tracking job
+  // [M-5] Set createdBy so the audit trail records which admin triggered the import.
   const job = await prisma.importJob.create({
     data: {
       tenantId: tid,
       totalItems: 0, // Will be updated by the background job during processing
       xmlData: compressedXml,
       status: "PENDING",
+      createdBy: actorId,
     }
   });
 

@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { recomputePartyBalance } from "@/lib/party-balance.server";
 
-import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
+import { resolveSession } from "@/lib/api-tenant";
 import { logError, logInfo, getRequestId } from "@/lib/observability";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -9,16 +9,13 @@ export const runtime = "nodejs";
 
 // GET /api/parties/reconcile — report balance discrepancies (Admin only)
 export async function GET(request: NextRequest) {
-  const role = request.headers.get("x-user-role");
+  const sessionResolution = await resolveSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, role } = sessionResolution.session;
 
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantResolution = await resolveReadTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   try {
     const parties = await prisma.party.findMany({
@@ -50,16 +47,13 @@ export async function GET(request: NextRequest) {
 
 // POST /api/parties/reconcile — fix all drifted balances (Admin only)
 export async function POST(request: NextRequest) {
-  const role = request.headers.get("x-user-role");
+  const sessionResolution2 = await resolveSession(request);
+  if (!sessionResolution2.ok) return sessionResolution2.response;
+  const { tenantId, role } = sessionResolution2.session;
 
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantResolution = await resolveWriteTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   try {
     const parties = await prisma.party.findMany({

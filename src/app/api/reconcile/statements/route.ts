@@ -10,17 +10,15 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { resolveVerifiedTenantId } from "@/lib/session-server";
+import { resolveSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
-  const role = request.headers.get("x-user-role");
-  if (!role) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const tenantId = await resolveVerifiedTenantId(request);
-  if (!tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const sessionResolution = await resolveSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId } = sessionResolution.session;
 
   const { searchParams } = new URL(request.url);
   const bankAccountId = searchParams.get("bankAccountId") ?? undefined;

@@ -2,7 +2,7 @@ import { Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
-import { resolveWriteTenant } from "@/lib/api-tenant";
+import { resolveSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 
 export const runtime = "nodejs";
@@ -31,17 +31,13 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const role = request.headers.get("x-user-role");
+  const sessionResolution = await resolveSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, role } = sessionResolution.session;
 
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-
-  const tenantResolution = await resolveWriteTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   try {
     const { id } = await params;
@@ -155,9 +151,9 @@ export async function PATCH(
     }
 
     if (hasOwn(body, "password")) {
-      if (typeof body.password !== "string" || body.password.length < 6) {
+      if (typeof body.password !== "string" || body.password.length < 12) {
         return NextResponse.json(
-          { error: "Password must be at least 6 characters" },
+          { error: "Password must be at least 12 characters" },
           { status: 400 }
         );
       }
@@ -194,17 +190,13 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const role = request.headers.get("x-user-role");
+  const sessionResolution = await resolveSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, role } = sessionResolution.session;
 
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-
-  const tenantResolution = await resolveWriteTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   try {
     const { id } = await params;

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { resolveVerifiedTenantId } from "@/lib/session-server";
+import { resolveSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 
@@ -8,11 +8,9 @@ export const runtime = "nodejs";
 
 /** GET /api/bank-accounts — list active bank accounts for the tenant */
 export async function GET(request: NextRequest) {
-  const role = request.headers.get("x-user-role");
-  if (!role) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const tenantId = await resolveVerifiedTenantId(request);
-  if (!tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const sessionResolution = await resolveSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId } = sessionResolution.session;
 
   try {
     const accounts = await prisma.bankAccount.findMany({
@@ -37,18 +35,16 @@ export async function GET(request: NextRequest) {
 
 /** POST /api/bank-accounts — create a new bank account */
 export async function POST(request: NextRequest) {
-  const role = request.headers.get("x-user-role");
+  const sessionResolution = await resolveSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, userId, role } = sessionResolution.session;
+
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const userId = request.headers.get("x-user-id");
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const tenantId = await resolveVerifiedTenantId(request);
-  if (!tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  await checkRateLimit(request, `bank-accounts:create:${tenantId}`, 20);
+  const rl = await checkRateLimit(request, `bank-accounts:create:${tenantId}`, 20);
+  if (rl) return rl;
 
   let body: {
     name?: unknown;

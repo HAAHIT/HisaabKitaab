@@ -15,7 +15,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { resolveVerifiedTenantId } from "@/lib/session-server";
+import { resolveSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { parseStatement } from "@/lib/bank-reconciliation/parsers/index";
@@ -26,13 +26,12 @@ import { Prisma } from "@prisma/client";
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
-  const role = request.headers.get("x-user-role");
-  if (!role) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const sessionResolution = await resolveSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId } = sessionResolution.session;
 
-  const tenantId = await resolveVerifiedTenantId(request);
-  if (!tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  await checkRateLimit(request, `reconcile:upload:${tenantId}`, 10);
+  const rl = await checkRateLimit(request, `reconcile:upload:${tenantId}`, 10);
+  if (rl) return rl;
 
   let formData: FormData;
   try {

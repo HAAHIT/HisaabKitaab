@@ -8,7 +8,7 @@ import {
 } from "@/lib/media";
 import { findUniqueCustomerPartyIdForUser } from "@/lib/party-relations";
 import { prisma } from "@/lib/prisma";
-import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
+import { resolveSession } from "@/lib/api-tenant";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { logError, getRequestId } from "@/lib/observability";
 import type { MeasurementStatus, Prisma } from "@prisma/client";
@@ -159,17 +159,9 @@ const measurementInclude = {
 
 // GET /api/measurements - List measurements with filters
 export async function GET(request: NextRequest) {
-  const role = request.headers.get("x-user-role");
-  const userId = request.headers.get("x-user-id");
-
-  if (!role || !userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  const tenantResolution = await resolveReadTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
+  const sessionResolution = await resolveSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, userId, role } = sessionResolution.session;
 
   const { searchParams } = new URL(request.url);
   const search = searchParams.get("search") || "";
@@ -216,16 +208,9 @@ export async function POST(request: NextRequest) {
   const rateLimitResponse = await checkRateLimit(request, "measurements.upload", 20);
   if (rateLimitResponse) return rateLimitResponse;
 
-  const userId = request.headers.get("x-user-id");
-
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  const tenantResolution = await resolveWriteTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
+  const sessionResolution = await resolveSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, userId } = sessionResolution.session;
 
   let photoAssets: MeasurementPhotoAssetCreateInput[] = [];
 

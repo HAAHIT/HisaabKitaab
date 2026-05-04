@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { resolveReadTenant, resolveWriteTenant } from "@/lib/api-tenant";
+import { resolveSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 import { NextRequest, NextResponse } from "next/server";
 import type { PartyType } from "@prisma/client";
@@ -42,16 +42,13 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const role = request.headers.get("x-user-role");
+  const sessionResolution = await resolveSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, role } = sessionResolution.session;
 
-  if (!role || role === "CUSTOMER") {
+  if (role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantResolution = await resolveReadTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   const { id } = await params;
   const party = await findVisibleParty(id, tenantId);
@@ -68,16 +65,13 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const role = request.headers.get("x-user-role");
+  const sessionResolution = await resolveSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, userId, role } = sessionResolution.session;
 
-  if (!role || role === "CUSTOMER") {
+  if (role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantResolution = await resolveWriteTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   try {
     const { id } = await params;
@@ -179,7 +173,7 @@ export async function PATCH(
           tenantId,
           entityType: "Party",
           entityId: party.id,
-          userId: request.headers.get("x-user-id") || null,
+          userId: userId,
           action: "UPDATE",
           fieldName: changedFields.join(","),
           oldValue: JSON.stringify(
@@ -217,16 +211,13 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const role = request.headers.get("x-user-role");
+  const sessionResolution = await resolveSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, userId, role } = sessionResolution.session;
 
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantResolution = await resolveWriteTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   try {
     const { id } = await params;
@@ -234,6 +225,17 @@ export async function DELETE(
 
     if (!existingParty) {
       return NextResponse.json({ error: "Party not found" }, { status: 404 });
+    }
+
+    // [M-7] Guard: block deletion if the party has an outstanding balance
+    const balance = existingParty.currentBalance
+      ? Number(existingParty.currentBalance)
+      : 0;
+    if (Math.abs(balance) >= 0.01) {
+      return NextResponse.json(
+        { error: "Cannot delete a party with an outstanding balance. Please settle all dues first." },
+        { status: 409 }
+      );
     }
 
     await prisma.party.update({
@@ -251,7 +253,7 @@ export async function DELETE(
         tenantId,
         entityType: "Party",
         entityId: existingParty.id,
-        userId: request.headers.get("x-user-id") || null,
+        userId: userId,
         action: "DELETE",
         fieldName: "isDeleted",
         oldValue: JSON.stringify(false),

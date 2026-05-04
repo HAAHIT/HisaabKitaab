@@ -10,22 +10,23 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { resolveVerifiedTenantId } from "@/lib/session-server";
+import { resolveSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
-  const role = request.headers.get("x-user-role");
+  const sessionResolution = await resolveSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, role } = sessionResolution.session;
+
   if (role !== "ADMIN" && role !== "ACCOUNTANT") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const tenantId = await resolveVerifiedTenantId(request);
-  if (!tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  await checkRateLimit(request, `reconcile:commit:${tenantId}`, 10);
+  const rl = await checkRateLimit(request, `reconcile:commit:${tenantId}`, 10);
+  if (rl) return rl;
 
   let body: { statementId?: unknown };
   try {
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
     const result = await prisma.$transaction(async (tx) => {
       // Mark remaining PENDING rows as AMBIGUOUS
       const ambiguousUpdate = await tx.bankStatementRow.updateMany({
-        where: { statementId, status: "PENDING" },
+        where: { statementId, tenantId, status: "PENDING" },
         data: { status: "AMBIGUOUS" },
       });
 

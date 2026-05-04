@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { TENANT_CONTEXT_MISSING_MESSAGE } from "@/lib/tenant";
+import { TENANT_CONTEXT_MISSING_MESSAGE, resolveTenantIdFromRequest } from "@/lib/tenant";
 import { resolveVerifiedTenantId } from "@/lib/session-server";
 import { verifyToken, type SessionPayload } from "@/lib/auth";
 
@@ -100,7 +100,6 @@ export async function resolveSession(
 export function resolvePublicTenant(
   request: NextRequest
 ): TenantResolution {
-  const { resolveTenantIdFromRequest } = require("@/lib/tenant");
   const tenantId = resolveTenantIdFromRequest(request);
   
   if (!tenantId) {

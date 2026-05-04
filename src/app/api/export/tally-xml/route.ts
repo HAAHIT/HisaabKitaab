@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { resolveReadTenant } from "@/lib/api-tenant";
+import { resolveSession } from "@/lib/api-tenant";
+import { checkRateLimit } from "@/lib/api-rate-limit";
 import { parseIndianDateRange } from "@/lib/journal-reporting";
 import { logError, getRequestId } from "@/lib/observability";
 import { CHART_OF_ACCOUNTS } from "@/lib/chart-of-accounts";
@@ -112,16 +113,16 @@ function extractHsnRatePairs(
  * Access: ADMIN and ACCOUNTANT only.
  */
 export async function POST(request: NextRequest) {
-  const role = request.headers.get("x-user-role");
+  const rl = await checkRateLimit(request, "export.tally-xml", 5);
+  if (rl) return rl;
+
+  const sessionResolution = await resolveSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, role } = sessionResolution.session;
 
   if (role !== "ADMIN" && role !== "ACCOUNTANT") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantResolution = await resolveReadTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
-  }
-  const tenantId = tenantResolution.tenantId;
 
   interface ExportBody {
     from?: unknown;
