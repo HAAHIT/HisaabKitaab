@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button, Input, Select, SelectItem } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -148,16 +148,47 @@ async function apiPatch(url: string, body: object) {
   return res.json();
 }
 
+// ── Wizard draft persistence ──────────────────────────────────────────────────
+
+const WIZARD_STORAGE_KEY = "hk_wizard_draft_v1";
+
+interface WizardDraft {
+  step: number;
+  businessName: string; businessType: string; stateName: string; city: string;
+  gstin: string;
+  banks: BankEntry[];
+  parties: PartyEntry[]; addPartyName: string; addPartyPhone: string; addPartyType: "CUSTOMER" | "VENDOR";
+  items: ItemEntry[]; addItemName: string; addItemUnit: string; addItemRate: string; addItemHsn: string;
+  selectedPreset: string;
+  caName: string; caEmail: string; caPhone: string;
+}
+
+function getWizardDraft(): WizardDraft | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(WIZARD_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as WizardDraft) : null;
+  } catch { return null; }
+}
+
+function clearWizardDraft() {
+  if (typeof window !== "undefined") localStorage.removeItem(WIZARD_STORAGE_KEY);
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
 
 export function SetupWizard({ onComplete }: SetupWizardProps) {
   const router = useRouter();
   const { resolvedTheme, setTheme } = useTheme();
   const [themeMounted, setThemeMounted] = useState(false);
-  const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+
+  // Load persisted draft once — used as lazy initial values for all state below
+  const draft = useRef(getWizardDraft());
+
+  const [step, setStep] = useState<number>(draft.current?.step ?? 0);
 
   useEffect(() => setThemeMounted(true), []);
 
@@ -170,38 +201,60 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
   }, []);
 
   // Step 0 — Business basics
-  const [businessName, setBusinessName] = useState("");
-  const [businessType, setBusinessType] = useState("Retail");
-  const [stateName, setStateName] = useState("");
-  const [city, setCity] = useState("");
+  const [businessName, setBusinessName] = useState(draft.current?.businessName ?? "");
+  const [businessType, setBusinessType] = useState(draft.current?.businessType ?? "Retail");
+  const [stateName, setStateName] = useState(draft.current?.stateName ?? "");
+  const [city, setCity] = useState(draft.current?.city ?? "");
 
   // Step 1 — GSTIN
-  const [gstin, setGstin] = useState("");
-  const [gstinValidState, setGstinValidState] = useState<"" | "valid" | "invalid">("");
+  const [gstin, setGstin] = useState(draft.current?.gstin ?? "");
+  const [gstinValidState, setGstinValidState] = useState<"" | "valid" | "invalid">(() => {
+    const g = draft.current?.gstin ?? "";
+    if (!g) return "";
+    return GSTIN_RE.test(g) ? "valid" : "invalid";
+  });
 
   // Step 2 — Bank accounts
-  const [banks, setBanks] = useState<BankEntry[]>([{ bankName: "", accountNumber: "", openingBalance: "0" }]);
+  const [banks, setBanks] = useState<BankEntry[]>(
+    draft.current?.banks ?? [{ bankName: "", accountNumber: "", openingBalance: "0" }]
+  );
 
   // Step 3 — Parties
-  const [parties, setParties] = useState<PartyEntry[]>([]);
-  const [addPartyName, setAddPartyName] = useState("");
-  const [addPartyPhone, setAddPartyPhone] = useState("");
-  const [addPartyType, setAddPartyType] = useState<"CUSTOMER" | "VENDOR">("CUSTOMER");
+  const [parties, setParties] = useState<PartyEntry[]>(draft.current?.parties ?? []);
+  const [addPartyName, setAddPartyName] = useState(draft.current?.addPartyName ?? "");
+  const [addPartyPhone, setAddPartyPhone] = useState(draft.current?.addPartyPhone ?? "");
+  const [addPartyType, setAddPartyType] = useState<"CUSTOMER" | "VENDOR">(draft.current?.addPartyType ?? "CUSTOMER");
 
   // Step 4 — Items
-  const [items, setItems] = useState<ItemEntry[]>([]);
-  const [addItemName, setAddItemName] = useState("");
-  const [addItemUnit, setAddItemUnit] = useState("pcs");
-  const [addItemRate, setAddItemRate] = useState("");
-  const [addItemHsn, setAddItemHsn] = useState("");
+  const [items, setItems] = useState<ItemEntry[]>(draft.current?.items ?? []);
+  const [addItemName, setAddItemName] = useState(draft.current?.addItemName ?? "");
+  const [addItemUnit, setAddItemUnit] = useState(draft.current?.addItemUnit ?? "pcs");
+  const [addItemRate, setAddItemRate] = useState(draft.current?.addItemRate ?? "");
+  const [addItemHsn, setAddItemHsn] = useState(draft.current?.addItemHsn ?? "");
 
   // Step 5 — Template selection
-  const [selectedPreset, setSelectedPreset] = useState<string>("standard");
+  const [selectedPreset, setSelectedPreset] = useState<string>(draft.current?.selectedPreset ?? "standard");
 
   // Step 6 — CA contact
-  const [caName, setCaName] = useState("");
-  const [caEmail, setCaEmail] = useState("");
-  const [caPhone, setCaPhone] = useState("");
+  const [caName, setCaName] = useState(draft.current?.caName ?? "");
+  const [caEmail, setCaEmail] = useState(draft.current?.caEmail ?? "");
+  const [caPhone, setCaPhone] = useState(draft.current?.caPhone ?? "");
+
+  // Auto-save all wizard state to localStorage on every change
+  useEffect(() => {
+    try {
+      const wizardDraft: WizardDraft = {
+        step, businessName, businessType, stateName, city,
+        gstin,
+        banks,
+        parties, addPartyName, addPartyPhone, addPartyType,
+        items, addItemName, addItemUnit, addItemRate, addItemHsn,
+        selectedPreset,
+        caName, caEmail, caPhone,
+      };
+      localStorage.setItem(WIZARD_STORAGE_KEY, JSON.stringify(wizardDraft));
+    } catch { /* ignore quota errors */ }
+  }, [step, businessName, businessType, stateName, city, gstin, banks, parties, addPartyName, addPartyPhone, addPartyType, items, addItemName, addItemUnit, addItemRate, addItemHsn, selectedPreset, caName, caEmail, caPhone]);
 
   // ── GSTIN validation ──────────────────────────────────────────────────────
   function onGstinChange(v: string) {
@@ -306,7 +359,12 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
 
   async function finishWizard() {
     setSaving(true); setError(null);
-    try { await apiFetch("/api/onboarding/complete", {}); onComplete(); router.push("/dashboard"); }
+    try {
+      await apiFetch("/api/onboarding/complete", {});
+      clearWizardDraft();
+      onComplete();
+      router.push("/dashboard");
+    }
     catch (err) { setError(err instanceof Error ? err.message : "Finish failed"); }
     finally { setSaving(false); }
   }
@@ -669,7 +727,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                   </div>
                 </div>
                 <div style={{ marginTop: 14, textAlign: "center" }}>
-                  <a href="/settings/tally-import" style={{ fontSize: TYPE.bodySmall, fontWeight: 600, color: PU, fontFamily: SG }}>📥 Ya Tally se import karo →</a>
+                  <a href="/settings/tally-import?returnTo=/dashboard" style={{ fontSize: TYPE.bodySmall, fontWeight: 600, color: PU, fontFamily: SG }}>📥 Ya Tally se import karo →</a>
                 </div>
               </div>
             )}

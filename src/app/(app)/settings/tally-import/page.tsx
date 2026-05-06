@@ -1,16 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import {
   Button,
   Card,
   CardBody,
-  Skeleton,
 } from "@heroui/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
-export default function TallyImportPage() {
+function TallyImportContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnTo = searchParams.get("returnTo") ?? "/dashboard";
 
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -136,7 +137,7 @@ export default function TallyImportPage() {
       )}
 
       <div className="mb-6 flex items-center gap-3">
-        <Button isIconOnly variant="light" onPress={() => router.push("/settings/company")}>
+        <Button isIconOnly variant="light" onPress={() => router.push(returnTo)}>
           <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M10 19l-7-7m0 0l7-7m-7 7h18" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} /></svg>
         </Button>
         <div>
@@ -271,8 +272,8 @@ export default function TallyImportPage() {
               </div>
 
               <div className="flex justify-center pt-8">
-                <Button color="primary" className="font-semibold px-8" onPress={() => router.push("/dashboard")}>
-                  Dashboard Par Jao
+                <Button color="primary" className="font-semibold px-8" onPress={() => router.push(returnTo)}>
+                  {returnTo === "/dashboard" ? "Dashboard Par Jao" : "Wapas Jao"}
                 </Button>
               </div>
             </div>
@@ -281,5 +282,13 @@ export default function TallyImportPage() {
         </CardBody>
       </Card>
     </div>
+  );
+}
+
+export default function TallyImportPage() {
+  return (
+    <Suspense fallback={null}>
+      <TallyImportContent />
+    </Suspense>
   );
 }
