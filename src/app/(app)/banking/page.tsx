@@ -16,6 +16,7 @@ interface BankAccount {
   type: "BANK" | "CASH";
   accountNumber: string | null;
   currentBalance: number;
+  isDefault: boolean;
 }
 
 function BankIcon() {
@@ -59,6 +60,14 @@ function ChevronRight() {
   );
 }
 
+function StarIcon() {
+  return (
+    <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24">
+      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+    </svg>
+  );
+}
+
 export default function BankingPage() {
   const isMobile = useIsMobile();
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
@@ -66,6 +75,7 @@ export default function BankingPage() {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [accountToDelete, setAccountToDelete] = useState<BankAccount | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [settingDefaultId, setSettingDefaultId] = useState<string | null>(null);
 
   const { isOpen: isAddOpen, onOpen: onAddOpen, onOpenChange: onAddChange } = useDisclosure();
   const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onOpenChange: onDeleteChange, onClose: onDeleteClose } = useDisclosure();
@@ -89,6 +99,27 @@ export default function BankingPage() {
   function showToast(message: string, type: "success" | "error") {
     setToast({ message, type });
     window.setTimeout(() => setToast(null), 3000);
+  }
+
+  async function handleSetDefault(account: BankAccount) {
+    setSettingDefaultId(account.id);
+    try {
+      const res = await fetch(`/api/bank-accounts/${account.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isDefault: true }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Update failed");
+      }
+      showToast(`${account.name} default ho gaya`, "success");
+      await fetchAccounts();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Default set nahi hua", "error");
+    } finally {
+      setSettingDefaultId(null);
+    }
   }
 
   async function handleDelete() {
@@ -155,7 +186,7 @@ export default function BankingPage() {
       <div style={{ padding: isMobile ? "0 14px 80px" : "0 28px 40px", maxWidth: 1200, margin: "0 auto" }}>
 
         {/* Summary cards */}
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr", gap: 12, marginBottom: 20 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
           {[
             { label: "Bank Balance", value: totalBank, color: PU, icon: <BankIcon /> },
             { label: "Cash in Hand", value: totalCash, color: GR, icon: <CashIcon /> },
@@ -202,15 +233,16 @@ export default function BankingPage() {
               const isBank = account.type === "BANK";
               const color = isBank ? PU : GR;
               const bal = Number(account.currentBalance);
+              const isSettingDefault = settingDefaultId === account.id;
               return (
                 <div
                   key={account.id}
                   style={{
-                    padding: "16px 20px",
+                    padding: isMobile ? "14px 16px" : "16px 20px",
                     borderBottom: i < accounts.length - 1 ? "1px solid var(--hk-border)" : undefined,
                     display: "flex",
                     alignItems: "center",
-                    gap: 14,
+                    gap: 12,
                   }}
                 >
                   {/* Icon */}
@@ -219,15 +251,39 @@ export default function BankingPage() {
                     background: color + "18",
                     display: "flex", alignItems: "center", justifyContent: "center",
                     flexShrink: 0, color,
+                    position: "relative",
                   }}>
                     {isBank ? <BankIcon /> : <CashIcon />}
+                    {account.isDefault && (
+                      <div style={{
+                        position: "absolute", top: -4, right: -4,
+                        width: 16, height: 16, borderRadius: "50%",
+                        background: AM, color: "#fff",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>
+                        <StarIcon />
+                      </div>
+                    )}
                   </div>
 
                   {/* Name + account number */}
                   <Link href={`/banking/${account.id}`} style={{ flex: 1, minWidth: 0, textDecoration: "none" }}>
-                    <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, lineHeight: 1.3 }}>
-                      {account.name}
-                    </p>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, lineHeight: 1.3 }}>
+                        {account.name}
+                      </p>
+                      {account.isDefault && (
+                        <span style={{
+                          fontSize: 10, fontWeight: 700, fontFamily: SG,
+                          color: AM, background: AM + "18",
+                          padding: "2px 7px", borderRadius: 6,
+                          border: `1px solid ${AM}30`,
+                          letterSpacing: "0.02em",
+                        }}>
+                          DEFAULT
+                        </span>
+                      )}
+                    </div>
                     <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--hk-sub)", fontFamily: SG, marginTop: 2 }}>
                       {account.type === "BANK" ? "Bank Account" : "Cash Register"}
                       {account.accountNumber && ` • ${account.accountNumber}`}
@@ -246,6 +302,27 @@ export default function BankingPage() {
                     </p>
                     <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontWeight: 500, marginTop: 2, fontFamily: SG }}>Balance</p>
                   </div>
+
+                  {/* Set as default (bank accounts only, not already default) */}
+                  {isBank && !account.isDefault && (
+                    <button
+                      onClick={() => handleSetDefault(account)}
+                      disabled={isSettingDefault}
+                      title="Default account set karo"
+                      style={{
+                        width: TOUCH.secondary, height: TOUCH.secondary,
+                        borderRadius: 10, border: "none",
+                        background: "transparent", color: "var(--hk-sub)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        cursor: isSettingDefault ? "default" : "pointer",
+                        flexShrink: 0, opacity: isSettingDefault ? 0.5 : 1,
+                      }}
+                      onMouseEnter={(e) => { if (!isSettingDefault) { (e.currentTarget as HTMLButtonElement).style.background = AM + "15"; (e.currentTarget as HTMLButtonElement).style.color = AM; } }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "var(--hk-sub)"; }}
+                    >
+                      <StarIcon />
+                    </button>
+                  )}
 
                   {/* Delete */}
                   <button
