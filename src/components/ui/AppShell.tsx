@@ -131,6 +131,18 @@ const MORE_NAV: NavItem[] = [
     ),
   },
   {
+    label: "Banking",
+    hindiLabel: "बैंकिंग",
+    translationKey: "nav.banking",
+    href: "/banking",
+    roles: ["ADMIN", "STAFF", "ACCOUNTANT"],
+    icon: (
+      <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11M8 14v3M12 14v3M16 14v3"/>
+      </svg>
+    ),
+  },
+  {
     label: "Reports",
     hindiLabel: "रिपोर्ट",
     translationKey: "nav.reports",

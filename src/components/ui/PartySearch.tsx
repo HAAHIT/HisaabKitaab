@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Autocomplete, AutocompleteItem, Button } from "@heroui/react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { Button, useDisclosure } from "@heroui/react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getBalanceStatusLabel } from "@/lib/accounting";
 import { QuickAddPartyModal } from "@/components/parties/QuickAddPartyModal";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 
 export interface PartyOption {
   id: string;
@@ -21,17 +21,21 @@ interface PartySearchProps {
   value: string | null;
   onChange: (party: PartyOption | null) => void;
   partyType?: "CUSTOMER" | "VENDOR" | null;
+  filterTypes?: string[];
   placeholder?: string;
   autoFocus?: boolean;
   isInvalid?: boolean;
+  initialParty?: PartyOption | null;
+  className?: string;
+  variant?: "flat" | "bordered" | "underlined" | "faded";
+  size?: "sm" | "md" | "lg";
+  label?: string;
+  includeBankAccounts?: boolean;
 }
 
 function formatSignedBalance(value: number) {
   const absolute = Math.abs(value).toLocaleString("en-IN");
-  if (value === 0) {
-    return `INR ${absolute}`;
-  }
-
+  if (value === 0) return `INR ${absolute}`;
   return `${value > 0 ? "+" : "-"}INR ${absolute}`;
 }
 
@@ -39,113 +43,191 @@ export function PartySearch({
   value,
   onChange,
   partyType,
+  filterTypes,
   placeholder,
   autoFocus,
   isInvalid,
+  initialParty,
+  className,
+  variant,
+  size,
+  label,
+  includeBankAccounts,
 }: PartySearchProps) {
   const { t } = useLanguage();
-  const router = useRouter();
-  const [parties, setParties] = useState<PartyOption[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isOpen, setIsOpen] = useState(false);
-  const onOpen = () => setIsOpen(true);
-  const onOpenChange = (open: boolean) => setIsOpen(open);
+  const [parties, setParties] = useState<PartyOption[]>(
+    initialParty ? [initialParty] : []
+  );
+  const [bankAccountOptions, setBankAccountOptions] = useState<PartyOption[]>([]);
+  const [searchTerm, setSearchTerm] = useState(initialParty?.name || "");
+  const [isLoading, setIsLoading] = useState(false);
+  const { isOpen, onOpen, onOpenChange } = useDisclosure();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const selectedPartyRef = useRef<PartyOption | null>(initialParty ?? null);
+
+  async function fetchParties(search: string) {
+    setIsLoading(true);
+    try {
+      const params = new URLSearchParams({ limit: "20" });
+      if (filterTypes && filterTypes.length > 0) {
+        params.set("types", filterTypes.join(","));
+      } else if (partyType) {
+        params.set("type", partyType);
+      }
+      if (search) params.set("search", search);
+      const response = await fetch(`/api/parties?${params}`);
+      if (response.ok) {
+        const data = await response.json();
+        const results = (data.parties || []) as PartyOption[];
+        if (selectedPartyRef.current && !results.some((p) => p.id === selectedPartyRef.current!.id)) {
+          setParties([selectedPartyRef.current, ...results]);
+        } else {
+          setParties(results);
+        }
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }
 
   useEffect(() => {
-    async function fetchParties() {
-      setIsLoading(true);
+    fetchParties("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [partyType, filterTypes]);
+
+  useEffect(() => {
+    if (!includeBankAccounts) return;
+    async function fetchBankAccounts() {
       try {
-        const url = partyType ? `/api/parties?type=${partyType}` : "/api/parties";
-        const response = await fetch(url);
-        if (response.ok) {
-          const data = await response.json();
-          setParties(data.parties || []);
-        }
-      } catch {
-        // silently fail — parties list will remain empty
-      } finally {
-        setIsLoading(false);
-      }
+        const res = await fetch("/api/bank-accounts");
+        if (!res.ok) return;
+        const data = await res.json();
+        const accounts = Array.isArray(data) ? data : data.accounts || [];
+        setBankAccountOptions(
+          accounts.map((a: { id: string; name: string; type: string; currentBalance: number }) => ({
+            id: `bank:${a.id}`,
+            name: a.name,
+            phone: null,
+            type: a.type === "CASH" ? "CASH_ACCOUNT" : "BANK_ACCOUNT",
+            currentBalance: Number(a.currentBalance),
+            address: null,
+            gstin: null,
+          }))
+        );
+      } catch { /* ignore */ }
+    }
+    fetchBankAccounts();
+  }, [includeBankAccounts]);
+
+  useEffect(() => {
+    if (!value) {
+      setSearchTerm("");
+      selectedPartyRef.current = null;
+    }
+  }, [value]);
+
+  function handleInputChange(val: string) {
+    setSearchTerm(val);
+
+    if (val === "" && selectedPartyRef.current) {
+      selectedPartyRef.current = null;
+      onChange(null);
     }
 
-    fetchParties();
-  }, [partyType]);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      fetchParties(val);
+    }, 300);
+  }
 
-  const selectedKey = value || undefined;
+  const bottomSection = (closePopover: () => void) => (
+    <div className="p-2 pt-1 border-t border-divider/50 mt-1">
+      <Button
+        className="w-full justify-start font-medium"
+        size="sm"
+        color="primary"
+        variant="light"
+        onPress={() => {
+          closePopover();
+          onOpen();
+        }}
+      >
+        + Add New {partyType ? t(`parties.${partyType.toLowerCase()}Type` as Parameters<typeof t>[0]) : "Party / Ledger"}
+      </Button>
+    </div>
+  );
 
   return (
     <div className="flex flex-col gap-2">
-      {!isOpen && (
-        <Autocomplete
-          label={placeholder || t("parties.searchPlaceholder")}
-          variant="bordered"
-          items={parties}
-          isLoading={isLoading}
-          selectedKey={selectedKey}
-          onSelectionChange={(key) => {
-            if (!key) {
-              onChange(null);
-              return;
-            }
-
-            const selected = parties.find((party) => party.id === String(key));
-            onChange(selected || null);
-          }}
-          autoFocus={autoFocus}
-          isInvalid={isInvalid}
-          listboxProps={{
-            emptyContent: (
-              <div className="flex flex-col items-center justify-center gap-3 p-4 text-center">
-                <p className="text-default-500">No parties found.</p>
-                <Button
-                  size="sm"
-                  color="primary"
-                  variant="flat"
-                  onPress={onOpen}
-                >
-                  + Add New Party
-                </Button>
-              </div>
-            ),
-          }}
-        >
-          {(party) => (
-            <AutocompleteItem key={party.id} textValue={party.name}>
-              <div className="flex w-full items-center justify-between">
-                <div className="flex flex-col">
-                  <span className="font-semibold">{party.name}</span>
-                  {party.phone && (
-                    <span className="text-xs text-default-500">Phone {party.phone}</span>
-                  )}
-                </div>
-                {party.currentBalance !== 0 && (
-                  <div className="flex flex-col items-end">
-                    <span
-                      className={`text-sm font-semibold ${
-                        party.currentBalance > 0 ? "text-success" : "text-danger"
-                      }`}
-                    >
-                      {formatSignedBalance(party.currentBalance)}
-                    </span>
+      <SearchableSelect
+        items={[
+          ...bankAccountOptions.filter(
+            (a) => !searchTerm || a.name.toLowerCase().includes(searchTerm.toLowerCase())
+          ),
+          ...parties,
+        ]}
+        inputValue={searchTerm}
+        onInputChange={handleInputChange}
+        onSelectionChange={(party) => {
+          selectedPartyRef.current = party;
+          setSearchTerm(party.name);
+          onChange(party);
+        }}
+        isLoading={isLoading}
+        placeholder={placeholder || t("parties.searchPlaceholder")}
+        isInvalid={isInvalid}
+        label={label}
+        size={size}
+        variant={variant}
+        className={className}
+        getKey={(party) => party.id}
+        getTextValue={(party) => party.name}
+        bottomContent={bottomSection}
+        emptyContent="No parties found."
+        renderItem={(party) => (
+          <div className="flex w-full items-center justify-between">
+            <div className="flex flex-col">
+              <span className="font-semibold">{party.name}</span>
+              {party.type === "CASH_ACCOUNT" || party.type === "BANK_ACCOUNT" ? (
+                <span className="text-xs text-primary">
+                  {party.type === "CASH_ACCOUNT" ? "Cash A/c" : "Bank A/c"}
+                </span>
+              ) : party.phone ? (
+                <span className="text-xs text-default-500">Phone {party.phone}</span>
+              ) : null}
+            </div>
+            <div className="flex flex-col items-end">
+              {Number(party.currentBalance) === 0 ? (
+                <span className="text-sm font-semibold text-default-400">
+                  {party.type === "CASH_ACCOUNT" || party.type === "BANK_ACCOUNT" ? "" : "Settled"}
+                </span>
+              ) : (
+                <>
+                  <span
+                    className={`text-sm font-semibold ${Number(party.currentBalance) > 0 ? "text-success" : "text-danger"}`}
+                  >
+                    {formatSignedBalance(Number(party.currentBalance))}
+                  </span>
+                  {party.type !== "CASH_ACCOUNT" && party.type !== "BANK_ACCOUNT" && (
                     <span className="text-[10px] text-default-400">
-                      {getBalanceStatusLabel(
-                        party.type as "CUSTOMER" | "VENDOR",
-                        party.currentBalance
-                      )}
+                      {getBalanceStatusLabel(party.type as "CUSTOMER" | "VENDOR", Number(party.currentBalance))}
                     </span>
-                  </div>
-                )}
-              </div>
-            </AutocompleteItem>
-          )}
-        </Autocomplete>
-      )}
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      />
 
       <QuickAddPartyModal
         isOpen={isOpen}
         onOpenChange={onOpenChange}
-        initialType={partyType || "CUSTOMER"}
+        initialType={partyType || filterTypes?.[0] || "CUSTOMER"}
+        allowedTypes={filterTypes || (partyType ? [partyType] : ["CUSTOMER", "VENDOR"])}
         onSuccess={(newParty) => {
+          selectedPartyRef.current = newParty;
+          setSearchTerm(newParty.name);
           setParties((prev) => [...prev, newParty]);
           onChange(newParty);
         }}
