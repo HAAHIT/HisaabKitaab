@@ -246,6 +246,15 @@ export function evaluateRow(
   columns: ColumnDef[]
 ): Record<string, number | string> {
   const result = { ...rowValues };
+
+  // Add name-keyed aliases so formulas stored with {ColumnName} refs work the
+  // same as formulas stored with {columnId} refs (both styles appear in practice).
+  for (const col of columns) {
+    if (col.id in result && !(col.name in result)) {
+      result[col.name] = result[col.id];
+    }
+  }
+
   const sortedColumns = [...columns].sort((a, b) => a.position - b.position);
 
   for (const col of sortedColumns) {
@@ -253,6 +262,7 @@ export function evaluateRow(
       const computed = evaluateFormula(col.formula, result);
       if (computed !== null) {
         result[col.id] = computed;
+        result[col.name] = computed;
       }
     }
   }

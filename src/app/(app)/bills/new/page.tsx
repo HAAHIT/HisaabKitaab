@@ -27,6 +27,15 @@ interface Template {
   columns: ColumnDef[];
 }
 
+interface CatalogItem {
+  id: string;
+  name: string;
+  hsnCode: string | null;
+  unit: string;
+  rate: number;
+  taxRate: number | null;
+}
+
 
 
 function formatCurrency(value: number) {
@@ -98,6 +107,8 @@ export default function NewBillPage() {
   const [terms, setTerms] = useState("");
   const [didAutoFocusRow, setDidAutoFocusRow] = useState(false);
   const [companyGstin, setCompanyGstin] = useState("");
+  const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
+  const [autoFocusedRow, setAutoFocusedRow] = useState<number | null>(null);
 
   // Lock GST controls whenever the selected party has a GSTIN — auto-fill takes over
   const gstIsLocked = Boolean(selectedParty?.gstin);
@@ -105,20 +116,23 @@ export default function NewBillPage() {
   const fetchFormData = useCallback(async () => {
     setLoading(true);
     try {
-      const [templatesResponse, partiesResponse, settingsResponse] = await Promise.all([
+      const [templatesResponse, partiesResponse, settingsResponse, itemsResponse] = await Promise.all([
         fetch("/api/templates"),
         fetch("/api/parties"),
         fetch("/api/settings"),
+        fetch("/api/items"),
       ]);
 
-      const [templatesData, partiesData, settingsData] = await Promise.all([
+      const [templatesData, partiesData, settingsData, itemsData] = await Promise.all([
         templatesResponse.json().catch(() => ({ templates: [] })),
         partiesResponse.json().catch(() => ({ parties: [] })),
         settingsResponse.json().catch(() => ({ settings: null })),
+        itemsResponse.json().catch(() => ({ items: [] })),
       ]);
 
       setTemplates(templatesData.templates || []);
       setParties((partiesData.parties || []) as PartyOption[]);
+      setCatalogItems(itemsData.items || []);
 
       if (settingsData.settings) {
         setTaxPercent(settingsData.settings.defaultTaxPercent || 18);
@@ -217,6 +231,70 @@ export default function NewBillPage() {
   }
 
 
+  const firstEditableColumnId = useMemo(() => {
+    if (!selectedTemplate) {
+      return null;
+    }
+
+    return (
+      selectedTemplate.columns.find((column) => column.type !== "formula")?.id ?? null
+    );
+  }, [selectedTemplate]);
+
+  const nameColId = useMemo(() => {
+    if (!selectedTemplate) return null;
+    const nameHints = ["name", "item", "description", "desc", "product", "particulars", "detail"];
+    const byHint = selectedTemplate.columns.find(
+      (c) => c.type === "text" && nameHints.some((h) => c.name.toLowerCase().includes(h))
+    );
+    if (byHint) return byHint.id;
+    return selectedTemplate.columns.find((c) => c.type === "text")?.id ?? null;
+  }, [selectedTemplate]);
+
+  const rateColId = useMemo(() => {
+    if (!selectedTemplate) return null;
+    const taxHints = ["tax rate", "tax%", "gst rate", "gst%", "gst"];
+    const rateHints = ["rate", "price", "mrp", "unit price", "unit rate"];
+    // Exclude columns that are tax-rate columns
+    const byHint = selectedTemplate.columns.find(
+      (c) =>
+        c.type === "number" &&
+        !taxHints.some((h) => c.name.toLowerCase().includes(h)) &&
+        rateHints.some((h) => c.name.toLowerCase().includes(h))
+    );
+    return byHint?.id ?? null;
+  }, [selectedTemplate]);
+
+  const qtyColId = useMemo(() => {
+    if (!selectedTemplate) return null;
+    const qtyHints = ["qty", "quantity", "nos", "pcs", "count", "units"];
+    return (
+      selectedTemplate.columns.find(
+        (c) => c.type === "number" && qtyHints.some((h) => c.name.toLowerCase().includes(h))
+      )?.id ?? null
+    );
+  }, [selectedTemplate]);
+
+  const hsnColId = useMemo(() => {
+    if (!selectedTemplate) return null;
+    const hsnHints = ["hsn", "sac"];
+    return (
+      selectedTemplate.columns.find(
+        (c) => c.type === "text" && hsnHints.some((h) => c.name.toLowerCase().includes(h))
+      )?.id ?? null
+    );
+  }, [selectedTemplate]);
+
+  const taxRateColId = useMemo(() => {
+    if (!selectedTemplate) return null;
+    const taxHints = ["tax rate", "tax%", "gst rate", "gst%", "gst"];
+    return (
+      selectedTemplate.columns.find(
+        (c) => c.type === "number" && taxHints.some((h) => c.name.toLowerCase().includes(h))
+      )?.id ?? null
+    );
+  }, [selectedTemplate]);
+
   const { subtotal, taxAmount, grandTotal } = useMemo(() => {
     if (!selectedTemplate) {
       return { subtotal: 0, taxAmount: 0, grandTotal: 0 };
@@ -230,15 +308,34 @@ export default function NewBillPage() {
       return { subtotal: 0, taxAmount: 0, grandTotal: 0 };
     }
 
-    const nextSubtotal = rows.reduce((sum, row) => {
-      const value =
-        typeof row[lastValueColumn.id] === "number"
-          ? (row[lastValueColumn.id] as number)
-          : 0;
-      return sum + value;
-    }, 0);
+    // When per-line tax rate exists, derive subtotal from rate×qty directly so
+    // it's always the pre-tax base regardless of what the Taxable formula computes.
+    const nextSubtotal = taxRateColId
+      ? Math.round(
+          rows.reduce((sum, row) => {
+            const rate = typeof row[rateColId ?? ""] === "number" ? (row[rateColId ?? ""] as number) : 0;
+            const qty = typeof row[qtyColId ?? ""] === "number" ? (row[qtyColId ?? ""] as number) : 0;
+            return sum + rate * qty;
+          }, 0) * 100
+        ) / 100
+      : rows.reduce((sum, row) => {
+          const value =
+            typeof row[lastValueColumn.id] === "number"
+              ? (row[lastValueColumn.id] as number)
+              : 0;
+          return sum + value;
+        }, 0);
 
-    const nextTaxAmount = Math.round(((nextSubtotal * taxPercent) / 100) * 100) / 100;
+    const nextTaxAmount = taxRateColId
+      ? Math.round(
+          rows.reduce((sum, row) => {
+            const rate = typeof row[rateColId ?? ""] === "number" ? (row[rateColId ?? ""] as number) : 0;
+            const qty = typeof row[qtyColId ?? ""] === "number" ? (row[qtyColId ?? ""] as number) : 0;
+            const taxRate = typeof row[taxRateColId] === "number" ? (row[taxRateColId] as number) : 0;
+            return sum + (rate * qty * taxRate) / 100;
+          }, 0) * 100
+        ) / 100
+      : Math.round(((nextSubtotal * taxPercent) / 100) * 100) / 100;
     const nextGrandTotal = Math.round((nextSubtotal + nextTaxAmount) * 100) / 100;
 
     return {
@@ -246,17 +343,44 @@ export default function NewBillPage() {
       taxAmount: nextTaxAmount,
       grandTotal: nextGrandTotal,
     };
-  }, [rows, selectedTemplate, taxPercent]);
+  }, [rows, selectedTemplate, taxPercent, taxRateColId, rateColId, qtyColId]);
 
-  const firstEditableColumnId = useMemo(() => {
-    if (!selectedTemplate) {
-      return null;
-    }
+  const autoFilteredItems = useMemo(() => {
+    if (autoFocusedRow === null || !nameColId) return [];
+    const query = String(rows[autoFocusedRow]?.[nameColId] || "").toLowerCase().trim();
+    const results = query
+      ? catalogItems.filter(
+          (i) =>
+            i.name.toLowerCase().includes(query) ||
+            (i.hsnCode && i.hsnCode.toLowerCase().includes(query))
+        )
+      : catalogItems;
+    return results.slice(0, 10);
+  }, [autoFocusedRow, rows, nameColId, catalogItems]);
 
-    return (
-      selectedTemplate.columns.find((column) => column.type !== "formula")?.id ?? null
-    );
-  }, [selectedTemplate]);
+  function applyCatalogItem(rowIndex: number, itemId: string) {
+    const item = catalogItems.find((i) => i.id === itemId);
+    if (!item || !selectedTemplate) return;
+
+    // Build and evaluate the row using the current render snapshot — avoids
+    // stale-closure issues when this setRows is batched with another setRows call.
+    const base = { ...rows[rowIndex] };
+    if (nameColId) base[nameColId] = item.name;
+    if (rateColId) base[rateColId] = Number(item.rate);
+    if (qtyColId && (!base[qtyColId] || base[qtyColId] === 0)) base[qtyColId] = 1;
+    if (hsnColId) base[hsnColId] = item.hsnCode ?? "";
+    if (taxRateColId && item.taxRate !== null) base[taxRateColId] = Number(item.taxRate);
+    base._hsnCode = item.hsnCode ?? "";
+    const evaluatedRow = evaluateRow(base, selectedTemplate.columns);
+
+    setRows((prev) => {
+      const next = [...prev];
+      next[rowIndex] = evaluatedRow;
+      return next;
+    });
+    if (item.taxRate !== null) setTaxPercent(Number(item.taxRate));
+    if (item.hsnCode && !hsnColId) setHsnPerRow(true);
+  }
 
   useEffect(() => {
     setDidAutoFocusRow(false);
@@ -721,6 +845,46 @@ export default function NewBillPage() {
                                 size="sm"
                                 className="min-w-[130px]"
                               />
+                            ) : column.id === nameColId && catalogItems.length > 0 ? (
+                              <div className="relative min-w-[160px]">
+                                <Input
+                                  type="text"
+                                  aria-label={`Row ${rowIndex + 1} ${column.name}`}
+                                  value={String(row[column.id] || "")}
+                                  onValueChange={(value) => updateCell(rowIndex, column.id, value)}
+                                  onFocus={() => setAutoFocusedRow(rowIndex)}
+                                  onBlur={() => window.setTimeout(() => setAutoFocusedRow((prev) => (prev === rowIndex ? null : prev)), 150)}
+                                  variant="underlined"
+                                  size="sm"
+                                  placeholder={column.name}
+                                />
+                                {autoFocusedRow === rowIndex && autoFilteredItems.length > 0 && (
+                                  <div className="absolute left-0 top-full z-50 w-64 overflow-hidden rounded-xl border border-divider bg-content1 shadow-xl">
+                                    {autoFilteredItems.map((item) => (
+                                      <button
+                                        key={item.id}
+                                        type="button"
+                                        onMouseDown={(e) => {
+                                          e.preventDefault();
+                                          applyCatalogItem(rowIndex, item.id);
+                                          setAutoFocusedRow(null);
+                                        }}
+                                        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-default-100 first:pt-2 last:pb-2"
+                                      >
+                                        <div className="min-w-0">
+                                          <p className="truncate text-sm font-medium">{item.name}</p>
+                                          {item.hsnCode && (
+                                            <p className="text-xs text-default-400">HSN {item.hsnCode}</p>
+                                          )}
+                                        </div>
+                                        <span className="shrink-0 text-sm font-semibold text-default-600">
+                                          ₹{Number(item.rate).toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+                                        </span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
                             ) : (
                               <Input
                                 type="text"
@@ -794,16 +958,18 @@ export default function NewBillPage() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span className="text-default-500">Tax</span>
-                        <Input
-                          type="number"
-                          aria-label="Tax percentage"
-                          value={String(taxPercent)}
-                          onValueChange={(value) => setTaxPercent(Number.parseFloat(value) || 0)}
-                          variant="bordered"
-                          size="sm"
-                          className="w-20"
-                          endContent={<span className="text-sm text-default-400">%</span>}
-                        />
+                        {taxRateColId === null && (
+                          <Input
+                            type="number"
+                            aria-label="Tax percentage"
+                            value={String(taxPercent)}
+                            onValueChange={(value) => setTaxPercent(Number.parseFloat(value) || 0)}
+                            variant="bordered"
+                            size="sm"
+                            className="w-20"
+                            endContent={<span className="text-sm text-default-400">%</span>}
+                          />
+                        )}
                       </div>
                       <span className="font-medium">{formatCurrency(taxAmount)}</span>
                     </div>
