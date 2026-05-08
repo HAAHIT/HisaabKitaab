@@ -2,9 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Button,
-  Card,
-  CardBody,
   Input,
   Select,
   SelectItem,
@@ -12,6 +9,11 @@ import {
 } from "@heroui/react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { ITEM_UNITS } from "@/lib/item-catalog";
+import {
+  GR, AM, OR, SG, IN, TYPE,
+  fmtFull,
+  HKCard, HKToast, PageHeader, GradientButton, useIsMobile,
+} from "@/components/ui/hk-design";
 
 interface ItemRecord {
   id: string;
@@ -30,21 +32,7 @@ interface FormState {
   taxRate: string;
 }
 
-const INITIAL_FORM: FormState = {
-  name: "",
-  hsnCode: "",
-  unit: "pcs",
-  rate: "",
-  taxRate: "",
-};
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 2,
-  }).format(value);
-}
+const INITIAL_FORM: FormState = { name: "", hsnCode: "", unit: "pcs", rate: "", taxRate: "" };
 
 async function readError(response: Response) {
   const payload = await response.json().catch(() => null);
@@ -53,43 +41,31 @@ async function readError(response: Response) {
 
 export default function ItemCatalogPage() {
   const { t } = useLanguage();
+  const isMobile = useIsMobile();
   const [items, setItems] = useState<ItemRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
-  const [toast, setToast] = useState<{
-    type: "success" | "error";
-    message: string;
-  } | null>(null);
+  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
-  const unitOptions = useMemo(
-    () => ITEM_UNITS.map((unit) => ({ key: unit, label: unit })),
-    []
-  );
+  const unitOptions = useMemo(() => ITEM_UNITS.map((unit) => ({ key: unit, label: unit })), []);
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
     try {
       const response = await fetch("/api/items");
       const payload = await response.json().catch(() => ({ items: [] }));
-      if (!response.ok) {
-        throw new Error(payload?.error || "Failed to load items");
-      }
+      if (!response.ok) throw new Error(payload?.error || "Failed to load items");
       setItems(payload.items || []);
     } catch (error) {
-      showToast(
-        error instanceof Error ? error.message : "Failed to load items",
-        "error"
-      );
+      showToast(error instanceof Error ? error.message : "Failed to load items", "error");
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    fetchItems();
-  }, [fetchItems]);
+  useEffect(() => { fetchItems(); }, [fetchItems]);
 
   function showToast(message: string, type: "success" | "error") {
     setToast({ message, type });
@@ -100,10 +76,7 @@ export default function ItemCatalogPage() {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
-  function resetForm() {
-    setEditingId(null);
-    setForm(INITIAL_FORM);
-  }
+  function resetForm() { setEditingId(null); setForm(INITIAL_FORM); }
 
   function startEdit(item: ItemRecord) {
     setEditingId(item.id);
@@ -117,245 +90,187 @@ export default function ItemCatalogPage() {
   }
 
   async function handleSave() {
-    if (!form.name.trim()) {
-      showToast(t("items.nameRequired"), "error");
-      return;
-    }
-
+    if (!form.name.trim()) { showToast(t("items.nameRequired"), "error"); return; }
     setSaving(true);
-
     try {
-      const payload = {
-        name: form.name,
-        hsnCode: form.hsnCode,
-        unit: form.unit,
-        rate: form.rate,
-        taxRate: form.taxRate,
-      };
-
-      const response = await fetch(
-        editingId ? `/api/items/${editingId}` : "/api/items",
-        {
-          method: editingId ? "PATCH" : "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(await readError(response));
-      }
-
+      const payload = { name: form.name, hsnCode: form.hsnCode, unit: form.unit, rate: form.rate, taxRate: form.taxRate };
+      const response = await fetch(editingId ? `/api/items/${editingId}` : "/api/items", {
+        method: editingId ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) throw new Error(await readError(response));
       await fetchItems();
       resetForm();
-      showToast(
-        editingId ? t("items.updated") : t("items.created"),
-        "success"
-      );
+      showToast(editingId ? t("items.updated") : t("items.created"), "success");
     } catch (error) {
-      showToast(
-        error instanceof Error ? error.message : "Failed to save item",
-        "error"
-      );
+      showToast(error instanceof Error ? error.message : "Failed to save item", "error");
     } finally {
       setSaving(false);
     }
   }
 
   async function handleDelete(itemId: string) {
-    if (!confirm(t("items.deleteConfirm"))) {
-      return;
-    }
-
+    if (!confirm(t("items.deleteConfirm"))) return;
     try {
-      const response = await fetch(`/api/items/${itemId}`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) {
-        throw new Error(await readError(response));
-      }
-
-      if (editingId === itemId) {
-        resetForm();
-      }
-
+      const response = await fetch(`/api/items/${itemId}`, { method: "DELETE" });
+      if (!response.ok) throw new Error(await readError(response));
+      if (editingId === itemId) resetForm();
       await fetchItems();
       showToast(t("items.deleted"), "success");
     } catch (error) {
-      showToast(
-        error instanceof Error ? error.message : "Failed to delete item",
-        "error"
-      );
+      showToast(error instanceof Error ? error.message : "Failed to delete item", "error");
     }
   }
 
   return (
-    <div className="animate-fade-in p-4 lg:p-8">
-      {toast && (
-        <div
-          className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${
-            toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
-          }`}
-        >
-          {toast.message}
-        </div>
-      )}
+    <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG }}>
+      {toast && <HKToast message={toast.message} type={toast.type} />}
 
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold">{t("items.title")}</h1>
-        <p className="mt-1 text-sm text-default-500">{t("items.subtitle")}</p>
-      </div>
+      <PageHeader
+        title={t("items.title")}
+        subtitle={t("items.subtitle")}
+        isMobile={isMobile}
+      />
 
-      <Card shadow="sm" className="mb-6">
-        <CardBody className="space-y-4 p-6">
-          <div className="flex items-center justify-between gap-3">
+      <div style={{ padding: isMobile ? "0 14px 80px" : "0 28px 80px", maxWidth: 1200, margin: "0 auto" }}>
+        {/* Add / Edit form */}
+        <HKCard style={{ marginBottom: 20 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
             <div>
-              <h2 className="text-lg font-semibold">
+              <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, margin: 0 }}>
                 {editingId ? t("items.edit") : t("items.add")}
-              </h2>
-              <p className="text-sm text-default-500">{t("items.hsnHelp")}</p>
+              </p>
+              <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG, marginTop: 4 }}>
+                {t("items.hsnHelp")}
+              </p>
             </div>
             {editingId && (
-              <Button variant="light" onPress={resetForm}>
+              <button
+                onClick={resetForm}
+                style={{
+                  padding: "8px 16px", borderRadius: 10,
+                  background: "var(--hk-badge)", border: "1px solid var(--hk-border)",
+                  color: "var(--hk-sub)", fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: 600, cursor: "pointer",
+                }}
+              >
                 {t("common.cancel")}
-              </Button>
+              </button>
             )}
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-            <Input
-              label={t("items.name")}
-              value={form.name}
-              onValueChange={(value) => updateForm("name", value)}
-              variant="bordered"
-            />
-            <Input
-              label={t("items.hsnCode")}
-              value={form.hsnCode}
-              onValueChange={(value) => updateForm("hsnCode", value)}
-              variant="bordered"
-            />
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(5, 1fr)", gap: 12, marginBottom: 16 }}>
+            <Input label={t("items.name")} value={form.name} onValueChange={(v) => updateForm("name", v)} variant="bordered" />
+            <Input label={t("items.hsnCode")} value={form.hsnCode} onValueChange={(v) => updateForm("hsnCode", v)} variant="bordered" />
             <Select
               label={t("items.unit")}
               selectedKeys={[form.unit]}
               onSelectionChange={(keys) => {
-                const nextValue = Array.from(keys)[0];
-                if (typeof nextValue === "string") {
-                  updateForm("unit", nextValue);
-                }
+                const v = Array.from(keys)[0];
+                if (typeof v === "string") updateForm("unit", v);
               }}
               variant="bordered"
             >
               {unitOptions.map((option) => (
                 <SelectItem key={option.key} textValue={option.label}>{option.label}</SelectItem>
               ))}
-
             </Select>
-            <Input
-              label={t("items.rate")}
-              type="number"
-              value={form.rate}
-              onValueChange={(value) => updateForm("rate", value)}
-              variant="bordered"
-            />
-            <Input
-              label={t("items.taxRate")}
-              type="number"
-              description={t("items.taxRateHelp")}
-              value={form.taxRate}
-              onValueChange={(value) => updateForm("taxRate", value)}
-              variant="bordered"
-            />
+            <Input label={t("items.rate")} type="number" value={form.rate} onValueChange={(v) => updateForm("rate", v)} variant="bordered" />
+            <Input label={t("items.taxRate")} type="number" description={t("items.taxRateHelp")} value={form.taxRate} onValueChange={(v) => updateForm("taxRate", v)} variant="bordered" />
           </div>
 
-          <div className="flex justify-end">
-            <Button
-              color="primary"
-              className="bg-gradient-to-r from-blue-600 to-indigo-600 font-semibold"
-              isLoading={saving}
-              onPress={handleSave}
-            >
-              {editingId ? t("common.update") : t("items.add")}
-            </Button>
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <GradientButton onClick={handleSave} disabled={saving}>
+              {saving ? "Saving..." : editingId ? t("common.update") : t("items.add")}
+            </GradientButton>
           </div>
-        </CardBody>
-      </Card>
+        </HKCard>
 
-      <Card shadow="sm">
-        <CardBody className="p-6">
+        {/* Items list */}
+        <HKCard>
           {loading ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map((index) => (
-                <Skeleton key={index} className="h-20 rounded-xl" />
-              ))}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {[1, 2, 3].map((i) => <Skeleton key={i} className="h-20 rounded-2xl" />)}
             </div>
           ) : items.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-divider px-6 py-12 text-center">
-              <p className="text-lg font-medium text-default-700">{t("items.empty")}</p>
-              <p className="mt-1 text-sm text-default-400">{t("items.emptyHint")}</p>
+            <div style={{ textAlign: "center", padding: "40px 20px", border: "2px dashed var(--hk-border)", borderRadius: 16 }}>
+              <p style={{ fontSize: TYPE.bodyLarge, fontWeight: 700, color: "var(--hk-sub)", fontFamily: SG }}>{t("items.empty")}</p>
+              <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG, marginTop: 6 }}>{t("items.emptyHint")}</p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {items.map((item) => (
                 <div
                   key={item.id}
-                  className="flex flex-col gap-4 rounded-2xl border border-divider bg-default-50/80 p-4 md:flex-row md:items-center md:justify-between"
+                  style={{
+                    display: "flex", flexDirection: isMobile ? "column" : "row",
+                    alignItems: isMobile ? "flex-start" : "center",
+                    justifyContent: "space-between",
+                    gap: 12, padding: "16px 20px", borderRadius: 14,
+                    background: "var(--hk-bg)", border: "1px solid var(--hk-border)",
+                  }}
                 >
-                  <div className="grid flex-1 gap-3 md:grid-cols-4">
+                  <div style={{ display: "grid", flex: 1, gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: 12 }}>
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-default-400">
+                      <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: "var(--hk-sub)", textTransform: "uppercase", letterSpacing: "0.5px", fontFamily: SG, marginBottom: 4 }}>
                         {t("items.name")}
                       </p>
-                      <p className="font-semibold">{item.name}</p>
+                      <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG }}>{item.name}</p>
                     </div>
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-default-400">
+                      <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: "var(--hk-sub)", textTransform: "uppercase", letterSpacing: "0.5px", fontFamily: SG, marginBottom: 4 }}>
                         {t("items.hsnCode")}
                       </p>
-                      <p>{item.hsnCode || "-"}</p>
+                      <p style={{ fontSize: TYPE.body, color: "var(--hk-text)", fontFamily: SG }}>{item.hsnCode || "—"}</p>
                     </div>
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-default-400">
+                      <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: "var(--hk-sub)", textTransform: "uppercase", letterSpacing: "0.5px", fontFamily: SG, marginBottom: 4 }}>
                         {t("items.unit")}
                       </p>
-                      <p>{item.unit}</p>
+                      <p style={{ fontSize: TYPE.body, color: "var(--hk-text)", fontFamily: SG }}>{item.unit}</p>
                     </div>
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-default-400">
+                      <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: "var(--hk-sub)", textTransform: "uppercase", letterSpacing: "0.5px", fontFamily: SG, marginBottom: 4 }}>
                         {t("items.rate")}
                       </p>
-                      <p>{formatCurrency(item.rate)}</p>
+                      <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", fontFamily: IN }}>{fmtFull(item.rate)}</p>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <div className="text-right text-sm text-default-500">
-                      <p>{t("items.taxRate")}</p>
-                      <p className="font-medium text-default-700">
-                        {item.taxRate != null
-                          ? `${item.taxRate}%`
-                          : t("items.useBusinessDefault")}
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                    <div style={{ textAlign: "right" }}>
+                      <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>{t("items.taxRate")}</p>
+                      <p style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG }}>
+                        {item.taxRate != null ? `${item.taxRate}%` : t("items.useBusinessDefault")}
                       </p>
                     </div>
-                    <Button size="sm" variant="flat" onPress={() => startEdit(item)}>
+                    <button
+                      onClick={() => startEdit(item)}
+                      style={{
+                        padding: "8px 14px", borderRadius: 10,
+                        background: "var(--hk-badge)", border: "1px solid var(--hk-border)",
+                        color: "var(--hk-text)", fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: 600, cursor: "pointer",
+                      }}
+                    >
                       {t("items.edit")}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="flat"
-                      color="danger"
-                      onPress={() => handleDelete(item.id)}
+                    </button>
+                    <button
+                      onClick={() => handleDelete(item.id)}
+                      style={{
+                        padding: "8px 14px", borderRadius: 10,
+                        background: OR + "12", border: `1px solid ${OR}33`,
+                        color: OR, fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: 600, cursor: "pointer",
+                      }}
                     >
                       {t("common.delete")}
-                    </Button>
+                    </button>
                   </div>
                 </div>
               ))}
             </div>
           )}
-        </CardBody>
-      </Card>
+        </HKCard>
+      </div>
     </div>
   );
 }

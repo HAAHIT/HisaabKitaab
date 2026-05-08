@@ -20,6 +20,7 @@ export async function GET(request: NextRequest) {
         name: true,
         type: true,
         accountNumber: true,
+        ifscCode: true,
         openingBalance: true,
         currentBalance: true,
         isDefault: true,
@@ -50,6 +51,7 @@ export async function POST(request: NextRequest) {
   let body: {
     name?: unknown;
     accountNumber?: unknown;
+    ifscCode?: unknown;
     openingBalance?: unknown;
     type?: unknown;
   };
@@ -65,8 +67,8 @@ export async function POST(request: NextRequest) {
   }
 
   const accountNumber = typeof body.accountNumber === "string" ? body.accountNumber.trim() : null;
+  const ifscCode = typeof body.ifscCode === "string" ? body.ifscCode.trim().toUpperCase() : null;
   const openingBalance = Number(body.openingBalance) || 0;
-  // Always BANK type for bank accounts created via onboarding
   const type = body.type === "CASH" ? "CASH" as const : "BANK" as const;
 
   try {
@@ -84,12 +86,13 @@ export async function POST(request: NextRequest) {
         name,
         type,
         accountNumber: accountNumber || null,
+        ifscCode: ifscCode || null,
         openingBalance,
         currentBalance: openingBalance,
         createdBy: userId,
         updatedAt: new Date(),
       },
-      select: { id: true, name: true, type: true, accountNumber: true, openingBalance: true },
+      select: { id: true, name: true, type: true, accountNumber: true, ifscCode: true, openingBalance: true },
     });
 
     return NextResponse.json({ account }, { status: 201 });

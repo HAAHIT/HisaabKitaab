@@ -242,6 +242,7 @@ export async function GET(request: NextRequest) {
     }
 
     const BATCH_SIZE = 50;
+    const CONCURRENCY = 10;
 
     async function importVoucher(
       voucher: (typeof vouchers)[number]
@@ -325,20 +326,25 @@ export async function GET(request: NextRequest) {
 
     const allVouchers = [...vouchersWithRemoteId, ...vouchersWithoutRemoteId];
     
-    // Process in batches sequentially to avoid deadlocks on shared party rows.
-    // Promise.allSettled was replaced: 50 parallel transactions caused lock
-    // contention when multiple vouchers referenced the same party.
+    // Process vouchers in parallel chunks of CONCURRENCY within each BATCH_SIZE window.
+    // Party upsert contention is gone — all names are pre-resolved into partyCache before
+    // this loop, so resolvePartyId() is a pure cache hit inside importVoucher. Each
+    // transaction only INSERTs (JournalEntry + JournalLine + AuditLog), so there is no
+    // shared-row contention between parallel vouchers.
     for (let i = 0; i < allVouchers.length; i += BATCH_SIZE) {
       const batch = allVouchers.slice(i, i + BATCH_SIZE);
 
-      for (const voucher of batch) {
-        try {
-          const result = await importVoucher(voucher);
-          if (result === "skipped") skipped++;
-          else if (result === "imported") imported++;
-          else failed++; // result is an Error object
-        } catch {
-          failed++;
+      for (let j = 0; j < batch.length; j += CONCURRENCY) {
+        const chunk = batch.slice(j, j + CONCURRENCY);
+        const results = await Promise.allSettled(chunk.map(importVoucher));
+        for (const r of results) {
+          if (r.status === "fulfilled") {
+            if (r.value === "skipped") skipped++;
+            else if (r.value === "imported") imported++;
+            else failed++;
+          } else {
+            failed++;
+          }
         }
       }
 
@@ -368,14 +374,15 @@ export async function GET(request: NextRequest) {
     // Runs AFTER the job is marked COMPLETED so import success is not
     // blocked by a balance recompute failure.
     const affectedPartyIds = [...new Set(partyCache.values())];
-    for (const pid of affectedPartyIds) {
-      try {
-        await recomputePartyBalance(null, pid, tid);
-      } catch (err) {
-        // Log but don't fail the import — balance can be recomputed on-demand
-        logError("import.party-balance.error", { pid, jobId: job.id, error: err });
-      }
-    }
+    await Promise.allSettled(
+      affectedPartyIds.map(async (pid) => {
+        try {
+          await recomputePartyBalance(null, pid, tid);
+        } catch (err) {
+          logError("import.party-balance.error", { pid, jobId: job.id, error: err });
+        }
+      })
+    );
 
     return NextResponse.json({
       jobId: job.id,

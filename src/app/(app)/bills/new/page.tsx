@@ -1,13 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  Chip,
-  Divider,
   Input,
   Select,
   SelectItem,
@@ -19,7 +14,11 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { evaluateRow, type ColumnDef } from "@/lib/formula";
 import { GST_STATE_CODES } from "@/lib/gst-states";
 import { deriveIsInterState, extractGstinStateCode } from "@/lib/gst-helpers";
-
+import {
+  OR, GR, AM, PU, SG, IN, TYPE, TOUCH,
+  HKCard, HKToast, PageHeader, GradientButton,
+  fmtFull, useIsMobile,
+} from "@/components/ui/hk-design";
 
 interface Template {
   id: string;
@@ -36,32 +35,16 @@ interface CatalogItem {
   taxRate: number | null;
 }
 
-
-
 function formatCurrency(value: number) {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 2,
-  }).format(value);
+  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(value);
 }
 
 function formatColumnValue(columnName: string, value: number) {
   const lower = columnName.toLowerCase();
-  const isCurrency =
-    lower.includes("rate") ||
-    lower.includes("price") ||
-    lower.includes("amount") ||
-    lower.includes("total") ||
-    lower.includes("rs");
-
-  if (isCurrency) {
-    return formatCurrency(value);
-  }
-
-  return new Intl.NumberFormat("en-IN", {
-    maximumFractionDigits: 2,
-  }).format(value);
+  const isCurrency = lower.includes("rate") || lower.includes("price") || lower.includes("amount") || lower.includes("total") || lower.includes("rs");
+  return isCurrency
+    ? formatCurrency(value)
+    : new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(value);
 }
 
 async function readError(response: Response) {
@@ -76,23 +59,41 @@ function buildEmptyRow(template: Template) {
   }, {});
 }
 
+// ─── Section card wrapper ─────────────────────────────────────────────────────
+
+function Section({ title, action, children }: { title?: string; action?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <HKCard style={{ marginBottom: 16, padding: 0, overflow: "visible" }}>
+      {(title || action) && (
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "16px 20px 12px", borderBottom: "1px solid var(--hk-border)",
+        }}>
+          {title && <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG }}>{title}</p>}
+          {action}
+        </div>
+      )}
+      <div style={{ padding: 20 }}>{children}</div>
+    </HKCard>
+  );
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export default function NewBillPage() {
   const router = useRouter();
   const { t } = useLanguage();
+  const isMobile = useIsMobile();
 
   const [templates, setTemplates] = useState<Template[]>([]);
   const [parties, setParties] = useState<PartyOption[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [defaultTemplateId, setDefaultTemplateId] = useState<string | null>(null);
-  // Only show the template picker when the user explicitly clicks "Change Template"
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [savingAs, setSavingAs] = useState<"DRAFT" | "FINAL" | null>(null);
   const [errors, setErrors] = useState<Record<string, boolean>>({});
-  const [toast, setToast] = useState<{
-    message: string;
-    type: "success" | "error";
-  } | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const searchParams = useSearchParams();
   const preselectedPartyId = searchParams.get("partyId");
@@ -102,15 +103,15 @@ export default function NewBillPage() {
   const [isInterState, setIsInterState] = useState(false);
   const [placeOfSupply, setPlaceOfSupply] = useState("");
   const [hsnPerRow, setHsnPerRow] = useState(false);
-
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("");
   const [didAutoFocusRow, setDidAutoFocusRow] = useState(false);
   const [companyGstin, setCompanyGstin] = useState("");
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
   const [autoFocusedRow, setAutoFocusedRow] = useState<number | null>(null);
+  const nameInputRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
 
-  // Lock GST controls whenever the selected party has a GSTIN — auto-fill takes over
   const gstIsLocked = Boolean(selectedParty?.gstin);
 
   const fetchFormData = useCallback(async () => {
@@ -122,18 +123,15 @@ export default function NewBillPage() {
         fetch("/api/settings"),
         fetch("/api/items"),
       ]);
-
       const [templatesData, partiesData, settingsData, itemsData] = await Promise.all([
         templatesResponse.json().catch(() => ({ templates: [] })),
         partiesResponse.json().catch(() => ({ parties: [] })),
         settingsResponse.json().catch(() => ({ settings: null })),
         itemsResponse.json().catch(() => ({ items: [] })),
       ]);
-
       setTemplates(templatesData.templates || []);
       setParties((partiesData.parties || []) as PartyOption[]);
       setCatalogItems(itemsData.items || []);
-
       if (settingsData.settings) {
         setTaxPercent(settingsData.settings.defaultTaxPercent || 18);
         setTerms(settingsData.settings.defaultTerms || "");
@@ -141,15 +139,13 @@ export default function NewBillPage() {
         setCompanyGstin(settingsData.settings.companyGstin || "");
       }
     } catch {
-      showToast("Failed to load bill form data", "error");
+      showToast("Form data load nahi hua", "error");
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    fetchFormData();
-  }, [fetchFormData]);
+  useEffect(() => { fetchFormData(); }, [fetchFormData]);
 
   useEffect(() => {
     if (preselectedPartyId && parties.length > 0 && !selectedParty) {
@@ -165,10 +161,7 @@ export default function NewBillPage() {
 
   const selectTemplate = useCallback((templateId: string) => {
     const template = templates.find((item) => item.id === templateId);
-    if (!template) {
-      return;
-    }
-
+    if (!template) return;
     setSelectedTemplate(template);
     setRows([buildEmptyRow(template)]);
     setTemplatePickerOpen(false);
@@ -176,194 +169,118 @@ export default function NewBillPage() {
 
   useEffect(() => {
     if (selectedTemplate || templates.length === 0) return;
-    // Use the saved default if it exists and is valid
     if (defaultTemplateId) {
       const found = templates.find((t) => t.id === defaultTemplateId);
       if (found) { selectTemplate(found.id); return; }
     }
-    // No default configured — silently pick the first template so the
-    // user lands directly on the bill form (they can still change via
-    // the "Change Template" button that appears once a template is active)
     selectTemplate(templates[0].id);
   }, [selectTemplate, selectedTemplate, templates, defaultTemplateId]);
 
   function addRow() {
-    if (!selectedTemplate) {
-      return;
-    }
-
-    setRows((currentRows) => [...currentRows, buildEmptyRow(selectedTemplate)]);
+    if (!selectedTemplate) return;
+    setRows((prev) => [...prev, buildEmptyRow(selectedTemplate)]);
   }
 
   function removeRow(index: number) {
-    if (rows.length <= 1) {
-      return;
-    }
-
-    setRows((currentRows) => currentRows.filter((_, rowIndex) => rowIndex !== index));
+    if (rows.length <= 1) return;
+    setRows((prev) => prev.filter((_, i) => i !== index));
   }
 
   function updateCell(rowIndex: number, columnId: string, value: string) {
     setRows((currentRows) => {
       const nextRows = [...currentRows];
       const column = selectedTemplate?.columns.find((item) => item.id === columnId);
-
       if (column?.type === "number") {
         nextRows[rowIndex][columnId] = value === "" ? 0 : Number.parseFloat(value) || 0;
       } else {
         nextRows[rowIndex][columnId] = value;
       }
-
-      if (selectedTemplate) {
-        nextRows[rowIndex] = evaluateRow(nextRows[rowIndex], selectedTemplate.columns);
-      }
-
+      if (selectedTemplate) nextRows[rowIndex] = evaluateRow(nextRows[rowIndex], selectedTemplate.columns);
       return nextRows;
     });
   }
 
   function updateRowHsn(rowIndex: number, value: string) {
-    setRows((currentRows) => {
-      const nextRows = [...currentRows];
-      nextRows[rowIndex] = { ...nextRows[rowIndex], _hsnCode: value };
-      return nextRows;
+    setRows((prev) => {
+      const next = [...prev];
+      next[rowIndex] = { ...next[rowIndex], _hsnCode: value };
+      return next;
     });
   }
 
-
   const firstEditableColumnId = useMemo(() => {
-    if (!selectedTemplate) {
-      return null;
-    }
-
-    return (
-      selectedTemplate.columns.find((column) => column.type !== "formula")?.id ?? null
-    );
+    if (!selectedTemplate) return null;
+    return selectedTemplate.columns.find((column) => column.type !== "formula")?.id ?? null;
   }, [selectedTemplate]);
 
   const nameColId = useMemo(() => {
     if (!selectedTemplate) return null;
     const nameHints = ["name", "item", "description", "desc", "product", "particulars", "detail"];
-    const byHint = selectedTemplate.columns.find(
-      (c) => c.type === "text" && nameHints.some((h) => c.name.toLowerCase().includes(h))
-    );
-    if (byHint) return byHint.id;
-    return selectedTemplate.columns.find((c) => c.type === "text")?.id ?? null;
+    const byHint = selectedTemplate.columns.find((c) => c.type === "text" && nameHints.some((h) => c.name.toLowerCase().includes(h)));
+    return byHint ? byHint.id : selectedTemplate.columns.find((c) => c.type === "text")?.id ?? null;
   }, [selectedTemplate]);
 
   const rateColId = useMemo(() => {
     if (!selectedTemplate) return null;
     const taxHints = ["tax rate", "tax%", "gst rate", "gst%", "gst"];
     const rateHints = ["rate", "price", "mrp", "unit price", "unit rate"];
-    // Exclude columns that are tax-rate columns
-    const byHint = selectedTemplate.columns.find(
-      (c) =>
-        c.type === "number" &&
-        !taxHints.some((h) => c.name.toLowerCase().includes(h)) &&
-        rateHints.some((h) => c.name.toLowerCase().includes(h))
-    );
-    return byHint?.id ?? null;
+    return selectedTemplate.columns.find((c) => c.type === "number" && !taxHints.some((h) => c.name.toLowerCase().includes(h)) && rateHints.some((h) => c.name.toLowerCase().includes(h)))?.id ?? null;
   }, [selectedTemplate]);
 
   const qtyColId = useMemo(() => {
     if (!selectedTemplate) return null;
     const qtyHints = ["qty", "quantity", "nos", "pcs", "count", "units"];
-    return (
-      selectedTemplate.columns.find(
-        (c) => c.type === "number" && qtyHints.some((h) => c.name.toLowerCase().includes(h))
-      )?.id ?? null
-    );
+    return selectedTemplate.columns.find((c) => c.type === "number" && qtyHints.some((h) => c.name.toLowerCase().includes(h)))?.id ?? null;
   }, [selectedTemplate]);
 
   const hsnColId = useMemo(() => {
     if (!selectedTemplate) return null;
     const hsnHints = ["hsn", "sac"];
-    return (
-      selectedTemplate.columns.find(
-        (c) => c.type === "text" && hsnHints.some((h) => c.name.toLowerCase().includes(h))
-      )?.id ?? null
-    );
+    return selectedTemplate.columns.find((c) => c.type === "text" && hsnHints.some((h) => c.name.toLowerCase().includes(h)))?.id ?? null;
   }, [selectedTemplate]);
 
   const taxRateColId = useMemo(() => {
     if (!selectedTemplate) return null;
     const taxHints = ["tax rate", "tax%", "gst rate", "gst%", "gst"];
-    return (
-      selectedTemplate.columns.find(
-        (c) => c.type === "number" && taxHints.some((h) => c.name.toLowerCase().includes(h))
-      )?.id ?? null
-    );
+    return selectedTemplate.columns.find((c) => c.type === "number" && taxHints.some((h) => c.name.toLowerCase().includes(h)))?.id ?? null;
   }, [selectedTemplate]);
 
   const { subtotal, taxAmount, grandTotal } = useMemo(() => {
-    if (!selectedTemplate) {
-      return { subtotal: 0, taxAmount: 0, grandTotal: 0 };
-    }
-
-    const lastValueColumn = [...selectedTemplate.columns]
-      .reverse()
-      .find((column) => column.type === "formula" || column.type === "number");
-
-    if (!lastValueColumn) {
-      return { subtotal: 0, taxAmount: 0, grandTotal: 0 };
-    }
-
-    // When per-line tax rate exists, derive subtotal from rate×qty directly so
-    // it's always the pre-tax base regardless of what the Taxable formula computes.
+    if (!selectedTemplate) return { subtotal: 0, taxAmount: 0, grandTotal: 0 };
+    const lastValueColumn = [...selectedTemplate.columns].reverse().find((c) => c.type === "formula" || c.type === "number");
+    if (!lastValueColumn) return { subtotal: 0, taxAmount: 0, grandTotal: 0 };
     const nextSubtotal = taxRateColId
-      ? Math.round(
-          rows.reduce((sum, row) => {
-            const rate = typeof row[rateColId ?? ""] === "number" ? (row[rateColId ?? ""] as number) : 0;
-            const qty = typeof row[qtyColId ?? ""] === "number" ? (row[qtyColId ?? ""] as number) : 0;
-            return sum + rate * qty;
-          }, 0) * 100
-        ) / 100
+      ? Math.round(rows.reduce((sum, row) => {
+          const rate = typeof row[rateColId ?? ""] === "number" ? (row[rateColId ?? ""] as number) : 0;
+          const qty = typeof row[qtyColId ?? ""] === "number" ? (row[qtyColId ?? ""] as number) : 0;
+          return sum + rate * qty;
+        }, 0) * 100) / 100
       : rows.reduce((sum, row) => {
-          const value =
-            typeof row[lastValueColumn.id] === "number"
-              ? (row[lastValueColumn.id] as number)
-              : 0;
+          const value = typeof row[lastValueColumn.id] === "number" ? (row[lastValueColumn.id] as number) : 0;
           return sum + value;
         }, 0);
-
     const nextTaxAmount = taxRateColId
-      ? Math.round(
-          rows.reduce((sum, row) => {
-            const rate = typeof row[rateColId ?? ""] === "number" ? (row[rateColId ?? ""] as number) : 0;
-            const qty = typeof row[qtyColId ?? ""] === "number" ? (row[qtyColId ?? ""] as number) : 0;
-            const taxRate = typeof row[taxRateColId] === "number" ? (row[taxRateColId] as number) : 0;
-            return sum + (rate * qty * taxRate) / 100;
-          }, 0) * 100
-        ) / 100
+      ? Math.round(rows.reduce((sum, row) => {
+          const rate = typeof row[rateColId ?? ""] === "number" ? (row[rateColId ?? ""] as number) : 0;
+          const qty = typeof row[qtyColId ?? ""] === "number" ? (row[qtyColId ?? ""] as number) : 0;
+          const taxRate = typeof row[taxRateColId] === "number" ? (row[taxRateColId] as number) : 0;
+          return sum + (rate * qty * taxRate) / 100;
+        }, 0) * 100) / 100
       : Math.round(((nextSubtotal * taxPercent) / 100) * 100) / 100;
     const nextGrandTotal = Math.round((nextSubtotal + nextTaxAmount) * 100) / 100;
-
-    return {
-      subtotal: nextSubtotal,
-      taxAmount: nextTaxAmount,
-      grandTotal: nextGrandTotal,
-    };
+    return { subtotal: nextSubtotal, taxAmount: nextTaxAmount, grandTotal: nextGrandTotal };
   }, [rows, selectedTemplate, taxPercent, taxRateColId, rateColId, qtyColId]);
 
   const autoFilteredItems = useMemo(() => {
     if (autoFocusedRow === null || !nameColId) return [];
     const query = String(rows[autoFocusedRow]?.[nameColId] || "").toLowerCase().trim();
-    const results = query
-      ? catalogItems.filter(
-          (i) =>
-            i.name.toLowerCase().includes(query) ||
-            (i.hsnCode && i.hsnCode.toLowerCase().includes(query))
-        )
-      : catalogItems;
+    const results = query ? catalogItems.filter((i) => i.name.toLowerCase().includes(query) || (i.hsnCode && i.hsnCode.toLowerCase().includes(query))) : catalogItems;
     return results.slice(0, 10);
   }, [autoFocusedRow, rows, nameColId, catalogItems]);
 
   function applyCatalogItem(rowIndex: number, itemId: string) {
     const item = catalogItems.find((i) => i.id === itemId);
     if (!item || !selectedTemplate) return;
-
-    // Build and evaluate the row using the current render snapshot — avoids
-    // stale-closure issues when this setRows is batched with another setRows call.
     const base = { ...rows[rowIndex] };
     if (nameColId) base[nameColId] = item.name;
     if (rateColId) base[rateColId] = Number(item.rate);
@@ -372,73 +289,46 @@ export default function NewBillPage() {
     if (taxRateColId && item.taxRate !== null) base[taxRateColId] = Number(item.taxRate);
     base._hsnCode = item.hsnCode ?? "";
     const evaluatedRow = evaluateRow(base, selectedTemplate.columns);
-
-    setRows((prev) => {
-      const next = [...prev];
-      next[rowIndex] = evaluatedRow;
-      return next;
-    });
+    setRows((prev) => { const next = [...prev]; next[rowIndex] = evaluatedRow; return next; });
     if (item.taxRate !== null) setTaxPercent(Number(item.taxRate));
     if (item.hsnCode && !hsnColId) setHsnPerRow(true);
   }
 
-  useEffect(() => {
-    setDidAutoFocusRow(false);
-  }, [selectedParty?.id, selectedTemplate?.id]);
+  useEffect(() => { setDidAutoFocusRow(false); }, [selectedParty?.id, selectedTemplate?.id]);
 
   useEffect(() => {
-    if (!selectedParty || !selectedTemplate || rows.length === 0 || didAutoFocusRow) {
-      return;
-    }
-
+    if (!selectedParty || !selectedTemplate || rows.length === 0 || didAutoFocusRow) return;
     const focusTimer = window.setTimeout(() => {
-      const target = document.querySelector<
-        HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement
-      >(
+      const target = document.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement>(
         '[data-bill-focus-target="true"] input, [data-bill-focus-target="true"] textarea, [data-bill-focus-target="true"] button'
       );
-
       target?.focus();
       setDidAutoFocusRow(true);
     }, 0);
-
     return () => window.clearTimeout(focusTimer);
   }, [didAutoFocusRow, rows.length, selectedParty, selectedTemplate]);
 
   async function handleSave(status: "DRAFT" | "FINAL") {
     const mainScroll = document.querySelector("main");
-
     if (!selectedTemplate) {
-      showToast("Please select a template", "error");
+      showToast("Pehle template select karo", "error");
       mainScroll?.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
-
     const formErrors: Record<string, boolean> = {};
-    if (!selectedParty) {
-      formErrors.partyId = true;
-    }
-    if (status === "FINAL" && !placeOfSupply) {
-      formErrors.placeOfSupply = true;
-    }
-
+    if (!selectedParty) formErrors.partyId = true;
+    if (status === "FINAL" && !placeOfSupply) formErrors.placeOfSupply = true;
     if (Object.keys(formErrors).length > 0) {
       setErrors(formErrors);
-      showToast("Please fill in required fields (Place of Supply is mandatory for final bills)", "error");
+      showToast("Required fields fill karo (Place of Supply final bills ke liye zaroori hai)", "error");
       mainScroll?.scrollTo({ top: 0, behavior: "smooth" });
       window.setTimeout(() => setErrors({}), 3000);
       return;
     }
-
     const currentParty = selectedParty;
-    if (!currentParty) {
-      showToast("Please select a party", "error");
-      return;
-    }
-
+    if (!currentParty) { showToast("Party select karo", "error"); return; }
     setErrors({});
     setSavingAs(status);
-
     try {
       const response = await fetch("/api/bills", {
         method: "POST",
@@ -450,12 +340,7 @@ export default function NewBillPage() {
           customerPhone: currentParty.phone || null,
           customerAddress: currentParty.address || null,
           gstin: currentParty.gstin || null,
-          rows,
-          subtotal,
-          taxPercent,
-          taxAmount,
-          grandTotal,
-          isInterState,
+          rows, subtotal, taxPercent, taxAmount, grandTotal, isInterState,
           placeOfSupply: placeOfSupply || null,
           hsnCode: null,
           notes: notes.trim() || null,
@@ -463,323 +348,281 @@ export default function NewBillPage() {
           status,
         }),
       });
-
-      if (!response.ok) {
-        throw new Error(await readError(response));
-      }
-
+      if (!response.ok) throw new Error(await readError(response));
       const data = await response.json();
-      showToast(status === "FINAL" ? "Bill created" : "Draft saved", "success");
+      showToast(status === "FINAL" ? "Bill ban gaya!" : "Draft save ho gaya", "success");
       window.setTimeout(() => router.push(`/bills/${data.bill.id}`), 700);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Failed to save bill", "error");
+      showToast(error instanceof Error ? error.message : "Bill save nahi hua", "error");
     } finally {
       setSavingAs(null);
     }
   }
 
+  // ── Render ──────────────────────────────────────────────────────────────────
+
   return (
-    <>
-      {toast && (
-        <div
-          className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${
-            toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
-          }`}
-        >
-          {toast.message}
-        </div>
-      )}
+    <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG }}>
+      {toast && <HKToast message={toast.message} type={toast.type} />}
 
-      <div className="animate-fade-in p-4 lg:p-8">
-        <div className="mb-6 flex items-center gap-3">
-          <Button
-            isIconOnly
-            variant="light"
-            aria-label="Back to bills"
-            onPress={() => router.push("/bills")}
+      <PageHeader
+        title="Naya Bill"
+        subtitle="Customer select karo, items bharo"
+        isMobile={isMobile}
+        action={
+          <button
+            onClick={() => router.push("/bills")}
+            style={{
+              height: TOUCH.secondary, padding: "0 16px",
+              borderRadius: 12, border: "1.5px solid var(--hk-border)",
+              background: "var(--hk-card)", color: "var(--hk-sub)",
+              fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG,
+              cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+            }}
           >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                d="M10 19l-7-7m0 0l7-7m-7 7h18"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-              />
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5M12 5l-7 7 7 7" />
             </svg>
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold">{t("bills.new")}</h1>
-            <p className="mt-1 text-sm text-default-500">
-              Choose a real party record first, then confirm the invoice snapshot.
-            </p>
-          </div>
-        </div>
+            Bills
+          </button>
+        }
+      />
 
-        {/* Template picker — only shown when user explicitly requests a change,
-            or when there are genuinely no templates yet (first-run empty state) */}
+      <div style={{ padding: isMobile ? "0 14px 100px" : "0 28px 60px", maxWidth: 1100, margin: "0 auto" }}>
+
+        {/* ── Template picker ──────────────────────────────────────────────── */}
         {(templatePickerOpen || (!loading && !selectedTemplate && templates.length === 0)) && (
-          <Card shadow="sm" className="mb-6">
-            <CardBody className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold">Choose Template</h2>
-                {templatePickerOpen && (
-                  <Button size="sm" variant="light" onPress={() => setTemplatePickerOpen(false)}>
-                    Cancel
-                  </Button>
-                )}
-              </div>
-              {loading ? (
-                <p className="text-default-400">Loading templates...</p>
-              ) : templates.length === 0 ? (
-                <div className="py-8 text-center">
-                  <p className="text-default-500">No templates found</p>
-                  <Button
-                    size="sm"
-                    variant="flat"
-                    color="primary"
-                    className="mt-2"
-                    onPress={() => router.push("/settings/templates/new")}
-                  >
-                    Create Template First
-                  </Button>
-                </div>
-              ) : (
-                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                  {templates.map((template) => (
-                    <button
-                      key={template.id}
-                      type="button"
-                      onClick={() => selectTemplate(template.id)}
-                      className="group relative w-full rounded-2xl border border-default-200 bg-content1 p-4 text-left transition-all duration-300 hover:-translate-y-0.5 hover:border-primary-300/60 hover:bg-primary-500/[0.04] hover:shadow-[0_12px_28px_-20px_rgba(59,130,246,0.9)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="rounded-xl bg-primary-100 p-3 text-primary transition-colors group-hover:bg-primary group-hover:text-white group-hover:shadow-lg group-hover:shadow-primary/30 dark:bg-primary/15 dark:text-primary-300">
-                          <svg
-                            aria-hidden="true"
-                            className="h-5 w-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              d="M9 12h6m-6 4h6M8 4h8a2 2 0 012 2v12a2 2 0 01-2 2H8a2 2 0 01-2-2V6a2 2 0 012-2z"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={1.8}
-                            />
-                          </svg>
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-base font-semibold text-default-900 dark:text-default-100">
-                            {template.name}
-                          </p>
-                          <p className="mt-1 text-xs text-default-500">
-                            {template.columns.length} column{template.columns.length === 1 ? "" : "s"}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-1">
-                        {template.columns.map((column) => (
-                          <Chip
-                            key={column.id}
-                            size="sm"
-                            variant="flat"
-                            color={
-                              column.type === "formula"
-                                ? "warning"
-                                : column.type === "number"
-                                  ? "primary"
-                                  : "default"
-                            }
-                          >
-                            {column.name}
-                          </Chip>
-                        ))}
-                      </div>
-                    </button>
-                  ))}
-                </div>
+          <HKCard style={{ marginBottom: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG }}>Template Choose Karo</p>
+              {templatePickerOpen && (
+                <button
+                  onClick={() => setTemplatePickerOpen(false)}
+                  style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", background: "none", border: "none", cursor: "pointer", fontFamily: SG }}
+                >
+                  Cancel
+                </button>
               )}
-            </CardBody>
-          </Card>
+            </div>
+            {loading ? (
+              <p style={{ color: "var(--hk-sub)", fontSize: TYPE.body }}>Templates load ho rahe hain...</p>
+            ) : templates.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "32px 0" }}>
+                <p style={{ color: "var(--hk-sub)", marginBottom: 12, fontSize: TYPE.body }}>Koi template nahi mila</p>
+                <GradientButton onClick={() => router.push("/settings/templates/new")}>Template Banao</GradientButton>
+              </div>
+            ) : (
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
+                {templates.map((template) => (
+                  <button
+                    key={template.id}
+                    type="button"
+                    onClick={() => selectTemplate(template.id)}
+                    style={{
+                      padding: "16px", borderRadius: 14,
+                      border: "1.5px solid var(--hk-border)",
+                      background: "var(--hk-card)", textAlign: "left",
+                      cursor: "pointer", transition: "border-color 0.15s",
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = PU; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--hk-border)"; }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                      <div style={{ width: 36, height: 36, borderRadius: 10, background: PU + "18", display: "flex", alignItems: "center", justifyContent: "center", color: PU }}>
+                        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M9 12h6m-6 4h6M8 4h8a2 2 0 012 2v12a2 2 0 01-2 2H8a2 2 0 01-2-2V6a2 2 0 012-2z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG }}>{template.name}</p>
+                        <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", marginTop: 2 }}>{template.columns.length} columns</p>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                      {template.columns.map((col) => (
+                        <span key={col.id} style={{
+                          fontSize: 10, fontWeight: 600, fontFamily: SG,
+                          padding: "2px 7px", borderRadius: 6,
+                          background: col.type === "formula" ? AM + "18" : col.type === "number" ? PU + "18" : "var(--hk-badge)",
+                          color: col.type === "formula" ? AM : col.type === "number" ? PU : "var(--hk-sub)",
+                          border: `1px solid ${col.type === "formula" ? AM + "30" : col.type === "number" ? PU + "30" : "var(--hk-border)"}`,
+                        }}>
+                          {col.name}
+                        </span>
+                      ))}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </HKCard>
         )}
 
         {selectedTemplate && (
           <>
-            <div className="mb-4 flex items-center gap-2">
-              <Chip size="sm" color="primary" variant="flat">
+            {/* Active template indicator */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+              <span style={{
+                fontSize: TYPE.bodySmall, fontWeight: 700, fontFamily: SG,
+                padding: "4px 12px", borderRadius: 20,
+                background: PU + "18", color: PU,
+                border: `1px solid ${PU}30`,
+              }}>
                 {selectedTemplate.name}
-              </Chip>
-              <Button
-                size="sm"
-                variant="light"
-                onPress={() => setTemplatePickerOpen(true)}
+              </span>
+              <button
+                onClick={() => setTemplatePickerOpen(true)}
+                style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", background: "none", border: "none", cursor: "pointer", fontFamily: SG, fontWeight: 600 }}
               >
                 Change Template
-              </Button>
+              </button>
             </div>
 
-            <Card shadow="sm" className="mb-6">
-              <CardHeader className="px-6 pt-6 pb-0">
-                <h2 className="text-lg font-semibold">{t("bills.billTo")}</h2>
-              </CardHeader>
-              <CardBody className="p-6">
-                <PartySearch
-                  value={selectedParty?.id || null}
-                  onChange={(party) => {
-                    setSelectedParty(party);
-                    if (party) {
-                      setErrors((prev) => ({ ...prev, partyId: false }));
-                      if (party.gstin) {
-                        const stateCode = extractGstinStateCode(party.gstin);
-                        if (stateCode && GST_STATE_CODES[stateCode]) {
-                          setPlaceOfSupply(stateCode);
-                        }
-                        setIsInterState(deriveIsInterState(party.gstin, companyGstin));
-                      } else {
-                        setPlaceOfSupply("");
-                        setIsInterState(false);
-                      }
+            {/* ── Party / Bill To ────────────────────────────────────────── */}
+            <Section title="Bill Kisko?">
+              <PartySearch
+                value={selectedParty?.id || null}
+                onChange={(party) => {
+                  setSelectedParty(party);
+                  if (party) {
+                    setErrors((prev) => ({ ...prev, partyId: false }));
+                    if (party.gstin) {
+                      const stateCode = extractGstinStateCode(party.gstin);
+                      if (stateCode && GST_STATE_CODES[stateCode]) setPlaceOfSupply(stateCode);
+                      setIsInterState(deriveIsInterState(party.gstin, companyGstin));
                     } else {
                       setPlaceOfSupply("");
                       setIsInterState(false);
                     }
-                  }}
-                  partyType="CUSTOMER"
-                  placeholder={t("bills.selectCustomer")}
-                  autoFocus={!selectedParty}
-                  isInvalid={Boolean(errors.partyId)}
-                />
+                  } else {
+                    setPlaceOfSupply("");
+                    setIsInterState(false);
+                  }
+                }}
+                partyType="CUSTOMER"
+                placeholder={t("bills.selectCustomer")}
+                autoFocus={!selectedParty}
+                isInvalid={Boolean(errors.partyId)}
+              />
 
-                {selectedParty && (
-                  <div className="mt-4 rounded-xl bg-default-50 dark:bg-default-100/5 p-4 border border-default-200 animate-slide-up">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-semibold text-lg">{selectedParty.name}</h3>
-                      <Button
-                        size="sm"
-                        variant="light"
-                        onPress={() => setSelectedParty(null)}
-                      >
-                        {t("common.change")}
-                      </Button>
-                    </div>
-                    
-                    <div className="space-y-1 text-sm text-default-500">
-                      {selectedParty.phone && (
-                        <p className="flex items-center gap-2">
-                          <span>📱</span> {selectedParty.phone}
-                        </p>
-                      )}
-                      {selectedParty.address && (
-                        <p className="flex items-center gap-2">
-                          <span>📍</span> {selectedParty.address}
-                        </p>
-                      )}
-                      {selectedParty.gstin && (
-                        <p className="flex items-center gap-2">
-                          <span className="text-xs font-mono font-bold tracking-widest text-default-400">GST</span> {selectedParty.gstin}
-                        </p>
-                      )}
-                    </div>
-                    
-                    {selectedParty.currentBalance !== 0 && (
-                      <div className={`mt-3 pt-3 border-t border-default-200 text-sm font-medium flex items-center gap-2 ${
-                        selectedParty.currentBalance < 0 ? "text-success" : "text-danger"
-                      }`}>
-                        <div className={`w-2 h-2 rounded-full ${selectedParty.currentBalance < 0 ? "bg-success" : "bg-danger"}`} />
-                        {selectedParty.currentBalance < 0
-                          ? `To Get: ₹${Math.abs(selectedParty.currentBalance).toLocaleString("en-IN")}`
-                          : `To Pay: ₹${selectedParty.currentBalance.toLocaleString("en-IN")}`
-                        }
-                      </div>
+              {selectedParty && (
+                <div style={{
+                  marginTop: 14, padding: "14px 16px", borderRadius: 12,
+                  background: "var(--hk-badge)", border: "1px solid var(--hk-border)",
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                    <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG }}>{selectedParty.name}</p>
+                    <button
+                      onClick={() => setSelectedParty(null)}
+                      style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", background: "none", border: "none", cursor: "pointer", fontFamily: SG, fontWeight: 600 }}
+                    >
+                      {t("common.change")}
+                    </button>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    {selectedParty.phone && (
+                      <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG }}>📱 {selectedParty.phone}</p>
+                    )}
+                    {selectedParty.address && (
+                      <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG }}>📍 {selectedParty.address}</p>
+                    )}
+                    {selectedParty.gstin && (
+                      <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: IN }}>GST: {selectedParty.gstin}</p>
                     )}
                   </div>
-                )}
-              </CardBody>
-            </Card>
-
-            <Card shadow="sm" className="mb-6">
-              <CardHeader className="flex items-center justify-between px-6 pt-6 pb-0">
-                <div className="flex flex-wrap items-center gap-3">
-                  <h2 className="text-lg font-semibold">Line Items</h2>
-                  <Chip size="sm" variant="flat" color="default">
-                    Subtotal {formatCurrency(subtotal)}
-                  </Chip>
-                  <Chip size="sm" variant="flat" color="primary">
-                    Total {formatCurrency(grandTotal)}
-                  </Chip>
+                  {selectedParty.currentBalance !== 0 && (
+                    <div style={{
+                      marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--hk-border)",
+                      fontSize: TYPE.bodySmall, fontWeight: 700, fontFamily: SG,
+                      color: selectedParty.currentBalance < 0 ? GR : OR,
+                      display: "flex", alignItems: "center", gap: 6,
+                    }}>
+                      <div style={{ width: 7, height: 7, borderRadius: "50%", background: selectedParty.currentBalance < 0 ? GR : OR }} />
+                      {selectedParty.currentBalance < 0
+                        ? `Lena Hai: ${fmtFull(Math.abs(selectedParty.currentBalance))}`
+                        : `Dena Hai: ${fmtFull(selectedParty.currentBalance)}`}
+                    </div>
+                  )}
                 </div>
-                <div className="flex items-center gap-2">
+              )}
+            </Section>
+
+            {/* ── Line Items ──────────────────────────────────────────────── */}
+            <HKCard style={{ marginBottom: 16, padding: 0 }}>
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "16px 20px 12px", borderBottom: "1px solid var(--hk-border)", flexWrap: "wrap", gap: 8,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG }}>Line Items</p>
+                  <span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG }}>
+                    Subtotal: <span style={{ fontFamily: IN, fontWeight: 700, color: "var(--hk-text)" }}>{formatCurrency(subtotal)}</span>
+                  </span>
+                  <span style={{ fontSize: TYPE.bodySmall, color: PU, fontFamily: SG }}>
+                    Total: <span style={{ fontFamily: IN, fontWeight: 800 }}>{formatCurrency(grandTotal)}</span>
+                  </span>
+                </div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   {taxPercent > 0 && (
-                    <Button
-                      size="sm"
-                      variant={hsnPerRow ? "flat" : "light"}
-                      color={hsnPerRow ? "secondary" : "default"}
-                      onPress={() => setHsnPerRow((v) => !v)}
+                    <button
+                      onClick={() => setHsnPerRow((v) => !v)}
+                      style={{
+                        height: TOUCH.secondary, padding: "0 12px",
+                        borderRadius: 10, fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG,
+                        border: `1.5px solid ${hsnPerRow ? PU : "var(--hk-border)"}`,
+                        background: hsnPerRow ? PU + "18" : "transparent",
+                        color: hsnPerRow ? PU : "var(--hk-sub)",
+                        cursor: "pointer",
+                      }}
                       title="Add HSN/SAC code per line item for GSTR-1 Table 12"
                     >
                       HSN per row
-                    </Button>
+                    </button>
                   )}
-
-                  <Button
-                    size="sm"
-                    variant="flat"
-                    color="primary"
-                    onPress={addRow}
-                    startContent={
-                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                          d="M12 4v16m8-8H4"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                        />
-                      </svg>
-                    }
+                  <button
+                    onClick={addRow}
+                    style={{
+                      height: TOUCH.secondary, padding: "0 14px",
+                      borderRadius: 10, border: "none",
+                      background: PU, color: "#fff",
+                      fontSize: TYPE.bodySmall, fontWeight: 700, fontFamily: SG,
+                      cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+                    }}
                   >
-                    Add Row
-                  </Button>
+                    <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                      <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+                    </svg>
+                    Row Add Karo
+                  </button>
                 </div>
-              </CardHeader>
-              <CardBody className="overflow-x-auto p-6">
-                <table className="w-full text-sm">
+              </div>
+
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: TYPE.bodySmall, fontFamily: SG }}>
                   <thead>
-                    <tr className="border-b border-divider">
-                      <th className="w-10 px-2 py-3 text-left font-medium text-default-500">#</th>
+                    <tr style={{ borderBottom: "1px solid var(--hk-border)", background: "var(--hk-badge)" }}>
+                      <th style={{ padding: "10px 12px", textAlign: "center", fontWeight: 600, color: "var(--hk-sub)", width: 40 }}>#</th>
                       {hsnPerRow && taxPercent > 0 && (
-                        <th className="px-2 py-3 text-left font-medium text-default-500 text-xs whitespace-nowrap">
-                          HSN/SAC
-                        </th>
+                        <th style={{ padding: "10px 12px", textAlign: "left", fontWeight: 600, color: "var(--hk-sub)", whiteSpace: "nowrap" }}>HSN/SAC</th>
                       )}
                       {selectedTemplate.columns.map((column) => (
-                        <th
-                          key={column.id}
-                          className="px-2 py-3 text-left font-medium text-default-500"
-                        >
-                          <div className="flex items-center gap-1">
-                            {column.name}
-                            {column.type === "formula" && (
-                              <span className="text-xs text-warning">fx</span>
-                            )}
-                          </div>
+                        <th key={column.id} style={{ padding: "10px 12px", textAlign: "left", fontWeight: 600, color: "var(--hk-sub)", whiteSpace: "nowrap" }}>
+                          {column.name}
+                          {column.type === "formula" && <span style={{ color: AM, marginLeft: 4, fontSize: 10 }}>fx</span>}
                         </th>
                       ))}
-                      <th className="w-10" />
+                      <th style={{ width: 40 }} />
                     </tr>
                   </thead>
                   <tbody>
                     {rows.map((row, rowIndex) => (
-                      <tr
-                        key={rowIndex}
-                        className="border-b border-divider/30 hover:bg-default-50 dark:hover:bg-default-100/5"
-                      >
-                        <td className="px-2 py-2 text-default-400">{rowIndex + 1}</td>
+                      <tr key={rowIndex} style={{ borderBottom: "1px solid var(--hk-border)" }}>
+                        <td style={{ padding: "8px 12px", textAlign: "center", color: "var(--hk-sub)", fontSize: TYPE.bodySmall }}>{rowIndex + 1}</td>
                         {hsnPerRow && taxPercent > 0 && (
-                          <td className="px-2 py-2">
+                          <td style={{ padding: "8px 8px" }}>
                             <Input
                               type="text"
-                              aria-label={`Row ${rowIndex + 1} HSN/SAC code`}
+                              aria-label={`Row ${rowIndex + 1} HSN/SAC`}
                               placeholder="e.g. 9983"
                               value={String(row._hsnCode || "")}
                               onValueChange={(value) => updateRowHsn(rowIndex, value)}
@@ -792,18 +635,12 @@ export default function NewBillPage() {
                         {selectedTemplate.columns.map((column) => (
                           <td
                             key={column.id}
-                            className="px-2 py-2"
-                            data-bill-focus-target={
-                              rowIndex === 0 && column.id === firstEditableColumnId
-                                ? "true"
-                                : undefined
-                            }
+                            style={{ padding: "8px 8px" }}
+                            data-bill-focus-target={rowIndex === 0 && column.id === firstEditableColumnId ? "true" : undefined}
                           >
                             {column.type === "formula" ? (
-                              <span className="font-mono font-medium text-success">
-                                {typeof row[column.id] === "number"
-                                  ? formatColumnValue(column.name, row[column.id] as number)
-                                  : "-"}
+                              <span style={{ fontFamily: IN, fontWeight: 700, color: GR, fontSize: TYPE.bodySmall }}>
+                                {typeof row[column.id] === "number" ? formatColumnValue(column.name, row[column.id] as number) : "—"}
                               </span>
                             ) : column.type === "number" ? (
                               <Input
@@ -822,9 +659,7 @@ export default function NewBillPage() {
                                 selectedKeys={row[column.id] ? new Set([String(row[column.id])]) : new Set([])}
                                 onSelectionChange={(keys) => {
                                   const value = Array.from(keys)[0] as string;
-                                  if (value) {
-                                    updateCell(rowIndex, column.id, value);
-                                  }
+                                  if (value) updateCell(rowIndex, column.id, value);
                                 }}
                                 variant="underlined"
                                 size="sm"
@@ -832,7 +667,6 @@ export default function NewBillPage() {
                               >
                                 {column.options.map((option) => (
                                   <SelectItem key={option} textValue={option}>{option}</SelectItem>
-
                                 ))}
                               </Select>
                             ) : column.type === "date" ? (
@@ -846,44 +680,78 @@ export default function NewBillPage() {
                                 className="min-w-[130px]"
                               />
                             ) : column.id === nameColId && catalogItems.length > 0 ? (
-                              <div className="relative min-w-[160px]">
+                              <div
+                                ref={(el) => {
+                                  if (el) nameInputRefs.current.set(rowIndex, el);
+                                  else nameInputRefs.current.delete(rowIndex);
+                                }}
+                                style={{ minWidth: 160 }}
+                              >
                                 <Input
                                   type="text"
                                   aria-label={`Row ${rowIndex + 1} ${column.name}`}
                                   value={String(row[column.id] || "")}
                                   onValueChange={(value) => updateCell(rowIndex, column.id, value)}
-                                  onFocus={() => setAutoFocusedRow(rowIndex)}
+                                  onFocus={() => {
+                                    setAutoFocusedRow(rowIndex);
+                                    const el = nameInputRefs.current.get(rowIndex);
+                                    if (el) {
+                                      const rect = el.getBoundingClientRect();
+                                      setDropdownRect({ top: rect.bottom + 4, left: rect.left, width: Math.max(260, rect.width) });
+                                    }
+                                  }}
                                   onBlur={() => window.setTimeout(() => setAutoFocusedRow((prev) => (prev === rowIndex ? null : prev)), 150)}
                                   variant="underlined"
                                   size="sm"
                                   placeholder={column.name}
                                 />
-                                {autoFocusedRow === rowIndex && autoFilteredItems.length > 0 && (
-                                  <div className="absolute left-0 top-full z-50 w-64 overflow-hidden rounded-xl border border-divider bg-content1 shadow-xl">
-                                    {autoFilteredItems.map((item) => (
-                                      <button
-                                        key={item.id}
-                                        type="button"
-                                        onMouseDown={(e) => {
-                                          e.preventDefault();
-                                          applyCatalogItem(rowIndex, item.id);
-                                          setAutoFocusedRow(null);
-                                        }}
-                                        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-default-100 first:pt-2 last:pb-2"
-                                      >
-                                        <div className="min-w-0">
-                                          <p className="truncate text-sm font-medium">{item.name}</p>
-                                          {item.hsnCode && (
-                                            <p className="text-xs text-default-400">HSN {item.hsnCode}</p>
-                                          )}
-                                        </div>
-                                        <span className="shrink-0 text-sm font-semibold text-default-600">
-                                          ₹{Number(item.rate).toLocaleString("en-IN", { maximumFractionDigits: 2 })}
-                                        </span>
-                                      </button>
-                                    ))}
-                                  </div>
-                                )}
+                                {autoFocusedRow === rowIndex && autoFilteredItems.length > 0 && dropdownRect &&
+                                  createPortal(
+                                    <div style={{
+                                      position: "fixed",
+                                      top: dropdownRect.top,
+                                      left: dropdownRect.left,
+                                      width: dropdownRect.width,
+                                      zIndex: 9999,
+                                      borderRadius: 12,
+                                      border: "1px solid var(--hk-border)",
+                                      background: "var(--hk-card)",
+                                      boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+                                      overflow: "hidden",
+                                    }}>
+                                      {autoFilteredItems.map((item) => (
+                                        <button
+                                          key={item.id}
+                                          type="button"
+                                          onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            applyCatalogItem(rowIndex, item.id);
+                                            setAutoFocusedRow(null);
+                                          }}
+                                          style={{
+                                            width: "100%", display: "flex", alignItems: "center",
+                                            justifyContent: "space-between", gap: 8,
+                                            padding: "10px 14px", textAlign: "left",
+                                            background: "none", border: "none",
+                                            borderBottom: "1px solid var(--hk-border)",
+                                            cursor: "pointer", fontFamily: SG,
+                                          }}
+                                          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--hk-badge)"; }}
+                                          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "none"; }}
+                                        >
+                                          <div style={{ minWidth: 0 }}>
+                                            <p style={{ fontSize: TYPE.bodySmall, fontWeight: 600, color: "var(--hk-text)", fontFamily: SG, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</p>
+                                            {item.hsnCode && <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)" }}>HSN {item.hsnCode}</p>}
+                                          </div>
+                                          <span style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: PU, fontFamily: IN, flexShrink: 0 }}>
+                                            ₹{Number(item.rate).toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+                                          </span>
+                                        </button>
+                                      ))}
+                                    </div>,
+                                    document.body
+                                  )
+                                }
                               </div>
                             ) : (
                               <Input
@@ -898,171 +766,187 @@ export default function NewBillPage() {
                             )}
                           </td>
                         ))}
-                        <td className="px-2 py-2">
-                          <Button
-                            isIconOnly
-                            size="sm"
-                            variant="light"
-                            color="danger"
+                        <td style={{ padding: "8px 8px", textAlign: "center" }}>
+                          <button
+                            onClick={() => removeRow(rowIndex)}
+                            disabled={rows.length <= 1}
                             aria-label={`Remove row ${rowIndex + 1}`}
-                            onPress={() => removeRow(rowIndex)}
-                            isDisabled={rows.length <= 1}
+                            style={{
+                              width: 28, height: 28, borderRadius: 8, border: "none",
+                              background: "transparent", color: rows.length <= 1 ? "var(--hk-border)" : OR,
+                              cursor: rows.length <= 1 ? "default" : "pointer",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                            }}
                           >
-                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path
-                                d="M6 18L18 6M6 6l12 12"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={1.5}
-                              />
+                            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round">
+                              <path d="M18 6L6 18M6 6l12 12" />
                             </svg>
-                          </Button>
+                          </button>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              </CardBody>
-            </Card>
+              </div>
+            </HKCard>
 
-            <div className="mb-6 grid gap-6 lg:grid-cols-2">
-              <Card shadow="sm">
-                <CardBody className="space-y-4 p-6">
-                  <Textarea
-                    label="Notes"
-                    placeholder="Additional notes..."
-                    value={notes}
-                    onValueChange={setNotes}
-                    variant="bordered"
-                    minRows={2}
-                  />
-                  <Textarea
-                    label="Terms & Conditions"
-                    placeholder="Enter terms..."
-                    value={terms}
-                    onValueChange={setTerms}
-                    variant="bordered"
-                    minRows={3}
-                  />
-                </CardBody>
-              </Card>
+            {/* ── Notes + Summary ─────────────────────────────────────────── */}
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16, marginBottom: 24 }}>
+              {/* Notes */}
+              <HKCard style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <Textarea
+                  label="Notes"
+                  placeholder="Additional notes..."
+                  value={notes}
+                  onValueChange={setNotes}
+                  variant="bordered"
+                  minRows={2}
+                />
+                <Textarea
+                  label="Terms & Conditions"
+                  placeholder="Enter terms..."
+                  value={terms}
+                  onValueChange={setTerms}
+                  variant="bordered"
+                  minRows={3}
+                />
+              </HKCard>
 
-              <Card shadow="sm" className="bg-gradient-to-br from-blue-500/5 to-indigo-500/5">
-                <CardBody className="p-6">
-                  <h3 className="mb-4 text-lg font-semibold">Summary</h3>
-                  <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-default-500">Subtotal</span>
-                      <span className="font-medium">{formatCurrency(subtotal)}</span>
+              {/* Summary */}
+              <HKCard style={{ background: PU + "08", border: `1px solid ${PU}20` }}>
+                <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, marginBottom: 16 }}>Summary</p>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ color: "var(--hk-sub)", fontSize: TYPE.body, fontFamily: SG }}>Subtotal</span>
+                    <span style={{ fontFamily: IN, fontWeight: 600, color: "var(--hk-text)" }}>{formatCurrency(subtotal)}</span>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ color: "var(--hk-sub)", fontSize: TYPE.body, fontFamily: SG }}>Tax</span>
+                      {taxRateColId === null && (
+                        <Input
+                          type="number"
+                          aria-label="Tax percentage"
+                          value={String(taxPercent)}
+                          onValueChange={(value) => setTaxPercent(Number.parseFloat(value) || 0)}
+                          variant="bordered"
+                          size="sm"
+                          className="w-20"
+                          endContent={<span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)" }}>%</span>}
+                        />
+                      )}
                     </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-default-500">Tax</span>
-                        {taxRateColId === null && (
-                          <Input
-                            type="number"
-                            aria-label="Tax percentage"
-                            value={String(taxPercent)}
-                            onValueChange={(value) => setTaxPercent(Number.parseFloat(value) || 0)}
-                            variant="bordered"
-                            size="sm"
-                            className="w-20"
-                            endContent={<span className="text-sm text-default-400">%</span>}
-                          />
-                        )}
-                      </div>
-                      <span className="font-medium">{formatCurrency(taxAmount)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <p className="text-xs text-default-400">{t("bills.autoTaxNote")}</p>
-                        {gstIsLocked && (
-                          <Chip size="sm" variant="flat" color={isInterState ? "warning" : "success"}>
-                            {isInterState ? "IGST" : "CGST + SGST"}
-                          </Chip>
-                        )}
-                      </div>
-                      <label
-                        className={`flex items-center gap-1.5 select-none ${gstIsLocked ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
-                        title={gstIsLocked ? "Auto-detected from party GSTIN" : undefined}
-                      >
+                    <span style={{ fontFamily: IN, fontWeight: 600, color: "var(--hk-text)" }}>{formatCurrency(taxAmount)}</span>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                    <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG, flex: 1, margin: 0, paddingTop: 2 }}>{t("bills.autoTaxNote")}</p>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                      {gstIsLocked && (
+                        <span style={{
+                          fontSize: 10, fontWeight: 700, fontFamily: SG,
+                          padding: "2px 8px", borderRadius: 6,
+                          background: isInterState ? AM + "20" : GR + "18",
+                          color: isInterState ? AM : GR,
+                          border: `1px solid ${isInterState ? AM + "40" : GR + "40"}`,
+                        }}>
+                          {isInterState ? "IGST" : "CGST + SGST"}
+                        </span>
+                      )}
+                      <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: gstIsLocked ? "not-allowed" : "pointer", opacity: gstIsLocked ? 0.5 : 1 }}
+                        title={gstIsLocked ? "Auto-detected from party GSTIN" : undefined}>
                         <input
                           type="checkbox"
                           checked={isInterState}
                           onChange={(e) => { if (!gstIsLocked) setIsInterState(e.target.checked); }}
                           disabled={gstIsLocked}
-                          className="accent-primary"
+                          style={{ accentColor: PU }}
                         />
-                        <span className="text-xs text-default-500">Inter-state (IGST)</span>
+                        <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>Inter-state (IGST)</span>
                       </label>
                     </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <span className="text-sm text-default-500">Place of Supply</span>
-                        {gstIsLocked && (
-                          <svg className="h-3.5 w-3.5 text-default-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                          </svg>
-                        )}
-                      </div>
-                      <Select
-                        aria-label="Place of supply"
-                        placeholder="Select state"
-                        size="sm"
-                        variant="bordered"
-                        className="max-w-[200px]"
-                        selectedKeys={placeOfSupply ? new Set([placeOfSupply]) : new Set([])}
-                        onSelectionChange={(keys) => {
-                          const value = Array.from(keys)[0] as string | undefined;
-                          setPlaceOfSupply(value ?? "");
-                          if (value) {
-                            setErrors((curr) => ({ ...curr, placeOfSupply: false }));
-                          }
-                        }}
-                        isDisabled={gstIsLocked}
-                        isInvalid={Boolean(errors.placeOfSupply)}
-                        errorMessage={errors.placeOfSupply ? "Required for final bills" : undefined}
-                      >
-                        {Object.entries(GST_STATE_CODES).map(([code, name]) => (
-                          <SelectItem key={code} textValue={`${code} - ${name}`}>
-                            {code} — {name}
-                          </SelectItem>
-                        ))}
-                      </Select>
-                    </div>
-                    <Divider />
-                    <div className="flex justify-between">
-                      <span className="text-lg font-bold">Grand Total</span>
-                      <span className="text-lg font-bold text-primary">
-                        {formatCurrency(grandTotal)}
-                      </span>
-                    </div>
                   </div>
-                </CardBody>
-              </Card>
+
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                      <span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG }}>Place of Supply</span>
+                      {gstIsLocked && (
+                        <svg width="13" height="13" fill="none" stroke="var(--hk-sub)" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                      )}
+                    </div>
+                    <Select
+                      aria-label="Place of supply"
+                      placeholder="State select karo"
+                      size="sm"
+                      variant="bordered"
+                      className="max-w-[200px]"
+                      selectedKeys={placeOfSupply ? new Set([placeOfSupply]) : new Set([])}
+                      onSelectionChange={(keys) => {
+                        const value = Array.from(keys)[0] as string | undefined;
+                        setPlaceOfSupply(value ?? "");
+                        if (value) setErrors((curr) => ({ ...curr, placeOfSupply: false }));
+                      }}
+                      isDisabled={gstIsLocked}
+                      isInvalid={Boolean(errors.placeOfSupply)}
+                      errorMessage={errors.placeOfSupply ? "Final bills ke liye zaroori hai" : undefined}
+                    >
+                      {Object.entries(GST_STATE_CODES).map(([code, name]) => (
+                        <SelectItem key={code} textValue={`${code} - ${name}`}>{code} — {name}</SelectItem>
+                      ))}
+                    </Select>
+                  </div>
+
+                  <div style={{ borderTop: "1px solid var(--hk-border)", paddingTop: 12, marginTop: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: TYPE.h2, fontWeight: 800, color: "var(--hk-text)", fontFamily: SG }}>Grand Total</span>
+                    <span style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: PU, fontFamily: IN }}>{formatCurrency(grandTotal)}</span>
+                  </div>
+                </div>
+              </HKCard>
             </div>
 
-            <div className="flex justify-end gap-3">
-              <Button variant="flat" onPress={() => router.push("/bills")}>
-                Cancel
-              </Button>
-              <Button variant="bordered" onPress={() => handleSave("DRAFT")} isLoading={savingAs === "DRAFT"} isDisabled={savingAs === "FINAL"}>
-                {t("bills.saveDraft")}
-              </Button>
-              <Button
-                color="primary"
-                className="bg-gradient-to-r from-blue-600 to-indigo-600 font-semibold"
-                onPress={() => handleSave("FINAL")}
-                isLoading={savingAs === "FINAL"}
-                isDisabled={savingAs === "DRAFT"}
+            {/* ── Footer buttons ──────────────────────────────────────────── */}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <button
+                onClick={() => router.push("/bills")}
+                style={{
+                  height: TOUCH.primary, padding: "0 20px",
+                  borderRadius: 12, border: "1.5px solid var(--hk-border)",
+                  background: "var(--hk-card)", color: "var(--hk-sub)",
+                  fontSize: TYPE.body, fontWeight: 600, fontFamily: SG,
+                  cursor: "pointer",
+                }}
               >
-                {t("bills.finalize")}
-              </Button>
+                Cancel
+              </button>
+              <button
+                onClick={() => handleSave("DRAFT")}
+                disabled={savingAs === "FINAL"}
+                style={{
+                  height: TOUCH.primary, padding: "0 20px",
+                  borderRadius: 12, border: "1.5px solid var(--hk-border)",
+                  background: savingAs === "DRAFT" ? "var(--hk-badge)" : "var(--hk-card)",
+                  color: "var(--hk-text)",
+                  fontSize: TYPE.body, fontWeight: 600, fontFamily: SG,
+                  cursor: savingAs === "FINAL" ? "not-allowed" : "pointer",
+                  opacity: savingAs === "FINAL" ? 0.5 : 1,
+                }}
+              >
+                {savingAs === "DRAFT" ? "Saving..." : t("bills.saveDraft")}
+              </button>
+              <GradientButton
+                onClick={() => handleSave("FINAL")}
+                disabled={savingAs === "DRAFT"}
+              >
+                {savingAs === "FINAL" ? "Saving..." : t("bills.finalize")}
+              </GradientButton>
             </div>
           </>
         )}
       </div>
-
-    </>
+    </div>
   );
 }

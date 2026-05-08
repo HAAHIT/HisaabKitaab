@@ -1,38 +1,30 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  Button,
-  Card,
-  CardBody,
-  Checkbox,
-  Radio,
-  RadioGroup,
-  Input,
-} from "@heroui/react";
+import { Checkbox, Input, Radio, RadioGroup } from "@heroui/react";
 import { useRouter } from "next/navigation";
+import {
+  GR, AM, OR, PU, SG, IN, TYPE,
+  fmtFull,
+  HKCard, HKToast, PageHeader, GradientButton, useIsMobile,
+} from "@/components/ui/hk-design";
 
 export default function TallyExportPage() {
   const router = useRouter();
+  const isMobile = useIsMobile();
 
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
-  // Step 1: Date Range
-  const [periodType, setPeriodType] = useState("year"); // month, quarter, year, custom
+  const [periodType, setPeriodType] = useState("year");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
 
-  // Step 2: Include Options
   const [include, setInclude] = useState({
-    sales: true,
-    purchases: true,
-    receipts: true,
-    payments: true,
-    ledgers: true,
-    journals: false,
+    sales: true, purchases: true, receipts: true,
+    payments: true, ledgers: true, journals: false,
   });
 
   const [preview, setPreview] = useState<{
@@ -40,32 +32,21 @@ export default function TallyExportPage() {
     purchasesCount: number; purchasesAmount: number;
     receiptsCount: number; receiptsAmount: number;
     paymentsCount: number; paymentsAmount: number;
-    journalsCount: number;
-    partiesCount: number;
-    unbalancedCount: number;
+    journalsCount: number; partiesCount: number; unbalancedCount: number;
   } | null>(null);
 
   const [caEmail, setCaEmail] = useState("");
 
   useEffect(() => {
-    // Determine default dates based on financial year
     const today = new Date();
-    const currentMonth = today.getMonth(); // 0-11
+    const currentMonth = today.getMonth();
     const currentYear = today.getFullYear();
-    
-    // FY is April 1 to March 31
     const fyStartYear = currentMonth >= 3 ? currentYear : currentYear - 1;
-    const fyEndYear = fyStartYear + 1;
-    
     if (!customFrom) setCustomFrom(`${fyStartYear}-04-01`);
-    if (!customTo) setCustomTo(`${fyEndYear}-03-31`);
-
-    // Fetch CA Email from company profile
+    if (!customTo) setCustomTo(`${fyStartYear + 1}-03-31`);
     fetch("/api/settings")
       .then((res) => res.json())
-      .then((data) => {
-        if (data?.settings?.caEmail) setCaEmail(data.settings.caEmail);
-      })
+      .then((data) => { if (data?.settings?.caEmail) setCaEmail(data.settings.caEmail); })
       .catch(() => {});
   }, []);
 
@@ -75,25 +56,23 @@ export default function TallyExportPage() {
   }
 
   const getDateRange = () => {
-    let from = customFrom;
-    let to = customTo;
     const today = new Date();
     const currentYear = today.getFullYear();
     const currentMonth = today.getMonth();
-
     if (periodType === "month") {
-      from = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-01`;
-      to = new Date(currentYear, currentMonth + 1, 0).toISOString().split("T")[0];
+      const from = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-01`;
+      const to = new Date(currentYear, currentMonth + 1, 0).toISOString().split("T")[0];
+      return { from, to };
     } else if (periodType === "quarter") {
       const q = Math.floor(currentMonth / 3);
-      from = `${currentYear}-${String(q * 3 + 1).padStart(2, "0")}-01`;
-      to = new Date(currentYear, q * 3 + 3, 0).toISOString().split("T")[0];
+      const from = `${currentYear}-${String(q * 3 + 1).padStart(2, "0")}-01`;
+      const to = new Date(currentYear, q * 3 + 3, 0).toISOString().split("T")[0];
+      return { from, to };
     } else if (periodType === "year") {
       const fyStartYear = currentMonth >= 3 ? currentYear : currentYear - 1;
-      from = `${fyStartYear}-04-01`;
-      to = `${fyStartYear + 1}-03-31`;
+      return { from: `${fyStartYear}-04-01`, to: `${fyStartYear + 1}-03-31` };
     }
-    return { from, to };
+    return { from: customFrom, to: customTo };
   };
 
   const handleFetchPreview = async () => {
@@ -107,11 +86,10 @@ export default function TallyExportPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Preview fetch failed");
-      
       setPreview(data);
       if (data.unbalancedCount > 0) {
         showToast(`Kuch entries mein gadbad hai (${data.unbalancedCount}). Support se baat karo.`, "error");
-        return; // Don't proceed to step 2
+        return;
       }
       setStep(2);
     } catch (err) {
@@ -130,46 +108,32 @@ export default function TallyExportPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ from, to, include }),
       });
-
       if (!res.ok) {
         const errorData = await res.json().catch(() => null);
         throw new Error(errorData?.error || "Export failed");
       }
-
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
-
       if (method === "download") {
         const a = document.createElement("a");
-        a.href = url;
-        a.download = `HisaabKitaab-${from}-to-${to}.xml`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
+        a.href = url; a.download = `HisaabKitaab-${from}-to-${to}.xml`;
+        document.body.appendChild(a); a.click();
+        window.URL.revokeObjectURL(url); document.body.removeChild(a);
         showToast("Ho gaya ✓ — File CA ko bhej do", "success");
       } else if (method === "whatsapp") {
-        // Just triggering download for now since we don't have public URLs for files yet
         const a = document.createElement("a");
-        a.href = url;
-        a.download = `HisaabKitaab-${from}-to-${to}.xml`;
-        a.click();
-        
+        a.href = url; a.download = `HisaabKitaab-${from}-to-${to}.xml`; a.click();
         const msg = encodeURIComponent(`Namaste — yeh HisaabKitaab ka Tally file hai for ${from} to ${to}.`);
         window.open(`https://wa.me/?text=${msg}`, "_blank");
         showToast("Downloaded for WhatsApp", "success");
       } else if (method === "email") {
         const a = document.createElement("a");
-        a.href = url;
-        a.download = `HisaabKitaab-${from}-to-${to}.xml`;
-        a.click();
-
+        a.href = url; a.download = `HisaabKitaab-${from}-to-${to}.xml`; a.click();
         const subject = encodeURIComponent(`HisaabKitaab Tally file for ${from} to ${to}`);
         const body = encodeURIComponent(`Namaste,\nHisaabKitaab ka ${from} se ${to} ka Tally file ready hai.\nDownload karke Tally mein import kar lo.\n\n— HisaabKitaab`);
         window.open(`mailto:${caEmail}?subject=${subject}&body=${body}`);
         showToast("Downloaded for Email", "success");
       }
-      
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Export failed", "error");
     } finally {
@@ -177,138 +141,156 @@ export default function TallyExportPage() {
     }
   };
 
-  const fmt = (num: number) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(num);
+  const navBtnStyle: React.CSSProperties = {
+    minHeight: 44, padding: "0 18px", borderRadius: 12,
+    background: "var(--hk-badge)", border: "1px solid var(--hk-border)",
+    color: "var(--hk-text)", fontFamily: SG, fontSize: TYPE.body, fontWeight: 600, cursor: "pointer",
+    display: "flex", alignItems: "center", gap: 6,
+  };
+
+  const exportBtnStyle = (color: string): React.CSSProperties => ({
+    width: "100%", minHeight: 52, borderRadius: 14,
+    display: "flex", alignItems: "center", padding: "0 20px", gap: 10,
+    background: color + "12", border: `1px solid ${color}33`, color,
+    fontFamily: SG, fontSize: TYPE.body, fontWeight: 700,
+    cursor: exporting ? "not-allowed" : "pointer", opacity: exporting ? 0.6 : 1,
+  });
 
   return (
-    <div className="mx-auto max-w-3xl animate-fade-in p-4 lg:p-8">
-      {toast && (
-        <div className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"}`}>
-          {toast.message}
-        </div>
-      )}
+    <>
+      {toast && <HKToast message={toast.message} type={toast.type} />}
 
-      <div className="mb-6 flex items-center gap-3">
-        <Button isIconOnly variant="light" onPress={() => router.push("/settings/company")}>
-          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M10 19l-7-7m0 0l7-7m-7 7h18" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} /></svg>
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold font-sg">Tally ko Bhejo</h1>
-          <p className="mt-1 text-sm text-default-500 font-sg">Send your books directly to your CA in Tally format.</p>
-        </div>
-      </div>
+      <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG }}>
+        <PageHeader
+          title="Tally ko Bhejo"
+          subtitle="Send your books directly to your CA in Tally format."
+          isMobile={isMobile}
+          action={
+            <button onClick={() => router.push("/settings/company")} style={navBtnStyle}>
+              ← Back
+            </button>
+          }
+        />
 
-      <div className="flex gap-2 mb-6">
-        {[1, 2, 3].map(i => (
-          <div key={i} className={`h-2 flex-1 rounded-full ${step >= i ? "bg-primary" : "bg-default-200"}`} />
-        ))}
-      </div>
+        <div style={{ padding: isMobile ? "0 14px 80px" : "0 28px 80px", maxWidth: 760, margin: "0 auto" }}>
+          {/* Step progress */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
+            {[1, 2, 3].map((i) => (
+              <div key={i} style={{ height: 8, flex: 1, borderRadius: 999, background: step >= i ? PU : "var(--hk-border)", transition: "background 0.3s" }} />
+            ))}
+          </div>
 
-      <Card shadow="sm">
-        <CardBody className="p-6 md:p-8">
-          
-          {step === 1 && (
-            <div className="space-y-6 animate-fade-in">
-              <h2 className="text-xl font-bold font-sg">Kaunsa period?</h2>
-              
-              <RadioGroup value={periodType} onValueChange={setPeriodType}>
-                <Radio value="month">Is mahine</Radio>
-                <Radio value="quarter">Is quarter</Radio>
-                <Radio value="year">Is saal (Financial Year)</Radio>
-                <Radio value="custom">Custom dates</Radio>
-              </RadioGroup>
+          <HKCard>
+            {step === 1 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, margin: 0 }}>
+                  Kaunsa period?
+                </p>
 
-              {periodType === "custom" && (
-                <div className="grid grid-cols-2 gap-4 mt-4">
-                  <Input type="date" label="From" value={customFrom} onValueChange={setCustomFrom} variant="bordered" />
-                  <Input type="date" label="To" value={customTo} onValueChange={setCustomTo} variant="bordered" />
+                <RadioGroup value={periodType} onValueChange={setPeriodType}>
+                  <Radio value="month">Is mahine</Radio>
+                  <Radio value="quarter">Is quarter</Radio>
+                  <Radio value="year">Is saal (Financial Year)</Radio>
+                  <Radio value="custom">Custom dates</Radio>
+                </RadioGroup>
+
+                {periodType === "custom" && (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    <Input type="date" label="From" value={customFrom} onValueChange={setCustomFrom} variant="bordered" />
+                    <Input type="date" label="To" value={customTo} onValueChange={setCustomTo} variant="bordered" />
+                  </div>
+                )}
+
+                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                  <GradientButton onClick={handleFetchPreview} disabled={loading}>
+                    {loading ? "Loading..." : "Aage Badho →"}
+                  </GradientButton>
                 </div>
-              )}
-
-              <div className="flex justify-end pt-4">
-                <Button color="primary" className="font-semibold px-8" onPress={handleFetchPreview} isLoading={loading}>
-                  Aage Badho →
-                </Button>
               </div>
-            </div>
-          )}
+            )}
 
-          {step === 2 && preview && (
-            <div className="space-y-6 animate-fade-in">
-              <h2 className="text-xl font-bold font-sg">Kya kya include karna hai?</h2>
-              
-              <div className="space-y-4">
-                <Checkbox isSelected={include.sales} onValueChange={(v) => setInclude({...include, sales: v})}>
-                  Sales bills <span className="text-default-500 text-sm ml-1">({preview.salesCount} bills, {fmt(preview.salesAmount)})</span>
-                </Checkbox>
-                <Checkbox isSelected={include.purchases} onValueChange={(v) => setInclude({...include, purchases: v})}>
-                  Purchase bills <span className="text-default-500 text-sm ml-1">({preview.purchasesCount} bills, {fmt(preview.purchasesAmount)})</span>
-                </Checkbox>
-                <Checkbox isSelected={include.receipts} onValueChange={(v) => setInclude({...include, receipts: v})}>
-                  Receipts (Mila) <span className="text-default-500 text-sm ml-1">({preview.receiptsCount} payments, {fmt(preview.receiptsAmount)})</span>
-                </Checkbox>
-                <Checkbox isSelected={include.payments} onValueChange={(v) => setInclude({...include, payments: v})}>
-                  Payments out (Diya) <span className="text-default-500 text-sm ml-1">({preview.paymentsCount} payments, {fmt(preview.paymentsAmount)})</span>
-                </Checkbox>
-                <Checkbox isSelected={include.ledgers} onValueChange={(v) => setInclude({...include, ledgers: v})}>
-                  Party balances <span className="text-default-500 text-sm ml-1">({preview.partiesCount} parties)</span>
-                </Checkbox>
-                <Checkbox isSelected={include.journals} onValueChange={(v) => setInclude({...include, journals: v})}>
-                  Manual journal entries <span className="text-default-500 text-sm ml-1">({preview.journalsCount} entries)</span>
-                </Checkbox>
+            {step === 2 && preview && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, margin: 0 }}>
+                  Kya kya include karna hai?
+                </p>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  <Checkbox isSelected={include.sales} onValueChange={(v) => setInclude({ ...include, sales: v })}>
+                    Sales bills{" "}
+                    <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>
+                      ({preview.salesCount} bills, {fmtFull(preview.salesAmount)})
+                    </span>
+                  </Checkbox>
+                  <Checkbox isSelected={include.purchases} onValueChange={(v) => setInclude({ ...include, purchases: v })}>
+                    Purchase bills{" "}
+                    <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>
+                      ({preview.purchasesCount} bills, {fmtFull(preview.purchasesAmount)})
+                    </span>
+                  </Checkbox>
+                  <Checkbox isSelected={include.receipts} onValueChange={(v) => setInclude({ ...include, receipts: v })}>
+                    Receipts (Mila){" "}
+                    <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>
+                      ({preview.receiptsCount} payments, {fmtFull(preview.receiptsAmount)})
+                    </span>
+                  </Checkbox>
+                  <Checkbox isSelected={include.payments} onValueChange={(v) => setInclude({ ...include, payments: v })}>
+                    Payments out (Diya){" "}
+                    <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>
+                      ({preview.paymentsCount} payments, {fmtFull(preview.paymentsAmount)})
+                    </span>
+                  </Checkbox>
+                  <Checkbox isSelected={include.ledgers} onValueChange={(v) => setInclude({ ...include, ledgers: v })}>
+                    Party balances{" "}
+                    <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>
+                      ({preview.partiesCount} parties)
+                    </span>
+                  </Checkbox>
+                  <Checkbox isSelected={include.journals} onValueChange={(v) => setInclude({ ...include, journals: v })}>
+                    Manual journal entries{" "}
+                    <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>
+                      ({preview.journalsCount} entries)
+                    </span>
+                  </Checkbox>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <button onClick={() => setStep(1)} style={navBtnStyle}>← Wapas</button>
+                  <GradientButton onClick={() => setStep(3)}>Aage Badho →</GradientButton>
+                </div>
               </div>
+            )}
 
-              <div className="flex justify-between pt-4">
-                <Button variant="flat" onPress={() => setStep(1)}>← Wapas</Button>
-                <Button color="primary" className="font-semibold px-8" onPress={() => setStep(3)}>Aage Badho →</Button>
+            {step === 3 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, margin: 0 }}>
+                  Kaise bhejna hai?
+                </p>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <button onClick={() => handleExport("download")} disabled={exporting} style={exportBtnStyle(PU)}>
+                    📥 Download .xml
+                  </button>
+                  <button onClick={() => handleExport("email")} disabled={exporting} style={exportBtnStyle(PU)}>
+                    📧 Email to CA{caEmail && (
+                      <span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG, fontWeight: 400 }}>
+                        ({caEmail})
+                      </span>
+                    )}
+                  </button>
+                  <button onClick={() => handleExport("whatsapp")} disabled={exporting} style={exportBtnStyle("#25D366")}>
+                    💬 WhatsApp share
+                  </button>
+                </div>
+
+                <div>
+                  <button onClick={() => setStep(2)} style={navBtnStyle}>← Wapas</button>
+                </div>
               </div>
-            </div>
-          )}
-
-          {step === 3 && (
-            <div className="space-y-6 animate-fade-in">
-              <h2 className="text-xl font-bold font-sg">Kaise bhejna hai?</h2>
-              
-              <div className="grid grid-cols-1 gap-4">
-                <Button 
-                  size="lg" 
-                  color="primary" 
-                  variant="flat" 
-                  className="justify-start px-6 font-semibold"
-                  onPress={() => handleExport("download")}
-                  isLoading={exporting}
-                >
-                  📥 Download .xml
-                </Button>
-                
-                <Button 
-                  size="lg" 
-                  color="primary" 
-                  variant="flat" 
-                  className="justify-start px-6 font-semibold"
-                  onPress={() => handleExport("email")}
-                  isLoading={exporting}
-                >
-                  📧 Email to CA {caEmail && <span className="font-normal text-sm opacity-80">({caEmail})</span>}
-                </Button>
-
-                <Button 
-                  size="lg" 
-                  className="justify-start px-6 font-semibold bg-[#25D366]/10 text-[#25D366]"
-                  onPress={() => handleExport("whatsapp")}
-                  isLoading={exporting}
-                >
-                  💬 WhatsApp share
-                </Button>
-              </div>
-
-              <div className="flex justify-start pt-4">
-                <Button variant="light" onPress={() => setStep(2)}>← Wapas</Button>
-              </div>
-            </div>
-          )}
-
-        </CardBody>
-      </Card>
-    </div>
+            )}
+          </HKCard>
+        </div>
+      </div>
+    </>
   );
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { resolveSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
+import { mergeTenantSettings } from "@/lib/tenant-settings";
 
 export const runtime = "nodejs";
 
@@ -32,6 +33,19 @@ export async function PATCH(
         const body = await request.json() as { isDefault?: boolean };
 
         if (body.isDefault === true) {
+            // Fetch current tenant settings to merge into
+            const tenant = await prisma.tenant.findUnique({
+                where: { id: tenantId },
+                select: { settings: true },
+            });
+
+            const updatedSettings = mergeTenantSettings(tenant?.settings, {
+                bankName: account.name,
+                bankAccountNumber: account.accountNumber ?? null,
+                bankIfscCode: account.ifscCode ?? null,
+                bankBranch: null,
+            });
+
             await prisma.$transaction([
                 prisma.bankAccount.updateMany({
                     where: { tenantId, isDeleted: false },
@@ -40,6 +54,10 @@ export async function PATCH(
                 prisma.bankAccount.update({
                     where: { id },
                     data: { isDefault: true },
+                }),
+                prisma.tenant.update({
+                    where: { id: tenantId },
+                    data: { settings: updatedSettings },
                 }),
             ]);
 

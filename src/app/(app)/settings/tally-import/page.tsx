@@ -1,15 +1,15 @@
 "use client";
 
-import { useState, Suspense } from "react";
-import {
-  Button,
-  Card,
-  CardBody,
-} from "@heroui/react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import {
+  GR, AM, OR, PU, SG, IN, TYPE,
+  HKCard, HKToast, PageHeader, GradientButton, useIsMobile,
+} from "@/components/ui/hk-design";
 
 function TallyImportContent() {
   const router = useRouter();
+  const isMobile = useIsMobile();
   const searchParams = useSearchParams();
   const returnTo = searchParams.get("returnTo") ?? "/dashboard";
 
@@ -20,7 +20,7 @@ function TallyImportContent() {
 
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importJobId, setImportJobId] = useState<string | null>(null);
-  
+
   const [preview, setPreview] = useState<{
     vouchersCount: number;
     partiesCount: number;
@@ -37,6 +37,21 @@ function TallyImportContent() {
     imported: number; skipped: number; partiesCreated: number; failed: number; parseErrors: string[]; importErrors: string[];
   } | null>(null);
 
+  useEffect(() => {
+    fetch("/api/import/active")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.active && data.jobId) {
+          setImportJobId(data.jobId);
+          setJobProgress({ processed: data.processed ?? 0, total: data.totalItems ?? 0, status: data.status, failed: data.failed ?? 0 });
+          setStep(3);
+          pollStatus(data.jobId);
+        }
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function showToast(message: string, type: "success" | "error") {
     setToast({ message, type });
     window.setTimeout(() => setToast(null), 3000);
@@ -48,13 +63,9 @@ function TallyImportContent() {
     try {
       const body = new FormData();
       body.append("file", importFile);
-      const res = await fetch("/api/import/tally-xml/preview", {
-        method: "POST",
-        body,
-      });
+      const res = await fetch("/api/import/tally-xml/preview", { method: "POST", body });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Preview fetch failed");
-      
       setPreview(data);
       setStep(2);
     } catch (err) {
@@ -67,15 +78,13 @@ function TallyImportContent() {
   const handleImport = async () => {
     if (!importFile) return;
     setImporting(true);
-    setStep(3); // Importing step
-    
+    setStep(3);
     try {
       const body = new FormData();
       body.append("file", importFile);
       const res = await fetch("/api/import/tally-xml", { method: "POST", body });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Import failed");
-      
       if (data.jobId) {
         setImportJobId(data.jobId);
         setJobProgress({ processed: 0, total: preview?.vouchersCount || 0, status: "PENDING", failed: 0 });
@@ -83,7 +92,7 @@ function TallyImportContent() {
       }
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Import failed", "error");
-      setStep(2); // Revert to preview
+      setStep(2);
       setImporting(false);
     }
   };
@@ -94,23 +103,15 @@ function TallyImportContent() {
         const res = await fetch(`/api/import/status/${jobId}`);
         if (!res.ok) throw new Error("Failed to fetch job status");
         const data = await res.json();
-
-        setJobProgress({
-          processed: data.processed,
-          total: data.totalItems,
-          status: data.status,
-          failed: data.failed,
-        });
-
+        setJobProgress({ processed: data.processed, total: data.totalItems, status: data.status, failed: data.failed });
         if (data.status === "COMPLETED" || data.status === "FAILED") {
           clearInterval(interval);
           setImporting(false);
           setImportJobId(null);
-
           if (data.status === "COMPLETED") {
             setImportResult({
-              partiesCreated: 0, // Simplified for now
-              imported: data.processed, 
+              partiesCreated: 0,
+              imported: data.processed,
               skipped: 0,
               failed: data.failed,
               parseErrors: preview?.parseErrors || [],
@@ -128,160 +129,223 @@ function TallyImportContent() {
     }, 2000);
   };
 
+  const statCardStyle: React.CSSProperties = {
+    padding: "14px 16px", borderRadius: 12,
+    background: "var(--hk-bg)", border: "1px solid var(--hk-border)",
+  };
+
+  const navBtnStyle = (primary?: boolean): React.CSSProperties => ({
+    minHeight: 44, padding: "0 20px", borderRadius: 12,
+    background: primary ? undefined : "var(--hk-badge)",
+    border: primary ? undefined : "1px solid var(--hk-border)",
+    color: primary ? undefined : "var(--hk-text)",
+    fontFamily: SG, fontSize: TYPE.body, fontWeight: 600, cursor: "pointer",
+    display: "flex", alignItems: "center", gap: 6,
+  });
+
   return (
-    <div className="mx-auto max-w-3xl animate-fade-in p-4 lg:p-8">
-      {toast && (
-        <div className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"}`}>
-          {toast.message}
-        </div>
-      )}
+    <>
+      {toast && <HKToast message={toast.message} type={toast.type} />}
 
-      <div className="mb-6 flex items-center gap-3">
-        <Button isIconOnly variant="light" onPress={() => router.push(returnTo)}>
-          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M10 19l-7-7m0 0l7-7m-7 7h18" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} /></svg>
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold font-sg">Tally se Laao</h1>
-          <p className="mt-1 text-sm text-default-500 font-sg">Import historical vouchers and masters from Tally into HisaabKitaab.</p>
-        </div>
-      </div>
+      <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG }}>
+        <PageHeader
+          title="Tally se Laao"
+          subtitle="Import historical vouchers and masters from Tally into HisaabKitaab."
+          isMobile={isMobile}
+          action={
+            <button
+              onClick={() => router.push(returnTo)}
+              style={navBtnStyle()}
+            >
+              ← Back
+            </button>
+          }
+        />
 
-      <div className="flex gap-2 mb-6">
-        {[1, 2, 3, 4].map(i => (
-          <div key={i} className={`h-2 flex-1 rounded-full ${step >= i ? "bg-primary" : "bg-default-200"}`} />
-        ))}
-      </div>
+        <div style={{ padding: isMobile ? "0 14px 80px" : "0 28px 80px", maxWidth: 760, margin: "0 auto" }}>
+          {/* Step progress */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} style={{ height: 8, flex: 1, borderRadius: 999, background: step >= i ? PU : "var(--hk-border)", transition: "background 0.3s" }} />
+            ))}
+          </div>
 
-      <Card shadow="sm">
-        <CardBody className="p-6 md:p-8">
-          
-          {step === 1 && (
-            <div className="space-y-6 animate-fade-in">
-              <h2 className="text-xl font-bold font-sg">XML file choose karo</h2>
-              
-              <div className="flex flex-col items-center justify-center border-2 border-dashed border-default-300 rounded-xl p-10 bg-default-50">
-                <span className="text-4xl mb-4">📄</span>
-                <input
-                  type="file"
-                  accept=".xml,text/xml,application/xml"
-                  className="w-full max-w-xs cursor-pointer rounded-xl border border-default-200 bg-white px-3 py-2 text-sm file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-primary/10 file:px-3 file:py-1 file:text-sm file:font-medium file:text-primary"
-                  onChange={(e) => {
-                    setImportFile(e.target.files?.[0] ?? null);
-                  }}
-                />
-                <p className="mt-4 text-sm text-default-500">Only Tally XML files up to 5MB.</p>
-              </div>
+          <HKCard>
+            {step === 1 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, margin: 0 }}>
+                  XML file choose karo
+                </p>
 
-              <div className="flex justify-end pt-4">
-                <Button color="primary" className="font-semibold px-8" onPress={handleFetchPreview} isLoading={loading} isDisabled={!importFile}>
-                  Aage Badho →
-                </Button>
-              </div>
-            </div>
-          )}
+                <div style={{
+                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                  border: "2px dashed var(--hk-border)", borderRadius: 16, padding: "40px 20px",
+                  background: "var(--hk-bg)",
+                }}>
+                  <span style={{ fontSize: 48, marginBottom: 16 }}>📄</span>
+                  <label style={{ cursor: "pointer" }}>
+                    <input
+                      type="file"
+                      accept=".xml,text/xml,application/xml"
+                      onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
+                      style={{ display: "none" }}
+                    />
+                    <div style={{
+                      padding: "10px 20px", borderRadius: 12,
+                      background: PU + "18", border: `1px solid ${PU}44`,
+                      color: PU, fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: 700,
+                      display: "flex", alignItems: "center", gap: 8,
+                    }}>
+                      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                      </svg>
+                      XML File Choose Karo
+                    </div>
+                  </label>
+                  {importFile ? (
+                    <p style={{ marginTop: 12, fontSize: TYPE.bodySmall, color: GR, fontFamily: SG, fontWeight: 600 }}>
+                      ✓ {importFile.name}
+                    </p>
+                  ) : (
+                    <p style={{ marginTop: 12, fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG }}>
+                      Only Tally XML files up to 5MB.
+                    </p>
+                  )}
+                </div>
 
-          {step === 2 && preview && (
-            <div className="space-y-6 animate-fade-in">
-              <h2 className="text-xl font-bold font-sg">Import Preview</h2>
-              
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                <div className="p-4 rounded-xl bg-default-100">
-                  <p className="text-xs uppercase text-default-500">Party Masters</p>
-                  <p className="text-2xl font-semibold">{preview.partiesCount}</p>
-                </div>
-                <div className="p-4 rounded-xl bg-default-100">
-                  <p className="text-xs uppercase text-default-500">Sales</p>
-                  <p className="text-2xl font-semibold">{preview.salesCount}</p>
-                </div>
-                <div className="p-4 rounded-xl bg-default-100">
-                  <p className="text-xs uppercase text-default-500">Purchases</p>
-                  <p className="text-2xl font-semibold">{preview.purchasesCount}</p>
-                </div>
-                <div className="p-4 rounded-xl bg-default-100">
-                  <p className="text-xs uppercase text-default-500">Receipts</p>
-                  <p className="text-2xl font-semibold">{preview.receiptsCount}</p>
-                </div>
-                <div className="p-4 rounded-xl bg-default-100">
-                  <p className="text-xs uppercase text-default-500">Payments</p>
-                  <p className="text-2xl font-semibold">{preview.paymentsCount}</p>
-                </div>
-                <div className="p-4 rounded-xl bg-default-100">
-                  <p className="text-xs uppercase text-default-500">Journals</p>
-                  <p className="text-2xl font-semibold">{preview.journalsCount}</p>
+                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                  <GradientButton onClick={handleFetchPreview} disabled={loading || !importFile}>
+                    {loading ? "Loading..." : "Aage Badho →"}
+                  </GradientButton>
                 </div>
               </div>
+            )}
 
-              {preview.parseErrors?.length > 0 && (
-                <div className="p-4 rounded-xl bg-warning/10 border border-warning/20">
-                  <p className="text-warning font-semibold text-sm mb-2">⚠ Warnings</p>
-                  <ul className="list-disc pl-4 text-xs text-warning/80 space-y-1">
-                    {preview.parseErrors.slice(0, 5).map((e, i) => <li key={i}>{e}</li>)}
-                    {preview.parseErrors.length > 5 && <li>... and {preview.parseErrors.length - 5} more</li>}
-                  </ul>
+            {step === 2 && preview && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, margin: 0 }}>
+                  Import Preview
+                </p>
+
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(3, 1fr)", gap: 12 }}>
+                  {[
+                    { label: "Party Masters", value: preview.partiesCount },
+                    { label: "Sales", value: preview.salesCount },
+                    { label: "Purchases", value: preview.purchasesCount },
+                    { label: "Receipts", value: preview.receiptsCount },
+                    { label: "Payments", value: preview.paymentsCount },
+                    { label: "Journals", value: preview.journalsCount },
+                  ].map(({ label, value }) => (
+                    <div key={label} style={statCardStyle}>
+                      <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: "var(--hk-sub)", textTransform: "uppercase", letterSpacing: "0.5px", fontFamily: SG, marginBottom: 4 }}>
+                        {label}
+                      </p>
+                      <p style={{ fontSize: TYPE.numMedium, fontWeight: 700, color: "var(--hk-text)", fontFamily: IN, margin: 0 }}>
+                        {value}
+                      </p>
+                    </div>
+                  ))}
                 </div>
-              )}
 
-              <div className="flex justify-between pt-4">
-                <Button variant="flat" onPress={() => setStep(1)}>← Wapas</Button>
-                <Button color="primary" className="font-semibold px-8" onPress={handleImport}>
-                  Haan, Import Karo →
-                </Button>
+                {preview.parseErrors?.length > 0 && (
+                  <div style={{ padding: 14, borderRadius: 12, background: AM + "10", border: `1px solid ${AM}33` }}>
+                    <p style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: AM, fontFamily: SG, marginBottom: 8 }}>
+                      ⚠ Warnings
+                    </p>
+                    <ul style={{ paddingLeft: 16, margin: 0 }}>
+                      {preview.parseErrors.slice(0, 5).map((e, i) => (
+                        <li key={i} style={{ fontSize: TYPE.caption, color: AM, fontFamily: SG, marginBottom: 2 }}>{e}</li>
+                      ))}
+                      {preview.parseErrors.length > 5 && (
+                        <li style={{ fontSize: TYPE.caption, color: AM, fontFamily: SG }}>
+                          ... and {preview.parseErrors.length - 5} more
+                        </li>
+                      )}
+                    </ul>
+                  </div>
+                )}
+
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <button onClick={() => setStep(1)} style={navBtnStyle()}>← Wapas</button>
+                  <GradientButton onClick={handleImport}>Haan, Import Karo →</GradientButton>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {step === 3 && (
-            <div className="space-y-6 animate-fade-in py-8">
-              <div className="flex flex-col items-center justify-center space-y-4">
-                <div className="w-16 h-16 border-4 border-default-200 border-t-primary rounded-full animate-spin"></div>
-                <h2 className="text-xl font-bold font-sg">Import chal raha hai...</h2>
-                <p className="text-default-500 text-sm">Please don't close this page.</p>
-                
+            {step === 3 && (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, padding: "32px 0", textAlign: "center" }}>
+                <div style={{
+                  width: 64, height: 64,
+                  border: `4px solid var(--hk-border)`,
+                  borderTopColor: PU,
+                  borderRadius: "50%",
+                }} className="animate-spin" />
+                <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, margin: 0 }}>
+                  Import chal raha hai...
+                </p>
+                <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG, margin: 0 }}>
+                  Yeh process server pe background mein chal raha hai.<br />
+                  Page band karo ya kahi bhi jao — import rukega nahi.
+                </p>
+
                 {importJobId && (
-                  <div className="w-full max-w-sm mt-4">
-                    <div className="flex justify-between text-xs mb-1">
-                      <span>{jobProgress.processed} processed</span>
-                      <span>{jobProgress.total} total</span>
+                  <div style={{ width: "100%", maxWidth: 320, marginTop: 8 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                      <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>{jobProgress.processed} processed</span>
+                      <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>{jobProgress.total} total</span>
                     </div>
-                    <div className="w-full bg-default-200 rounded-full h-2.5">
-                      <div className="bg-primary h-2.5 rounded-full" style={{ width: `${Math.max(5, (jobProgress.processed / (jobProgress.total || 1)) * 100)}%` }}></div>
+                    <div style={{ height: 8, borderRadius: 999, background: "var(--hk-border)", overflow: "hidden" }}>
+                      <div style={{
+                        height: "100%", borderRadius: 999, background: PU,
+                        width: `${Math.max(5, (jobProgress.processed / (jobProgress.total || 1)) * 100)}%`,
+                        transition: "width 0.4s ease",
+                      }} />
                     </div>
                   </div>
                 )}
-              </div>
-            </div>
-          )}
 
-          {step === 4 && importResult && (
-            <div className="space-y-6 animate-fade-in text-center py-6">
-              <span className="text-5xl">🎉</span>
-              <h2 className="text-2xl font-bold font-sg">Ho gaya!</h2>
-              <p className="text-default-500">Tally data has been imported successfully.</p>
-              
-              <div className="grid grid-cols-2 gap-4 mt-6 max-w-sm mx-auto text-left">
-                <div className="p-4 rounded-xl bg-success/10 border border-success/20">
-                  <p className="text-xs uppercase text-success/80">Imported</p>
-                  <p className="text-2xl font-semibold text-success">{importResult.imported}</p>
+                <div style={{ marginTop: 8 }}>
+                  <button onClick={() => router.push(returnTo)} style={navBtnStyle()}>
+                    {returnTo === "/dashboard" ? "Dashboard Par Jao" : "Wapas Jao"}
+                  </button>
                 </div>
-                {importResult.failed > 0 && (
-                  <div className="p-4 rounded-xl bg-danger/10 border border-danger/20">
-                    <p className="text-xs uppercase text-danger/80">Failed</p>
-                    <p className="text-2xl font-semibold text-danger">{importResult.failed}</p>
+              </div>
+            )}
+
+            {step === 4 && importResult && (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, padding: "24px 0", textAlign: "center" }}>
+                <span style={{ fontSize: 52 }}>🎉</span>
+                <p style={{ fontSize: TYPE.h1, fontWeight: 800, color: "var(--hk-text)", fontFamily: SG, margin: 0 }}>
+                  Ho gaya!
+                </p>
+                <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", fontFamily: SG, margin: 0 }}>
+                  Tally data has been imported successfully.
+                </p>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 16, width: "100%", maxWidth: 320, textAlign: "left" }}>
+                  <div style={{ padding: "14px 16px", borderRadius: 12, background: GR + "10", border: `1px solid ${GR}33` }}>
+                    <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: GR, textTransform: "uppercase", fontFamily: SG, marginBottom: 4 }}>Imported</p>
+                    <p style={{ fontSize: TYPE.numMedium, fontWeight: 700, color: GR, fontFamily: IN, margin: 0 }}>{importResult.imported}</p>
                   </div>
-                )}
-              </div>
+                  {importResult.failed > 0 && (
+                    <div style={{ padding: "14px 16px", borderRadius: 12, background: OR + "10", border: `1px solid ${OR}33` }}>
+                      <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: OR, textTransform: "uppercase", fontFamily: SG, marginBottom: 4 }}>Failed</p>
+                      <p style={{ fontSize: TYPE.numMedium, fontWeight: 700, color: OR, fontFamily: IN, margin: 0 }}>{importResult.failed}</p>
+                    </div>
+                  )}
+                </div>
 
-              <div className="flex justify-center pt-8">
-                <Button color="primary" className="font-semibold px-8" onPress={() => router.push(returnTo)}>
-                  {returnTo === "/dashboard" ? "Dashboard Par Jao" : "Wapas Jao"}
-                </Button>
+                <div style={{ marginTop: 24 }}>
+                  <GradientButton onClick={() => router.push(returnTo)}>
+                    {returnTo === "/dashboard" ? "Dashboard Par Jao" : "Wapas Jao"}
+                  </GradientButton>
+                </div>
               </div>
-            </div>
-          )}
-
-        </CardBody>
-      </Card>
-    </div>
+            )}
+          </HKCard>
+        </div>
+      </div>
+    </>
   );
 }
 

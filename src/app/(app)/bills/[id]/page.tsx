@@ -3,20 +3,23 @@
 import { useState, useEffect, use } from "react";
 import Image from "next/image";
 import {
-  Button,
-  Chip,
   Modal,
   ModalBody,
   ModalContent,
   ModalFooter,
   ModalHeader,
   Skeleton,
+  Button,
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { BillActionBar } from "@/components/bills/BillActionBar";
 import type { ColumnDef } from "@/lib/formula";
 import { shareBill } from "@/lib/share";
 import { GST_STATE_CODES } from "@/lib/gst-states";
+import {
+  OR, GR, AM, SG, IN, TYPE, TOUCH,
+  HKToast, StatusChip, GradientButton,
+} from "@/components/ui/hk-design";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -100,10 +103,6 @@ function stateName(code: string|null) {
   return GST_STATE_CODES[code] ? `${GST_STATE_CODES[code]}` : code;
 }
 
-const STATUS_COLOR: Record<string,"default"|"primary"|"success"|"danger"> =
-  { DRAFT:"default", FINAL:"success", CANCELLED:"danger" };
-
-// Print CSS injected via useEffect to avoid React insertBefore crash
 const PRINT_CSS = `
 @media print {
   @page { margin: 8mm; size: A4 portrait; }
@@ -130,7 +129,6 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
   const [confirmAction, setConfirmAction] = useState<"FINAL"|"CANCELLED"|null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
-  // Inject print CSS without touching JSX (avoids insertBefore crash)
   useEffect(() => {
     const el = document.createElement("style");
     el.setAttribute("data-hk-print", "1");
@@ -172,7 +170,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
         }),
       });
       if (!res.ok) throw new Error((await res.json()).error);
-      showToast(status === "FINAL" ? "Bill finalized!" : "Bill cancelled", "success");
+      showToast(status === "FINAL" ? "Bill final ho gaya!" : "Bill cancel ho gaya", "success");
       setBill((await fetch(`/api/bills/${id}`).then(r => r.json())).bill);
     } catch (e) { showToast(e instanceof Error ? e.message : "Failed", "error"); }
     finally { setActionLoading(false); setConfirmAction(null); }
@@ -189,19 +187,25 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
     });
   }
 
-  // ── Guards ────────────────────────────────────────────────────────────────
+  // ── Loading ───────────────────────────────────────────────────────────────
 
   if (loading) return (
-    <div className="p-6 space-y-4">
-      <Skeleton className="h-10 w-64 rounded-lg" />
-      <Skeleton className="h-[700px] w-full rounded-xl" />
+    <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG }}>
+      <div style={{ height: 57, borderBottom: "1px solid var(--hk-border)", background: "var(--hk-nav)" }} />
+      <div style={{ padding: "24px 20px", maxWidth: 860, margin: "0 auto" }}>
+        <Skeleton className="h-[700px] w-full rounded-2xl" />
+      </div>
     </div>
   );
 
   if (!bill) return (
-    <div className="p-8 text-center">
-      <p className="text-lg font-medium mb-3">Bill not found</p>
-      <Button variant="flat" onPress={() => router.push("/bills")}>Back to List</Button>
+    <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG, display: "flex", alignItems: "center", justifyContent: "center", padding: 40 }}>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontSize: 52, marginBottom: 16 }}>📋</div>
+        <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", marginBottom: 8 }}>Bill nahi mila</p>
+        <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", marginBottom: 24 }}>Yeh bill exist nahi karta ya delete ho gaya</p>
+        <GradientButton onClick={() => router.push("/bills")}>Bills par wapas jao</GradientButton>
+      </div>
     </div>
   );
 
@@ -216,75 +220,134 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
   const supply   = bill.placeOfSupply ? stateName(bill.placeOfSupply) : "";
   const supplyFull = bill.placeOfSupply ? `${supply} (${bill.placeOfSupply})` : "";
 
-  // Find the last "amount" column to anchor sub-total alignment
   const lastNumCol = [...cols].reverse().find(c => c.type === "formula" || c.type === "number");
   const numColCount = cols.filter(c => c.type === "number" || c.type === "formula").length;
 
-  // ── GST invoice render ────────────────────────────────────────────────────
+  const isVendor = bill.party?.type === "VENDOR";
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <>
-      {/* Toast */}
-      {toast && (
-        <div className={`no-print fixed top-4 right-4 z-[100] px-4 py-3 rounded-xl shadow-lg ${toast.type==="success"?"bg-success text-white":"bg-danger text-white"}`}>
-          {toast.message}
-        </div>
-      )}
+      {toast && <HKToast message={toast.message} type={toast.type} />}
 
-      {/* ── Screen toolbar ──────────────────────────────────────────────────── */}
-      <div className="no-print sticky top-0 z-20 border-b border-default-200 backdrop-blur-md" style={{ background: "var(--hk-nav)" }}>
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <Button isIconOnly size="sm" variant="light"
-              onPress={() => router.push(bill.party?.type==="VENDOR" ? "/purchases" : "/bills")}>
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+      {/* ── Toolbar ─────────────────────────────────────────────────────────── */}
+      <div
+        className="no-print"
+        style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 20,
+          borderBottom: "1px solid var(--hk-border)",
+          background: "var(--hk-nav)",
+          backdropFilter: "blur(12px)",
+        }}
+      >
+        <div style={{ maxWidth: 900, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 16px" }}>
+          {/* Left: back + bill number + status */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
+            <button
+              onClick={() => router.push(isVendor ? "/purchases" : "/bills")}
+              style={{
+                width: TOUCH.secondary, height: TOUCH.secondary,
+                borderRadius: 10, border: "1.5px solid var(--hk-border)",
+                background: "var(--hk-card)", color: "var(--hk-sub)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: "pointer", flexShrink: 0,
+              }}
+            >
+              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 12H5M12 5l-7 7 7 7" />
               </svg>
-            </Button>
-            <span className="font-bold font-mono truncate">{bill.billNumber}</span>
-            <Chip size="sm" variant="flat" color={STATUS_COLOR[bill.status]}>{bill.status}</Chip>
-            <span className="hidden sm:block text-xs text-default-400">{fmtDate(bill.createdAt)} · {bill.creator.name}</span>
+            </button>
+            <span style={{ fontSize: TYPE.body, fontWeight: 800, color: "var(--hk-text)", fontFamily: IN, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {bill.billNumber}
+            </span>
+            <StatusChip status={bill.status} />
+            <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG, whiteSpace: "nowrap", display: "none" }} className="sm-visible">
+              {fmtDate(bill.createdAt)} · {bill.creator.name}
+            </span>
           </div>
-          <div className="flex shrink-0 gap-2">
-            <Button size="sm" variant="flat" onPress={() => window.print()}
-              startContent={
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6v-8z"/>
-                </svg>
-              }>
-              Print / PDF
-            </Button>
-            {bill.status==="DRAFT" && <>
-              <Button size="sm" variant="bordered" onPress={() => router.push(`/bills/${id}/edit`)}
-                startContent={
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+
+          {/* Right: actions */}
+          <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center" }}>
+            <button
+              onClick={() => window.print()}
+              style={{
+                height: TOUCH.secondary, padding: "0 14px",
+                borderRadius: 10, border: "1.5px solid var(--hk-border)",
+                background: "var(--hk-card)", color: "var(--hk-text)",
+                fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG,
+                cursor: "pointer", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
+              }}
+            >
+              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6v-8z" />
+              </svg>
+              Print
+            </button>
+
+            {bill.status === "DRAFT" && (
+              <>
+                <button
+                  onClick={() => router.push(`/bills/${id}/edit`)}
+                  style={{
+                    height: TOUCH.secondary, padding: "0 14px",
+                    borderRadius: 10, border: "1.5px solid var(--hk-border)",
+                    background: "var(--hk-card)", color: "var(--hk-text)",
+                    fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG,
+                    cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+                  }}
+                >
+                  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
                   </svg>
-                }>
-                Edit
-              </Button>
-              <Button size="sm" color="success" variant="flat" onPress={() => setConfirmAction("FINAL")}
-                startContent={
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/>
+                  Edit
+                </button>
+                <button
+                  onClick={() => setConfirmAction("FINAL")}
+                  style={{
+                    height: TOUCH.secondary, padding: "0 14px",
+                    borderRadius: 10, border: "none",
+                    background: GR, color: "#fff",
+                    fontSize: TYPE.bodySmall, fontWeight: 700, fontFamily: SG,
+                    cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+                    boxShadow: `0 3px 12px ${GR}40`,
+                  }}
+                >
+                  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 13l4 4L19 7" />
                   </svg>
-                }>
-                Finalize
-              </Button>
-            </>}
-            {bill.status!=="CANCELLED" && (
-              <Button size="sm" color="danger" variant="flat" onPress={() => setConfirmAction("CANCELLED")}>Cancel</Button>
+                  Finalize
+                </button>
+              </>
+            )}
+
+            {bill.status !== "CANCELLED" && (
+              <button
+                onClick={() => setConfirmAction("CANCELLED")}
+                style={{
+                  height: TOUCH.secondary, padding: "0 14px",
+                  borderRadius: 10, border: "1.5px solid var(--hk-border)",
+                  background: "transparent", color: OR,
+                  fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG,
+                  cursor: "pointer", whiteSpace: "nowrap",
+                }}
+              >
+                Cancel
+              </button>
             )}
           </div>
         </div>
       </div>
 
-      {/* ── Invoice document ────────────────────────────────────────────────── */}
-      <div className="bill-bg min-h-screen py-8 px-3" style={{ background: "var(--hk-bg)" }}>
+      {/* ── Invoice document ──────────────────────────────────────────────────── */}
+      <div className="bill-bg" style={{ minHeight: "100vh", padding: "24px 12px 120px", background: "var(--hk-bg)" }}>
         <div
-          className="bill-paper mx-auto"
+          className="bill-paper"
           style={{
             maxWidth: 860,
+            margin: "0 auto",
             background: "white",
             color: "#111",
             fontFamily: '"Arial","Helvetica",sans-serif',
@@ -295,13 +358,11 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
         >
 
           {/* ══ HEADER ════════════════════════════════════════════════════════ */}
-          {/* Top meta strip */}
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"6px 14px", borderBottom:"1px solid #ccc", fontSize:10 }}>
             <span style={{ fontWeight:700, letterSpacing:1, textTransform:"uppercase", color:"#555" }}>Tax Invoice</span>
             <span style={{ color:"#555" }}>Subject to {supply || "local"} Jurisdiction</span>
           </div>
 
-          {/* Company nameplate */}
           <div style={{ textAlign:"center", padding:"14px 20px 10px", borderBottom:"1.5px solid #333" }}>
             {settings?.companyLogo && (
               <div style={{ marginBottom:8 }}>
@@ -328,7 +389,6 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
 
           {/* ══ PARTY + INVOICE META ══════════════════════════════════════════ */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", borderBottom:"1.5px solid #333" }}>
-            {/* Party */}
             <div style={{ padding:"10px 14px", borderRight:"1px solid #999", fontSize:11 }}>
               <div style={{ fontWeight:700, marginBottom:5, fontSize:11 }}>Party Name &amp; Address :</div>
               <div style={{ fontWeight:800, fontSize:13 }}>{bill.customerName}</div>
@@ -350,7 +410,6 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
               )}
             </div>
 
-            {/* Invoice meta */}
             <div style={{ padding:"10px 14px", fontSize:11 }}>
               {[
                 ["Invoice No", bill.billNumber],
@@ -409,13 +468,9 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
                 );
               })}
 
-              {/* Blank padding rows */}
-
-              {/* ── Sub-total + Tax rows ── */}
               {(() => {
-                // How many text cols to span
                 const textCols = cols.length - numColCount;
-                const spanLeft = 1 + textCols; // S.No + text cols
+                const spanLeft = 1 + textCols;
                 const taxRows = isIS
                   ? [["IGST", `@ ${bill.taxPercent}%`, formatINR(bill.taxAmount)]]
                   : [
@@ -424,7 +479,6 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
                     ];
                 return (
                   <>
-                    {/* Sub Total */}
                     <tr style={{ borderTop:"1.5px solid #555", borderBottom:"1px solid #ddd" }}>
                       <td colSpan={spanLeft} style={{ ...TD({}), borderRight:"1px solid #ccc" }}> </td>
                       {numColCount > 1 && Array.from({length:numColCount-1}).map((_,i) => (
@@ -437,7 +491,6 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
                         </div>
                       </td>
                     </tr>
-                    {/* Tax rows */}
                     {taxRows.map(([label, rate, amt]) => (
                       <tr key={label} style={{ borderBottom:"1px solid #e5e5e5" }}>
                         <td colSpan={spanLeft} style={{ ...TD({}), borderRight:"1px solid #ccc" }}> </td>
@@ -456,7 +509,6 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
                 );
               })()}
 
-              {/* ── Grand Total row ── */}
               <tr style={{ background:"#1e3a5f", borderTop:"2px solid #1e3a5f" }}>
                 <td colSpan={1} style={{ padding:"10px 10px", color:"white", fontWeight:900, fontSize:14, textAlign:"center", borderRight:"1px solid rgba(255,255,255,0.2)" }}>
                   Total
@@ -489,7 +541,6 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
             <span>{numberToWords(bill.grandTotal)}</span>
           </div>
 
-          {/* Notes / Declaration */}
           {(bill.notes || bill.terms) && (
             <div style={{ padding:"8px 14px", borderBottom:"1px solid #ccc", fontSize:11, color:"#444" }}>
               {bill.notes && <div><span style={{ fontWeight:700 }}>Declaration / Notes : </span>{bill.notes}</div>}
@@ -499,7 +550,6 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
 
           {/* ══ FOOTER ════════════════════════════════════════════════════════ */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", borderTop:"1.5px solid #333" }}>
-            {/* Bank / UPI details */}
             <div style={{ padding:"12px 14px", borderRight:"1px solid #999", fontSize:11 }}>
               <div style={{ fontWeight:800, marginBottom:8, fontSize:12 }}>Company&apos;s Bank Details</div>
               {settings?.bankName || settings?.bankAccountNumber ? (
@@ -520,7 +570,6 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
               )}
             </div>
 
-            {/* Signatures */}
             <div style={{ padding:"12px 14px", fontSize:11 }}>
               <div style={{ fontWeight:800, marginBottom:32, textAlign:"right" }}>
                 for {settings?.companyName || "—"}
@@ -540,7 +589,6 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
             </div>
           </div>
 
-          {/* ══ GENERATED BY ══════════════════════════════════════════════════ */}
           <div style={{ borderTop:"1px solid #ccc", padding:"6px 14px", background:"#f9f9f9", display:"flex", justifyContent:"space-between", fontSize:9, color:"#aaa", letterSpacing:0.3 }}>
             <span>E &amp; O.E.</span>
             <span>
@@ -550,31 +598,39 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
             </span>
           </div>
 
-        </div>{/* /bill-paper */}
-      </div>{/* /bill-bg */}
+        </div>
+      </div>
 
-      {/* ── Action bar ──────────────────────────────────────────────────────── */}
+      {/* ── Action bar ───────────────────────────────────────────────────────── */}
       <BillActionBar
         bill={{ id:bill.id, billNumber:bill.billNumber, customerName:bill.customerName, grandTotal:bill.grandTotal, status:bill.status, customerPhone:bill.customerPhone, partyId:bill.partyId }}
         onShare={handleShare}
       />
 
-      {/* ── Confirm modal ───────────────────────────────────────────────────── */}
-      <Modal isOpen={confirmAction!==null} onClose={()=>setConfirmAction(null)} size="sm">
+      {/* ── Confirm modal ────────────────────────────────────────────────────── */}
+      <Modal isOpen={confirmAction !== null} onClose={() => setConfirmAction(null)} size="sm" backdrop="blur" placement="center">
         <ModalContent>
-          <ModalHeader>{confirmAction==="FINAL" ? "Finalize Bill" : "Cancel Bill"}</ModalHeader>
+          <ModalHeader style={{ fontFamily: SG, fontSize: TYPE.h2 }}>
+            {confirmAction === "FINAL" ? "Bill Final Karo?" : "Bill Cancel Karo?"}
+          </ModalHeader>
           <ModalBody>
-            <p className="text-sm text-default-600">
-              {confirmAction==="FINAL"
-                ? "This will lock the bill and record it in your books. It cannot be edited after finalization."
-                : "This will permanently cancel the bill and reverse any balance changes."}
+            <p style={{ fontFamily: SG, fontSize: TYPE.body, color: "var(--hk-sub)", lineHeight: 1.6 }}>
+              {confirmAction === "FINAL"
+                ? "Bill lock ho jayega aur books mein record ho jayega. Finalize karne ke baad edit nahi kar sakte."
+                : "Bill permanently cancel ho jayega aur balance changes reverse ho jayenge."}
             </p>
           </ModalBody>
           <ModalFooter>
-            <Button variant="flat" onPress={()=>setConfirmAction(null)}>Go back</Button>
-            <Button color={confirmAction==="FINAL"?"success":"danger"} isLoading={actionLoading}
-              onPress={()=>confirmAction&&execStatus(confirmAction)}>
-              {confirmAction==="FINAL"?"Yes, Finalize":"Yes, Cancel Bill"}
+            <Button variant="flat" onPress={() => setConfirmAction(null)} style={{ fontFamily: SG }}>
+              Wapas jao
+            </Button>
+            <Button
+              color={confirmAction === "FINAL" ? "success" : "danger"}
+              isLoading={actionLoading}
+              onPress={() => confirmAction && execStatus(confirmAction)}
+              style={{ fontFamily: SG, fontWeight: 700 }}
+            >
+              {confirmAction === "FINAL" ? "Haan, Finalize Karo" : "Haan, Cancel Karo"}
             </Button>
           </ModalFooter>
         </ModalContent>

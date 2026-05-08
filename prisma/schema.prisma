@@ -372,6 +372,7 @@ model BankAccount {
   name                                              String
   type                                              AccountType
   accountNumber                                     String?
+  ifscCode                                          String?
   openingBalance                                    Decimal     @default(0) @db.Decimal(19, 4)
   currentBalance                                    Decimal     @default(0) @db.Decimal(19, 4)
   isActive                                          Boolean     @default(true)

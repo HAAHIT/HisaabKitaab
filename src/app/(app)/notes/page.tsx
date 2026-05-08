@@ -1,18 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Button,
-  Card,
-  CardBody,
-  Chip,
-  Input,
-  Pagination,
-  Select,
-  SelectItem,
-  Skeleton,
-} from "@heroui/react";
+import { Pagination, Skeleton } from "@heroui/react";
 import { useRouter } from "next/navigation";
+import {
+  GR, AM, PU, OR, SG, IN, TYPE,
+  fmtFull, useIsMobile,
+  HKCard, HKToast, SearchBox, PillFilter,
+  PageHeader, GradientButton,
+} from "@/components/ui/hk-design";
 
 interface Note {
   id: string;
@@ -24,14 +20,6 @@ interface Note {
   partyId: string | null;
 }
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(value);
-}
-
 async function readError(response: Response) {
   const data = await response.json().catch(() => null);
   return data?.error || "Request failed";
@@ -39,35 +27,31 @@ async function readError(response: Response) {
 
 export default function NotesListPage() {
   const router = useRouter();
+  const isMobile = useIsMobile();
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState("ALL");
+  const [typeFilter, setTypeFilter] = useState<"ALL" | "CREDIT_NOTE" | "DEBIT_NOTE">("ALL");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [collapsedMonths, setCollapsedMonths] = useState<Record<string, boolean>>({});
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const monthlyGroups = useMemo(() => {
-    const monthFormatter = new Intl.DateTimeFormat("en-IN", {
-      month: "long",
-      year: "numeric",
-    });
+    const monthFormatter = new Intl.DateTimeFormat("en-IN", { month: "long", year: "numeric" });
     const groups = new Map<string, { label: string; notes: Note[]; total: number }>();
-
     for (const note of notes) {
-      const date = new Date(note.entryDate);
-      const groupKey = `${date.getFullYear()}-${date.getMonth()}`;
-      const existing = groups.get(groupKey);
+      const d = new Date(note.entryDate);
+      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      const existing = groups.get(key);
       if (existing) {
         existing.notes.push(note);
         existing.total += Number(note.grandTotal);
-        continue;
+      } else {
+        groups.set(key, { label: monthFormatter.format(d), notes: [note], total: Number(note.grandTotal) });
       }
-      groups.set(groupKey, { label: monthFormatter.format(date), notes: [note], total: Number(note.grandTotal) });
     }
-
-    return Array.from(groups.entries()).map(([key, group]) => ({ key, ...group }));
+    return Array.from(groups.entries()).map(([key, g]) => ({ key, ...g }));
   }, [notes]);
 
   const fetchNotes = useCallback(async () => {
@@ -106,219 +90,188 @@ export default function NotesListPage() {
     setCollapsedMonths((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
-  const typeOptions = [
-    { key: "ALL", label: "All Notes" },
-    { key: "CREDIT_NOTE", label: "Credit Notes" },
-    { key: "DEBIT_NOTE", label: "Debit Notes" },
+  const totalCredit = notes.filter((n) => n.voucherType === "CREDIT_NOTE").length;
+  const totalDebit = notes.filter((n) => n.voucherType === "DEBIT_NOTE").length;
+
+  const filterOptions = [
+    { key: "ALL" as const, label: `Sab (${notes.length})` },
+    { key: "CREDIT_NOTE" as const, label: `Credit (${totalCredit})` },
+    { key: "DEBIT_NOTE" as const, label: `Debit (${totalDebit})` },
   ];
 
   return (
-    <div className="animate-fade-in p-4 lg:p-8">
-      {toast && (
-        <div
-          className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${
-            toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
-          }`}
-        >
-          {toast.message}
-        </div>
-      )}
+    <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG }}>
+      {toast && <HKToast message={toast.message} type={toast.type} />}
 
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Credit &amp; Debit Notes</h1>
-          <p className="mt-1 text-sm text-default-500">
-            Manage sales returns (credit notes) and purchase returns (debit notes).
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            color="primary"
-            className="bg-gradient-to-r from-blue-600 to-indigo-600 font-semibold shadow-lg shadow-blue-500/25"
-            onPress={() => router.push("/notes/new?type=CREDIT_NOTE")}
-            startContent={
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} />
-              </svg>
-            }
-          >
-            Credit Note
-          </Button>
-          <Button
-            color="primary"
-            className="bg-gradient-to-r from-blue-600 to-indigo-600 font-semibold shadow-lg shadow-blue-500/25"
-            onPress={() => router.push("/notes/new?type=DEBIT_NOTE")}
-            startContent={
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} />
-              </svg>
-            }
-          >
-            Debit Note
-          </Button>
-        </div>
-      </div>
-
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row">
-        <Input
-          aria-label="Search notes"
-          placeholder="Search by narration or party…"
-          value={search}
-          onValueChange={setSearch}
-          variant="bordered"
-          className="flex-1"
-          startContent={
-            <svg className="h-4 w-4 text-default-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} />
-            </svg>
-          }
-        />
-        <Select
-          aria-label="Filter by type"
-          placeholder="All Notes"
-          selectedKeys={new Set([typeFilter])}
-          onSelectionChange={(keys) => {
-            const value = Array.from(keys)[0] as string;
-            if (value) { setTypeFilter(value); setPage(1); }
-          }}
-          variant="bordered"
-          className="w-44"
-        >
-          {typeOptions.map((opt) => (
-            <SelectItem key={opt.key} textValue={opt.label}>{opt.label}</SelectItem>
-          ))}
-        </Select>
-      </div>
-
-      {loading ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-20 w-full rounded-xl" />
-          ))}
-        </div>
-      ) : notes.length === 0 ? (
-        <Card shadow="sm">
-          <CardBody className="flex flex-col items-center justify-center py-16">
-            <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
-              <svg className="h-10 w-10 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} />
-              </svg>
+      <PageHeader
+        title="Credit & Debit Notes"
+        subtitle="Sales returns aur purchase returns"
+        isMobile={isMobile}
+        action={
+          !isMobile && (
+            <div style={{ display: "flex", gap: 8 }}>
+              <GradientButton onClick={() => router.push("/notes/new?type=CREDIT_NOTE")}>
+                + Credit Note
+              </GradientButton>
+              <button
+                onClick={() => router.push("/notes/new?type=DEBIT_NOTE")}
+                style={{
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  gap: 8, minHeight: 48, padding: "0 22px", borderRadius: 14,
+                  background: AM + "18", border: `1.5px solid ${AM}44`,
+                  color: AM, fontFamily: SG, fontSize: TYPE.body, fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                + Debit Note
+              </button>
             </div>
-            <p className="text-lg font-medium text-default-600">
-              {search || typeFilter !== "ALL" ? "No notes found matching your filters" : "No notes recorded yet"}
+          )
+        }
+      />
+
+      <div style={{ padding: isMobile ? "0 14px" : "0 28px", maxWidth: 1440, margin: "0 auto" }}>
+        <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+          <SearchBox value={search} onChange={setSearch} placeholder="Note dhundho..." />
+          <PillFilter
+            options={filterOptions}
+            value={typeFilter}
+            onChange={(v) => { setTypeFilter(v); setPage(1); }}
+          />
+        </div>
+
+        {loading ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-20 rounded-2xl" />)}
+          </div>
+        ) : notes.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--hk-sub)" }}>
+            <div style={{ fontSize: 52, marginBottom: 16 }}>📝</div>
+            <p style={{ fontWeight: 700, fontSize: TYPE.h2, color: "var(--hk-text)", marginBottom: 8, fontFamily: SG }}>
+              {search || typeFilter !== "ALL" ? "Koi note nahi mila" : "Abhi tak koi note nahi"}
             </p>
-            <p className="mt-1 text-sm text-default-400">
-              {search || typeFilter !== "ALL"
-                ? "Try adjusting your search or filters"
-                : "Create a credit or debit note using the buttons above"}
+            <p style={{ fontSize: TYPE.body, fontWeight: 500, fontFamily: SG, marginBottom: 20 }}>
+              {search || typeFilter !== "ALL" ? "Search badlo ya naya note banao" : "Pehla credit ya debit note banao"}
             </p>
             {!search && typeFilter === "ALL" && (
-              <Button
-                color="primary"
-                variant="flat"
-                size="sm"
-                className="mt-4"
-                onPress={() => router.push("/notes/new?type=CREDIT_NOTE")}
-              >
-                Create Note
-              </Button>
+              <GradientButton onClick={() => router.push("/notes/new?type=CREDIT_NOTE")}>
+                + Credit Note Banao
+              </GradientButton>
             )}
-          </CardBody>
-        </Card>
-      ) : (
-        <>
-          <div className="space-y-6">
+          </div>
+        ) : (
+          <>
             {monthlyGroups.map((group) => {
               const isCollapsed = collapsedMonths[group.key] === true;
               return (
-                <section key={group.key} className="space-y-3">
+                <div key={group.key} style={{ marginBottom: 20 }}>
                   <button
-                    type="button"
-                    aria-expanded={!isCollapsed}
-                    aria-controls={`notes-month-${group.key}`}
-                    className="w-full rounded-xl border border-default-200 bg-content2/40 px-4 py-2 text-left transition hover:bg-content2/60"
                     onClick={() => toggleMonth(group.key)}
+                    aria-expanded={!isCollapsed}
+                    style={{
+                      width: "100%", minHeight: 48, display: "flex",
+                      justifyContent: "space-between", alignItems: "center",
+                      padding: "10px 16px", borderRadius: 12,
+                      background: "var(--hk-badge)", border: "1px solid var(--hk-border)",
+                      marginBottom: 10, cursor: "pointer", fontFamily: SG,
+                    }}
                   >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-semibold text-default-700">{group.label}</p>
-                        <Chip size="sm" variant="flat" color="default">
-                          {group.notes.length} {group.notes.length === 1 ? "note" : "notes"}
-                        </Chip>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <p className="text-sm font-semibold text-default-700">
-                          {formatCurrency(group.total)}
-                        </p>
-                        <svg
-                          className={`h-4 w-4 text-default-500 transition-transform ${isCollapsed ? "" : "rotate-180"}`}
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path d="m19 9-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} />
-                        </svg>
-                      </div>
+                    <span style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)" }}>
+                      {group.label}
+                    </span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{ fontSize: TYPE.numSmall, fontWeight: 700, color: "var(--hk-sub)", fontFamily: IN }}>
+                        {fmtFull(group.total)}
+                      </span>
+                      <span style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--hk-sub)" }}>
+                        · {group.notes.length} notes
+                      </span>
+                      <svg
+                        width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="var(--hk-sub)" strokeWidth="1.8" strokeLinecap="round"
+                        style={{ transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)", transition: "transform 0.2s" }}
+                      >
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
                     </div>
                   </button>
 
                   {!isCollapsed && (
-                    <div
-                      id={`notes-month-${group.key}`}
-                      className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
-                    >
-                      {group.notes.map((note) => {
+                    <HKCard style={{ padding: "0 16px" }}>
+                      {group.notes.map((note, i) => {
                         const isCredit = note.voucherType === "CREDIT_NOTE";
                         return (
-                          <Card key={note.id} shadow="sm" className="transition hover:shadow-md">
-                            <CardBody className="p-4">
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="flex flex-col gap-1 min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <Chip
-                                      size="sm"
-                                      variant="flat"
-                                      color={isCredit ? "success" : "warning"}
-                                      className="flex-shrink-0"
-                                    >
-                                      {isCredit ? "Credit" : "Debit"}
-                                    </Chip>
-                                    {note.partyName && (
-                                      <span className="text-sm font-medium truncate">{note.partyName}</span>
-                                    )}
-                                  </div>
-                                  <p className="text-xs text-default-500 line-clamp-2">{note.narration}</p>
-                                  <p className="text-xs text-default-400">
-                                    {new Date(note.entryDate).toLocaleDateString("en-IN", {
-                                      day: "numeric",
-                                      month: "short",
-                                      year: "numeric",
-                                    })}
-                                  </p>
-                                </div>
-                                <div className="text-right flex-shrink-0">
-                                  <p className="text-lg font-bold">{formatCurrency(note.grandTotal)}</p>
-                                </div>
+                          <div
+                            key={note.id}
+                            style={{
+                              display: "flex", justifyContent: "space-between",
+                              alignItems: "center", padding: "16px 0",
+                              borderBottom: i < group.notes.length - 1 ? "1px solid var(--hk-border)" : "none",
+                              minHeight: 64,
+                            }}
+                          >
+                            <div style={{ display: "flex", gap: 14, alignItems: "center", flex: 1, minWidth: 0 }}>
+                              <div
+                                style={{
+                                  width: 44, height: 44, borderRadius: 11, flexShrink: 0,
+                                  background: isCredit ? GR + "18" : AM + "18",
+                                  display: "flex", alignItems: "center", justifyContent: "center",
+                                }}
+                              >
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                  stroke={isCredit ? GR : AM} strokeWidth="2" strokeLinecap="round"
+                                >
+                                  <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z" />
+                                </svg>
                               </div>
-                            </CardBody>
-                          </Card>
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                                  <span
+                                    style={{
+                                      fontSize: TYPE.chip, fontWeight: 700,
+                                      color: isCredit ? GR : AM,
+                                      background: isCredit ? GR + "18" : AM + "18",
+                                      padding: "3px 8px", borderRadius: 6, fontFamily: SG,
+                                    }}
+                                  >
+                                    {isCredit ? "Credit" : "Debit"}
+                                  </span>
+                                  {note.partyName && (
+                                    <span style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--hk-sub)", fontFamily: SG, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                      {note.partyName}
+                                    </span>
+                                  )}
+                                </div>
+                                <p style={{ fontSize: TYPE.body, fontWeight: 600, color: "var(--hk-text)", marginBottom: 3, fontFamily: SG, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {note.narration || "—"}
+                                </p>
+                                <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--hk-sub)", fontFamily: SG }}>
+                                  {new Date(note.entryDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                                </p>
+                              </div>
+                            </div>
+                            <div style={{ textAlign: "right", flexShrink: 0 }}>
+                              <p style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: isCredit ? GR : PU, fontFamily: IN, whiteSpace: "nowrap" }}>
+                                {fmtFull(note.grandTotal)}
+                              </p>
+                            </div>
+                          </div>
                         );
                       })}
-                    </div>
+                    </HKCard>
                   )}
-                </section>
+                </div>
               );
             })}
-          </div>
 
-          {totalPages > 1 && (
-            <div className="mt-6 flex justify-center">
-              <Pagination total={totalPages} page={page} onChange={setPage} showControls />
-            </div>
-          )}
-        </>
-      )}
-
+            {totalPages > 1 && (
+              <div style={{ marginTop: 24, display: "flex", justifyContent: "center" }}>
+                <Pagination total={totalPages} page={page} onChange={setPage} showControls />
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
