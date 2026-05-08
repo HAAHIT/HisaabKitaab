@@ -127,7 +127,10 @@ export function QuickAddPartyModal({ isOpen, onOpenChange, onSuccess, initialTyp
                   label="Type"
                   variant="bordered"
                   selectedKeys={[type]}
-                  onSelectionChange={(keys) => setType(Array.from(keys)[0] as string)}
+                  onSelectionChange={(keys) => {
+                    const selected = Array.from(keys as Iterable<string>)[0];
+                    if (selected) setType(selected);
+                  }}
                 >
                   <SelectItem key="CUSTOMER">{t("parties.customerType")}</SelectItem>
                   <SelectItem key="VENDOR">{t("parties.vendorType")}</SelectItem>

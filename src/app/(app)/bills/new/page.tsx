@@ -18,7 +18,8 @@ import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { evaluateRow, type ColumnDef } from "@/lib/formula";
 import { GST_STATE_CODES } from "@/lib/gst-states";
-import ItemCatalogPicker from "@/components/bills/ItemCatalogPicker";
+import { deriveIsInterState, extractGstinStateCode } from "@/lib/gst-helpers";
+
 
 interface Template {
   id: string;
@@ -91,12 +92,15 @@ export default function NewBillPage() {
   const [taxPercent, setTaxPercent] = useState(18);
   const [isInterState, setIsInterState] = useState(false);
   const [placeOfSupply, setPlaceOfSupply] = useState("");
-  const [hsnCode, setHsnCode] = useState("");
   const [hsnPerRow, setHsnPerRow] = useState(false);
-  const [showCatalogPicker, setShowCatalogPicker] = useState(false);
+
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("");
   const [didAutoFocusRow, setDidAutoFocusRow] = useState(false);
+  const [companyGstin, setCompanyGstin] = useState("");
+
+  // Lock GST controls whenever the selected party has a GSTIN — auto-fill takes over
+  const gstIsLocked = Boolean(selectedParty?.gstin);
 
   const fetchFormData = useCallback(async () => {
     setLoading(true);
@@ -120,6 +124,7 @@ export default function NewBillPage() {
         setTaxPercent(settingsData.settings.defaultTaxPercent || 18);
         setTerms(settingsData.settings.defaultTerms || "");
         setDefaultTemplateId(settingsData.settings.defaultTemplateId || null);
+        setCompanyGstin(settingsData.settings.companyGstin || "");
       }
     } catch {
       showToast("Failed to load bill form data", "error");
@@ -211,19 +216,6 @@ export default function NewBillPage() {
     });
   }
 
-  function handleCatalogSelect(
-    rowData: Record<string, string | number>,
-    taxRate: number | null
-  ) {
-    if (!selectedTemplate) return;
-    const baseRow = buildEmptyRow(selectedTemplate);
-    const merged = { ...baseRow, ...rowData };
-    const evaluated = evaluateRow(merged, selectedTemplate.columns);
-    setRows((prev) => [...prev, evaluated]);
-    if (taxRate !== null) setTaxPercent(taxRate);
-    if (rowData._hsnCode && String(rowData._hsnCode).trim()) setHsnPerRow(true);
-    setShowCatalogPicker(false);
-  }
 
   const { subtotal, taxAmount, grandTotal } = useMemo(() => {
     if (!selectedTemplate) {
@@ -341,7 +333,7 @@ export default function NewBillPage() {
           grandTotal,
           isInterState,
           placeOfSupply: placeOfSupply || null,
-          hsnCode: hsnCode.trim() || null,
+          hsnCode: null,
           notes: notes.trim() || null,
           terms: terms.trim() || null,
           status,
@@ -514,11 +506,19 @@ export default function NewBillPage() {
                     setSelectedParty(party);
                     if (party) {
                       setErrors((prev) => ({ ...prev, partyId: false }));
-                      // Auto-fill place of supply from first 2 digits of customer GSTIN
-                      if (party.gstin && party.gstin.length >= 2) {
-                        const code = party.gstin.substring(0, 2);
-                        if (GST_STATE_CODES[code]) setPlaceOfSupply(code);
+                      if (party.gstin) {
+                        const stateCode = extractGstinStateCode(party.gstin);
+                        if (stateCode && GST_STATE_CODES[stateCode]) {
+                          setPlaceOfSupply(stateCode);
+                        }
+                        setIsInterState(deriveIsInterState(party.gstin, companyGstin));
+                      } else {
+                        setPlaceOfSupply("");
+                        setIsInterState(false);
                       }
+                    } else {
+                      setPlaceOfSupply("");
+                      setIsInterState(false);
                     }
                   }}
                   partyType="CUSTOMER"
@@ -597,19 +597,7 @@ export default function NewBillPage() {
                       HSN per row
                     </Button>
                   )}
-                  <Button
-                    size="sm"
-                    variant="flat"
-                    color="secondary"
-                    onPress={() => setShowCatalogPicker(true)}
-                    startContent={
-                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round">
-                        <path d="M20 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M16 3H8l-2 4h12l-2-4z"/>
-                      </svg>
-                    }
-                  >
-                    Catalogue
-                  </Button>
+
                   <Button
                     size="sm"
                     variant="flat"
@@ -820,19 +808,37 @@ export default function NewBillPage() {
                       <span className="font-medium">{formatCurrency(taxAmount)}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <p className="text-xs text-default-400">{t("bills.autoTaxNote")}</p>
-                      <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs text-default-400">{t("bills.autoTaxNote")}</p>
+                        {gstIsLocked && (
+                          <Chip size="sm" variant="flat" color={isInterState ? "warning" : "success"}>
+                            {isInterState ? "IGST" : "CGST + SGST"}
+                          </Chip>
+                        )}
+                      </div>
+                      <label
+                        className={`flex items-center gap-1.5 select-none ${gstIsLocked ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
+                        title={gstIsLocked ? "Auto-detected from party GSTIN" : undefined}
+                      >
                         <input
                           type="checkbox"
                           checked={isInterState}
-                          onChange={(e) => setIsInterState(e.target.checked)}
+                          onChange={(e) => { if (!gstIsLocked) setIsInterState(e.target.checked); }}
+                          disabled={gstIsLocked}
                           className="accent-primary"
                         />
                         <span className="text-xs text-default-500">Inter-state (IGST)</span>
                       </label>
                     </div>
                     <div className="flex items-center justify-between gap-3">
-                      <span className="shrink-0 text-sm text-default-500">Place of Supply</span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="text-sm text-default-500">Place of Supply</span>
+                        {gstIsLocked && (
+                          <svg className="h-3.5 w-3.5 text-default-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                          </svg>
+                        )}
+                      </div>
                       <Select
                         aria-label="Place of supply"
                         placeholder="Select state"
@@ -847,6 +853,7 @@ export default function NewBillPage() {
                             setErrors((curr) => ({ ...curr, placeOfSupply: false }));
                           }
                         }}
+                        isDisabled={gstIsLocked}
                         isInvalid={Boolean(errors.placeOfSupply)}
                         errorMessage={errors.placeOfSupply ? "Required for final bills" : undefined}
                       >
@@ -857,25 +864,6 @@ export default function NewBillPage() {
                         ))}
                       </Select>
                     </div>
-                    {!hsnPerRow && (
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="shrink-0 text-sm text-default-500">HSN/SAC Code</span>
-                        <Input
-                          aria-label="HSN/SAC Code"
-                          placeholder="e.g. 9983"
-                          size="sm"
-                          variant="bordered"
-                          value={hsnCode}
-                          onValueChange={setHsnCode}
-                          className="max-w-[200px]"
-                        />
-                      </div>
-                    )}
-                    {hsnPerRow && taxPercent > 0 && (
-                      <p className="text-xs text-default-400">
-                        HSN/SAC entered per row above (GSTR-1 Table 12)
-                      </p>
-                    )}
                     <Divider />
                     <div className="flex justify-between">
                       <span className="text-lg font-bold">Grand Total</span>
@@ -909,13 +897,6 @@ export default function NewBillPage() {
         )}
       </div>
 
-      {showCatalogPicker && selectedTemplate && (
-        <ItemCatalogPicker
-          columns={selectedTemplate.columns}
-          onSelect={handleCatalogSelect}
-          onClose={() => setShowCatalogPicker(false)}
-        />
-      )}
     </>
   );
 }

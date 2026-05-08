@@ -597,12 +597,22 @@ export default function PartiesPage() {
                             </a>
                           )}
                           {/* Overflow menu */}
-                          <button
+                          <div
+                            role="button"
+                            tabIndex={0}
                             onClick={(e) => {
                               e.stopPropagation();
                               setOverflowPartyId(overflowPartyId === party.id ? null : party.id);
                             }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.stopPropagation();
+                                setOverflowPartyId(overflowPartyId === party.id ? null : party.id);
+                              }
+                            }}
                             aria-label={`More actions for ${party.name}`}
+                            aria-haspopup="true"
+                            aria-expanded={overflowPartyId === party.id}
                             style={{
                               width: 36,
                               height: 36,
@@ -687,7 +697,7 @@ export default function PartiesPage() {
                                 </button>
                               </div>
                             )}
-                          </button>
+                          </div>
                         </div>
                       </div>
                     </div>
