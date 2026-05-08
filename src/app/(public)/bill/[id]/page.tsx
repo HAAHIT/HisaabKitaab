@@ -134,10 +134,12 @@ export default async function PublicBillPage(
       <style>{`
         @media print {
           @page { margin: 8mm; size: A4 portrait; }
-          body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          html, body { margin: 0 !important; padding: 0 !important; background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           .no-print { display: none !important; }
-          .bill-wrap { background: white !important; padding: 0 !important; min-height: auto !important; }
-          .bill-paper { box-shadow: none !important; border-radius: 0 !important; max-width: 100% !important; }
+          .bill-wrap { background: white !important; padding: 0 !important; min-height: 0 !important; }
+          .bill-paper { box-shadow: none !important; border-radius: 0 !important; max-width: 100% !important; width: 100% !important; box-sizing: border-box !important; margin: 0 !important; }
+          .bill-pad-row { display: none !important; }
+          .bill-paper table th { white-space: normal !important; }
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { background: #e5e7eb; }
@@ -279,7 +281,7 @@ export default async function PublicBillPage(
 
             {/* Blank filler */}
             {(bill.rows as unknown[]).length < 5 && Array.from({length:5-(bill.rows as unknown[]).length}).map((_,i) => (
-              <tr key={`pad-${i}`} style={{ borderBottom:"1px solid #e8e8e8", height:28, background:i%2===0?"#fafafa":"white" }}>
+              <tr key={`pad-${i}`} className="bill-pad-row" style={{ borderBottom:"1px solid #e8e8e8", height:28, background:i%2===0?"#fafafa":"white" }}>
                 <td style={TD({ center:true })}>&nbsp;</td>
                 {cols.map((col,ci) => <td key={col.id} style={TD({ last:ci===cols.length-1 })}>&nbsp;</td>)}
               </tr>

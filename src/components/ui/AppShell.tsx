@@ -297,9 +297,9 @@ export default function AppShell({
 
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--hk-bg)", transition: "background 0.25s" }}>
+    <div className="app-shell-root" style={{ minHeight: "100vh", background: "var(--hk-bg)", transition: "background 0.25s" }}>
       {/* ── Top NavBar ─────────────────────────────────────── */}
-      <header style={{
+      <header className="no-print" style={{
         height: 64, background: "var(--hk-nav)",
         borderBottom: "1px solid var(--hk-border)",
         display: "grid",

@@ -210,3 +210,17 @@ dialog[open] {
     padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px) + 1rem);
   }
 }
+
+/* ── Print: hide chrome, show only invoice content ─── */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  html,
+  body,
+  .app-shell-root,
+  .main-content-area {
+    height: auto !important;
+    min-height: 0 !important;
+  }
+}

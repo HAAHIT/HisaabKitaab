@@ -107,10 +107,13 @@ const STATUS_COLOR: Record<string,"default"|"primary"|"success"|"danger"> =
 const PRINT_CSS = `
 @media print {
   @page { margin: 8mm; size: A4 portrait; }
-  body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html, body { margin: 0 !important; padding: 0 !important; background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .no-print { display: none !important; }
-  .bill-bg { background: white !important; padding: 0 !important; }
-  .bill-paper { box-shadow: none !important; border-radius: 0 !important; max-width: 100% !important; width: 100% !important; }
+  .bill-bg { background: white !important; padding: 0 !important; min-height: 0 !important; }
+  .bill-paper { box-shadow: none !important; border-radius: 0 !important; max-width: 100% !important; width: 100% !important; box-sizing: border-box !important; margin: 0 !important; }
+  .main-content-area { padding: 0 !important; min-height: 0 !important; }
+  .bill-pad-row { display: none !important; }
+  .bill-paper table th { white-space: normal !important; }
 }
 `;
 
@@ -229,7 +232,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
       )}
 
       {/* ── Screen toolbar ──────────────────────────────────────────────────── */}
-      <div className="no-print sticky top-0 z-20 border-b border-default-200 bg-background/95 backdrop-blur-md">
+      <div className="no-print sticky top-0 z-20 border-b border-default-200 backdrop-blur-md" style={{ background: "var(--hk-nav)" }}>
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
           <div className="flex items-center gap-3 min-w-0">
             <Button isIconOnly size="sm" variant="light"
@@ -277,7 +280,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
       </div>
 
       {/* ── Invoice document ────────────────────────────────────────────────── */}
-      <div className="bill-bg bg-zinc-200 dark:bg-zinc-800 min-h-screen py-8 px-3">
+      <div className="bill-bg min-h-screen py-8 px-3" style={{ background: "var(--hk-bg)" }}>
         <div
           className="bill-paper mx-auto"
           style={{
@@ -407,14 +410,6 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
               })}
 
               {/* Blank padding rows */}
-              {bill.rows.length < 6 && Array.from({length: 6-bill.rows.length}).map((_,i) => (
-                <tr key={`pad-${i}`} style={{ borderBottom:"1px solid #e8e8e8", height:28 }}>
-                  <td style={TD({ center:true })}> </td>
-                  {cols.map((col, ci) => (
-                    <td key={col.id} style={TD({ right:col.type==="number"||col.type==="formula", last:ci===cols.length-1 })}> </td>
-                  ))}
-                </tr>
-              ))}
 
               {/* ── Sub-total + Tax rows ── */}
               {(() => {
