@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
         accountNumber: true,
         openingBalance: true,
         currentBalance: true,
+        isDefault: true,
       },
       orderBy: { createdAt: "asc" },
     });

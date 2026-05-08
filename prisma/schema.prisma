@@ -375,6 +375,7 @@ model BankAccount {
   openingBalance                                    Decimal     @default(0) @db.Decimal(19, 4)
   currentBalance                                    Decimal     @default(0) @db.Decimal(19, 4)
   isActive                                          Boolean     @default(true)
+  isDefault                                         Boolean     @default(false)
   isDeleted                                         Boolean     @default(false)
   createdBy                                         String?
   createdAt                                         DateTime    @default(now())
