@@ -2,8 +2,10 @@ import { prisma } from "@/lib/prisma";
 import {
   CHART_OF_ACCOUNTS,
   paymentModeToAccount,
+  partyTypeToAccountCode,
   type AccountCode,
 } from "@/lib/chart-of-accounts";
+import { getSettlementDirectionForParty } from "@/lib/accounting";
 import { roundTo2 } from "@/lib/journal-reporting";
 
 type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
@@ -51,12 +53,14 @@ interface SalesBillJournalInput {
 
 interface PaymentJournalInput {
   id: string;
-  partyId: string;
-  partyName: string;
+  partyId: string | null;
+  partyName: string | null;
   amount: number;
   mode: string;
   date: Date;
   createdBy: string;
+  sourceAccountType?: string;
+  destAccountType?: string;
 }
 
 interface PurchaseBillJournalInput {
@@ -390,5 +394,65 @@ export async function journalForPurchaseBill(
     isReverseCharge: purchase.isReverseCharge,
     createdBy: purchase.createdBy,
     lines,
+  });
+}
+
+export async function journalForContraEntry(
+  tx: PrismaTx,
+  tenantId: string,
+  payment: PaymentJournalInput
+) {
+  const mainAccount = payment.sourceAccountType === "CASH" ? "CASH" : "BANK";
+  const otherAccount = payment.destAccountType === "CASH" ? "CASH" : "BANK";
+
+  return createJournalEntry(tx, {
+    tenantId,
+    entryDate: payment.date,
+    narration: `Contra Transfer (${payment.mode})`,
+    voucherType: "CONTRA",
+    paymentId: payment.id,
+    createdBy: payment.createdBy,
+    lines: [
+      { accountCode: mainAccount as AccountCode, debit: 0, credit: payment.amount },
+      { accountCode: otherAccount as AccountCode, debit: payment.amount, credit: 0 },
+    ],
+  });
+}
+
+export async function journalForLedgerPayment(
+  tx: PrismaTx,
+  tenantId: string,
+  payment: PaymentJournalInput & { partyType: string }
+) {
+  const ledgerAccount = partyTypeToAccountCode(payment.partyType);
+  const bankAccount = paymentModeToAccount(payment.mode);
+  const isOutgoing =
+    getSettlementDirectionForParty(
+      payment.partyType as Parameters<typeof getSettlementDirectionForParty>[0]
+    ) === "OUTGOING";
+
+  return createJournalEntry(tx, {
+    tenantId,
+    entryDate: payment.date,
+    narration: `${isOutgoing ? "Payment to" : "Receipt from"} ${payment.partyName} (${payment.mode})`,
+    voucherType: isOutgoing ? "PAYMENT" : "RECEIPT",
+    paymentId: payment.id,
+    createdBy: payment.createdBy,
+    lines: [
+      {
+        accountCode: isOutgoing ? ledgerAccount : bankAccount,
+        debit: payment.amount,
+        credit: 0,
+        partyId: isOutgoing ? payment.partyId : null,
+        partyName: isOutgoing ? payment.partyName : null,
+      },
+      {
+        accountCode: isOutgoing ? bankAccount : ledgerAccount,
+        debit: 0,
+        credit: payment.amount,
+        partyId: isOutgoing ? null : payment.partyId,
+        partyName: isOutgoing ? null : payment.partyName,
+      },
+    ],
   });
 }

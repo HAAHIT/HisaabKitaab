@@ -203,11 +203,12 @@ export default function NotesListPage() {
                         return (
                           <div
                             key={note.id}
+                            onClick={() => router.push(`/notes/${note.id}`)}
                             style={{
                               display: "flex", justifyContent: "space-between",
                               alignItems: "center", padding: "16px 0",
                               borderBottom: i < group.notes.length - 1 ? "1px solid var(--hk-border)" : "none",
-                              minHeight: 64,
+                              minHeight: 64, cursor: "pointer",
                             }}
                           >
                             <div style={{ display: "flex", gap: 14, alignItems: "center", flex: 1, minWidth: 0 }}>

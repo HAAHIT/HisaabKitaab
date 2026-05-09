@@ -10,6 +10,8 @@ import {
 import {
   journalForPaymentMade,
   journalForPaymentReceived,
+  journalForContraEntry,
+  journalForLedgerPayment,
 } from "@/lib/journal";
 import { resolveSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
@@ -115,7 +117,17 @@ export async function GET(request: NextRequest) {
       orderBy: { date: "desc" },
       skip: (page - 1) * limit,
       take: limit,
-      include: {
+      select: {
+        id: true,
+        partyId: true,
+        accountId: true,
+        destinationAccountId: true,
+        amount: true,
+        direction: true,
+        mode: true,
+        status: true,
+        date: true,
+        notes: true,
         party: { select: { name: true, type: true } },
         linkedBill: { select: { id: true, billNumber: true } },
       },
@@ -146,108 +158,114 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { partyId, amount, type, mode, date, notes, billId, status } = body;
+    const { partyId, accountId, destinationAccountId, amount, type, mode, date, notes, billId, status } = body;
     const normalizedAmount = parsePaymentAmount(amount);
     const normalizedMode = normalizePaymentMode(mode);
     const paymentDate = date ? new Date(date) : new Date();
 
-    if ((!partyId && !billId) || !normalizedAmount || !type || !normalizedMode) {
-      return NextResponse.json(
-        { error: "Party or linked bill, amount, type, and mode are required" },
-        { status: 400 }
-      );
+    const isContra = type === "OUTGOING" && !partyId && !billId && !!destinationAccountId;
+
+    if (isContra && accountId === destinationAccountId) {
+      return NextResponse.json({ error: "Source and destination accounts must be different" }, { status: 400 });
+    }
+    if (!isContra && !partyId && !billId) {
+      return NextResponse.json({ error: "Party or linked bill required" }, { status: 400 });
+    }
+    if (!normalizedAmount || !type || !normalizedMode || !accountId) {
+      return NextResponse.json({ error: "accountId, amount, type, and mode are required" }, { status: 400 });
     }
     if (Number.isNaN(paymentDate.getTime())) {
       return NextResponse.json({ error: "Invalid payment date" }, { status: 400 });
     }
-
     if (!VALID_DIRECTIONS.has(type)) {
-      return NextResponse.json(
-        { error: "Invalid payment direction" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Invalid payment direction" }, { status: 400 });
     }
 
     const paymentStatus = status === "EXPECTED" ? "EXPECTED" : "COMPLETED";
 
     const payment = await prisma.$transaction(async (tx) => {
-      // [T-W2] Acquire advisory lock to prevent concurrent balance mutations
       const lockKey = generateLockKey(tenantId);
-      // [FF-10] Prevent indefinite blocking from hung transactions
       await tx.$executeRaw`SET LOCAL lock_timeout = '5s'`;
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
 
+      // ── Contra entry (bank-to-bank transfer) ──────────────────────────────
+      if (isContra) {
+        const account = await tx.bankAccount.findFirst({
+          where: { id: accountId, tenantId, isDeleted: false },
+          select: { id: true, type: true },
+        });
+        if (!account) throw new Error("Source account not found");
+
+        const destAccount = await tx.bankAccount.findFirst({
+          where: { id: destinationAccountId, tenantId, isDeleted: false },
+          select: { id: true, type: true },
+        });
+        if (!destAccount) throw new Error("Destination account not found");
+
+        const newPayment = await tx.payment.create({
+          data: {
+            tenantId, partyId: null, direction: "OUTGOING",
+            amount: normalizedAmount, date: paymentDate, mode: normalizedMode,
+            status: paymentStatus, notes: notes || null, createdBy: userId!,
+            accountId: account.id, destinationAccountId: destAccount.id, isDeleted: false,
+          },
+        });
+
+        if (paymentStatus === "COMPLETED") {
+          await tx.bankAccount.update({ where: { id: account.id }, data: { currentBalance: { decrement: normalizedAmount } } });
+          await tx.bankAccount.update({ where: { id: destAccount.id }, data: { currentBalance: { increment: normalizedAmount } } });
+          await journalForContraEntry(tx, tenantId, {
+            id: newPayment.id, partyId: null, partyName: null,
+            amount: normalizedAmount, mode: normalizedMode, date: paymentDate, createdBy: userId!,
+            sourceAccountType: account.type, destAccountType: destAccount.type,
+          });
+        }
+
+        await tx.auditLog.create({ data: { tenantId, entityType: "Payment", entityId: newPayment.id, userId: userId!, action: "CREATE" } });
+        return newPayment;
+      }
+
+      // ── Party / ledger payment ─────────────────────────────────────────────
       let resolvedPartyId = partyId as string | null;
       const resolvedBillId = billId || null;
 
       if (billId) {
         const linkedBill = await tx.bill.findUnique({
           where: { id: billId },
-          select: {
-            id: true,
-            tenantId: true,
-            partyId: true,
-            status: true,
-            party: {
-              select: {
-                id: true,
-                type: true,
-              },
-            },
-          },
+          select: { id: true, tenantId: true, partyId: true, status: true, party: { select: { id: true, type: true } } },
         });
-
-        if (
-          !linkedBill ||
-          linkedBill.tenantId !== tenantId ||
-          linkedBill.status !== "FINAL" ||
-          !linkedBill.partyId ||
-          !linkedBill.party
-        ) {
+        if (!linkedBill || linkedBill.tenantId !== tenantId || linkedBill.status !== "FINAL" || !linkedBill.partyId || !linkedBill.party) {
           throw new Error("Linked bill must be a final bill attached to a party");
         }
-
         if (resolvedPartyId && resolvedPartyId !== linkedBill.partyId) {
           throw new Error("Linked bill does not belong to the selected party");
         }
-
         resolvedPartyId = linkedBill.partyId;
         if (type !== getSettlementDirectionForParty(asSupportedPartyType(linkedBill.party.type))) {
           throw new Error("Linked bill payments must use the settlement direction for that party");
         }
       }
 
-      if (!resolvedPartyId) {
-        throw new Error("Party not found");
-      }
+      if (!resolvedPartyId) throw new Error("Party not found");
 
       const party = await tx.party.findFirst({
-        where: {
-          id: resolvedPartyId,
-          tenantId,
-          isDeleted: false,
-          isActive: true,
-        },
+        where: { id: resolvedPartyId, tenantId, isDeleted: false, isActive: true },
         select: { id: true, name: true, type: true },
       });
+      if (!party) throw new Error("Party not found");
 
-      if (!party) {
-        throw new Error("Party not found");
-      }
+      const account = await tx.bankAccount.findFirst({
+        where: { id: accountId, tenantId, isDeleted: false },
+        select: { id: true, type: true },
+      });
+      if (!account) throw new Error("Account not found");
 
       const newPayment = await tx.payment.create({
         data: {
-          tenantId,
-          partyId: party.id,
-          direction: type,
-          amount: normalizedAmount,
-          date: paymentDate,
-          mode: normalizedMode,
-          status: paymentStatus,
-          linkedBillId: resolvedBillId,
-          notes: notes || null,
-          createdBy: userId!,
-          isDeleted: false,
+          tenantId, partyId: party.id, direction: type,
+          amount: normalizedAmount, date: paymentDate, mode: normalizedMode,
+          status: paymentStatus, linkedBillId: resolvedBillId, notes: notes || null,
+          createdBy: userId!, accountId: account.id, isDeleted: false,
         },
         include: {
           party: { select: { name: true, type: true } },
@@ -256,52 +274,36 @@ export async function POST(request: NextRequest) {
       });
 
       if (paymentStatus === "COMPLETED") {
-        const balanceChange = getPaymentBalanceDelta(
-          asSupportedPartyType(party.type),
-          type,
-          normalizedAmount
-        );
+        const isLedgerParty = ["EXPENSE", "INCOME", "ASSET", "LIABILITY", "EQUITY"].includes(party.type);
 
-        await tx.party.update({
-          where: { id: party.id },
-          data: {
-            currentBalance: { increment: balanceChange },
-          },
-        });
+        // Update bank account balance
+        const bankDelta = type === "INCOMING" ? normalizedAmount : -normalizedAmount;
+        await tx.bankAccount.update({ where: { id: account.id }, data: { currentBalance: { increment: bankDelta } } });
 
-        if (type === "INCOMING") {
-          await journalForPaymentReceived(tx, tenantId, {
-            id: newPayment.id,
-            partyId: party.id,
-            partyName: party.name,
-            amount: newPayment.amount.toNumber(),
-            mode: newPayment.mode,
-            date: newPayment.date,
-            createdBy: userId!,
+        if (isLedgerParty) {
+          await journalForLedgerPayment(tx, tenantId, {
+            id: newPayment.id, partyId: party.id, partyName: party.name,
+            amount: normalizedAmount, mode: normalizedMode, date: paymentDate,
+            createdBy: userId!, partyType: party.type,
           });
         } else {
-          await journalForPaymentMade(tx, tenantId, {
-            id: newPayment.id,
-            partyId: party.id,
-            partyName: party.name,
-            amount: newPayment.amount.toNumber(),
-            mode: newPayment.mode,
-            date: newPayment.date,
-            createdBy: userId!,
-          });
+          // Standard CUSTOMER / VENDOR
+          const balanceChange = getPaymentBalanceDelta(asSupportedPartyType(party.type), type, normalizedAmount);
+          await tx.party.update({ where: { id: party.id }, data: { currentBalance: { increment: balanceChange } } });
+
+          const journalArgs = {
+            id: newPayment.id, partyId: party.id, partyName: party.name,
+            amount: normalizedAmount, mode: normalizedMode, date: paymentDate, createdBy: userId!,
+          };
+          if (type === "INCOMING") {
+            await journalForPaymentReceived(tx, tenantId, journalArgs);
+          } else {
+            await journalForPaymentMade(tx, tenantId, journalArgs);
+          }
         }
       }
 
-      await tx.auditLog.create({
-        data: {
-          tenantId,
-          entityType: "Payment",
-          entityId: newPayment.id,
-          userId: userId!,
-          action: "CREATE",
-        },
-      });
-
+      await tx.auditLog.create({ data: { tenantId, entityType: "Payment", entityId: newPayment.id, userId: userId!, action: "CREATE" } });
       return newPayment;
     }, { isolationLevel: "RepeatableRead" });
 

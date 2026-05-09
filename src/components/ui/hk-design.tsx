@@ -4,7 +4,7 @@
 // Shared tokens and components for screens that follow the dashboard's
 // visual language (top navbar + rounded cards + HK color palette).
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // Color tokens — kept in sync with hk-v2-shared.jsx and globals.css
 export const OR = "#f76000";
@@ -382,5 +382,83 @@ export function GradientButton({
     >
       {children}
     </button>
+  );
+}
+
+// ── HKModal — centered overlay modal ────────────────────────────────────────
+
+export function HKModal({
+  isOpen,
+  onClose,
+  title,
+  children,
+  footer,
+  width = 520,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  title: React.ReactNode;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+  width?: number;
+}) {
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, zIndex: 200,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        background: "rgba(0,0,0,0.50)", backdropFilter: "blur(6px)",
+        padding: "16px",
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        ref={panelRef}
+        style={{
+          background: "var(--hk-card)", borderRadius: 20,
+          border: "1px solid var(--hk-border)",
+          width: "100%", maxWidth: width,
+          maxHeight: "88vh", display: "flex", flexDirection: "column",
+          boxShadow: "0 24px 80px rgba(0,0,0,0.30)",
+          fontFamily: SG,
+        }}
+      >
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 22px 16px", borderBottom: "1px solid var(--hk-border)", flexShrink: 0 }}>
+          <p style={{ fontSize: TYPE.h2, fontWeight: 800, color: "var(--hk-text)", margin: 0 }}>{title}</p>
+          <button
+            onClick={onClose}
+            style={{ width: 34, height: 34, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--hk-badge)", border: "1px solid var(--hk-border)", cursor: "pointer" }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hk-text)" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: "20px 22px", overflowY: "auto", flex: 1 }}>
+          {children}
+        </div>
+
+        {/* Footer */}
+        {footer && (
+          <div style={{ padding: "14px 22px 20px", borderTop: "1px solid var(--hk-border)", display: "flex", gap: 10, justifyContent: "flex-end", flexShrink: 0 }}>
+            {footer}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

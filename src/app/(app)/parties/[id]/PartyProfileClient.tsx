@@ -1,31 +1,21 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Card, CardBody, Chip } from "@heroui/react";
-import BalanceHeader from "@/components/parties/BalanceHeader";
-import LedgerChat from "@/components/parties/LedgerChat";
+import { useLanguage } from "@/contexts/LanguageContext";
 import {
+  GR, AM, OR, PU, SG, IN, TYPE,
+  fmtFull, useIsMobile, HKCard, HKToast, GradientButton,
+} from "@/components/ui/hk-design";
+import {
+  getBalanceIndicator,
   getBalanceStatusLabel,
   type PartyLedgerEntry,
   type SupportedPartyType,
 } from "@/lib/accounting";
 
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(Math.abs(n));
-}
-
-function formatSignedCurrency(value: number) {
-  if (value === 0) {
-    return "INR 0";
-  }
-
-  return `${value > 0 ? "+" : "-"}${formatCurrency(value)}`;
+function fmtAbs(n: number) {
+  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Math.abs(n));
 }
 
 type PartyProfile = {
@@ -68,9 +58,20 @@ export default function PartyProfileClient({
   role: string | null;
 }) {
   const router = useRouter();
+  const { t } = useLanguage();
+  const isMobile = useIsMobile();
   const [reconcileResult, setReconcileResult] = useState<ReconcileResult | null>(null);
   const [reconcileLoading, setReconcileLoading] = useState<"check" | "fix" | null>(null);
   const [reconcileError, setReconcileError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+
+  const isCustomer = party.type === "CUSTOMER";
+  const accentColor = isCustomer ? PU : OR;
+  const accentBg = isCustomer ? PU + "18" : OR + "18";
+
+  const balanceColor = calculatedCurrent === 0 ? "var(--hk-sub)" : calculatedCurrent > 0 ? GR : OR;
+  const balanceLabel = getBalanceStatusLabel(party.type, calculatedCurrent);
+  const balanceIndicator = getBalanceIndicator(party.type, calculatedCurrent);
 
   async function handleCheckBalances() {
     setReconcileLoading("check");
@@ -97,175 +98,247 @@ export default function PartyProfileClient({
       if (!res.ok) throw new Error(data.error || "Fix failed");
       setReconcileResult(null);
       router.refresh();
-      await handleCheckBalances();
     } catch (err) {
       setReconcileError(err instanceof Error ? err.message : "Fix failed");
       setReconcileLoading(null);
     }
   }
 
-  const openingBalanceLabel = getBalanceStatusLabel(
-    party.type,
-    party.openingBalance
-  );
-
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-4 lg:p-8">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/parties"
-            className="rounded-xl p-2 transition hover:bg-default-100"
-          >
-            <svg
-              className="h-5 w-5 text-default-500"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                d="M10 19l-7-7m0 0l7-7m-7 7h18"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-              />
-            </svg>
-          </Link>
-          <div>
-            <h1 className="flex items-center gap-3 text-2xl font-bold">
-              {party.name}
-              <Chip
-                size="sm"
-                color={party.type === "CUSTOMER" ? "primary" : "secondary"}
-                variant="flat"
-              >
-                {party.type}
-              </Chip>
-            </h1>
-            <p className="text-sm text-default-500">
-              {party.phone ? `+91 ${party.phone}` : "No phone provided"}
-              {party.email ? ` | ${party.email}` : ""}
-            </p>
-          </div>
+    <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG }}>
+      {toast && <HKToast message={toast.message} type={toast.type} />}
+
+      {/* Top bar */}
+      <div style={{
+        position: "sticky", top: 0, zIndex: 50,
+        background: "var(--hk-nav)", borderBottom: "1px solid var(--hk-border)",
+        display: "flex", alignItems: "center", gap: 12,
+        padding: "0 20px", height: 57,
+      }}>
+        <button
+          onClick={() => router.push("/parties")}
+          style={{
+            width: 36, height: 36, borderRadius: 10, border: "1px solid var(--hk-border)",
+            background: "var(--hk-card)", display: "flex", alignItems: "center",
+            justifyContent: "center", cursor: "pointer", flexShrink: 0,
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--hk-text)" strokeWidth="2" strokeLinecap="round">
+            <path d="M19 12H5M12 5l-7 7 7 7" />
+          </svg>
+        </button>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {party.name}
+          </p>
+          <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)" }}>
+            {party.phone ? `+91 ${party.phone}` : party.email || "No contact"}
+          </p>
         </div>
+        <span style={{
+          fontSize: TYPE.chip, fontWeight: 700, color: accentColor,
+          background: accentBg, padding: "4px 10px", borderRadius: 7,
+          whiteSpace: "nowrap", flexShrink: 0,
+        }}>
+          {isCustomer ? "Customer" : "Vendor"}
+        </span>
       </div>
 
-      <BalanceHeader
-        partyName={party.name}
-        partyType={party.type}
-        currentBalance={calculatedCurrent}
-        partyPhone={party.phone}
-      />
+      <div style={{ padding: isMobile ? "16px 14px" : "20px 28px", maxWidth: 1200, margin: "0 auto" }}>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
-          <LedgerChat
-            partyId={partyId}
-            partyName={party.name}
-            partyType={party.type}
-            partyPhone={party.phone}
-            currentBalance={calculatedCurrent}
-            ledger={ledger}
-          />
-        </div>
+        {/* Balance hero */}
+        <HKCard style={{ marginBottom: 16, borderLeft: `4px solid ${balanceColor}` }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+            <div>
+              <p style={{ fontSize: TYPE.caption, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", color: "var(--hk-sub)", marginBottom: 4 }}>
+                Current Balance
+              </p>
+              <p style={{ fontSize: isMobile ? 28 : TYPE.numLarge, fontWeight: 800, color: balanceColor, fontFamily: IN }}>
+                {fmtAbs(calculatedCurrent)}
+              </p>
+              <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", marginTop: 4 }}>
+                {balanceLabel}{balanceIndicator ? ` · ${balanceIndicator}` : ""}
+              </p>
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                onClick={() => router.push(`/bills/new?partyId=${partyId}`)}
+                style={{
+                  padding: "10px 18px", borderRadius: 12,
+                  background: OR + "18", border: `1.5px solid ${OR}44`,
+                  color: OR, fontFamily: SG, fontSize: TYPE.bodySmall,
+                  fontWeight: 700, cursor: "pointer",
+                }}
+              >
+                {t("bills.new")}
+              </button>
+              <GradientButton onClick={() => router.push(`/payments/new?partyId=${partyId}`)}>
+                {t("payments.record")}
+              </GradientButton>
+            </div>
+          </div>
+        </HKCard>
 
-        <div className="space-y-6">
-          <Card shadow="sm">
-            <CardBody className="p-5">
-              <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
-                <svg
-                  className="h-5 w-5 text-secondary"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                  />
-                </svg>
-                Party Details
-              </h2>
-              <div className="space-y-3 text-sm">
-                <div>
-                  <p className="text-xs text-default-400">Address</p>
-                  <p className="font-medium">{party.address || "Not provided"}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-default-400">GSTIN</p>
-                  <p className="font-medium font-mono">
-                    {party.gstin || "Not provided"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-default-400">Opening Balance</p>
-                  <p className="font-medium">
-                    {formatSignedCurrency(party.openingBalance)}
-                  </p>
-                  <p className="text-xs text-default-400">{openingBalanceLabel}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-default-400">Registered</p>
-                  <p className="font-medium">
-                    {new Date(party.createdAt).toLocaleDateString("en-IN")}
-                  </p>
-                </div>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 360px", gap: 16 }}>
+
+          {/* Ledger (left) */}
+          <HKCard style={{ padding: 0 }}>
+            <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--hk-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <p style={{ fontSize: TYPE.label, fontWeight: 700, color: "var(--hk-text)" }}>{t("khata.ledgerTitle")}</p>
+                <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)" }}>{party.phone ? `+91 ${party.phone}` : party.name}</p>
               </div>
-            </CardBody>
-          </Card>
+              <span style={{
+                fontSize: TYPE.bodySmall, fontWeight: 700,
+                color: calculatedCurrent >= 0 ? GR : OR,
+                background: calculatedCurrent >= 0 ? GR + "18" : OR + "18",
+                padding: "4px 10px", borderRadius: 8,
+              }}>
+                {fmtAbs(calculatedCurrent)}
+                {balanceIndicator ? ` (${balanceIndicator})` : ""}
+              </span>
+            </div>
 
-          {role === "ADMIN" && (
-            <Card shadow="sm">
-              <CardBody className="p-5">
-                <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
-                  <svg
-                    className="h-5 w-5 text-warning"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+            <div style={{ maxHeight: "60vh", overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+              {ledger.map((entry) => {
+                const isOpening = entry.type === "OPENING";
+                const isDebit = entry.debit > 0;
+                const amount = isDebit ? `-${fmtAbs(entry.debit)}` : entry.credit > 0 ? `+${fmtAbs(entry.credit)}` : fmtAbs(0);
+                const entryColor = isOpening ? "var(--hk-sub)" : isDebit ? OR : GR;
+                const entryBg = isOpening ? "var(--hk-badge)" : isDebit ? OR + "12" : GR + "12";
+
+                return (
+                  <div
+                    key={entry.id}
+                    style={{ display: "flex", justifyContent: isOpening ? "center" : isDebit ? "flex-start" : "flex-end" }}
                   >
-                    <path
-                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.5}
-                    />
-                  </svg>
-                  Balance Health
-                </h2>
-                <p className="mb-4 text-xs text-default-400">
-                  Verify all party balances match their journal history.
+                    <div style={{
+                      maxWidth: "88%", borderRadius: 16, padding: "12px 14px",
+                      background: entryBg, border: isOpening ? "1px solid var(--hk-border)" : "none",
+                    }}>
+                      <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", marginBottom: 4 }}>
+                        {new Date(entry.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                        {" · "}{entry.type}
+                      </p>
+                      {entry.link ? (
+                        <button
+                          onClick={() => router.push(entry.link!)}
+                          style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: SG, fontSize: TYPE.body, fontWeight: 700, color: PU, textDecoration: "underline" }}
+                        >
+                          {entry.description}
+                        </button>
+                      ) : (
+                        <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)" }}>{entry.description}</p>
+                      )}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: 6, gap: 16 }}>
+                        <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)" }}>
+                          {t("khata.balanceAfter")} {fmtAbs(entry.balanceAfter)}
+                          {getBalanceIndicator(party.type, entry.balanceAfter) ? ` (${getBalanceIndicator(party.type, entry.balanceAfter)})` : ""}
+                        </p>
+                        <p style={{ fontSize: TYPE.numSmall, fontWeight: 800, color: entryColor, fontFamily: IN }}>{amount}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {ledger.length <= 1 && (
+                <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--hk-sub)", fontSize: TYPE.body }}>
+                  {t("khata.noTransactions")}
+                </div>
+              )}
+            </div>
+          </HKCard>
+
+          {/* Right column */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+            {/* Party details */}
+            <HKCard>
+              <p style={{ fontSize: TYPE.label, fontWeight: 700, color: "var(--hk-text)", marginBottom: 14 }}>Party Details</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {[
+                  { label: "Address", value: party.address },
+                  { label: "GSTIN", value: party.gstin, mono: true },
+                  { label: "Email", value: party.email },
+                  {
+                    label: "Opening Balance",
+                    value: party.openingBalance !== 0
+                      ? `${party.openingBalance > 0 ? "+" : ""}${fmtAbs(party.openingBalance)}`
+                      : "₹0",
+                  },
+                  { label: "Registered", value: new Date(party.createdAt).toLocaleDateString("en-IN") },
+                ].map(({ label, value, mono }) => (
+                  <div key={label}>
+                    <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", marginBottom: 2 }}>{label}</p>
+                    <p style={{ fontSize: TYPE.bodySmall, fontWeight: 600, color: "var(--hk-text)", fontFamily: mono ? IN : SG }}>
+                      {value || "Not provided"}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </HKCard>
+
+            {/* Measurements (customers only) */}
+            {isCustomer && measurements.length > 0 && (
+              <HKCard>
+                <p style={{ fontSize: TYPE.label, fontWeight: 700, color: "var(--hk-text)", marginBottom: 14 }}>Measurements</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {measurements.map((m) => (
+                    <div key={m.id} style={{
+                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                      padding: "10px 12px", borderRadius: 10, border: "1px solid var(--hk-border)",
+                      background: "var(--hk-badge)",
+                    }}>
+                      <div>
+                        <p style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--hk-text)" }}>{m.label}</p>
+                        <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)" }}>
+                          {m.roomName || "Unspecified"} · {new Date(m.createdAt).toLocaleDateString("en-IN")}
+                        </p>
+                      </div>
+                      <span style={{
+                        fontSize: TYPE.chip, fontWeight: 700, color: GR,
+                        background: GR + "18", padding: "3px 8px", borderRadius: 6,
+                      }}>
+                        {m.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </HKCard>
+            )}
+
+            {/* Balance health (admin only) */}
+            {role === "ADMIN" && (
+              <HKCard>
+                <p style={{ fontSize: TYPE.label, fontWeight: 700, color: "var(--hk-text)", marginBottom: 6 }}>Balance Health</p>
+                <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", marginBottom: 12 }}>
+                  Verify all party balances match journal history.
                 </p>
 
                 {reconcileError && (
-                  <p className="mb-3 rounded-lg border border-danger/20 bg-danger/10 px-3 py-2 text-xs text-danger">
+                  <div style={{ marginBottom: 10, padding: "8px 12px", borderRadius: 8, background: OR + "18", border: `1px solid ${OR}44`, fontSize: TYPE.caption, color: OR }}>
                     {reconcileError}
-                  </p>
+                  </div>
                 )}
 
                 {reconcileResult && (
-                  <div className="mb-4 space-y-2">
+                  <div style={{ marginBottom: 12 }}>
                     {reconcileResult.drifted.length === 0 ? (
-                      <p className="rounded-lg bg-success/10 px-3 py-2 text-xs font-medium text-success">
-                        All {reconcileResult.total} balances are correct.
-                      </p>
+                      <div style={{ padding: "8px 12px", borderRadius: 8, background: GR + "18", fontSize: TYPE.caption, fontWeight: 700, color: GR }}>
+                        All {reconcileResult.total} balances are correct ✓
+                      </div>
                     ) : (
                       <>
-                        <p className="rounded-lg bg-warning/10 px-3 py-2 text-xs font-medium text-warning">
-                          {reconcileResult.drifted.length} of {reconcileResult.total} parties have drift.
-                        </p>
-                        <div className="max-h-36 space-y-1.5 overflow-y-auto">
+                        <div style={{ padding: "8px 12px", borderRadius: 8, background: AM + "18", fontSize: TYPE.caption, fontWeight: 700, color: AM, marginBottom: 8 }}>
+                          {reconcileResult.drifted.length} of {reconcileResult.total} parties have drift
+                        </div>
+                        <div style={{ maxHeight: 140, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
                           {reconcileResult.drifted.map((d) => (
-                            <div
-                              key={d.partyId}
-                              className="rounded-lg border border-default-100 p-2 text-xs"
-                            >
-                              <p className="font-medium">{d.name}</p>
-                              <p className="text-default-400">
-                                Stored: {formatSignedCurrency(d.stored)} → Actual:{" "}
-                                {formatSignedCurrency(d.computed)}
+                            <div key={d.partyId} style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--hk-border)", fontSize: TYPE.caption }}>
+                              <p style={{ fontWeight: 700, color: "var(--hk-text)" }}>{d.name}</p>
+                              <p style={{ color: "var(--hk-sub)", marginTop: 2 }}>
+                                Stored: {fmtAbs(d.stored)} → Actual: {fmtAbs(d.computed)}
                               </p>
                             </div>
                           ))}
@@ -275,85 +348,37 @@ export default function PartyProfileClient({
                   </div>
                 )}
 
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="flat"
-                    color="default"
-                    className="flex-1"
-                    isLoading={reconcileLoading === "check"}
-                    isDisabled={reconcileLoading !== null}
-                    onPress={handleCheckBalances}
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    onClick={handleCheckBalances}
+                    disabled={reconcileLoading !== null}
+                    style={{
+                      flex: 1, padding: "9px 0", borderRadius: 10, border: "1px solid var(--hk-border)",
+                      background: "var(--hk-badge)", color: "var(--hk-text)", fontFamily: SG,
+                      fontSize: TYPE.bodySmall, fontWeight: 600, cursor: reconcileLoading ? "not-allowed" : "pointer",
+                      opacity: reconcileLoading ? 0.6 : 1,
+                    }}
                   >
-                    Check
-                  </Button>
+                    {reconcileLoading === "check" ? "Checking..." : "Check"}
+                  </button>
                   {reconcileResult && reconcileResult.drifted.length > 0 && (
-                    <Button
-                      size="sm"
-                      variant="flat"
-                      color="warning"
-                      className="flex-1"
-                      isLoading={reconcileLoading === "fix"}
-                      isDisabled={reconcileLoading !== null}
-                      onPress={handleFixBalances}
+                    <button
+                      onClick={handleFixBalances}
+                      disabled={reconcileLoading !== null}
+                      style={{
+                        flex: 1, padding: "9px 0", borderRadius: 10, border: `1px solid ${AM}44`,
+                        background: AM + "18", color: AM, fontFamily: SG,
+                        fontSize: TYPE.bodySmall, fontWeight: 700, cursor: reconcileLoading ? "not-allowed" : "pointer",
+                        opacity: reconcileLoading ? 0.6 : 1,
+                      }}
                     >
-                      Fix All
-                    </Button>
+                      {reconcileLoading === "fix" ? "Fixing..." : "Fix All"}
+                    </button>
                   )}
                 </div>
-              </CardBody>
-            </Card>
-          )}
-
-          {party.type === "CUSTOMER" && (
-            <Card shadow="sm">
-              <CardBody className="p-5">
-                <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
-                  <svg
-                    className="h-5 w-5 text-success"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.5}
-                    />
-                  </svg>
-                  Measurements
-                </h2>
-                {measurements.length > 0 ? (
-                  <div className="space-y-3">
-                    {measurements.map((measurement) => (
-                      <div
-                        key={measurement.id}
-                        className="flex items-center justify-between rounded-lg border border-default-200 p-3 transition hover:bg-default-50"
-                      >
-                        <div>
-                          <p className="font-medium">{measurement.label}</p>
-                          <p className="text-xs text-default-400">
-                            {measurement.roomName || "Unspecified Room"} |{" "}
-                            {new Date(measurement.createdAt).toLocaleDateString(
-                              "en-IN"
-                            )}
-                          </p>
-                        </div>
-                        <Chip size="sm" variant="flat">
-                          {measurement.status}
-                        </Chip>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="rounded-lg bg-default-50 py-6 text-center text-sm text-default-400">
-                    No measurements found for this customer.
-                  </div>
-                )}
-              </CardBody>
-            </Card>
-          )}
+              </HKCard>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -4,22 +4,26 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pagination, Skeleton } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { EditPaymentModal, type EditablePayment } from "./EditPaymentModal";
 import {
   OR, PU, GR, AM, SG, IN, TYPE,
   fmt, fmtFull, useIsMobile,
   HKCard, HKToast, SearchBox, PillFilter,
-  PageHeader, GradientButton,
+  PageHeader, GradientButton, HKModal,
 } from "@/components/ui/hk-design";
 
 interface Payment {
   id: string;
+  partyId: string | null;
+  accountId: string | null;
+  destinationAccountId: string | null;
   amount: number;
   direction: string;
   mode: string;
   status: string;
   date: string;
   notes: string | null;
-  party: { name: string; type: string };
+  party: { name: string; type: string } | null;
   linkedBill: { id: string; billNumber: string } | null;
 }
 
@@ -62,6 +66,11 @@ export default function PaymentsListPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [collapsedMonths, setCollapsedMonths] = useState<Record<string, boolean>>({});
   const [markingId, setMarkingId] = useState<string | null>(null);
+  const [paymentToEdit, setPaymentToEdit] = useState<Payment | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [paymentToDelete, setPaymentToDelete] = useState<Payment | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const monthlyPaymentGroups = useMemo(() => {
@@ -150,6 +159,23 @@ export default function PaymentsListPage() {
       );
     } finally {
       setMarkingId(null);
+    }
+  }
+
+  async function handleDeletePayment() {
+    if (!paymentToDelete) return;
+    setIsDeleting(true);
+    try {
+      const res = await fetch(`/api/payments/${paymentToDelete.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(await readError(res));
+      showToast("Payment delete ho gaya", "success");
+      setIsDeleteModalOpen(false);
+      setPaymentToDelete(null);
+      await fetchPayments();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Delete failed", "error");
+    } finally {
+      setIsDeleting(false);
     }
   }
 
@@ -354,7 +380,7 @@ export default function PaymentsListPage() {
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, lineHeight: 1.3 }}>
-                            {p.party.name}
+                            {p.party?.name ?? "—"}
                           </p>
                           <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--hk-sub)", fontFamily: SG, marginTop: 2 }}>
                             {isIn ? "Milega" : "Dena hai"} • {modeLabel(p.mode)}
@@ -382,6 +408,20 @@ export default function PaymentsListPage() {
                           }}
                         >
                           {markingId === p.id ? "..." : "✓ Done"}
+                        </button>
+                        <button
+                          onClick={() => { setPaymentToEdit(p); setIsEditModalOpen(true); }}
+                          style={{ width: 34, height: 34, borderRadius: 9, border: "1px solid var(--hk-border)", background: "var(--hk-badge)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+                          title="Edit"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hk-text)" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                        </button>
+                        <button
+                          onClick={() => { setPaymentToDelete(p); setIsDeleteModalOpen(true); }}
+                          style={{ width: 34, height: 34, borderRadius: 9, border: `1px solid ${OR}33`, background: OR + "10", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+                          title="Delete"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={OR} strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
                         </button>
                       </div>
                     );
@@ -539,7 +579,7 @@ export default function PaymentsListPage() {
                                       whiteSpace: "nowrap",
                                     }}
                                   >
-                                    {p.party.name}
+                                    {p.party?.name ?? "—"}
                                   </p>
                                   <div
                                     style={{
@@ -662,6 +702,20 @@ export default function PaymentsListPage() {
                                       {markingId === p.id ? "..." : "✓ Done"}
                                     </button>
                                   )}
+                                  <button
+                                    onClick={() => { setPaymentToEdit(p); setIsEditModalOpen(true); }}
+                                    style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid var(--hk-border)", background: "var(--hk-badge)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+                                    title="Edit"
+                                  >
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--hk-text)" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                                  </button>
+                                  <button
+                                    onClick={() => { setPaymentToDelete(p); setIsDeleteModalOpen(true); }}
+                                    style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${OR}33`, background: OR + "10", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+                                    title="Delete"
+                                  >
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={OR} strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
+                                  </button>
                                 </div>
                               </div>
                             </div>
@@ -682,6 +736,41 @@ export default function PaymentsListPage() {
           </>
         )}
       </div>
+
+      <EditPaymentModal
+        payment={paymentToEdit as EditablePayment | null}
+        isOpen={isEditModalOpen}
+        onClose={() => { setIsEditModalOpen(false); setPaymentToEdit(null); }}
+        onSuccess={() => { fetchPayments(); }}
+      />
+
+      <HKModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => { setIsDeleteModalOpen(false); setPaymentToDelete(null); }}
+        title="Transaction Delete Karo?"
+        footer={
+          <>
+            <button
+              onClick={() => { setIsDeleteModalOpen(false); setPaymentToDelete(null); }}
+              disabled={isDeleting}
+              style={{ padding: "10px 20px", borderRadius: 12, border: "1px solid var(--hk-border)", background: "var(--hk-badge)", color: "var(--hk-text)", fontFamily: SG, fontSize: TYPE.body, fontWeight: 600, cursor: "pointer", opacity: isDeleting ? 0.5 : 1 }}
+            >
+              Wapas Jao
+            </button>
+            <button
+              onClick={handleDeletePayment}
+              disabled={isDeleting}
+              style={{ padding: "10px 20px", borderRadius: 12, border: "none", background: OR, color: "#fff", fontFamily: SG, fontSize: TYPE.body, fontWeight: 700, cursor: isDeleting ? "wait" : "pointer", opacity: isDeleting ? 0.7 : 1 }}
+            >
+              {isDeleting ? "Deleting..." : "Haan, Delete Karo"}
+            </button>
+          </>
+        }
+      >
+        <p style={{ fontFamily: SG, fontSize: TYPE.body, color: "var(--hk-sub)", lineHeight: 1.6 }}>
+          Kya aap sure hain? <span style={{ fontWeight: 700, color: "var(--hk-text)" }}>{fmtFull(paymentToDelete?.amount || 0)}</span> ka payment permanently delete ho jayega aur balance reverse ho jayega.
+        </p>
+      </HKModal>
     </div>
   );
 }
