@@ -114,7 +114,7 @@ export default async function PublicBillPage(
   const halfRate  = taxPct / 2;
   const halfTax   = Math.round((tax / 2) * 100) / 100;
   const cgst      = halfTax;
-  const sgst      = Math.round((tax - halfTax) * 100) / 100;
+  const sgst      = halfTax;
   const supply    = bill.placeOfSupply ? stateName(bill.placeOfSupply) : "";
   const supplyFull = bill.placeOfSupply ? `${supply} (${bill.placeOfSupply})` : "";
   const upiLink   = settings.upiId

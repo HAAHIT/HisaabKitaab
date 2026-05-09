@@ -106,6 +106,8 @@ export default function NewBillPage() {
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("");
   const [didAutoFocusRow, setDidAutoFocusRow] = useState(false);
+  const [enableRoundOff, setEnableRoundOff] = useState(false);
+  const [billDate, setBillDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [companyGstin, setCompanyGstin] = useState("");
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
   const [autoFocusedRow, setAutoFocusedRow] = useState<number | null>(null);
@@ -271,6 +273,39 @@ export default function NewBillPage() {
     return { subtotal: nextSubtotal, taxAmount: nextTaxAmount, grandTotal: nextGrandTotal };
   }, [rows, selectedTemplate, taxPercent, taxRateColId, rateColId, qtyColId]);
 
+  const roundOff = useMemo(() => {
+    if (!enableRoundOff || grandTotal === 0) return 0;
+    return Math.round((Math.round(grandTotal) - grandTotal) * 100) / 100;
+  }, [enableRoundOff, grandTotal]);
+
+  const roundedGrandTotal = useMemo(
+    () => (enableRoundOff ? Math.round(grandTotal) : grandTotal),
+    [enableRoundOff, grandTotal]
+  );
+
+  // Unique tax rate across rows — null means multiple distinct rates exist
+  const uniqueTaxRate = useMemo<number | null>(() => {
+    if (!taxRateColId) return taxPercent;
+    const rates = rows
+      .map((r) => (typeof r[taxRateColId] === "number" ? (r[taxRateColId] as number) : 0))
+      .filter((r) => r > 0);
+    if (rates.length === 0) return taxPercent;
+    const uniq = [...new Set(rates)];
+    return uniq.length === 1 ? uniq[0] : null;
+  }, [taxRateColId, rows, taxPercent]);
+
+  const taxLabelText = useMemo(() => {
+    if (taxRateColId !== null) {
+      if (uniqueTaxRate === null)
+        return isInterState ? "Output IGST" : "Output CGST + Output SGST";
+      if (uniqueTaxRate === 0) return "Tax";
+      if (isInterState) return `IGST @ ${uniqueTaxRate}%`;
+      const half = uniqueTaxRate / 2;
+      return `CGST @ ${half}% + SGST @ ${half}%`;
+    }
+    return isInterState ? "IGST" : "CGST + SGST";
+  }, [taxRateColId, uniqueTaxRate, isInterState]);
+
   const autoFilteredItems = useMemo(() => {
     if (autoFocusedRow === null || !nameColId) return [];
     const query = String(rows[autoFocusedRow]?.[nameColId] || "").toLowerCase().trim();
@@ -340,7 +375,7 @@ export default function NewBillPage() {
           customerPhone: currentParty.phone || null,
           customerAddress: currentParty.address || null,
           gstin: currentParty.gstin || null,
-          rows, subtotal, taxPercent, taxAmount, grandTotal, isInterState,
+          rows, subtotal, taxPercent, taxAmount, grandTotal: roundedGrandTotal, roundOff, isInterState, billDate,
           placeOfSupply: placeOfSupply || null,
           hsnCode: null,
           notes: notes.trim() || null,
@@ -817,6 +852,19 @@ export default function NewBillPage() {
                 <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, marginBottom: 16 }}>Summary</p>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                    <span style={{ color: "var(--hk-sub)", fontSize: TYPE.body, fontFamily: SG, flexShrink: 0 }}>Bill Date</span>
+                    <Input
+                      type="date"
+                      aria-label="Bill date"
+                      value={billDate}
+                      onValueChange={setBillDate}
+                      variant="bordered"
+                      size="sm"
+                      className="max-w-[180px]"
+                    />
+                  </div>
+
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
                     <span style={{ color: "var(--hk-sub)", fontSize: TYPE.body, fontFamily: SG }}>Subtotal</span>
                     <span style={{ fontFamily: IN, fontWeight: 600, color: "var(--hk-text)" }}>{formatCurrency(subtotal)}</span>
@@ -824,7 +872,7 @@ export default function NewBillPage() {
 
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ color: "var(--hk-sub)", fontSize: TYPE.body, fontFamily: SG }}>Tax</span>
+                      <span style={{ color: "var(--hk-sub)", fontSize: TYPE.body, fontFamily: SG }}>{taxLabelText}</span>
                       {taxRateColId === null && (
                         <Input
                           type="number"
@@ -900,9 +948,27 @@ export default function NewBillPage() {
                     </Select>
                   </div>
 
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: grandTotal === 0 ? "not-allowed" : "pointer", opacity: grandTotal === 0 ? 0.4 : 1 }}>
+                      <input
+                        type="checkbox"
+                        checked={enableRoundOff}
+                        onChange={(e) => { if (grandTotal !== 0) setEnableRoundOff(e.target.checked); }}
+                        disabled={grandTotal === 0}
+                        style={{ accentColor: PU }}
+                      />
+                      <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>Round off to nearest ₹</span>
+                    </label>
+                    {enableRoundOff && roundOff !== 0 && (
+                      <span style={{ fontSize: TYPE.bodySmall, fontFamily: IN, fontWeight: 600, color: roundOff > 0 ? GR : OR }}>
+                        {roundOff > 0 ? "+" : ""}{formatCurrency(roundOff)}
+                      </span>
+                    )}
+                  </div>
+
                   <div style={{ borderTop: "1px solid var(--hk-border)", paddingTop: 12, marginTop: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <span style={{ fontSize: TYPE.h2, fontWeight: 800, color: "var(--hk-text)", fontFamily: SG }}>Grand Total</span>
-                    <span style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: PU, fontFamily: IN }}>{formatCurrency(grandTotal)}</span>
+                    <span style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: PU, fontFamily: IN }}>{formatCurrency(roundedGrandTotal)}</span>
                   </div>
                 </div>
               </HKCard>

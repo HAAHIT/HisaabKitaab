@@ -118,6 +118,8 @@ const CreateBillSchema = z.object({
   subtotal: z.number().nonnegative().default(0),
   taxAmount: z.number().nonnegative().default(0),
   grandTotal: z.number().nonnegative().default(0),
+  roundOff: z.number().finite().optional().default(0),
+  billDate: z.string().optional(),
   status: z.string().optional(),
   isInterState: z.boolean().optional(),
   paymentMode: z.string().optional(),
@@ -494,10 +496,10 @@ export async function POST(request: NextRequest) {
     const effectiveGstin = gstin || party.gstin;
     const isInterState = deriveIsInterState(effectiveGstin, tenant?.gstin, body.isInterState);
     const normalizedPaymentMode = normalizePaymentMode(body.paymentMode);
-    const now = new Date();
-    const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const billDate = body.billDate ? new Date(body.billDate) : new Date();
+    const yearMonth = `${billDate.getFullYear()}${String(billDate.getMonth() + 1).padStart(2, "0")}`;
+    const monthStart = new Date(billDate.getFullYear(), billDate.getMonth(), 1);
+    const nextMonthStart = new Date(billDate.getFullYear(), billDate.getMonth() + 1, 1);
     
     const snapshot = buildBillSnapshotFromParty(party, {
       customerName,
@@ -567,6 +569,8 @@ export async function POST(request: NextRequest) {
           taxPercent: taxPercent ?? billingSettings.defaultTaxPercent,
           taxAmount: taxAmount || 0,
           grandTotal: resolvedGrandTotal,
+          roundOff: body.roundOff ?? 0,
+          date: billDate,
           status: billStatus,
           isInterState,
           placeOfSupply: body.placeOfSupply ?? null,  // [B1] GSTR-1 mandatory field
@@ -614,7 +618,7 @@ export async function POST(request: NextRequest) {
           taxAmount: createdBill.taxAmount.toNumber(),
           grandTotal: createdBill.grandTotal.toNumber(),
           createdBy: userId!,
-          entryDate: createdBill.createdAt,
+          entryDate: createdBill.date,
           isInterState,
         });
       }
@@ -626,7 +630,7 @@ export async function POST(request: NextRequest) {
             partyId: party.id,
             direction: party.type === "CUSTOMER" ? "INCOMING" : "OUTGOING",
             amount: resolvedGrandTotal,
-            date: now,
+            date: billDate,
             mode: normalizedPaymentMode,
             status: "COMPLETED",
             linkedBillId: createdBill.id,

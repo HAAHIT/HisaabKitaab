@@ -42,6 +42,9 @@ interface BillResponse {
   notes: string | null;
   terms: string | null;
   taxPercent: number;
+  grandTotal?: number;
+  roundOff?: number | null;
+  date?: string;
   hsnCode?: string | null;
 }
 
@@ -112,6 +115,8 @@ export default function EditBillPage({
   const [placeOfSupply, setPlaceOfSupply] = useState("");
   const [hsnCode, setHsnCode] = useState("");
   const [hsnPerRow, setHsnPerRow] = useState(false);
+  const [enableRoundOff, setEnableRoundOff] = useState(false);
+  const [billDate, setBillDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [showCatalogPicker, setShowCatalogPicker] = useState(false);
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("");
@@ -156,6 +161,8 @@ export default function EditBillPage({
       setHsnCode(nextBill.hsnCode || "");
       setIsInterState(nextBill.isInterState === true);
       setPlaceOfSupply(nextBill.placeOfSupply || "");
+      if (nextBill.roundOff && nextBill.roundOff !== 0) setEnableRoundOff(true);
+      if (nextBill.date) setBillDate(new Date(nextBill.date).toISOString().slice(0, 10));
 
       const template = nextTemplates.find((item) => item.id === nextBill.templateId) || null;
       setSelectedTemplate(template);
@@ -247,6 +254,21 @@ export default function EditBillPage({
     return { subtotal: nextSubtotal, taxAmount: nextTaxAmount, grandTotal: nextGrandTotal };
   }, [rows, selectedTemplate, taxPercent]);
 
+  const roundOff = useMemo(() => {
+    if (!enableRoundOff || grandTotal === 0) return 0;
+    return Math.round((Math.round(grandTotal) - grandTotal) * 100) / 100;
+  }, [enableRoundOff, grandTotal]);
+
+  const roundedGrandTotal = useMemo(
+    () => (enableRoundOff ? Math.round(grandTotal) : grandTotal),
+    [enableRoundOff, grandTotal]
+  );
+
+  const taxLabelText = useMemo(
+    () => (isInterState ? "IGST" : "CGST + SGST"),
+    [isInterState]
+  );
+
   async function handleSave(status: "DRAFT" | "FINAL") {
     const mainScroll = document.querySelector("main");
     if (!selectedTemplate || !bill) {
@@ -277,8 +299,8 @@ export default function EditBillPage({
           customerAddress: customerAddress.trim() || null,
           gstin: gstin.trim() || null,
           rows, notes: notes.trim() || null, terms: terms.trim() || null,
-          taxPercent, subtotal, taxAmount, grandTotal,
-          isInterState, hsnCode: hsnCode.trim() || null,
+          taxPercent, subtotal, taxAmount, grandTotal: roundedGrandTotal, roundOff,
+          billDate, isInterState, hsnCode: hsnCode.trim() || null,
           placeOfSupply: placeOfSupply.trim() || null, status,
         }),
       });
@@ -584,6 +606,19 @@ export default function EditBillPage({
               <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, marginBottom: 16 }}>Summary</p>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                  <span style={{ color: "var(--hk-sub)", fontSize: TYPE.body, fontFamily: SG, flexShrink: 0 }}>Bill Date</span>
+                  <Input
+                    type="date"
+                    aria-label="Bill date"
+                    value={billDate}
+                    onValueChange={setBillDate}
+                    variant="bordered"
+                    size="sm"
+                    className="max-w-[180px]"
+                  />
+                </div>
+
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
                   <span style={{ color: "var(--hk-sub)", fontSize: TYPE.body, fontFamily: SG }}>Subtotal</span>
                   <span style={{ fontFamily: IN, fontWeight: 600, color: "var(--hk-text)" }}>{fmtFull(subtotal)}</span>
@@ -591,7 +626,7 @@ export default function EditBillPage({
 
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ color: "var(--hk-sub)", fontSize: TYPE.body, fontFamily: SG }}>Tax</span>
+                    <span style={{ color: "var(--hk-sub)", fontSize: TYPE.body, fontFamily: SG }}>{taxLabelText}</span>
                     <Input
                       type="number"
                       aria-label="Tax percentage"
@@ -662,9 +697,27 @@ export default function EditBillPage({
                   </p>
                 )}
 
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: grandTotal === 0 ? "not-allowed" : "pointer", opacity: grandTotal === 0 ? 0.4 : 1 }}>
+                    <input
+                      type="checkbox"
+                      checked={enableRoundOff}
+                      onChange={(e) => { if (grandTotal !== 0) setEnableRoundOff(e.target.checked); }}
+                      disabled={grandTotal === 0}
+                      style={{ accentColor: PU }}
+                    />
+                    <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>Round off to nearest ₹</span>
+                  </label>
+                  {enableRoundOff && roundOff !== 0 && (
+                    <span style={{ fontSize: TYPE.bodySmall, fontFamily: IN, fontWeight: 600, color: roundOff > 0 ? GR : OR }}>
+                      {roundOff > 0 ? "+" : ""}{fmtFull(roundOff)}
+                    </span>
+                  )}
+                </div>
+
                 <div style={{ borderTop: "1px solid var(--hk-border)", paddingTop: 12, marginTop: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontSize: TYPE.h2, fontWeight: 800, color: "var(--hk-text)", fontFamily: SG }}>Grand Total</span>
-                  <span style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: PU, fontFamily: IN }}>{fmtFull(grandTotal)}</span>
+                  <span style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: PU, fontFamily: IN }}>{fmtFull(roundedGrandTotal)}</span>
                 </div>
               </div>
             </HKCard>

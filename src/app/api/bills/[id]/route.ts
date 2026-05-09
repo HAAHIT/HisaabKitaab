@@ -34,6 +34,7 @@ const ALLOWED_BILL_PATCH_KEYS = new Set([
   "subtotal",
   "taxAmount",
   "grandTotal",
+  "roundOff",
   "status",
   "isInterState",
   "hsnCode",
@@ -280,6 +281,16 @@ export async function PATCH(
       }
 
       updateData[field] = value;
+    }
+
+    if (hasOwn(body, "roundOff") && body.roundOff !== null) {
+      const value = parseOptionalNumber(body.roundOff);
+      if (value !== undefined) updateData.roundOff = value;
+    }
+
+    if (hasOwn(body, "billDate") && typeof body.billDate === "string") {
+      const parsed = new Date(body.billDate);
+      if (!Number.isNaN(parsed.getTime())) updateData.date = parsed;
     }
 
     if (hasOwn(body, "status")) {

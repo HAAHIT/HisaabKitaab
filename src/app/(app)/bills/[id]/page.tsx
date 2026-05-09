@@ -43,9 +43,11 @@ interface BillDetail {
   taxPercent: number;
   taxAmount: number;
   grandTotal: number;
+  roundOff?: number | null;
   placeOfSupply: string | null;
   hsnCode: string | null;
   status: string;
+  date: string;
   createdAt: string;
   template: { name: string; columns: ColumnDef[] };
   creator: { name: string };
@@ -216,12 +218,22 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
   const halfRate = bill.taxPercent / 2;
   const halfTax  = Math.round((bill.taxAmount / 2) * 100) / 100;
   const cgst     = halfTax;
-  const sgst     = Math.round((bill.taxAmount - halfTax) * 100) / 100;
+  const sgst     = halfTax;
   const supply   = bill.placeOfSupply ? stateName(bill.placeOfSupply) : "";
   const supplyFull = bill.placeOfSupply ? `${supply} (${bill.placeOfSupply})` : "";
 
   const lastNumCol = [...cols].reverse().find(c => c.type === "formula" || c.type === "number");
   const numColCount = cols.filter(c => c.type === "number" || c.type === "formula").length;
+  const templateHasHsnCol = cols.some(c => c.type === "text" && ["hsn","sac"].some(h => c.name.toLowerCase().includes(h)));
+
+  const isMultiRate = (() => {
+    const taxRateCol = cols.find(c => c.type === "number" && ["tax rate","tax%","gst rate","gst%"].some(h => c.name.toLowerCase().includes(h)));
+    if (!taxRateCol) return false;
+    const rates = (bill.rows as Record<string,string|number>[])
+      .map(r => typeof r[taxRateCol.id] === "number" ? r[taxRateCol.id] as number : 0)
+      .filter(r => r > 0);
+    return new Set(rates).size > 1;
+  })();
 
   const isVendor = bill.party?.type === "VENDOR";
 
@@ -413,7 +425,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
             <div style={{ padding:"10px 14px", fontSize:11 }}>
               {[
                 ["Invoice No", bill.billNumber],
-                ["Date", fmtDate(bill.createdAt)],
+                ["Date", fmtDate(bill.date || bill.createdAt)],
                 ...(bill.hsnCode ? [["HSN / SAC", bill.hsnCode]] : []),
                 ...(bill.placeOfSupply ? [["Place of Supply", supplyFull]] : []),
                 ...(bill.terms ? [["Payment Terms", bill.terms]] : []),
@@ -455,7 +467,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
                           ? typeof row[col.id]==="number" ? formatVal(col.name, row[col.id] as number) : row[col.id]||"—"
                           : <>
                               {row[col.id]||"—"}
-                              {rowHsn && col.id === firstTextColId && (
+                              {rowHsn && col.id === firstTextColId && !templateHasHsnCol && (
                                 <span style={{ display:"block", fontSize:9, color:"#888", marginTop:1 }}>
                                   HSN/SAC: {rowHsn}
                                 </span>
@@ -472,10 +484,10 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
                 const textCols = cols.length - numColCount;
                 const spanLeft = 1 + textCols;
                 const taxRows = isIS
-                  ? [["IGST", `@ ${bill.taxPercent}%`, formatINR(bill.taxAmount)]]
+                  ? [["IGST", isMultiRate ? "" : `@ ${bill.taxPercent}%`, formatINR(bill.taxAmount)]]
                   : [
-                      ["OUTPUT CENTRAL GST", `(CGST) @ ${halfRate}%`, formatINR(cgst)],
-                      ["OUTPUT STATE GST",   `(SGST) @ ${halfRate}%`, formatINR(sgst)],
+                      ["OUTPUT CENTRAL GST", isMultiRate ? "(CGST)" : `(CGST) @ ${halfRate}%`, formatINR(cgst)],
+                      ["OUTPUT STATE GST",   isMultiRate ? "(SGST)" : `(SGST) @ ${halfRate}%`, formatINR(sgst)],
                     ];
                 return (
                   <>
@@ -505,6 +517,22 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
                         </td>
                       </tr>
                     ))}
+                    {Number(bill.roundOff) !== 0 && (
+                      <tr style={{ borderBottom:"1px solid #e5e5e5" }}>
+                        <td colSpan={spanLeft} style={{ ...TD({}), borderRight:"1px solid #ccc" }}> </td>
+                        {numColCount > 1 && Array.from({length:numColCount-1}).map((_,i) => (
+                          <td key={i} style={{ ...TD({ right:true }), borderRight:"1px solid #ccc" }}> </td>
+                        ))}
+                        <td style={{ ...TD({ right:true, last:true }), background:"#fafafa" }}>
+                          <div style={{ display:"flex", justifyContent:"space-between", gap:16 }}>
+                            <span style={{ color:"#6b7280", fontSize:11, fontWeight:600 }}>Round Off</span>
+                            <span style={{ fontFamily:"monospace", fontSize:11 }}>
+                              ({Number(bill.roundOff) > 0 ? "+" : ""}{formatINR(Number(bill.roundOff))})
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
                   </>
                 );
               })()}
