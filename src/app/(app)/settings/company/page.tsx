@@ -173,6 +173,20 @@ export default function CompanySettingsPage() {
     }
   }
 
+  async function handleWipeCloudData() {
+    if (!confirm("SACH MEIN? Yeh sab cloud data delete kar dega — journals, parties, bills, payments, imports. Yeh undo nahi hoga!")) return;
+    if (!confirm("Last chance: ALL cloud data will be permanently deleted. Continue?")) return;
+    try {
+      const res = await fetch("/api/admin/wipe-data", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Wipe failed");
+      showToast("All cloud data wiped successfully.", "success");
+      window.setTimeout(() => window.location.reload(), 1500);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Wipe failed", "error");
+    }
+  }
+
   const displayedCompanyLogo = pendingLogoPreviewUrl || companyLogoUrl;
 
   if (loading) {
@@ -379,15 +393,28 @@ export default function CompanySettingsPage() {
             </p>
             <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG }}>{t("company.dangerSubtitle")}</p>
           </div>
-          <button
-            onClick={handleResetLocalData}
-            style={{
-              padding: "10px 18px", borderRadius: 12, background: OR + "12", border: `1px solid ${OR}44`,
-              color: OR, fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: 700, cursor: "pointer",
-            }}
-          >
-            {t("company.resetOfflineStorage")}
-          </button>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            <button
+              onClick={handleResetLocalData}
+              style={{
+                padding: "10px 18px", borderRadius: 12, background: OR + "12", border: `1px solid ${OR}44`,
+                color: OR, fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: 700, cursor: "pointer",
+              }}
+            >
+              {t("company.resetOfflineStorage")}
+            </button>
+            {process.env.NEXT_PUBLIC_FEATURE_TESTING_WIPE_DATA === "true" && (
+              <button
+                onClick={handleWipeCloudData}
+                style={{
+                  padding: "10px 18px", borderRadius: 12, background: "#ff000020", border: "1px solid #ff000055",
+                  color: "#cc0000", fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: 700, cursor: "pointer",
+                }}
+              >
+                Wipe All Cloud Data (Testing)
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

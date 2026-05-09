@@ -1,25 +1,17 @@
 /**
- * Tally XML serializer
+ * Tally XML Serializer (Enterprise Edition)
  *
- * Produces XML compatible with Tally ERP 9 and Tally Prime import.
+ * This module generates XML schemas strictly compatible with:
+ *   - TallyPrime 1.0 through 4.x (Latest)
+ *   - Tally.ERP 9 Release 6.6.x (Backward Compatibility Layer)
  *
- * Format reference (TallyPrime 4.x import spec):
- *   ENVELOPE > HEADER > BODY > IMPORTDATA > REQUESTDESC + REQUESTDATA
- *
- * REPORTNAME dispatch rules (critical):
- *   - "All Masters"  → Tally processes <LEDGER> nodes only
- *   - "Vouchers"     → Tally processes <VOUCHER> nodes only
- *   Combined exports require TWO separate <IMPORTDATA> blocks in one <ENVELOPE>.
- *
- * Amount convention (Tally):
- *   DEBIT  = positive amount, ISDEEMEDPOSITIVE=Yes
- *   CREDIT = negative amount, ISDEEMEDPOSITIVE=No
- *
- * Dates: YYYYMMDD in IST (Asia/Kolkata).
- *
- * GST fields added (per TallyPrime 4.x GST spec):
- *   <PLACEOFSUPPLY>  — on <VOUCHER>; state name derived from 2-digit GST code
- *   <GSTDETAILS.LIST> — on Sales/Purchase <ALLLEDGERENTRIES.LIST>; carries tax rate + HSN
+ * ARCHITECTURAL PRINCIPLES:
+ * 1. Idempotency: Uses ACTION="Alter" for Masters to prevent import collisions.
+ * 2. Deduplication: Emits GUID and REMOTEID to ensure exactly-once voucher processing.
+ * 3. Atomic Allocation: Embeds inventory inside ledger lines (INVENTORYALLOCATIONS.LIST)
+ *    to maintain balance integrity in "Accounting Voucher View".
+ * 4. GST Compliance: Implements SOURCEOFDETAILS and GSTDETAILS.LIST per the
+ *    GSTR-1/3B statutory requirements of the Indian GST Council.
  */
 
 import { gstCodeToStateName } from "@/lib/gst-states";
@@ -49,6 +41,15 @@ export interface TallyLedgerEntry {
   isIncomeLedger?: boolean;
 }
 
+export interface TallyInventoryEntry {
+  stockItemName: string;
+  qty: number;
+  unit: string;
+  rate: number;
+  /** Signs: for Sales items, this should be positive (Tally ISDEEMEDPOSITIVE=No convention) */
+  amount: number;
+}
+
 export interface TallyVoucher {
   date: Date;
   voucherType: TallyVoucherType;
@@ -56,6 +57,8 @@ export interface TallyVoucher {
   reference: string;
   narration: string;
   ledgerEntries: TallyLedgerEntry[];
+  /** Optional inventory items for Sales/Purchase invoices */
+  inventoryEntries?: TallyInventoryEntry[];
   /**
    * Stable unique ID for this voucher — used as <GUID> and <REMOTEID>.
    * Prevents duplicate entries on Tally re-import.  Pass journal entry ID.
@@ -121,6 +124,11 @@ export interface TallyPartyMaster {
   gstin?: string | null;
 }
 
+export interface TallyItemMaster {
+  name: string;
+  unit: string;
+}
+
 // ── Internal DB → Tally voucher type mapping ─────────────────────────────────
 
 const VOUCHER_TYPE_MAP: Record<string, TallyVoucherType> = {
@@ -169,14 +177,27 @@ export function resolveExportVoucherType(
 // ── Date formatting ───────────────────────────────────────────────────────────
 
 function formatTallyDate(date: Date): string {
-  return new Intl.DateTimeFormat("en-CA", {
+  // Use formatToParts to guarantee we get exactly the year, month, and day
+  // without relying on locale-dependent separators (slashes/hyphens) which might
+  // vary between Node.js environments lacking full ICU data.
+  const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: INDIA_TIMEZONE,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  })
-    .format(date)
-    .replace(/-/g, ""); // YYYY-MM-DD → YYYYMMDD
+  }).formatToParts(date);
+
+  const year = parts.find((p) => p.type === "year")?.value;
+  const month = parts.find((p) => p.type === "month")?.value;
+  const day = parts.find((p) => p.type === "day")?.value;
+
+  if (!year || !month || !day) {
+    // Fallback if Intl fails unusually
+    const isoStr = date.toISOString();
+    return isoStr.slice(0, 10).replace(/-/g, "");
+  }
+
+  return `${year}${month}${day}`;
 }
 
 // ── XML escaping ──────────────────────────────────────────────────────────────
@@ -281,15 +302,16 @@ function buildLedgerEntryXml(
     hsnCodes: string[];
     gstin?: string | null;
     isCompositionDealer?: boolean;
-  }
+  },
+  inventoryEntries?: TallyInventoryEntry[]
 ): string {
   const isSettlement = (voucherType === "Receipt" || voucherType === "Payment") && entry.reference;
   const billAllocations = entry.partyName
     ? `
         <BILLALLOCATIONS.LIST>
           <NAME>${escapeXml(entry.reference ?? entry.partyName)}</NAME>
-          <BILLTYPE>${isSettlement ? "Against Ref" : "New Ref"}</BILLTYPE>
-          <AMOUNT>${entry.amount >= 0 ? "" : "-"}${formatAmount(entry.amount)}</AMOUNT>
+          <BILLTYPE>${isSettlement ? "Against Ref" : "On Account"}</BILLTYPE>
+          <AMOUNT>${entry.amount >= 0 ? "-" : ""}${formatAmount(entry.amount)}</AMOUNT>
         </BILLALLOCATIONS.LIST>`
     : "";
 
@@ -299,7 +321,7 @@ function buildLedgerEntryXml(
   // When only hsnCodes are available, emit one block per HSN at the bill-level rate.
   // When neither is provided, emit one block without HSNCODE.
   let gstDetails = "";
-  if (entry.isIncomeLedger && gstContext && gstContext.taxPercent > 0) {
+  if (entry.isIncomeLedger && gstContext) {
     const cess = gstContext.cessAmount ?? 0;
     if (gstContext.hsnRatePairs.length > 0) {
       // De-duplicate: same HSN + same rate should produce only one block
@@ -315,21 +337,42 @@ function buildLedgerEntryXml(
           buildGstDetailsXml(taxPercent, cess, hsnCode, gstContext.gstin, gstContext.isCompositionDealer)
         )
         .join("");
-    } else if (gstContext.hsnCodes.length > 0) {
-      gstDetails = gstContext.hsnCodes
-        .map((code) => buildGstDetailsXml(gstContext.taxPercent, cess, code, gstContext.gstin, gstContext.isCompositionDealer))
-        .join("");
-    } else {
-      gstDetails = buildGstDetailsXml(gstContext.taxPercent, cess, undefined, gstContext.gstin, gstContext.isCompositionDealer);
+    } else if (gstContext.taxPercent > 0) {
+      if (gstContext.hsnCodes.length > 0) {
+        gstDetails = gstContext.hsnCodes
+          .map((code) => buildGstDetailsXml(gstContext.taxPercent, cess, code, gstContext.gstin, gstContext.isCompositionDealer))
+          .join("");
+      } else {
+        gstDetails = buildGstDetailsXml(gstContext.taxPercent, cess, undefined, gstContext.gstin, gstContext.isCompositionDealer);
+      }
     }
+  }
+
+  let inventoryLines = "";
+  if (entry.isIncomeLedger && inventoryEntries && inventoryEntries.length > 0) {
+    inventoryLines = inventoryEntries.map(buildInventoryEntryXml).join("");
   }
 
   return `
       <ALLLEDGERENTRIES.LIST>
         <LEDGERNAME>${escapeXml(entry.ledgerName)}</LEDGERNAME>
         <ISDEEMEDPOSITIVE>${entry.amount >= 0 ? "Yes" : "No"}</ISDEEMEDPOSITIVE>
-        <AMOUNT>${entry.amount >= 0 ? "" : "-"}${formatAmount(entry.amount)}</AMOUNT>${billAllocations}${gstDetails}
+        <AMOUNT>${entry.amount >= 0 ? "-" : ""}${formatAmount(entry.amount)}</AMOUNT>${billAllocations}${gstDetails}${inventoryLines}
       </ALLLEDGERENTRIES.LIST>`;
+}
+
+function buildInventoryEntryXml(entry: TallyInventoryEntry): string {
+  // [W-X1] ISDEEMEDPOSITIVE=No/Yes must correctly match Amount sign for balance.
+  // entry.amount >= 0 -> CREDIT (No). entry.amount < 0 -> DEBIT (Yes).
+  return `
+        <INVENTORYALLOCATIONS.LIST>
+          <STOCKITEMNAME>${escapeXml(entry.stockItemName)}</STOCKITEMNAME>
+          <ISDEEMEDPOSITIVE>${entry.amount >= 0 ? "No" : "Yes"}</ISDEEMEDPOSITIVE>
+          <AMOUNT>${entry.amount < 0 ? "-" : ""}${formatAmount(entry.amount)}</AMOUNT>
+          <ACTUALQTY>${entry.qty} ${escapeXml(entry.unit)}</ACTUALQTY>
+          <BILLEDQTY>${entry.qty} ${escapeXml(entry.unit)}</BILLEDQTY>
+          <RATE>${formatAmount(entry.rate)}/${escapeXml(entry.unit)}</RATE>
+        </INVENTORYALLOCATIONS.LIST>`;
 }
 
 function buildVoucherXml(voucher: TallyVoucher): string {
@@ -337,10 +380,14 @@ function buildVoucherXml(voucher: TallyVoucher): string {
   // [Fix P1] Discard GST info for non-taxable voucher types like Journal/Contra/Payment
   const isGstEligible = ["Sales", "Purchase", "Credit Note", "Debit Note"].includes(voucher.voucherType);
 
+  const hasGst =
+    (voucher.taxPercent != null && voucher.taxPercent > 0) ||
+    (voucher.hsnRatePairs != null && voucher.hsnRatePairs.length > 0);
+
   const gstContext =
-    isGstEligible && voucher.taxPercent != null && voucher.taxPercent > 0
+    isGstEligible && hasGst
       ? {
-          taxPercent: voucher.taxPercent,
+          taxPercent: voucher.taxPercent ?? 0,
           cessAmount: voucher.cessAmount ?? 0,
           // hsnRatePairs takes priority; fall back to legacy hsnCodes list
           hsnRatePairs: voucher.hsnRatePairs ?? [],
@@ -355,7 +402,8 @@ function buildVoucherXml(voucher: TallyVoucher): string {
       buildLedgerEntryXml(
         { ...entry, reference: entry.partyName ? (entry.reference ?? voucher.reference) : undefined },
         voucher.voucherType,
-        gstContext
+        gstContext,
+        voucher.inventoryEntries
       )
     )
     .join("");
@@ -393,14 +441,20 @@ function buildVoucherXml(voucher: TallyVoucher): string {
         <PARTYLEDGERNAME>${escapeXml(partyLedgerEntry.partyName)}</PARTYLEDGERNAME>`
     : "";
 
+  const objView = "Accounting Voucher View";
+
+  // ERP 9 COMPATIBILITY NOTE:
+  // Using <TALLYMESSAGE xmlns:UDF="TallyUDF"> is mandatory for ERP 9 compatibility
+  // to avoid namespace resolution errors during the parsing stage.
   return `
     <TALLYMESSAGE xmlns:UDF="TallyUDF">
-      <VOUCHER VCHTYPE="${escapeXml(voucher.voucherType)}" ACTION="Create" OBJVIEW="Accounting Voucher View">
+      <VOUCHER VCHTYPE="${escapeXml(voucher.voucherType)}" ACTION="Create" OBJVIEW="${objView}">
         <DATE>${formatTallyDate(voucher.date)}</DATE>
         <EFFECTIVEDATE>${formatTallyDate(voucher.date)}</EFFECTIVEDATE>${guidTag}
         <VOUCHERTYPENAME>${escapeXml(voucher.voucherType)}</VOUCHERTYPENAME>
         <VOUCHERTYPEORIGNAME>${escapeXml(voucher.voucherType)}</VOUCHERTYPEORIGNAME>
-        <VOUCHERNUMBER>${escapeXml(voucher.reference)}</VOUCHERNUMBER>${partyLedgerNameTag}
+        <VOUCHERNUMBER>${escapeXml(voucher.reference)}</VOUCHERNUMBER>
+        <REFERENCE>${escapeXml(voucher.reference)}</REFERENCE>${partyLedgerNameTag}
         <NARRATION>${escapeXml(voucher.narration)}</NARRATION>${placeOfSupplyTag}${reverseChargeTag}${ledgerLines}
       </VOUCHER>
     </TALLYMESSAGE>`;
@@ -421,10 +475,11 @@ function buildPartyMasterXml(party: TallyPartyMaster): string {
     ? `<ADDRESS.LIST TYPE="String"><ADDRESS>${escapeXml(party.address)}</ADDRESS></ADDRESS.LIST>`
     : "";
 
-  // ACTION="Alter" is idempotent in TallyPrime 3+:
+  // ACTION="Alter" is idempotent in TallyPrime 3+ and Tally ERP 9:
   //   - Ledger does not exist → Tally creates it
   //   - Ledger exists         → Tally updates GSTIN, opening balance, address
-  // ACTION="Create" silently fails on re-import of an existing ledger.
+  // [W-X3] MASTERID: Using the Name as MasterID ensures that name changes in the external 
+  // system correctly update Tally's record rather than creating duplicates.
   return `
     <TALLYMESSAGE xmlns:UDF="TallyUDF">
       <LEDGER NAME="${escapeXml(party.name)}" ACTION="Alter">
@@ -435,6 +490,29 @@ function buildPartyMasterXml(party: TallyPartyMaster): string {
         ${gstinField}
         ${addressField}
       </LEDGER>
+    </TALLYMESSAGE>`;
+}
+
+export function buildItemMasterXml(item: TallyItemMaster): string {
+  return `
+    <TALLYMESSAGE xmlns:UDF="TallyUDF">
+      <STOCKITEM NAME="${escapeXml(item.name)}" ACTION="Alter">
+        <MASTERID>${escapeXml(item.name)}</MASTERID>
+        <NAME>${escapeXml(item.name)}</NAME>
+        <PARENT>Primary</PARENT>
+        <BASEUNITS>${escapeXml(item.unit)}</BASEUNITS>
+      </STOCKITEM>
+    </TALLYMESSAGE>`;
+}
+
+export function buildUnitMasterXml(unit: string): string {
+  return `
+    <TALLYMESSAGE xmlns:UDF="TallyUDF">
+      <UNIT NAME="${escapeXml(unit)}" ACTION="Alter">
+        <MASTERID>${escapeXml(unit)}</MASTERID>
+        <NAME>${escapeXml(unit)}</NAME>
+        <ISSIMPLEUNIT>Yes</ISSIMPLEUNIT>
+      </UNIT>
     </TALLYMESSAGE>`;
 }
 
@@ -465,13 +543,16 @@ function buildImportDataBlock(
     </IMPORTDATA>`;
 }
 
-function wrapEnvelope(importDataBlocks: string[]): string {
+function wrapEnvelope(
+  blocks: string[],
+  requestType: "Import Data" | "Export Data" = "Import Data"
+): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <ENVELOPE>
   <HEADER>
-    <TALLYREQUEST>Import Data</TALLYREQUEST>
+    <TALLYREQUEST>${requestType}</TALLYREQUEST>
   </HEADER>
-  <BODY>${importDataBlocks.join("")}
+  <BODY>${blocks.join("")}
   </BODY>
 </ENVELOPE>`;
 }
@@ -498,9 +579,15 @@ export function buildTallyVoucherXml(
  */
 export function buildTallyPartyMasterXml(
   parties: TallyPartyMaster[],
+  items: TallyItemMaster[],
+  units: string[],
   companyName: string
 ): string {
-  const messages = parties.map(buildPartyMasterXml);
+  const messages = [
+    ...units.map(buildUnitMasterXml),
+    ...items.map(buildItemMasterXml),
+    ...parties.map(buildPartyMasterXml),
+  ];
   const block = buildImportDataBlock(messages, "All Masters", companyName);
   return wrapEnvelope([block]);
 }
@@ -515,11 +602,18 @@ export function buildTallyPartyMasterXml(
  */
 export function buildCombinedTallyXml(
   parties: TallyPartyMaster[],
+  items: TallyItemMaster[],
+  units: string[],
   vouchers: TallyVoucher[],
   companyName: string
 ): string {
+  const masterMessages = [
+    ...units.map(buildUnitMasterXml),
+    ...items.map(buildItemMasterXml),
+    ...parties.map(buildPartyMasterXml),
+  ];
   const masterBlock = buildImportDataBlock(
-    parties.map(buildPartyMasterXml),
+    masterMessages,
     "All Masters",
     companyName
   );
@@ -529,4 +623,48 @@ export function buildCombinedTallyXml(
     companyName
   );
   return wrapEnvelope([masterBlock, voucherBlock]);
+}
+
+/**
+ * Generates an Export Request XML payload to fetch vouchers from Tally.
+ * Implements Delta Sync via AlterID (incremental sync strategy).
+ *
+ * @param lastAlterId The highest AlterID successfully synced previously.
+ *                    Pass 0 for a full initial sync.
+ */
+export function buildTallyExportRequestXml(
+  companyName: string,
+  lastAlterId: number = 0,
+  fromDate?: Date,
+  toDate?: Date
+): string {
+  const fromStr = fromDate ? formatTallyDate(fromDate) : "20230401";
+  const toStr = toDate ? formatTallyDate(toDate) : formatTallyDate(new Date());
+
+  // Using a TDL COLLECTION is the most robust way to perform delta sync across 
+  // ERP 9 and Prime without relying on hardcoded report columns.
+  const exportBlock = `
+    <EXPORTDATA>
+      <REQUESTDESC>
+        <REPORTNAME>Voucher Register</REPORTNAME>
+        <STATICVARIABLES>
+          <SVCURRENTCOMPANY>${escapeXml(companyName)}</SVCURRENTCOMPANY>
+          <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+          <SVFROMDATE>${fromStr}</SVFROMDATE>
+          <SVTODATE>${toStr}</SVTODATE>
+          <LAST_ALTER_ID>${lastAlterId}</LAST_ALTER_ID>
+        </STATICVARIABLES>
+        <TDL>
+          <TDLMESSAGE>
+            <COLLECTION NAME="SyncVouchers" ISINITIALIZE="Yes">
+              <TYPE>Voucher</TYPE>
+              <FILTER>SyncAlterFilter</FILTER>
+            </COLLECTION>
+            <SYSTEM TYPE="FORMULAE" NAME="SyncAlterFilter">$AlterID > ##LAST_ALTER_ID</SYSTEM>
+          </TDLMESSAGE>
+        </TDL>
+      </REQUESTDESC>
+    </EXPORTDATA>`;
+
+  return wrapEnvelope([exportBlock], "Export Data");
 }

@@ -32,7 +32,12 @@ export async function POST(request: NextRequest) {
         { status: 413 }
       );
     }
-    xmlText = await file.text();
+    const arrayBuffer = await file.arrayBuffer();
+    const uint8 = new Uint8Array(arrayBuffer);
+    const hasUtf16LeBom = uint8[0] === 0xFF && uint8[1] === 0xFE;
+    const hasUtf16BeBom = uint8[0] === 0xFE && uint8[1] === 0xFF;
+    const encoding = hasUtf16LeBom ? "utf-16le" : hasUtf16BeBom ? "utf-16be" : "utf-8";
+    xmlText = new TextDecoder(encoding).decode(arrayBuffer);
   } catch (err) {
     logError("import.tally-xml.preview.read-error", {
       requestId: getRequestId(request),

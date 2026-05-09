@@ -4,13 +4,8 @@ import { resolveSession } from "@/lib/api-tenant";
 import { logError, logInfo, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { parseTallyXml } from "@/lib/tally-xml-import";
-import { createJournalEntry } from "@/lib/journal";
+import { processImportJob } from "@/app/api/jobs/process-import/route";
 import { gzipSync } from "zlib";
-import type { AccountCode } from "@/lib/chart-of-accounts";
-
-// Derive Prisma tx type from the client instance to avoid the
-// @prisma/client → .prisma/client re-export failure under Prisma v7.
-type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 
 export const runtime = "nodejs";
 
@@ -82,6 +77,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Failed to read uploaded file" }, { status: 400 });
   }
 
+  // Parse upfront to get accurate totalItems for progress tracking
+  let totalItems = 0;
+  let parseErrors: string[] = [];
+  try {
+    const parsed = parseTallyXml(xmlText);
+    totalItems = parsed.vouchers.length;
+    parseErrors = parsed.parseErrors ?? [];
+  } catch {
+    // Non-fatal — job will re-parse and fail gracefully if truly broken
+  }
+
   // [S-W1] Compress XML before DB storage (~80% size reduction).
   // Prefix with "gzip:" so the process-import route can detect and decompress.
   const compressedXml = "gzip:" + gzipSync(Buffer.from(xmlText, "utf-8")).toString("base64");
@@ -91,7 +97,7 @@ export async function POST(request: NextRequest) {
   const job = await prisma.importJob.create({
     data: {
       tenantId: tid,
-      totalItems: 0, // Will be updated by the background job during processing
+      totalItems,
       xmlData: compressedXml,
       status: "PENDING",
       createdBy: actorId,
@@ -102,12 +108,18 @@ export async function POST(request: NextRequest) {
     requestId: getRequestId(request),
     tenantId: tid,
     jobId: job.id,
+    totalItems,
   });
+
+  // Fire-and-forget — do not await, response returns immediately
+  processImportJob(job.id).catch((err) =>
+    logError("import.tally-xml.trigger-error", { jobId: job.id, error: err })
+  );
 
   return NextResponse.json({
     jobId: job.id,
     message: "Import job queued successfully.",
-    totalDetected: "Calculated in background",
-    parseErrors: [],
+    totalDetected: totalItems,
+    parseErrors,
   });
 }

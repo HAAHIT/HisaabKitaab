@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { resolveSession } from "@/lib/api-tenant";
-import { checkRateLimit } from "@/lib/api-rate-limit";
 import { parseIndianDateRange } from "@/lib/journal-reporting";
 import { logError, getRequestId } from "@/lib/observability";
 import { CHART_OF_ACCOUNTS } from "@/lib/chart-of-accounts";
@@ -12,7 +11,10 @@ import {
   resolveExportVoucherType,   // [A4] Sales Return detection for cancellation entries
   journalLineToTallyEntry,
   type TallyPartyMaster,
+  type TallyItemMaster,
   type TallyVoucher,
+  type TallyInventoryEntry,
+  type TallyVoucherType,
 } from "@/lib/tally-xml";
 
 export const runtime = "nodejs";
@@ -74,16 +76,15 @@ function extractHsnRatePairs(
 
     let hsnCode =
       typeof r["_hsnCode"] === "string" ? r["_hsnCode"].trim() : null;
-    
+
     if (!hsnCode && billLevelHsn) hsnCode = billLevelHsn.trim();
-    if (!hsnCode) continue;
 
     // Per-line rate is present only when the UI writes _taxPercent per row
     const rawRate = r["_taxPercent"];
     if (typeof rawRate === "number" && Number.isFinite(rawRate)) {
       hasPerLineRate = true;
-      pairs.push({ hsnCode, taxPercent: rawRate });
-    } else if (typeof billLevelTaxPercent === "number" && Number.isFinite(billLevelTaxPercent)) {
+      pairs.push({ hsnCode: hsnCode || "", taxPercent: rawRate });
+    } else if (hsnCode && typeof billLevelTaxPercent === "number" && Number.isFinite(billLevelTaxPercent)) {
       // Fallback: use the bill-level rate for this HSN
       pairs.push({ hsnCode, taxPercent: billLevelTaxPercent });
     }
@@ -101,21 +102,83 @@ function extractHsnRatePairs(
 }
 
 /**
- * POST /api/export/tally-xml
+ * Heuristic mapping of Bill rows to Tally Inventory entries.
+ * Searches template columns for keywords to identify Item, Qty, Rate, etc.
+ */
+function mapRowsToInventoryEntries(
+  rows: any[],
+  template: { name: string; columns: any[] },
+  voucherType: TallyVoucherType
+): TallyInventoryEntry[] {
+  const columns = (template.columns as any[]) || [];
+  const isPurchase = voucherType === "Purchase";
+
+  // Find column IDs for Item, Qty, Rate, Amount
+  const itemCol = columns.find((c) =>
+    ["item", "description", "desc", "particulars"].some((k) =>
+      c.name.toLowerCase().includes(k)
+    )
+  )?.id;
+  const qtyCol = columns.find((c) =>
+    ["qty", "quantity", "quant"].some((k) => c.name.toLowerCase().includes(k))
+  )?.id;
+  const rateCol = columns.find((c) =>
+    ["rate", "price", "unit price"].some((k) => c.name.toLowerCase().includes(k))
+  )?.id;
+  const unitCol = columns.find((c) =>
+    ["unit", "uom", "measure"].some((k) => c.name.toLowerCase().includes(k))
+  )?.id;
+  const amtCol = columns.find((c) =>
+    ["amount", "amt", "total"].some((k) => c.name.toLowerCase() === k)
+  )?.id;
+
+  if (!itemCol) return [];
+
+  return rows
+    .map((row: any) => {
+      const rowAmtValue = row[amtCol];
+      const rowAmt = typeof rowAmtValue === "number" ? rowAmtValue : parseFloat(rowAmtValue || "0");
+      if (rowAmt === 0 && !row[itemCol]) return null;
+
+      const qtyValue = row[qtyCol];
+      const qty = typeof qtyValue === "number" ? qtyValue : parseFloat(qtyValue || "1");
+      const amount = rowAmt;
+
+      // Tally Inventory signs:
+      // Sales items are Credit (positive in XML with ISDEEMEDPOSITIVE=No)
+      // Purchase items are Debit (negative in XML with ISDEEMEDPOSITIVE=Yes)
+      const entryAmount = isPurchase ? -amount : amount;
+
+      const rateValue = row[rateCol];
+      const rate = typeof rateValue === "number" ? rateValue : parseFloat(rateValue || "0");
+
+      return {
+        stockItemName: row[itemCol] || "Inventory Item",
+        qty: qty,
+        unit: row[unitCol] || "Nos",
+        rate: rate || (qty !== 0 ? amount / qty : amount),
+        amount: entryAmount,
+      };
+    })
+    .filter((e): e is TallyInventoryEntry => e !== null && e.amount !== 0);
+}
+
+/**
+ * GET /api/export/tally-xml
  *
- * Body params:
+ * Query params:
  *   from        YYYY-MM-DD  start of date range (IST)
  *   to          YYYY-MM-DD  end of date range (IST)
- *   include     { sales, purchases, receipts, payments, ledgers, journals }
+ *   type        "vouchers" | "masters" | "all"  (default: "all")
  *
  * Returns a single Tally-importable XML file.
+ * Import party masters first, then vouchers — or use type=all to get both
+ * in one file (masters first, then vouchers).
  *
  * Access: ADMIN and ACCOUNTANT only.
  */
-export async function POST(request: NextRequest) {
-  const rl = await checkRateLimit(request, "export.tally-xml", 5);
-  if (rl) return rl;
-
+export async function GET(request: NextRequest) {
+  // [FIX] Use JWT-verified session instead of trusting proxy headers
   const sessionResolution = await resolveSession(request);
   if (!sessionResolution.ok) return sessionResolution.response;
   const { tenantId, role } = sessionResolution.session;
@@ -124,39 +187,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  interface ExportBody {
-    from?: unknown;
-    to?: unknown;
-    include?: {
-      sales?: boolean;
-      purchases?: boolean;
-      receipts?: boolean;
-      payments?: boolean;
-      ledgers?: boolean;
-      journals?: boolean;
-    };
-  }
-  let body: ExportBody = {};
-  try {
-    body = await request.json();
-  } catch (e) {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-  }
-
-  const from = typeof body.from === "string" ? body.from : undefined;
-  const to = typeof body.to === "string" ? body.to : undefined;
-  const include = body.include || {
-    sales: true,
-    purchases: true,
-    receipts: true,
-    payments: true,
-    ledgers: true,
-    journals: false,
-  };
+  const { searchParams } = new URL(request.url);
+  const from = searchParams.get("from");
+  const to = searchParams.get("to");
+  const type = searchParams.get("type") || "all";
 
   if (!from || !to) {
     return NextResponse.json(
       { error: "Date range (from, to) is required" },
+      { status: 400 }
+    );
+  }
+
+  if (!["vouchers", "masters", "all"].includes(type)) {
+    return NextResponse.json(
+      { error: "type must be one of: vouchers, masters, all" },
       { status: 400 }
     );
   }
@@ -173,9 +218,9 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Block export if any entries are unbalanced
+    // [FIX #38] Scope unbalanced check to export date range (was blocking all exports)
     const unbalanced = await prisma.journalEntry.count({
-      where: { tenantId, isBalanced: false },
+      where: { tenantId, isBalanced: false, entryDate: { gte: fromDate, lte: toDate } },
     });
     if (unbalanced > 0) {
       return NextResponse.json(
@@ -196,17 +241,12 @@ export async function POST(request: NextRequest) {
 
     let xml = "";
 
-    // ── Party masters ────────────────────────────────────────────────────────
+    // ── Party & Item masters ────────────────────────────────────────────────────────
     let allMastersToExport: TallyPartyMaster[] = [];
+    let allItemsToExport: TallyItemMaster[] = [];
+    let allUnitsToExport: string[] = [];
 
-    const hasVouchers =
-      include.sales ||
-      include.purchases ||
-      include.receipts ||
-      include.payments ||
-      include.journals;
-
-    if (include.ledgers) {
+    if (type === "masters" || type === "all") {
       const parties = await prisma.party.findMany({
         where: { tenantId, isDeleted: false },
         select: {
@@ -221,15 +261,28 @@ export async function POST(request: NextRequest) {
         orderBy: { name: "asc" },
       });
 
-      const fetchedParties = parties.map((p: (typeof parties)[number]) => ({
-        name: p.name,
-        group: p.type === "CUSTOMER" ? "Sundry Debtors" : "Sundry Creditors",
-        openingBalance: p.openingBalance.toNumber(),
-        phone: p.phone,
-        email: p.email,
-        address: p.address,
-        gstin: p.gstin,
-      }));
+      const fetchedParties = parties.map((p: (typeof parties)[number]) => {
+        let tallyGroup = "Sundry Debtors";
+        switch (p.type) {
+          case "CUSTOMER": tallyGroup = "Sundry Debtors"; break;
+          case "VENDOR": tallyGroup = "Sundry Creditors"; break;
+          case "EXPENSE": tallyGroup = "Indirect Expenses"; break;
+          case "INCOME": tallyGroup = "Indirect Incomes"; break;
+          case "ASSET": tallyGroup = "Current Assets"; break;
+          case "LIABILITY": tallyGroup = "Current Liabilities"; break;
+          case "EQUITY": tallyGroup = "Capital Account"; break;
+        }
+
+        return {
+          name: p.name,
+          group: tallyGroup,
+          openingBalance: p.openingBalance.toNumber(),
+          phone: p.phone,
+          email: p.email,
+          address: p.address,
+          gstin: p.gstin,
+        };
+      });
 
       const standardLedgers: TallyPartyMaster[] = Object.values(CHART_OF_ACCOUNTS).map(acc => ({
         name: acc.name,
@@ -239,42 +292,27 @@ export async function POST(request: NextRequest) {
 
       allMastersToExport = [...standardLedgers, ...fetchedParties];
 
-      if (!hasVouchers) {
-        xml = buildTallyPartyMasterXml(allMastersToExport, companyName);
+      const catalogItems = await prisma.itemCatalog.findMany({
+        where: { tenantId },
+        select: { name: true, unit: true },
+      });
+      allItemsToExport = catalogItems.map(i => ({ name: i.name, unit: i.unit }));
+      allUnitsToExport = Array.from(new Set(catalogItems.map(i => i.unit)));
+
+      if (type === "masters") {
+        xml = buildTallyPartyMasterXml(allMastersToExport, allItemsToExport, allUnitsToExport, companyName);
         return xmlResponse(xml, `tally_masters_${from}_to_${to}.xml`);
       }
     }
 
     // ── Vouchers ─────────────────────────────────────────────────────────────
-    if (hasVouchers) {
-      // Build filter for voucher types based on include options
-      const voucherTypes: any[] = [];
-      if (include.sales) {
-        voucherTypes.push("SALES", "CREDIT_NOTE");
-      }
-      if (include.purchases) {
-        voucherTypes.push("PURCHASE", "DEBIT_NOTE");
-      }
-      if (include.receipts) {
-        voucherTypes.push("RECEIPT");
-      }
-      if (include.payments) {
-        voucherTypes.push("PAYMENT");
-      }
-      if (include.journals) {
-        voucherTypes.push("JOURNAL");
-      }
-
+    if (type === "vouchers" || type === "all") {
       // [P2] Pagination guard: refuse date ranges that would produce >5000 vouchers
       // in a single request to prevent OOM crashes on large books.
       // Callers should split large ranges by quarter or month.
       const MAX_VOUCHERS = 5_000;
       const voucherCount = await prisma.journalEntry.count({
-        where: {
-          tenantId,
-          entryDate: { gte: fromDate, lte: toDate },
-          voucherType: { in: voucherTypes },
-        },
+        where: { tenantId, entryDate: { gte: fromDate, lte: toDate } },
       });
 
       if (voucherCount > MAX_VOUCHERS) {
@@ -295,7 +333,6 @@ export async function POST(request: NextRequest) {
         where: {
           tenantId,
           entryDate: { gte: fromDate, lte: toDate },
-          voucherType: { in: voucherTypes },
         },
         orderBy: [{ entryDate: "asc" }, { createdAt: "asc" }],
         select: {
@@ -318,8 +355,14 @@ export async function POST(request: NextRequest) {
               placeOfSupply: true,
               hsnCode: true,
               rows: true,
-              cessAmount: true,  // [Task 3b] Cess amount for tobacco/luxury goods
+              cessAmount: true, // [Task 3b] Cess amount for tobacco/luxury goods
               gstin: true, // [P1] Used to emit SOURCEOFDETAILS=Autofill for registered parties
+              template: {
+                select: {
+                  name: true,
+                  columns: true,
+                },
+              },
             },
           },
         },
@@ -344,6 +387,12 @@ export async function POST(request: NextRequest) {
             rows: true,
             cessAmount: true,
             gstin: true,
+            template: {
+              select: {
+                name: true,
+                columns: true,
+              },
+            },
           },
         });
         for (const pb of purchaseBills) {
@@ -384,6 +433,14 @@ export async function POST(request: NextRequest) {
           reference:
             billData?.billNumber ?? entry.purchaseId ?? entry.paymentId ?? entry.id,
           narration: entry.narration,
+          inventoryEntries:
+            billData && billData.template
+              ? mapRowsToInventoryEntries(
+                billData.rows as any[],
+                billData.template as any,
+                resolveExportVoucherType(entry.voucherType, entry.narration)
+              )
+              : undefined,
           ledgerEntries: entry.lines.map((line) => {
             const tallyEntry = journalLineToTallyEntry({
               ...line,
@@ -426,7 +483,7 @@ export async function POST(request: NextRequest) {
           ? `<!-- WARNING: ${hsnMissingCount} voucher(s) have tax > 0% but no HSN/SAC code. GSTR-1 Table 12 may be incomplete. -->`
           : "";
 
-      if (!include.ledgers) {
+      if (type === "vouchers") {
         let voucherXml = buildTallyVoucherXml(vouchers, companyName);
         if (hsnWarningComment) {
           voucherXml = voucherXml.replace(
@@ -438,7 +495,7 @@ export async function POST(request: NextRequest) {
       }
 
       // For "all" — append vouchers after masters
-      let combinedXml = buildCombinedXml(allMastersToExport, vouchers, companyName, from, to);
+      let combinedXml = buildCombinedXml(allMastersToExport, allItemsToExport, allUnitsToExport, vouchers, companyName, from, to);
       if (hsnWarningComment) {
         combinedXml = combinedXml.replace(
           '<?xml version="1.0" encoding="UTF-8"?>',
@@ -469,12 +526,14 @@ function xmlResponse(xml: string, filename: string, hsnMissingCount = 0) {
 
 function buildCombinedXml(
   parties: TallyPartyMaster[],
+  items: TallyItemMaster[],
+  units: string[],
   vouchers: TallyVoucher[],
   companyName: string,
   from: string,
   to: string
 ): string {
-  const combinedXml = buildCombinedTallyXml(parties, vouchers, companyName);
+  const combinedXml = buildCombinedTallyXml(parties, items, units, vouchers, companyName);
   return combinedXml.replace(
     '<?xml version="1.0" encoding="UTF-8"?>\n<ENVELOPE>',
     `<?xml version="1.0" encoding="UTF-8"?>\n<!-- HisaabKitaab Tally Export: ${from} to ${to} -->\n<ENVELOPE>`

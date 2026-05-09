@@ -30,15 +30,13 @@ export function resolveImportVoucherType(
   originalTypeName: string,
   baseType: string
 ): VoucherType {
-  if (originalTypeName === "Sales Return" || originalTypeName === "Credit Note")
+  const normalized = originalTypeName.trim().toUpperCase();
+  if (normalized === "SALES RETURN" || normalized === "CREDIT NOTE")
     return "CREDIT_NOTE";
-  if (
-    originalTypeName === "Purchase Return" ||
-    originalTypeName === "Debit Note"
-  )
+  if (normalized === "PURCHASE RETURN" || normalized === "DEBIT NOTE")
     return "DEBIT_NOTE";
   // [X4] Preserve Contra voucher type instead of collapsing to JOURNAL
-  if (originalTypeName === "Contra") return "CONTRA";
+  if (normalized === "CONTRA") return "CONTRA";
   return baseType as VoucherType;
 }
 
@@ -50,17 +48,22 @@ export async function GET(request: NextRequest) {
   if (!process.env.CRON_SECRET || cronSecret !== process.env.CRON_SECRET) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  
+  return processImportJob();
+}
+
+export async function processImportJob(jobId?: string) {
   // ── Atomic job claim ────────────────────────────────────────────────────────
   // Two-step: find oldest PENDING job, then atomically update only if it is
   // still PENDING. If two cron workers race, only one will see count=1.
-  const candidate = await prisma.importJob.findFirst({
-    where: { status: "PENDING" },
-    orderBy: { createdAt: "asc" },
-  });
+  const candidate = jobId
+    ? await prisma.importJob.findFirst({ where: { id: jobId, status: "PENDING" } })
+    : await prisma.importJob.findFirst({
+        where: { status: "PENDING" },
+        orderBy: { createdAt: "asc" },
+      });
 
   if (!candidate) {
-    return NextResponse.json({ message: "No pending jobs" });
+    return NextResponse.json({ message: jobId ? "Job is not pending" : "No pending jobs" });
   }
 
   const claimed = await prisma.importJob.updateMany({
@@ -85,7 +88,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const tid = job.tenantId;
-    const actorId = "system"; // Internal cron actor
+    const actorId = job.createdBy ?? "system";
     
     // [S-W1] Decompress if stored with gzip prefix (backwards-compatible with raw XML)
     let xmlText = job.xmlData;
@@ -195,7 +198,20 @@ export async function GET(request: NextRequest) {
     const vouchersWithoutRemoteId = vouchers.filter((v) => !v.remoteId);
 
     let duplicateFingerprints = new Set<string>();
-    
+
+    // Reset any PROCESSING jobs for this tenant that have been stuck for >10 minutes
+    // (covers server crashes, serverless timeouts, killed processes).
+    const staleThreshold = new Date(Date.now() - 10 * 60 * 1000);
+    await prisma.importJob.updateMany({
+      where: {
+        tenantId: tid,
+        status: "PROCESSING",
+        id: { not: job.id },
+        updatedAt: { lt: staleThreshold },
+      },
+      data: { status: "FAILED", error: "Timed out" },
+    });
+
     // [W1-FIX] Non-blocking advisory lock — prevents indefinite hangs when a
     // previous import leaked a session-level lock (e.g. process crash, serverless
     // timeout). pg_try_advisory_lock returns false immediately if already held,
@@ -228,7 +244,7 @@ export async function GET(request: NextRequest) {
           "voucherType", '|',
           TO_CHAR("entryDate", 'YYYY-MM-DD'), '|',
           COALESCE("narration", ''), '|',
-          "totalDebit"::text
+          "totalDebit"::float8::text
         ) as fp
         FROM "JournalEntry"
         WHERE "tenantId" = ${tid}
@@ -251,7 +267,8 @@ export async function GET(request: NextRequest) {
         // Use date string only (YYYY-MM-DD) for fingerprint — avoids IST/UTC
         // mismatch where Tally's YYYYMMDD date becomes the previous day in UTC.
         const dateStr = voucher.entryDate.toISOString().slice(0, 10);
-        const fingerprint = `${voucher.voucherType}|${dateStr}|${voucher.narration}|${String(voucher.totalDebit)}`;
+        const resolvedType = resolveImportVoucherType(voucher.originalTypeName, voucher.voucherType);
+        const fingerprint = `${resolvedType}|${dateStr}|${voucher.narration}|${String(voucher.totalDebit)}`;
         if (duplicateFingerprints.has(fingerprint)) {
           return "skipped";
         }
@@ -374,15 +391,13 @@ export async function GET(request: NextRequest) {
     // Runs AFTER the job is marked COMPLETED so import success is not
     // blocked by a balance recompute failure.
     const affectedPartyIds = [...new Set(partyCache.values())];
-    await Promise.allSettled(
-      affectedPartyIds.map(async (pid) => {
-        try {
-          await recomputePartyBalance(null, pid, tid);
-        } catch (err) {
-          logError("import.party-balance.error", { pid, jobId: job.id, error: err });
-        }
-      })
-    );
+    for (const pid of affectedPartyIds) {
+      try {
+        await recomputePartyBalance(null, pid, tid);
+      } catch (err) {
+        logError("import.party-balance.error", { pid, jobId: job.id, error: err });
+      }
+    }
 
     return NextResponse.json({
       jobId: job.id,
