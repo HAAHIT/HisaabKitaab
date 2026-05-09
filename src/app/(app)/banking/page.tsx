@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { Skeleton, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Button, useDisclosure } from "@heroui/react";
+import { Skeleton } from "@heroui/react";
 import {
   OR, PU, GR, AM, SG, IN, TYPE, TOUCH,
-  fmtFull, useIsMobile, HKCard, HKToast,
+  fmtFull, useIsMobile, HKCard, HKToast, HKModal,
   PageHeader, GradientButton,
 } from "@/components/ui/hk-design";
 import { AddBankAccountModal } from "@/components/banking/AddBankAccountModal";
@@ -77,8 +77,8 @@ export default function BankingPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [settingDefaultId, setSettingDefaultId] = useState<string | null>(null);
 
-  const { isOpen: isAddOpen, onOpen: onAddOpen, onOpenChange: onAddChange } = useDisclosure();
-  const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onOpenChange: onDeleteChange, onClose: onDeleteClose } = useDisclosure();
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
   const fetchAccounts = useCallback(async () => {
     setLoading(true);
@@ -132,7 +132,7 @@ export default function BankingPage() {
         throw new Error(data.error || "Delete failed");
       }
       showToast("Account delete ho gaya", "success");
-      onDeleteClose();
+      setIsDeleteOpen(false);
       setAccountToDelete(null);
       await fetchAccounts();
     } catch (err) {
@@ -178,7 +178,7 @@ export default function BankingPage() {
                 <ArrowsIcon /> Contra
               </button>
             </Link>
-            <GradientButton onClick={onAddOpen}>+ Account Jodo</GradientButton>
+            <GradientButton onClick={() => setIsAddOpen(true)}>+ Account Jodo</GradientButton>
           </div>
         }
       />
@@ -225,7 +225,7 @@ export default function BankingPage() {
             <p style={{ fontSize: TYPE.body, fontWeight: 500, fontFamily: SG, marginBottom: 20 }}>
               Bank ya cash account add karo
             </p>
-            <GradientButton onClick={onAddOpen}>+ Account Jodo</GradientButton>
+            <GradientButton onClick={() => setIsAddOpen(true)}>+ Account Jodo</GradientButton>
           </div>
         ) : (
           <HKCard style={{ padding: 0, overflow: "hidden" }}>
@@ -326,7 +326,7 @@ export default function BankingPage() {
 
                   {/* Delete */}
                   <button
-                    onClick={() => { setAccountToDelete(account); onDeleteOpen(); }}
+                    onClick={() => { setAccountToDelete(account); setIsDeleteOpen(true); }}
                     style={{
                       width: TOUCH.secondary, height: TOUCH.secondary,
                       borderRadius: 10, border: "none",
@@ -351,32 +351,38 @@ export default function BankingPage() {
         )}
       </div>
 
-      <AddBankAccountModal isOpen={isAddOpen} onOpenChange={onAddChange} onSuccess={() => fetchAccounts()} />
+      <AddBankAccountModal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} onSuccess={fetchAccounts} />
 
-      {/* Delete confirmation */}
-      <Modal isOpen={isDeleteOpen} onOpenChange={onDeleteChange} backdrop="blur" placement="center">
-        <ModalContent>
-          {(onClose) => (
-            <>
-              <ModalHeader style={{ fontFamily: SG, fontSize: TYPE.h2 }}>
-                Account Delete Karo?
-              </ModalHeader>
-              <ModalBody>
-                <p style={{ fontFamily: SG, fontSize: TYPE.body, color: "var(--hk-sub)" }}>
-                  <span style={{ fontWeight: 700, color: "var(--hk-text)" }}>{accountToDelete?.name}</span> delete ho jayega.
-                  Purana history safe rahega, sirf future payments mein nahi dikhega.
-                </p>
-              </ModalBody>
-              <ModalFooter>
-                <Button variant="flat" onPress={onClose} isDisabled={isDeleting}>Cancel</Button>
-                <Button color="danger" onPress={handleDelete} isLoading={isDeleting} className="font-semibold">
-                  Delete Karo
-                </Button>
-              </ModalFooter>
-            </>
-          )}
-        </ModalContent>
-      </Modal>
+      <HKModal
+        isOpen={isDeleteOpen}
+        onClose={() => setIsDeleteOpen(false)}
+        title="Account Delete Karo?"
+        width={440}
+        footer={
+          <>
+            <button
+              onClick={() => setIsDeleteOpen(false)}
+              disabled={isDeleting}
+              style={{
+                padding: "10px 20px", borderRadius: 12, border: "1px solid var(--hk-border)",
+                background: "var(--hk-badge)", color: "var(--hk-text)", fontFamily: SG,
+                fontSize: TYPE.body, fontWeight: 600, cursor: isDeleting ? "not-allowed" : "pointer",
+                opacity: isDeleting ? 0.5 : 1,
+              }}
+            >
+              Cancel
+            </button>
+            <GradientButton onClick={handleDelete} disabled={isDeleting} variant="orange-purple">
+              {isDeleting ? "Delete ho raha hai..." : "Delete Karo"}
+            </GradientButton>
+          </>
+        }
+      >
+        <p style={{ fontFamily: SG, fontSize: TYPE.body, color: "var(--hk-sub)", lineHeight: 1.6 }}>
+          <span style={{ fontWeight: 700, color: "var(--hk-text)" }}>{accountToDelete?.name}</span> delete ho jayega.
+          Purana history safe rahega, sirf future payments mein nahi dikhega.
+        </p>
+      </HKModal>
     </div>
   );
 }
