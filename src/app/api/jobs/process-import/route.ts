@@ -78,18 +78,11 @@ export async function processImportJob(jobId?: string) {
 
   const job = candidate;
 
-  const tenantLockKey = BigInt(
-    "0x" + crypto.createHash("sha256").update(job.tenantId).digest("hex").substring(0, 15)
-  );
-
-  // [W1-FIX] Track whether the session-level advisory lock was acquired so
-  // the finally block only attempts to unlock when necessary.
-  let lockAcquired = false;
-
   try {
     const tid = job.tenantId;
     const actorId = job.createdBy ?? "system";
-    
+    const billCreatorId = job.createdBy ?? "system";
+
     // [S-W1] Decompress if stored with gzip prefix (backwards-compatible with raw XML)
     let xmlText = job.xmlData;
     if (xmlText.startsWith("gzip:")) {
@@ -97,7 +90,40 @@ export async function processImportJob(jobId?: string) {
       xmlText = gunzipSync(compressed).toString("utf-8");
     }
 
-    const { vouchers, partyMasters } = parseTallyXml(xmlText);
+    const { vouchers, partyMasters, bankMasters } = parseTallyXml(xmlText);
+
+    const needsTallyTemplate = vouchers.some(
+      (voucher) =>
+        voucher.voucherType === "SALES" ||
+        voucher.voucherType === "PURCHASE"
+    );
+
+    let tallyTemplateId: string | null = null;
+    if (needsTallyTemplate) {
+      const existingTallyTemplate = await prisma.billTemplate.findFirst({
+        where: { name: "__TALLY_IMPORT__", tenantId: tid },
+        select: { id: true },
+      });
+      if (existingTallyTemplate) {
+        tallyTemplateId = existingTallyTemplate.id;
+      } else {
+        const fallbackTemplate = await prisma.billTemplate.create({
+          data: {
+            tenantId: tid,
+            name: "__TALLY_IMPORT__",
+            columns: [
+              { id: "Item", name: "Item", type: "text", position: 0 },
+              { id: "Qty", name: "Qty", type: "number", position: 1 },
+              { id: "Unit", name: "Unit", type: "text", position: 2 },
+              { id: "Rate", name: "Rate", type: "number", position: 3 },
+              { id: "Amount", name: "Amount", type: "number", position: 4 },
+            ],
+            createdBy: actorId,
+          },
+        });
+        tallyTemplateId = fallbackTemplate.id;
+      }
+    }
 
     let partiesCreated = 0;
     const partyCache = new Map<string, string>();
@@ -143,6 +169,38 @@ export async function processImportJob(jobId?: string) {
         });
       }
       partyCache.set(pm.name, upserted.id);
+    }
+
+    // ── Bank / Cash account creation from Tally masters ─────────────────────
+    const bankAccountCache = new Map<string, string>(); // ledger name → BankAccount.id
+    for (const bm of bankMasters) {
+      const upserted = await prisma.bankAccount.upsert({
+        where: { tenantId_name: { tenantId: tid, name: bm.name } },
+        update: {},
+        create: {
+          tenantId: tid,
+          name: bm.name,
+          type: bm.type,
+          accountNumber: bm.accountNumber,
+          openingBalance: bm.openingBalance,
+          currentBalance: bm.openingBalance,
+          createdBy: actorId,
+          updatedAt: new Date(),
+        },
+        select: { id: true },
+      });
+      bankAccountCache.set(bm.name, upserted.id);
+    }
+
+    // Pre-populate from existing accounts for DayBook-only imports (no masters)
+    if (bankAccountCache.size === 0) {
+      const existingAccounts = await prisma.bankAccount.findMany({
+        where: { tenantId: tid, isDeleted: false },
+        select: { id: true, name: true },
+      });
+      for (const acc of existingAccounts) {
+        bankAccountCache.set(acc.name, acc.id);
+      }
     }
 
     async function resolvePartyId(
@@ -212,17 +270,11 @@ export async function processImportJob(jobId?: string) {
       data: { status: "FAILED", error: "Timed out" },
     });
 
-    // [W1-FIX] Non-blocking advisory lock — prevents indefinite hangs when a
-    // previous import leaked a session-level lock (e.g. process crash, serverless
-    // timeout). pg_try_advisory_lock returns false immediately if already held,
-    // instead of blocking forever like pg_advisory_lock.
-    const lockResult: { acquired: boolean }[] =
-      await prisma.$queryRaw`SELECT pg_try_advisory_lock(${tenantLockKey}) as acquired`;
-    lockAcquired = lockResult[0]?.acquired === true;
-
-    if (!lockAcquired) {
-      // Another import is already running (or a leaked lock exists).
-      // Revert claim so the next cron cycle retries this job.
+    // Concurrency guard: if another PROCESSING job exists for this tenant, revert to PENDING.
+    const otherProcessing = await prisma.importJob.count({
+      where: { tenantId: tid, status: "PROCESSING", id: { not: job.id } },
+    });
+    if (otherProcessing > 0) {
       await prisma.importJob.update({
         where: { id: job.id },
         data: { status: "PENDING" },
@@ -231,7 +283,7 @@ export async function processImportJob(jobId?: string) {
         message: "Import already in progress for this tenant, will retry",
       });
     }
-    
+
     if (vouchersWithoutRemoteId.length > 0) {
       // [S3] DB-side duplicate check: query only fingerprint strings instead of
       // loading entire JournalEntry rows into memory. Uses raw SQL for
@@ -282,6 +334,7 @@ export async function processImportJob(jobId?: string) {
               : null;
             return {
               accountCode: line.accountCode,
+              ledgerName: line.ledgerName,
               debit: line.debit,
               credit: line.credit,
               partyId,
@@ -290,26 +343,165 @@ export async function processImportJob(jobId?: string) {
           })
         );
 
+        // ── Auto-adjust rounding for Tally imports ────────────────────────
+        // Tally's internal rounding can produce vouchers where debit ≠ credit
+        // by a few paise/rupees. Absorb small differences (≤ ₹5) into a
+        // ROUND_OFF line so createJournalEntry's strict balance check passes.
+        const totalDebit = lines.reduce((s, l) => s + l.debit, 0);
+        const totalCredit = lines.reduce((s, l) => s + l.credit, 0);
+        const imbalance = Math.round((totalDebit - totalCredit) * 100) / 100;
+
+        if (imbalance !== 0 && Math.abs(imbalance) <= 5) {
+          const existingRoundOff = lines.find((l) => l.accountCode === "ROUND_OFF");
+          if (existingRoundOff) {
+            const netBefore = existingRoundOff.debit - existingRoundOff.credit;
+            const netAfter = Math.round((netBefore - imbalance) * 100) / 100;
+            if (Math.abs(netAfter) < 0.001) {
+              lines.splice(lines.indexOf(existingRoundOff), 1);
+            } else {
+              existingRoundOff.debit = netAfter > 0 ? netAfter : 0;
+              existingRoundOff.credit = netAfter < 0 ? Math.abs(netAfter) : 0;
+            }
+          } else {
+            lines.push({
+              accountCode: "ROUND_OFF" as AccountCode,
+              ledgerName: "Round Off",
+              debit: imbalance < 0 ? Math.abs(imbalance) : 0,
+              credit: imbalance > 0 ? imbalance : 0,
+              partyId: null,
+              partyName: undefined,
+            });
+          }
+        }
+
+        const resolvedVoucherType = resolveImportVoucherType(voucher.originalTypeName, voucher.voucherType);
+        const isSalesOrPurchase = resolvedVoucherType === "SALES" || resolvedVoucherType === "PURCHASE" || resolvedVoucherType === "CREDIT_NOTE" || resolvedVoucherType === "DEBIT_NOTE";
+        const isPaymentOrReceipt = resolvedVoucherType === "RECEIPT" || resolvedVoucherType === "PAYMENT" || resolvedVoucherType === "CONTRA";
+
         await prisma.$transaction(async (tx: PrismaTx) => {
+          let billId: string | null = null;
+          let paymentId: string | null = null;
+
+          if (isSalesOrPurchase && tallyTemplateId) {
+            const partyLine = lines.find((l) => l.partyId);
+            const isPurchase = resolvedVoucherType === "PURCHASE" || resolvedVoucherType === "DEBIT_NOTE";
+
+            const totalDebitForBill = lines.reduce((s, l) => s + l.debit, 0);
+            const grandTotal = partyLine
+              ? Math.abs(partyLine.debit !== 0 ? partyLine.debit : partyLine.credit)
+              : totalDebitForBill;
+
+            const primaryLine = lines.find((l) =>
+              l.accountCode === "CASH" || l.accountCode === "BANK" || l.accountCode === "UPI"
+              || l.accountCode === "SALES" || l.accountCode === "PURCHASE"
+            );
+            const customerName = partyLine?.partyName
+              ?? primaryLine?.ledgerName
+              ?? (isPurchase ? "Vendor" : "Cash Customer");
+
+            const rows = voucher.inventoryRows && voucher.inventoryRows.length > 0
+              ? voucher.inventoryRows
+              : [{
+                Item: isPurchase ? "Purchases" : "Sales",
+                Qty: 1,
+                Unit: "nos",
+                Rate: grandTotal,
+                Amount: grandTotal,
+              }];
+
+            const createdBill = await tx.bill.create({
+              data: {
+                tenantId: tid,
+                billNumber: voucher.reference ? voucher.reference : `IMP-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`,
+                templateId: tallyTemplateId,
+                partyId: partyLine?.partyId ?? null,
+                customerName,
+                rows: rows as any,
+                subtotal: rows.reduce((sum: number, r: any) => sum + (r.Amount || 0), 0),
+                taxPercent: voucher.taxPercent ?? 0,
+                taxAmount: Math.abs(voucher.lines.filter(l => l.accountCode.includes("GST")).reduce((s, l) => s + (l.debit || l.credit), 0)),
+                grandTotal,
+                status: "FINAL",
+                isInterState: voucher.isInterState ?? false,
+                placeOfSupply: voucher.placeOfSupply,
+                date: voucher.entryDate,
+                createdBy: billCreatorId,
+              },
+            });
+            billId = createdBill.id;
+
+            await tx.auditLog.create({
+              data: {
+                tenantId: tid,
+                entityType: "Bill",
+                entityId: billId,
+                userId: null,
+                actorType: "SYSTEM",
+                action: "CREATE",
+                newValue: JSON.stringify({ source: "tally-import" }),
+              },
+            });
+          } else if (isPaymentOrReceipt) {
+            const partyLine = lines.find((l) => l.partyId);
+            const cashBankLine = lines.find((l) => l.accountCode === "CASH" || l.accountCode === "BANK" || l.accountCode === "UPI");
+
+            const paymentAmount = partyLine
+              ? Math.abs(partyLine.debit !== 0 ? partyLine.debit : partyLine.credit)
+              : cashBankLine
+                ? Math.abs(cashBankLine.debit !== 0 ? cashBankLine.debit : cashBankLine.credit)
+                : lines.reduce((s, l) => s + l.debit, 0);
+
+            const direction = resolvedVoucherType === "RECEIPT" ? "INCOMING" : "OUTGOING";
+            const mode = cashBankLine?.accountCode === "CASH" ? "CASH"
+              : cashBankLine?.accountCode === "UPI" ? "UPI"
+              : "BANK_TRANSFER";
+
+            const accountId = cashBankLine?.ledgerName
+              ? (bankAccountCache.get(cashBankLine.ledgerName) ?? null)
+              : null;
+
+            const createdPayment = await tx.payment.create({
+              data: {
+                tenantId: tid,
+                partyId: partyLine?.partyId ?? null,
+                accountId,
+                amount: paymentAmount,
+                date: voucher.entryDate,
+                direction,
+                mode,
+                status: "COMPLETED",
+                referenceNo: voucher.reference || null,
+                notes: voucher.narration,
+                createdBy: billCreatorId,
+              },
+            });
+            paymentId = createdPayment.id;
+
+            await tx.auditLog.create({
+              data: {
+                tenantId: tid,
+                entityType: "Payment",
+                entityId: paymentId,
+                userId: null,
+                actorType: "SYSTEM",
+                action: "CREATE",
+                newValue: JSON.stringify({ source: "tally-import" }),
+              },
+            });
+          }
+
           const journalEntry = await createJournalEntry(tx, {
             tenantId: tid,
             entryDate: voucher.entryDate,
             narration: voucher.narration,
-            // [FIX] Resolve Credit Note / Debit Note types correctly.
-            // parseTallyXml coerces voucherType to SALES/PURCHASE for return
-            // vouchers; originalTypeName carries the raw Tally string needed
-            // to restore CREDIT_NOTE / DEBIT_NOTE for balance computation.
-            voucherType: resolveImportVoucherType(
-              voucher.originalTypeName,
-              voucher.voucherType
-            ),
+            voucherType: resolvedVoucherType,
             createdBy: actorId,
             ...(voucher.remoteId ? { remoteId: voucher.remoteId } : {}),
+            billId: billId ?? undefined,
+            paymentId: paymentId ?? undefined,
             lines,
           });
 
-          // [I3] MCA GSR 247(E) — audit trail for import-created entries.
-          // actorType=SYSTEM distinguishes automated imports from user actions.
           await tx.auditLog.create({
             data: {
               tenantId: tid,
@@ -416,12 +608,5 @@ export async function processImportJob(jobId?: string) {
       }
     });
     return NextResponse.json({ error: "Job failed" }, { status: 500 });
-  } finally {
-    // [W1-FIX] Guaranteed lock release in finally — covers success, catch, and
-    // early returns. pg_advisory_unlock returns false (not an error) if the lock
-    // was never acquired, but we gate on lockAcquired to avoid unnecessary calls.
-    if (lockAcquired) {
-      try { await prisma.$executeRaw`SELECT pg_advisory_unlock(${tenantLockKey})`; } catch { /* best effort */ }
-    }
   }
 }

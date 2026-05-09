@@ -524,7 +524,7 @@ function RecentPaymentsCard({ data, onNavigate }: { data: DashboardData; onNavig
       }/>
       {payments.length > 0 ? (
         <div>
-          {payments.map((p, i) => (
+          {payments.filter(p => p.party).map((p, i) => (
             <div key={p.id} style={{
               display: "flex", justifyContent: "space-between", alignItems: "center",
               padding: "14px 0",

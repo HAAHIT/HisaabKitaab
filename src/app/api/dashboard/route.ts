@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
         _sum: { amount: true },
       }),
       prisma.payment.findMany({
-        where: { tenantId, status: "COMPLETED" },
+        where: { tenantId, status: "COMPLETED", partyId: { not: null } },
         orderBy: { date: "desc" },
         take: 5,
         include: { party: { select: { name: true, type: true } } },

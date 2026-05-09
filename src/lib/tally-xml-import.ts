@@ -71,6 +71,24 @@ const TALLY_GROUP_TO_ACCOUNT_CODE: Partial<Record<string, AccountCode>> = {
   "Cash-in-Hand": "CASH",
   "Capital Account": "OWNER_EQUITY",
   "Reserves & Surplus": "OWNER_EQUITY",
+  "Direct Expenses": "DIRECT_EXPENSE",
+  "Indirect Expenses": "INDIRECT_EXPENSE",
+  "Direct Incomes": "DIRECT_INCOME",
+  "Indirect Incomes": "INDIRECT_INCOME",
+  "Fixed Assets": "FIXED_ASSETS",
+  "Investments": "FIXED_ASSETS",
+  "Loans & Advances (Asset)": "LOANS_ADVANCES",
+  "Current Assets": "CURRENT_ASSETS",
+  "Current Liabilities": "CURRENT_LIABILITIES",
+  "Provisions": "CURRENT_LIABILITIES",
+  "Secured Loans": "CURRENT_LIABILITIES",
+  "Unsecured Loans": "CURRENT_LIABILITIES",
+  "Loans (Liability)": "CURRENT_LIABILITIES",
+  "Deposits (Asset)": "CURRENT_ASSETS",
+  "Stock-in-Hand": "CURRENT_ASSETS",
+  "Misc. Expenses (ASSET)": "CURRENT_ASSETS",
+  "Suspense A/c": "CURRENT_ASSETS",
+  "Branch / Divisions": "CURRENT_ASSETS",
 };
 
 /**
@@ -90,7 +108,8 @@ function resolveGstAccountCode(ledgerName: string): AccountCode | null {
   if (isSgst) return isReceivable ? "SGST_INPUT" : "SGST_OUTPUT";
   if (isIgst) return isReceivable ? "IGST_INPUT" : "IGST_OUTPUT";
 
-  return null; // TDS / other Duties & Taxes — no matching AccountCode in this branch
+  if (upper.includes("TDS") || upper.includes("TAX DEDUCTED")) return "CURRENT_LIABILITIES";
+  return "CURRENT_LIABILITIES"; // generic duties & taxes fallback
 }
 
 /**
@@ -148,8 +167,18 @@ function resolveAccountCodeByPattern(ledgerName: string): AccountCode | null {
   // ── Bank accounts ─────────────────────────────────────────────────────────
   if (/\bBANK\b/i.test(ledgerName) && /\b(A\/?C|LTD|ACCOUNT|CURRENT)\b/i.test(ledgerName)) return "BANK";
 
+  // ── Expense accounts ──────────────────────────────────────────────────────
+  // "Telephone Expenses A/c.", "Bank Commission Exp.A/c."
+  if (/EXP(?:ENSES?)?\.?\s*A\/?C/i.test(ledgerName)) return "INDIRECT_EXPENSE";
+  if (/\bDEPRECIATION\b/i.test(ledgerName)) return "INDIRECT_EXPENSE";
+
   // ── Capital / Partner accounts ────────────────────────────────────────────
   if (/CAPITAL\s*A\/?C/i.test(ledgerName)) return "OWNER_EQUITY";
+
+  // ── TDS / Tax liability ────────────────────────────────────────────────────
+  // "Income Tax Tax Deducted At Source A/C", "GST (TDS) A/C"
+  if (/\bTDS\b/i.test(ledgerName) || /TAX\s*DEDUCTED/i.test(ledgerName)) return "CURRENT_LIABILITIES";
+  if (/\bGST\s*LIABILITY\b/i.test(ledgerName)) return "CURRENT_LIABILITIES";
 
   return null;
 }
@@ -232,6 +261,8 @@ export type ParsedVoucher = {
    * Null when no GST ledger entries are present (e.g. exempt supplies).
    */
   isInterState: boolean | null;
+  /** For Sales/Purchase vouchers, the raw stock-wise rows parsed from ALLINVENTORYENTRIES.LIST. */
+  inventoryRows?: Record<string, any>[];
 };
 
 export type ParsedPartyMaster = {
@@ -244,9 +275,17 @@ export type ParsedPartyMaster = {
   address: string | null;
 };
 
+export type ParsedBankMaster = {
+  name: string;
+  type: "BANK" | "CASH";
+  openingBalance: number;
+  accountNumber: string | null;
+};
+
 export type TallyParseResult = {
   vouchers: ParsedVoucher[];
   partyMasters: ParsedPartyMaster[];
+  bankMasters: ParsedBankMaster[];
   parseErrors: string[];
 };
 
@@ -308,6 +347,7 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
   const parseErrors: string[] = [];
   const vouchers: ParsedVoucher[] = [];
   const partyMasters: ParsedPartyMaster[] = [];
+  const bankMasters: ParsedBankMaster[] = [];
 
   let parsed: Record<string, unknown>;
   try {
@@ -332,6 +372,7 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
     return {
       vouchers: [],
       partyMasters: [],
+      bankMasters: [],
       parseErrors: [
         `XML parse error: ${err instanceof Error ? err.message : String(err)}`,
       ],
@@ -390,12 +431,12 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
     }
   } catch {
     parseErrors.push("Could not locate TALLYMESSAGE elements in XML");
-    return { vouchers, partyMasters, parseErrors };
+    return { vouchers, partyMasters, bankMasters, parseErrors };
   }
 
   if (messageCollections.length === 0) {
     parseErrors.push("No TALLYMESSAGE elements found in XML");
-    return { vouchers, partyMasters, parseErrors };
+    return { vouchers, partyMasters, bankMasters, parseErrors };
   }
 
   const allMessages = messageCollections.flat();
@@ -426,6 +467,23 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       const name = String(ledger["NAME"] ?? ledger["@_NAME"] ?? "").trim();
       const parent = String(ledger["PARENT"] ?? "").trim();
       if (!name) continue;
+
+      // ── Bank / Cash account master ─────────────────────────────────────
+      const upperParent = parent.toUpperCase();
+      if (upperParent === "BANK ACCOUNTS" || upperParent === "BANK OD ACCOUNTS" || upperParent === "CASH-IN-HAND") {
+        const openingBalance = parseAmount(ledger["OPENINGBALANCE"]);
+        const rawAccNo = ledger["BANKACCTNO"] ?? ledger["ACCOUNTNUMBER"];
+        const accountNumber = typeof rawAccNo === "string" && rawAccNo.trim().length > 0
+          ? rawAccNo.trim()
+          : null;
+        bankMasters.push({
+          name,
+          type: upperParent === "CASH-IN-HAND" ? "CASH" : "BANK",
+          openingBalance,
+          accountNumber,
+        });
+        continue;
+      }
 
       // Only extract Sundry Debtors / Creditors as party masters
       if (parent !== "Sundry Debtors" && parent !== "Sundry Creditors") continue;
@@ -640,5 +698,5 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
     });
   }
 
-  return { vouchers, partyMasters, parseErrors };
+  return { vouchers, partyMasters, bankMasters, parseErrors };
 }
