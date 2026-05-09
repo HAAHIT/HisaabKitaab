@@ -187,7 +187,7 @@ export async function journalForSalesBill(
   tenantId: string,
   bill: SalesBillJournalInput
 ) {
-  const theoreticalTotal = roundTo2(bill.subtotal + bill.taxAmount);
+  const theoreticalTotal = roundTo2(bill.subtotal + Math.round(bill.taxAmount));
   const diff = roundTo2(bill.grandTotal - theoreticalTotal);
 
   return createJournalEntry(tx, {
@@ -229,7 +229,7 @@ export async function journalForCancelledSalesBill(
   tenantId: string,
   bill: SalesBillJournalInput
 ) {
-  const theoreticalTotal = roundTo2(bill.subtotal + bill.taxAmount);
+  const theoreticalTotal = roundTo2(bill.subtotal + Math.round(bill.taxAmount));
   const diff = roundTo2(bill.grandTotal - theoreticalTotal);
 
   return createJournalEntry(tx, {
