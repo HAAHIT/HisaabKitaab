@@ -90,10 +90,12 @@ export async function GET(
       // Check for local/private IP ranges to prevent SSRF
       const hostname = url.hostname.toLowerCase();
       const isPrivateIP = (host: string) => {
-        if (host === "localhost" || host === "127.0.0.1" || host === "::1") return true;
+        if (host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]" || host === "0.0.0.0" || host === "[::]") return true;
         if (host.startsWith("10.")) return true; // 10.0.0.0/8
         if (host.startsWith("192.168.")) return true; // 192.168.0.0/16
         if (host.startsWith("169.254.")) return true; // 169.254.0.0/16
+        if (host.startsWith("127.")) return true; // 127.0.0.0/8
+        if (host.startsWith("0.")) return true; // 0.0.0.0/8
 
         // 172.16.0.0/12
         const match = host.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./);

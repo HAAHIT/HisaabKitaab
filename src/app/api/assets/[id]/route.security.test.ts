@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { GET } from "./route";
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { resolveReadTenant } from "@/lib/api-tenant";
+import { resolveWriteSession } from "@/lib/api-tenant";
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -16,7 +16,7 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 vi.mock("@/lib/api-tenant", () => ({
-  resolveReadTenant: vi.fn(),
+  resolveWriteSession: vi.fn(),
 }));
 
 // Mock global fetch
@@ -34,10 +34,14 @@ describe("Assets API Security - Open Redirect Fix", () => {
     const tenantId = "test-tenant-id";
     const mockImageData = new Uint8Array([0, 1, 2, 3]);
 
-    // Mock tenant resolution
-    (resolveReadTenant as import("vitest").Mock).mockReturnValue({
+    // Mock session resolution
+    (resolveWriteSession as import("vitest").Mock).mockResolvedValue({
       ok: true,
-      tenantId,
+      session: {
+        tenantId,
+        userId: "user-123",
+        role: "CUSTOMER"
+      }
     });
 
     // Mock asset lookup
@@ -89,33 +93,49 @@ describe("Assets API Security - Open Redirect Fix", () => {
   });
 
   it("blocks SSRF attempts to private IP ranges", async () => {
-    const internalUrl = "http://192.168.1.1/admin";
-    const assetId = "test-asset-id";
-    const tenantId = "test-tenant-id";
+    const blockedUrls = [
+      "http://192.168.1.1/admin",
+      "http://0.0.0.0:8080/metrics",
+      "http://127.0.0.1:3000/",
+      "http://127.1/admin",
+      "http://[::1]/",
+      "http://[::]/",
+    ];
 
-    (resolveReadTenant as import("vitest").Mock).mockReturnValue({ ok: true, tenantId });
-    (prisma.mediaAsset.findUnique as import("vitest").Mock).mockResolvedValue({
-      id: assetId,
-      kind: "MEASUREMENT_PHOTO",
-      storageProvider: "proxy",
-      storageKey: internalUrl,
-      mimeType: "image/jpeg",
-      measurementPhotos: [{ measurement: { customerId: "user-123", tenantId } }],
-    });
+    for (const internalUrl of blockedUrls) {
+      const assetId = "test-asset-id";
+      const tenantId = "test-tenant-id";
 
-    const req = new NextRequest(`http://localhost/api/assets/${assetId}`, {
-      headers: {
-        "x-user-id": "user-123",
-        "x-user-role": "CUSTOMER",
-      },
-    });
+      (resolveWriteSession as import("vitest").Mock).mockResolvedValue({
+        ok: true,
+        session: { tenantId, userId: "user-123", role: "CUSTOMER" }
+      });
+      (prisma.mediaAsset.findUnique as import("vitest").Mock).mockResolvedValue({
+        id: assetId,
+        kind: "MEASUREMENT_PHOTO",
+        storageProvider: "proxy",
+        storageKey: internalUrl,
+        mimeType: "image/jpeg",
+        measurementPhotos: [{ measurement: { customerId: "user-123", tenantId } }],
+      });
 
-    const res = await GET(req, { params: Promise.resolve({ id: assetId }) });
+      const req = new NextRequest(`http://localhost/api/assets/${assetId}`, {
+        headers: {
+          "x-user-id": "user-123",
+          "x-user-role": "CUSTOMER",
+        },
+      });
 
-    expect(res.status).toBe(403);
-    const data = await res.json();
-    expect(data.error).toBe("Forbidden proxy target");
-    expect(mockFetch).not.toHaveBeenCalled();
+      const res = await GET(req, { params: Promise.resolve({ id: assetId }) });
+
+      expect(res.status).toBe(403, `Expected 403 for ${internalUrl}`);
+      const data = await res.json();
+      expect(data.error).toBe("Forbidden proxy target");
+      expect(mockFetch).not.toHaveBeenCalled();
+
+      // reset mock for next iteration
+      mockFetch.mockClear();
+    }
   });
 
   it("blocks non-image content types from proxy", async () => {
@@ -123,7 +143,10 @@ describe("Assets API Security - Open Redirect Fix", () => {
     const assetId = "test-asset-id";
     const tenantId = "test-tenant-id";
 
-    (resolveReadTenant as import("vitest").Mock).mockReturnValue({ ok: true, tenantId });
+    (resolveWriteSession as import("vitest").Mock).mockResolvedValue({
+      ok: true,
+      session: { tenantId, userId: "user-123", role: "CUSTOMER" }
+    });
     (prisma.mediaAsset.findUnique as import("vitest").Mock).mockResolvedValue({
       id: assetId,
       kind: "MEASUREMENT_PHOTO",
