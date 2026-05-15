@@ -1,6 +1,6 @@
 "use client";
 
-import { Chip } from "@heroui/react";
+import { HKChip } from "@/components/ui/HKChip";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getBalanceStatusLabel, getPartyBalanceColor, formatPartyBalance, type SupportedPartyType } from "@/lib/accounting";
 
@@ -47,13 +47,13 @@ export default function BalanceHeader({
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-3">
             <h2 className="text-2xl font-bold">{partyName}</h2>
-            <Chip
+            <HKChip
               size="sm"
               color={partyType === "CUSTOMER" ? "primary" : "secondary"}
               variant="flat"
             >
               {partyType}
-            </Chip>
+            </HKChip>
           </div>
           <p className="text-sm text-default-500">{t("khata.ledgerSubtitle")}</p>
         </div>

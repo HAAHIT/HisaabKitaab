@@ -1,14 +1,38 @@
 @import "tailwindcss";
 
-/* ── HeroUI Tailwind Plugin ───────────────────────────── */
-@source "../../node_modules/@heroui/theme/dist";
-@plugin "../../hero.ts";
-
 /* ── Custom Theme ─────────────────────────────────────── */
 @theme inline {
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
   --font-grotesk: "Space Grotesk", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", "Fira Code", monospace;
+
+  /* ── Semantic color tokens (replaces HeroUI Tailwind plugin) ── */
+  --color-background:   var(--hk-bg);
+  --color-foreground:   var(--hk-text);
+  --color-divider:      var(--hk-border);
+  --color-content1:     var(--hk-card);
+  --color-content2:     var(--surface-100);
+
+  --color-default-50:   var(--surface-50);
+  --color-default-100:  var(--surface-100);
+  --color-default-200:  var(--surface-200);
+  --color-default-300:  var(--surface-300);
+  --color-default-400:  var(--hk-muted);
+  --color-default-500:  var(--hk-sub);
+  --color-default-600:  var(--surface-600);
+  --color-default-700:  var(--hk-text);
+  --color-default-900:  var(--hk-text);
+
+  --color-primary:      var(--hk-orange);
+  --color-secondary:    var(--hk-purple);
+  --color-success:      var(--hk-green);
+  --color-warning:      var(--hk-amber);
+  --color-danger:       #ef4444;
+
+  --radius-medium:      0.75rem;
+  --radius-large:       1rem;
+  --shadow-large:       0 8px 32px rgba(0,0,0,0.12);
+  --shadow-medium:      0 4px 16px rgba(0,0,0,0.08);
 }
 
 /* ── HisaabKitaab Design Tokens ───────────────────────── */
@@ -31,6 +55,13 @@
   --hk-badge:       rgba(0,0,0,0.05);
   --hk-line:        rgba(0,0,0,0.05);
   --hk-input:       rgba(0,0,0,0.04);
+
+  /* Surface scale (light) */
+  --surface-50:  #f7f7fb;
+  --surface-100: #f0f0f5;
+  --surface-200: #e0e0ea;
+  --surface-300: #c8c8d6;
+  --surface-600: #4a4d62;
 }
 
 .dark {
@@ -47,6 +78,13 @@
   --hk-badge:       rgba(255,255,255,0.06);
   --hk-line:        rgba(255,255,255,0.05);
   --hk-input:       rgba(255,255,255,0.04);
+
+  /* Surface scale (dark) */
+  --surface-50:  #161628;
+  --surface-100: #1e1e3a;
+  --surface-200: #2a2a4a;
+  --surface-300: #40445a;
+  --surface-600: #b0b4cc;
 }
 
 /* ── Base Styles ──────────────────────────────────────── */

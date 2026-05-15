@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
-import { Card, CardBody, Chip, Skeleton } from "@heroui/react";
+import { HKChip } from "@/components/ui/HKChip";
+import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { HKButton } from "@/components/ui/HKButton";
 import { useRouter } from "next/navigation";
 import { db, type MeasurementDraft } from "@/lib/db";
@@ -86,14 +87,14 @@ export default function MyUploadsPage() {
         </div>
         <div className="flex gap-2">
           {!isOnline && (
-            <Chip size="sm" variant="flat" color="warning">
+            <HKChip size="sm" variant="flat" color="warning">
               {t("common.offline")}
-            </Chip>
+            </HKChip>
           )}
           {isSyncing && (
-            <Chip size="sm" variant="flat" color="primary" className="animate-pulse">
+            <HKChip size="sm" variant="flat" color="primary" className="animate-pulse">
               {t("common.syncingDrafts")}
-            </Chip>
+            </HKChip>
           )}
           {drafts.length > 0 && isOnline && (
             <HKButton variant="secondary" onClick={syncAll}>

@@ -1,6 +1,5 @@
 "use client";
 
-import { HeroUIProvider } from "@heroui/react";
 import { useEffect } from "react";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import type { Language } from "@/lib/i18n/translations";
@@ -37,10 +36,8 @@ export function Providers({
   return (
     <LanguageProvider key={initialLanguage} initialLanguage={initialLanguage}>
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-        <HeroUIProvider>
-          {children}
-          <Toaster richColors position="bottom-right" />
-        </HeroUIProvider>
+        {children}
+        <Toaster richColors position="bottom-right" />
       </ThemeProvider>
     </LanguageProvider>
   );

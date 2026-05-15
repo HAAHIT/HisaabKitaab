@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Chip } from "@heroui/react";
+import { HKChip } from "@/components/ui/HKChip";
 import { HKButton } from "@/components/ui/HKButton";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -66,9 +66,9 @@ export default function LedgerChat({
               {partyPhone ? `+91 ${partyPhone}` : partyName}
             </p>
           </div>
-          <Chip variant="flat" color={currentBalance >= 0 ? "success" : "danger"}>
+          <HKChip variant="flat" color={currentBalance >= 0 ? "success" : "danger"}>
             {formatBalance(currentBalance, partyType)}
-          </Chip>
+          </HKChip>
         </div>
       </div>
 
