@@ -40,13 +40,15 @@ export function formatDateTime(date: Date | string): string {
 
 /**
  * Generate a random password of given length
+ * Uses crypto.getRandomValues for cryptographically secure random number generation
  */
 export function generateRandomPassword(length: number = 8): string {
   const chars =
     "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$";
   let password = "";
   for (let i = 0; i < length; i++) {
-    password += chars.charAt(Math.floor(Math.random() * chars.length));
+    const randomFloat = crypto.getRandomValues(new Uint32Array(1))[0] / 0x100000000;
+    password += chars.charAt(Math.floor(randomFloat * chars.length));
   }
   return password;
 }
