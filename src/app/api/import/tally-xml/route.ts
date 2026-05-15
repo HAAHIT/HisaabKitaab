@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { resolveSession } from "@/lib/api-tenant";
 import { logError, logInfo, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
-import { parseTallyXml } from "@/lib/tally-xml-import";
+import { parseTallyXml, type TallyParseResult } from "@/lib/tally-xml-import";
 import { processImportJob } from "@/app/api/jobs/process-import/route";
 import { gzipSync } from "zlib";
 
@@ -77,13 +77,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Failed to read uploaded file" }, { status: 400 });
   }
 
-  // Parse upfront to get accurate totalItems for progress tracking
+  // [PERF-4] Parse upfront to get totalItems and to pass preparsed data to
+  // processImportJob, avoiding a second decompress+parse in the worker.
   let totalItems = 0;
   let parseErrors: string[] = [];
+  let preparsed: TallyParseResult | undefined;
   try {
-    const parsed = parseTallyXml(xmlText);
-    totalItems = parsed.vouchers.length;
-    parseErrors = parsed.parseErrors ?? [];
+    preparsed = parseTallyXml(xmlText);
+    totalItems = preparsed.vouchers.length;
+    parseErrors = preparsed.parseErrors ?? [];
   } catch {
     // Non-fatal — job will re-parse and fail gracefully if truly broken
   }
@@ -112,7 +114,7 @@ export async function POST(request: NextRequest) {
   });
 
   // Fire-and-forget — do not await, response returns immediately
-  processImportJob(job.id).catch((err) =>
+  processImportJob(job.id, preparsed).catch((err) =>
     logError("import.tally-xml.trigger-error", { jobId: job.id, error: err })
   );
 

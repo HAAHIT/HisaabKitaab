@@ -110,7 +110,7 @@ function TallyImportContent() {
           setImportJobId(null);
           if (data.status === "COMPLETED") {
             setImportResult({
-              partiesCreated: 0,
+              partiesCreated: data.partiesCreated ?? 0,
               imported: data.processed,
               skipped: 0,
               failed: data.failed,
@@ -322,13 +322,21 @@ function TallyImportContent() {
                   Tally data has been imported successfully.
                 </p>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 16, width: "100%", maxWidth: 320, textAlign: "left" }}>
-                  <div style={{ padding: "14px 16px", borderRadius: 12, background: GR + "10", border: `1px solid ${GR}33` }}>
-                    <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: GR, textTransform: "uppercase", fontFamily: SG, marginBottom: 4 }}>Imported</p>
-                    <p style={{ fontSize: TYPE.numMedium, fontWeight: 700, color: GR, fontFamily: IN, margin: 0 }}>{importResult.imported}</p>
-                  </div>
+                <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 12, marginTop: 16, width: "100%", maxWidth: 320, textAlign: "center" }}>
+                  {importResult.imported > 0 && (
+                    <div style={{ padding: "14px 16px", borderRadius: 12, background: GR + "10", border: `1px solid ${GR}33`, minWidth: 130 }}>
+                      <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: GR, textTransform: "uppercase", fontFamily: SG, marginBottom: 4 }}>Imported</p>
+                      <p style={{ fontSize: TYPE.numMedium, fontWeight: 700, color: GR, fontFamily: IN, margin: 0 }}>{importResult.imported}</p>
+                    </div>
+                  )}
+                  {importResult.partiesCreated > 0 && (
+                    <div style={{ padding: "14px 16px", borderRadius: 12, background: PU + "10", border: `1px solid ${PU}33`, minWidth: 130 }}>
+                      <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: PU, textTransform: "uppercase", fontFamily: SG, marginBottom: 4 }}>Parties</p>
+                      <p style={{ fontSize: TYPE.numMedium, fontWeight: 700, color: PU, fontFamily: IN, margin: 0 }}>{importResult.partiesCreated}</p>
+                    </div>
+                  )}
                   {importResult.failed > 0 && (
-                    <div style={{ padding: "14px 16px", borderRadius: 12, background: OR + "10", border: `1px solid ${OR}33` }}>
+                    <div style={{ padding: "14px 16px", borderRadius: 12, background: OR + "10", border: `1px solid ${OR}33`, minWidth: 130 }}>
                       <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: OR, textTransform: "uppercase", fontFamily: SG, marginBottom: 4 }}>Failed</p>
                       <p style={{ fontSize: TYPE.numMedium, fontWeight: 700, color: OR, fontFamily: IN, margin: 0 }}>{importResult.failed}</p>
                     </div>

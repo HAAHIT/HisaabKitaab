@@ -30,6 +30,7 @@ export async function GET(
     totalItems: job.totalItems,
     processed: job.processed,
     failed: job.failed,
+    partiesCreated: job.partiesCreated,
     error: job.error
   });
 }

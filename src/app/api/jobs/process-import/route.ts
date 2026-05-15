@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { parseTallyXml } from "@/lib/tally-xml-import";
+import { parseTallyXml, type TallyParseResult } from "@/lib/tally-xml-import";
 import { createJournalEntry } from "@/lib/journal";
 import { recomputePartyBalance } from "@/lib/party-balance.server";
 import { logError } from "@/lib/observability";
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
   return processImportJob();
 }
 
-export async function processImportJob(jobId?: string) {
+export async function processImportJob(jobId?: string, preparsed?: TallyParseResult) {
   // ── Atomic job claim ────────────────────────────────────────────────────────
   // Two-step: find oldest PENDING job, then atomically update only if it is
   // still PENDING. If two cron workers race, only one will see count=1.
@@ -83,14 +83,23 @@ export async function processImportJob(jobId?: string) {
     const actorId = job.createdBy ?? "system";
     const billCreatorId = job.createdBy ?? "system";
 
-    // [S-W1] Decompress if stored with gzip prefix (backwards-compatible with raw XML)
-    let xmlText = job.xmlData;
-    if (xmlText.startsWith("gzip:")) {
-      const compressed = Buffer.from(xmlText.slice(5), "base64");
-      xmlText = gunzipSync(compressed).toString("utf-8");
-    }
+    // [PERF-4] Use preparsed data from upload route when available to skip
+    // decompression + re-parse. Cron recovery path falls back to stored XML.
+    let vouchers: TallyParseResult["vouchers"];
+    let partyMasters: TallyParseResult["partyMasters"];
+    let bankMasters: TallyParseResult["bankMasters"];
 
-    const { vouchers, partyMasters, bankMasters } = parseTallyXml(xmlText);
+    if (preparsed) {
+      ({ vouchers, partyMasters, bankMasters } = preparsed);
+    } else {
+      // [S-W1] Decompress if stored with gzip prefix (backwards-compatible with raw XML)
+      let xmlText = job.xmlData;
+      if (xmlText.startsWith("gzip:")) {
+        const compressed = Buffer.from(xmlText.slice(5), "base64");
+        xmlText = gunzipSync(compressed).toString("utf-8");
+      }
+      ({ vouchers, partyMasters, bankMasters } = parseTallyXml(xmlText));
+    }
 
     const needsTallyTemplate = vouchers.some(
       (voucher) =>
@@ -128,31 +137,43 @@ export async function processImportJob(jobId?: string) {
     let partiesCreated = 0;
     const partyCache = new Map<string, string>();
 
-    for (const pm of partyMasters) {
-      const upserted = await prisma.party.upsert({
-        where: { tenantId_name: { tenantId: tid, name: pm.name } },
-        // [W-X3] Fill in GSTIN/address only when existing record has null values
-        update: {
-          ...(pm.gstin ? { gstin: { set: pm.gstin } } : {}),
-          ...(pm.address ? { address: { set: pm.address } } : {}),
-        },
-        create: {
-          tenantId: tid,
-          name: pm.name,
-          type: pm.group === "Sundry Debtors" ? "CUSTOMER" : "VENDOR",
-          openingBalance: pm.openingBalance,
-          currentBalance: pm.openingBalance,
-          gstin: pm.gstin,
-          address: pm.address,
-          createdBy: actorId,
-        },
-        select: { id: true, createdAt: true, updatedAt: true },
-      });
-      if (upserted.createdAt.getTime() === upserted.updatedAt.getTime()) {
-        partiesCreated++;
-        // [I3] Audit trail for import-created parties (MCA GSR 247(E)).
-        await prisma.auditLog.create({
-          data: {
+    // [PERF-1] Parallelize party master upserts in batches of 25 instead of
+    // sequentially. Audit logs for new parties are collected and bulk-inserted
+    // with createMany after all batches complete.
+    const PARTY_UPSERT_BATCH = 25;
+    const partyAuditLogs: Prisma.AuditLogCreateManyInput[] = [];
+
+    for (let i = 0; i < partyMasters.length; i += PARTY_UPSERT_BATCH) {
+      const batch = partyMasters.slice(i, i + PARTY_UPSERT_BATCH);
+      const results = await Promise.all(
+        batch.map(async (pm) => {
+          const upserted = await prisma.party.upsert({
+            where: { tenantId_name: { tenantId: tid, name: pm.name } },
+            // [W-X3] Fill in GSTIN/address only when existing record has null values
+            update: {
+              ...(pm.gstin ? { gstin: { set: pm.gstin } } : {}),
+              ...(pm.address ? { address: { set: pm.address } } : {}),
+            },
+            create: {
+              tenantId: tid,
+              name: pm.name,
+              type: pm.group === "Sundry Debtors" ? "CUSTOMER" : "VENDOR",
+              openingBalance: pm.openingBalance,
+              currentBalance: pm.openingBalance,
+              gstin: pm.gstin,
+              address: pm.address,
+              createdBy: actorId,
+            },
+            select: { id: true, createdAt: true, updatedAt: true },
+          });
+          return { pm, upserted };
+        })
+      );
+      for (const { pm, upserted } of results) {
+        if (upserted.createdAt.getTime() === upserted.updatedAt.getTime()) {
+          partiesCreated++;
+          // [I3] Audit trail for import-created parties (MCA GSR 247(E)).
+          partyAuditLogs.push({
             tenantId: tid,
             entityType: "Party",
             entityId: upserted.id,
@@ -165,10 +186,14 @@ export async function processImportJob(jobId?: string) {
               partyName: pm.name,
               group: pm.group,
             }),
-          },
-        });
+          });
+        }
+        partyCache.set(pm.name, upserted.id);
       }
-      partyCache.set(pm.name, upserted.id);
+    }
+
+    if (partyAuditLogs.length > 0) {
+      await prisma.auditLog.createMany({ data: partyAuditLogs });
     }
 
     // ── Bank / Cash account creation from Tally masters ─────────────────────
@@ -312,8 +337,12 @@ export async function processImportJob(jobId?: string) {
     const BATCH_SIZE = 50;
     const CONCURRENCY = 10;
 
+    // [PERF-2/5] importVoucher uses ReadCommitted isolation (pure INSERTs, no
+    // read-modify-write cycles) and returns audit log rows for bulk insert
+    // outside the transaction, reducing per-transaction scope.
     async function importVoucher(
-      voucher: (typeof vouchers)[number]
+      voucher: (typeof vouchers)[number],
+      pendingAuditLogs: Prisma.AuditLogCreateManyInput[]
     ): Promise<"imported" | "skipped" | Error> {
       if (!voucher.remoteId) {
         // Use date string only (YYYY-MM-DD) for fingerprint — avoids IST/UTC
@@ -378,7 +407,8 @@ export async function processImportJob(jobId?: string) {
         const isSalesOrPurchase = resolvedVoucherType === "SALES" || resolvedVoucherType === "PURCHASE" || resolvedVoucherType === "CREDIT_NOTE" || resolvedVoucherType === "DEBIT_NOTE";
         const isPaymentOrReceipt = resolvedVoucherType === "RECEIPT" || resolvedVoucherType === "PAYMENT" || resolvedVoucherType === "CONTRA";
 
-        await prisma.$transaction(async (tx: PrismaTx) => {
+        const txResult = await prisma.$transaction(async (tx: PrismaTx) => {
+          const txAuditLogs: Prisma.AuditLogCreateManyInput[] = [];
           let billId: string | null = null;
           let paymentId: string | null = null;
 
@@ -429,17 +459,14 @@ export async function processImportJob(jobId?: string) {
               },
             });
             billId = createdBill.id;
-
-            await tx.auditLog.create({
-              data: {
-                tenantId: tid,
-                entityType: "Bill",
-                entityId: billId,
-                userId: null,
-                actorType: "SYSTEM",
-                action: "CREATE",
-                newValue: JSON.stringify({ source: "tally-import" }),
-              },
+            txAuditLogs.push({
+              tenantId: tid,
+              entityType: "Bill",
+              entityId: billId,
+              userId: null,
+              actorType: "SYSTEM",
+              action: "CREATE",
+              newValue: JSON.stringify({ source: "tally-import" }),
             });
           } else if (isPaymentOrReceipt) {
             const partyLine = lines.find((l) => l.partyId);
@@ -476,17 +503,14 @@ export async function processImportJob(jobId?: string) {
               },
             });
             paymentId = createdPayment.id;
-
-            await tx.auditLog.create({
-              data: {
-                tenantId: tid,
-                entityType: "Payment",
-                entityId: paymentId,
-                userId: null,
-                actorType: "SYSTEM",
-                action: "CREATE",
-                newValue: JSON.stringify({ source: "tally-import" }),
-              },
+            txAuditLogs.push({
+              tenantId: tid,
+              entityType: "Payment",
+              entityId: paymentId,
+              userId: null,
+              actorType: "SYSTEM",
+              action: "CREATE",
+              newValue: JSON.stringify({ source: "tally-import" }),
             });
           }
 
@@ -502,27 +526,29 @@ export async function processImportJob(jobId?: string) {
             lines,
           });
 
-          await tx.auditLog.create({
-            data: {
-              tenantId: tid,
-              entityType: "JournalEntry",
-              entityId: journalEntry.id,
-              userId: null,
-              actorType: "SYSTEM",
-              action: "CREATE",
-              newValue: JSON.stringify({
-                source: "tally-import",
-                jobId: job.id,
-                remoteId: voucher.remoteId ?? null,
-                voucherType: journalEntry.voucherType,
-                placeOfSupply: voucher.placeOfSupply ?? null,
-                taxPercent: voucher.taxPercent ?? null,
-                hsnCodes: voucher.hsnCodes ?? [],
-                isInterState: voucher.isInterState ?? null,
-              }),
-            },
+          txAuditLogs.push({
+            tenantId: tid,
+            entityType: "JournalEntry",
+            entityId: journalEntry.id,
+            userId: null,
+            actorType: "SYSTEM",
+            action: "CREATE",
+            newValue: JSON.stringify({
+              source: "tally-import",
+              jobId: job.id,
+              remoteId: voucher.remoteId ?? null,
+              voucherType: journalEntry.voucherType,
+              placeOfSupply: voucher.placeOfSupply ?? null,
+              taxPercent: voucher.taxPercent ?? null,
+              hsnCodes: voucher.hsnCodes ?? [],
+              isInterState: voucher.isInterState ?? null,
+            }),
           });
-        }, { timeout: 8000, isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+          return { txAuditLogs };
+        }, { timeout: 8000, isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
+
+        pendingAuditLogs.push(...txResult.txAuditLogs);
         return "imported";
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -534,18 +560,14 @@ export async function processImportJob(jobId?: string) {
     }
 
     const allVouchers = [...vouchersWithRemoteId, ...vouchersWithoutRemoteId];
-    
-    // Process vouchers in parallel chunks of CONCURRENCY within each BATCH_SIZE window.
-    // Party upsert contention is gone — all names are pre-resolved into partyCache before
-    // this loop, so resolvePartyId() is a pure cache hit inside importVoucher. Each
-    // transaction only INSERTs (JournalEntry + JournalLine + AuditLog), so there is no
-    // shared-row contention between parallel vouchers.
+
     for (let i = 0; i < allVouchers.length; i += BATCH_SIZE) {
       const batch = allVouchers.slice(i, i + BATCH_SIZE);
+      const pendingAuditLogs: Prisma.AuditLogCreateManyInput[] = [];
 
       for (let j = 0; j < batch.length; j += CONCURRENCY) {
         const chunk = batch.slice(j, j + CONCURRENCY);
-        const results = await Promise.allSettled(chunk.map(importVoucher));
+        const results = await Promise.allSettled(chunk.map((v) => importVoucher(v, pendingAuditLogs)));
         for (const r of results) {
           if (r.status === "fulfilled") {
             if (r.value === "skipped") skipped++;
@@ -555,6 +577,11 @@ export async function processImportJob(jobId?: string) {
             failed++;
           }
         }
+      }
+
+      // [PERF-5] Bulk insert all audit logs accumulated during this batch
+      if (pendingAuditLogs.length > 0) {
+        await prisma.auditLog.createMany({ data: pendingAuditLogs });
       }
 
       // Update progress in DB after each batch
@@ -573,22 +600,25 @@ export async function processImportJob(jobId?: string) {
         status: "COMPLETED",
         processed: imported + skipped,
         failed: failed,
+        partiesCreated,
         // [S1] Clear raw XML to prevent storage bloat (up to 5MB per job).
         // All relevant data is already persisted in JournalEntries + AuditLog.
         xmlData: "",
       }
     });
 
-    // [T2] Recompute balances for all parties touched during import.
-    // Runs AFTER the job is marked COMPLETED so import success is not
-    // blocked by a balance recompute failure.
+    // [PERF-3] Recompute party balances in parallel batches of 20 instead of
+    // sequentially — each recompute is independent and read-heavy.
     const affectedPartyIds = [...new Set(partyCache.values())];
-    for (const pid of affectedPartyIds) {
-      try {
-        await recomputePartyBalance(null, pid, tid);
-      } catch (err) {
-        logError("import.party-balance.error", { pid, jobId: job.id, error: err });
-      }
+    const BALANCE_BATCH = 3;
+    for (let i = 0; i < affectedPartyIds.length; i += BALANCE_BATCH) {
+      await Promise.allSettled(
+        affectedPartyIds.slice(i, i + BALANCE_BATCH).map((pid) =>
+          recomputePartyBalance(null, pid, tid).catch((err) =>
+            logError("import.party-balance.error", { pid, jobId: job.id, error: err })
+          )
+        )
+      );
     }
 
     return NextResponse.json({
