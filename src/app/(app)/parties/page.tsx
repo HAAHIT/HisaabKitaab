@@ -6,11 +6,8 @@ import {
   getBalanceStatusLabel,
   type SupportedPartyType,
 } from "@/lib/accounting";
-import {
-  Select,
-  SelectItem,
-  Skeleton,
-} from "@heroui/react";
+import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
+import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
@@ -372,7 +369,7 @@ export default function PartiesPage() {
           {loading ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-20 rounded-2xl" />
+                <HKSkeleton key={i} className="h-20 rounded-2xl" />
               ))}
             </div>
           ) : parties.length === 0 ? (
@@ -842,19 +839,15 @@ export default function PartiesPage() {
                 value={formGstin}
                 onValueChange={setFormGstin}
               />
-              <Select
+              <HKSelect
                 label="Type"
                 placeholder="Grahak ya Supplier"
-                selectedKeys={new Set([formType])}
-                onSelectionChange={(keys) => {
-                  const value = Array.from(keys)[0] as string;
-                  if (value) setFormType(value);
-                }}
-                variant="bordered"
+                value={formType}
+                onValueChange={(v) => { if (v) setFormType(v); }}
               >
-                <SelectItem key="CUSTOMER">Grahak (Customer)</SelectItem>
-                <SelectItem key="VENDOR">Supplier (Vendor)</SelectItem>
-              </Select>
+                <HKSelectItem value="CUSTOMER">Grahak (Customer)</HKSelectItem>
+                <HKSelectItem value="VENDOR">Supplier (Vendor)</HKSelectItem>
+              </HKSelect>
               {!editingParty && (
                 <HKInput
                   label="Opening Balance"

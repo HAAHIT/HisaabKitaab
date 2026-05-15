@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Skeleton, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure } from "@heroui/react";
+import { HKModal } from "@/components/ui/hk-design";
 import { HKButton } from "@/components/ui/HKButton";
 import {
   OR, PU, GR, AM, SG, IN, TYPE, TOUCH,
@@ -84,7 +84,9 @@ export default function BankLedgerClient({
   const [paymentToDelete, setPaymentToDelete] = useState<LedgerEntry | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
-  const { isOpen, onOpen, onClose, onOpenChange } = useDisclosure();
+  const [isOpen, setIsOpen] = useState(false);
+  const onOpen = () => setIsOpen(true);
+  const onClose = () => setIsOpen(false);
 
   const accountColor = account.type === "BANK" ? PU : GR;
 
@@ -431,35 +433,30 @@ export default function BankLedgerClient({
       </div>
 
       {/* Delete confirmation */}
-      <Modal isOpen={isOpen} onOpenChange={onOpenChange} backdrop="blur" placement="center">
-        <ModalContent>
-          {(onClose) => (
+      <HKModal
+        isOpen={isOpen}
+        onClose={onClose}
+        title="Transaction Delete Karo?"
+        footer={
+          <>
+            <HKButton variant="secondary" isDisabled={isDeleting} onClick={onClose}>Cancel</HKButton>
+            <HKButton variant="danger" isLoading={isDeleting} onClick={handleDeletePayment}>
+              Delete Karo
+            </HKButton>
+          </>
+        }
+      >
+        <p style={{ fontFamily: SG, fontSize: TYPE.body, color: "var(--hk-sub)" }}>
+          {paymentToDelete && (
             <>
-              <ModalHeader style={{ fontFamily: SG, fontSize: TYPE.h2 }}>
-                Transaction Delete Karo?
-              </ModalHeader>
-              <ModalBody>
-                <p style={{ fontFamily: SG, fontSize: TYPE.body, color: "var(--hk-sub)" }}>
-                  {paymentToDelete && (
-                    <>
-                      <span style={{ fontWeight: 700, color: OR }}>
-                        {paymentToDelete.direction === "INCOMING" ? "+" : "−"}{fmtFull(paymentToDelete.amount)}
-                      </span>
-                      {" "}— {paymentToDelete.partyName} ka transaction permanently delete ho jayega. Balance reverse ho jayega.
-                    </>
-                  )}
-                </p>
-              </ModalBody>
-              <ModalFooter>
-                <HKButton variant="secondary" isDisabled={isDeleting} onClick={onClose}>Cancel</HKButton>
-                <HKButton variant="danger" isLoading={isDeleting} onClick={handleDeletePayment} className="font-semibold">
-                  Delete Karo
-                </HKButton>
-              </ModalFooter>
+              <span style={{ fontWeight: 700, color: OR }}>
+                {paymentToDelete.direction === "INCOMING" ? "+" : "−"}{fmtFull(paymentToDelete.amount)}
+              </span>
+              {" "}— {paymentToDelete.partyName} ka transaction permanently delete ho jayega. Balance reverse ho jayega.
             </>
           )}
-        </ModalContent>
-      </Modal>
+        </p>
+      </HKModal>
     </div>
   );
 }

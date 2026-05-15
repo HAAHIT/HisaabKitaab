@@ -5,6 +5,7 @@ interface HKPaginationProps {
   total: number;
   onChange: (page: number) => void;
   className?: string;
+  showControls?: boolean;
 }
 
 export function HKPagination({

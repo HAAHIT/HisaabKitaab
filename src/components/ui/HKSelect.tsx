@@ -16,6 +16,7 @@ interface HKSelectProps {
   children: React.ReactNode;
   startContent?: React.ReactNode;
   description?: string;
+  "aria-label"?: string;
 }
 
 const SIZE_CLASS: Record<string, string> = {
@@ -40,6 +41,7 @@ export const HKSelect = forwardRef<HTMLSelectElement, HKSelectProps>(
       children,
       startContent,
       description,
+      "aria-label": ariaLabel,
     },
     ref
   ) {
@@ -60,7 +62,7 @@ export const HKSelect = forwardRef<HTMLSelectElement, HKSelectProps>(
           </label>
         )}
         <div
-          className={`relative flex items-center rounded-xl border bg-[var(--hk-input)] transition-colors ${borderClass} ${SIZE_CLASS[size] ?? SIZE_CLASS.md} ${isDisabled ? "opacity-50" : ""}`}
+          className={`relative flex items-center rounded-xl border bg-[var(--hk-card)] transition-colors ${borderClass} ${SIZE_CLASS[size] ?? SIZE_CLASS.md} ${isDisabled ? "opacity-50" : ""}`}
         >
           {startContent && (
             <div className="flex shrink-0 items-center pl-3">
@@ -74,8 +76,14 @@ export const HKSelect = forwardRef<HTMLSelectElement, HKSelectProps>(
             onChange={(e) => onValueChange(e.target.value)}
             disabled={isDisabled}
             required={isRequired}
-            className="h-full w-full flex-1 cursor-pointer appearance-none bg-transparent px-3 font-medium text-[var(--hk-text)] outline-none disabled:cursor-not-allowed"
-            style={{ paddingRight: "2rem" }}
+            aria-label={ariaLabel}
+            className="h-full w-full flex-1 cursor-pointer appearance-none px-3 font-medium outline-none disabled:cursor-not-allowed"
+            style={{
+              paddingRight: "2rem",
+              background: "var(--hk-card)",
+              color: "var(--hk-text)",
+              borderRadius: "inherit",
+            }}
           >
             {placeholder && (
               <option value="" disabled>
@@ -119,5 +127,12 @@ export function HKSelectItem({
   value: string;
   children: React.ReactNode;
 }) {
-  return <option value={value}>{children}</option>;
+  return (
+    <option
+      value={value}
+      style={{ background: "var(--hk-card)", color: "var(--hk-text)" }}
+    >
+      {children}
+    </option>
+  );
 }

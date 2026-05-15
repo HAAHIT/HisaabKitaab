@@ -1,13 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState, startTransition } from "react";
-import {
-  Card,
-  CardBody,
-  Select,
-  SelectItem,
-  Skeleton,
-} from "@heroui/react";
+import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
+import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { HKInput } from "@/components/ui/HKInput";
 import { HKButton } from "@/components/ui/HKButton";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -348,33 +343,27 @@ export default function ReportsClient({
         <p className="mt-1 text-sm text-default-500">{t("reports.subtitle")}</p>
       </div>
 
-      <Card shadow="sm">
-        <CardBody className="space-y-4 p-6">
+      <div className="rounded-2xl border border-[var(--hk-border)] bg-[var(--hk-card)] shadow-sm">
+        <div className="space-y-4 p-6">
           <div>
             <h2 className="text-lg font-semibold">{t("reports.dateRange")}</h2>
             <p className="text-sm text-default-500">{t("reports.financialYearHelp")}</p>
           </div>
 
           <div className="grid gap-4 lg:grid-cols-[260px,1fr,1fr]">
-            <Select
+            <HKSelect
               label={t("reports.financialYear")}
-              selectedKeys={[preset]}
-              onSelectionChange={(keys) => {
-                const nextPreset = Array.from(keys)[0];
-                if (
-                  nextPreset === "currentFy" ||
-                  nextPreset === "currentQuarter" ||
-                  nextPreset === "custom"
-                ) {
-                  applyPreset(nextPreset);
+              value={preset}
+              onValueChange={(v) => {
+                if (v === "currentFy" || v === "currentQuarter" || v === "custom") {
+                  applyPreset(v);
                 }
               }}
-              variant="bordered"
             >
               {presetOptions.map((option) => (
-                <SelectItem key={option.key}>{option.label}</SelectItem>
+                <HKSelectItem key={option.key} value={option.key}>{option.label}</HKSelectItem>
               ))}
-            </Select>
+            </HKSelect>
 
             <HKInput
               label={t("reports.from")}
@@ -400,12 +389,12 @@ export default function ReportsClient({
               }}
             />
           </div>
-        </CardBody>
-      </Card>
+        </div>
+      </div>
 
       {/* ── GST Summary Report ──────────────────────────────────────────────── */}
-      <Card shadow="sm">
-        <CardBody className="p-6 space-y-4">
+      <div className="rounded-2xl border border-[var(--hk-border)] bg-[var(--hk-card)] shadow-sm">
+        <div className="p-6 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
               <h2 className="text-lg font-semibold">GST Sales Summary</h2>
@@ -458,7 +447,7 @@ export default function ReportsClient({
 
           {gstLoading ? (
             <div className="grid gap-2">
-              {[1, 2, 3].map((i) => <Skeleton key={i} className="h-10 rounded-xl" />)}
+              {[1, 2, 3].map((i) => <HKSkeleton key={i} className="h-10 rounded-xl" />)}
             </div>
           ) : gstError ? (
             <p className="text-sm text-danger">{gstError}</p>
@@ -576,12 +565,12 @@ export default function ReportsClient({
               )}
             </div>
           )}
-        </CardBody>
-      </Card>
+        </div>
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <Card shadow="sm">
-          <CardBody className="space-y-3 p-6">
+        <div className="rounded-2xl border border-[var(--hk-border)] bg-[var(--hk-card)] shadow-sm">
+          <div className="space-y-3 p-6">
             <div>
               <h3 className="text-lg font-semibold">{t("reports.transactionRegister")}</h3>
               <p className="text-sm text-default-500">{t("reports.transactionDesc")}</p>
@@ -592,11 +581,11 @@ export default function ReportsClient({
             >
               {t("reports.downloadCSV")}
             </HKButton>
-          </CardBody>
-        </Card>
+          </div>
+        </div>
 
-        <Card shadow="sm">
-          <CardBody className="space-y-3 p-6">
+        <div className="rounded-2xl border border-[var(--hk-border)] bg-[var(--hk-card)] shadow-sm">
+          <div className="space-y-3 p-6">
             <div>
               <h3 className="text-lg font-semibold">{t("reports.trialBalance")}</h3>
               <p className="text-sm text-default-500">{t("reports.trialBalanceDesc")}</p>
@@ -607,46 +596,39 @@ export default function ReportsClient({
             >
               {t("reports.downloadCSV")}
             </HKButton>
-          </CardBody>
-        </Card>
+          </div>
+        </div>
 
-        <Card shadow="sm">
-          <CardBody className="space-y-3 p-6">
+        <div className="rounded-2xl border border-[var(--hk-border)] bg-[var(--hk-card)] shadow-sm">
+          <div className="space-y-3 p-6">
             <div>
               <h3 className="text-lg font-semibold">{t("reports.partyLedger")}</h3>
               <p className="text-sm text-default-500">{t("reports.partyLedgerDesc")}</p>
             </div>
-            <Select
+            <HKSelect
               label={t("reports.selectParty")}
-              selectedKeys={selectedPartyId ? [selectedPartyId] : []}
-              onSelectionChange={(keys) => {
-                const nextValue = Array.from(keys)[0];
-                if (typeof nextValue === "string") {
-                  setSelectedPartyId(nextValue);
-                }
-              }}
-              variant="bordered"
+              value={selectedPartyId}
+              onValueChange={(v) => { if (v) setSelectedPartyId(v); }}
             >
               {parties.map((party) => (
-                <SelectItem key={party.id} textValue={`${party.name} (${party.type.toLowerCase()})`}>
-
+                <HKSelectItem key={party.id} value={party.id}>
                   {party.name} ({party.type.toLowerCase()})
-                </SelectItem>
+                </HKSelectItem>
               ))}
-            </Select>
+            </HKSelect>
             <HKButton
               isDisabled={exportBlocked || !selectedPartyId}
               onClick={() => downloadFile(partyLedgerUrl)}
             >
               {t("reports.downloadCSV")}
             </HKButton>
-          </CardBody>
-        </Card>
+          </div>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card shadow="sm" className="border border-amber-500/20">
-          <CardBody className="p-6 flex flex-col justify-between items-start gap-4">
+        <div className="rounded-2xl border border-amber-500/20 bg-[var(--hk-card)] shadow-sm">
+          <div className="p-6 flex flex-col justify-between items-start gap-4">
             <div className="flex items-start gap-3 w-full">
               <div className="flex-1">
                 <h3 className="text-lg font-semibold">{t("reports.tallyExport")}</h3>
@@ -662,11 +644,11 @@ export default function ReportsClient({
             >
               Send to CA →
             </HKButton>
-          </CardBody>
-        </Card>
+          </div>
+        </div>
 
-        <Card shadow="sm" className="border border-amber-500/20">
-          <CardBody className="p-6 flex flex-col justify-between items-start gap-4">
+        <div className="rounded-2xl border border-amber-500/20 bg-[var(--hk-card)] shadow-sm">
+          <div className="p-6 flex flex-col justify-between items-start gap-4">
             <div className="flex items-start gap-3 w-full">
               <div className="flex-1">
                 <h3 className="text-lg font-semibold">{t("reports.tallyImport")}</h3>
@@ -683,12 +665,12 @@ export default function ReportsClient({
             >
               Start Import →
             </HKButton>
-          </CardBody>
-        </Card>
+          </div>
+        </div>
       </div>
 
-      <Card shadow="sm">
-        <CardBody className="space-y-4 p-6">
+      <div className="rounded-2xl border border-[var(--hk-border)] bg-[var(--hk-card)] shadow-sm">
+        <div className="space-y-4 p-6">
           <div className="flex flex-col gap-1">
             <h2 className="text-lg font-semibold">{t("reports.systemCheck")}</h2>
             <p className="text-sm text-default-500">
@@ -726,7 +708,7 @@ export default function ReportsClient({
             ) : !preview && !previewError ? (
               <div className="grid gap-3 md:grid-cols-3">
                 {[1, 2, 3].map((index) => (
-                  <Skeleton key={index} className="h-20 rounded-xl" />
+                  <HKSkeleton key={index} className="h-20 rounded-xl" />
                 ))}
               </div>
             ) : previewError ? (
@@ -760,8 +742,8 @@ export default function ReportsClient({
               <p className="text-sm text-default-500">{t("reports.noPreview")}</p>
             )}
           </div>
-        </CardBody>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

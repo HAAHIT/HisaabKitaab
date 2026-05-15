@@ -1,15 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Modal,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  Select,
-  SelectItem,
-} from "@heroui/react";
+import { HKModal } from "@/components/ui/hk-design";
+import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
 import { HKButton } from "@/components/ui/HKButton";
 import { HKInput } from "@/components/ui/HKInput";
 import { motion } from "framer-motion";
@@ -17,7 +10,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 
 interface Props {
   isOpen: boolean;
-  onOpenChange: (isOpen: boolean) => void;
+  onClose: () => void;
   onSuccess: (party: any) => void;
   initialType?: string;
   allowedTypes?: string[];
@@ -35,7 +28,7 @@ const TYPE_LABELS: Record<string, string> = {
 
 export function QuickAddPartyModal({
   isOpen,
-  onOpenChange,
+  onClose,
   onSuccess,
   initialType = "CUSTOMER",
   allowedTypes = ["CUSTOMER", "VENDOR"],
@@ -48,7 +41,7 @@ export function QuickAddPartyModal({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  async function handleSave(onClose: () => void) {
+  async function handleSave() {
     if (!name.trim()) {
       setError("Name is required");
       return;
@@ -89,80 +82,61 @@ export function QuickAddPartyModal({
   }
 
   return (
-    <Modal
+    <HKModal
       isOpen={isOpen}
-      onOpenChange={onOpenChange}
-      size="md"
-      backdrop="blur"
-      motionProps={{
-        variants: {
-          enter: { y: 0, opacity: 1, scale: 1, transition: { duration: 0.3, ease: "easeOut" } },
-          exit: { y: -20, opacity: 0, scale: 0.95, transition: { duration: 0.2, ease: "easeIn" } },
-        },
-      }}
+      onClose={onClose}
+      title="Quick Add Party"
+      footer={
+        <>
+          <HKButton variant="secondary" onClick={onClose}>Cancel</HKButton>
+          <HKButton onClick={handleSave} isLoading={isLoading}>Create Party</HKButton>
+        </>
+      }
     >
-      <ModalContent>
-        {(onClose) => (
-          <>
-            <ModalHeader className="flex flex-col gap-1">Quick Add Party</ModalHeader>
-            <ModalBody>
-              {error && (
-                <div className="bg-danger-50 text-danger-600 px-4 py-2 rounded-lg text-sm mb-2 border border-danger-200">
-                  {error}
-                </div>
-              )}
-              <motion.div
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, ease: "easeOut" }}
-                className="flex flex-col gap-4"
-              >
-                <HKInput
-                  label="Party Name *"
-                  autoFocus
-                  placeholder="Enter name"
-                  value={name}
-                  onValueChange={setName}
-                />
-                <HKInput
-                  label="Phone"
-                  placeholder="10 digit mobile number"
-                  value={phone}
-                  onValueChange={setPhone}
-                />
-                <HKInput
-                  label="GSTIN"
-                  placeholder="22AAAAA0000A1Z5"
-                  value={gstin}
-                  onValueChange={setGstin}
-                />
-                <Select
-                  label="Type"
-                  variant="bordered"
-                  selectedKeys={[type]}
-                  onSelectionChange={(keys) => setType(Array.from(keys)[0] as string)}
-                >
-                  {allowedTypes.map((tKey) => {
-                    const translationKey = `parties.${tKey.toLowerCase()}Type` as Parameters<typeof t>[0];
-                    const translated = t(translationKey);
-                    const label =
-                      translated === translationKey ? (TYPE_LABELS[tKey] || tKey) : translated;
-                    return <SelectItem key={tKey}>{label}</SelectItem>;
-                  })}
-                </Select>
-              </motion.div>
-            </ModalBody>
-            <ModalFooter>
-              <HKButton variant="secondary" onClick={onClose}>
-                Cancel
-              </HKButton>
-              <HKButton onClick={() => handleSave(onClose)} isLoading={isLoading}>
-                Create Party
-              </HKButton>
-            </ModalFooter>
-          </>
-        )}
-      </ModalContent>
-    </Modal>
+      {error && (
+        <div className="bg-danger-50 text-danger-600 px-4 py-2 rounded-lg text-sm mb-2 border border-danger-200">
+          {error}
+        </div>
+      )}
+      <motion.div
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: "easeOut" }}
+        className="flex flex-col gap-4"
+      >
+        <HKInput
+          label="Party Name *"
+          autoFocus
+          placeholder="Enter name"
+          value={name}
+          onValueChange={setName}
+        />
+        <HKInput
+          label="Phone"
+          placeholder="10 digit mobile number"
+          value={phone}
+          onValueChange={setPhone}
+        />
+        <HKInput
+          label="GSTIN"
+          placeholder="22AAAAA0000A1Z5"
+          value={gstin}
+          onValueChange={setGstin}
+        />
+        <HKSelect
+          label="Type"
+          value={type}
+          onValueChange={(v) => { if (v) setType(v); }}
+        >
+          {allowedTypes.map((tKey) => {
+            const translationKey = `parties.${tKey.toLowerCase()}Type` as Parameters<typeof t>[0];
+            const translated = t(translationKey);
+            const label =
+              translated === translationKey ? (TYPE_LABELS[tKey] || tKey) : translated;
+            return <HKSelectItem key={tKey} value={tKey}>{label}</HKSelectItem>;
+          })}
+        </HKSelect>
+      </motion.div>
+    </HKModal>
   );
 }

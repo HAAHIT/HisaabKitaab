@@ -1,7 +1,8 @@
 "use client";
 
 import { use, useCallback, useEffect, useMemo, useState } from "react";
-import { Select, SelectItem, Textarea } from "@heroui/react";
+import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
+import { HKTextarea } from "@/components/ui/HKTextarea";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { evaluateRow, type ColumnDef } from "@/lib/formula";
@@ -374,27 +375,23 @@ export default function EditBillPage({
 
           {/* Bill To */}
           <Section title="Bill To">
-            <Select
+            <HKSelect
               label="Party"
               placeholder="Select customer or vendor"
-              selectedKeys={partyId ? new Set([partyId]) : new Set([])}
-              onSelectionChange={(keys) => {
-                const value = Array.from(keys)[0] as string;
-                if (value) applyPartySnapshot(value);
-              }}
-              variant="bordered"
+              value={partyId}
+              onValueChange={(v) => { if (v) applyPartySnapshot(v); }}
               isInvalid={Boolean(errors.partyId)}
               errorMessage={errors.partyId ? "Party is required" : undefined}
             >
               {parties.map((party) => (
-                <SelectItem key={party.id} textValue={party.name}>
+                <HKSelectItem key={party.id} value={party.id}>
                   <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
                     <span>{party.name}</span>
                     <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)" }}>{party.type.toLowerCase()}</span>
                   </div>
-                </SelectItem>
+                </HKSelectItem>
               ))}
-            </Select>
+            </HKSelect>
 
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12, marginTop: 12 }}>
               <HKInput
@@ -499,15 +496,13 @@ export default function EditBillPage({
                       <td style={{ padding: "8px 12px", textAlign: "center", color: "var(--hk-sub)", fontSize: TYPE.bodySmall }}>{rowIndex + 1}</td>
                       {hsnPerRow && taxPercent > 0 && (
                         <td style={{ padding: "8px 8px" }}>
-                          <Input
+                          <input
                             type="text"
                             aria-label={`Row ${rowIndex + 1} HSN/SAC code`}
                             placeholder="e.g. 9983"
                             value={String(row._hsnCode || "")}
-                            onValueChange={(value) => updateRowHsn(rowIndex, value)}
-                            variant="underlined"
-                            size="sm"
-                            className="min-w-[80px] max-w-[100px]"
+                            onChange={(e) => updateRowHsn(rowIndex, e.target.value)}
+                            style={{ minWidth: 80, maxWidth: 100, background: "transparent", color: "var(--hk-text)", fontSize: TYPE.bodySmall, fontFamily: SG, outline: "none", border: "none", borderBottom: "1.5px solid var(--hk-border)", padding: "2px 0" }}
                           />
                         </td>
                       )}
@@ -520,51 +515,40 @@ export default function EditBillPage({
                                 : "—"}
                             </span>
                           ) : column.type === "number" ? (
-                            <Input
+                            <input
                               type="number"
                               aria-label={`Row ${rowIndex + 1} ${column.name}`}
                               value={String(row[column.id] || "")}
-                              onValueChange={(value) => updateCell(rowIndex, column.id, value)}
-                              variant="underlined"
-                              size="sm"
-                              className="min-w-[80px]"
+                              onChange={(e) => updateCell(rowIndex, column.id, e.target.value)}
+                              style={{ minWidth: 80, background: "transparent", color: "var(--hk-text)", fontSize: TYPE.bodySmall, fontFamily: IN, outline: "none", border: "none", borderBottom: "1.5px solid var(--hk-border)", padding: "2px 0" }}
                             />
                           ) : column.type === "dropdown" && column.options ? (
-                            <Select
+                            <HKSelect
                               aria-label={`Row ${rowIndex + 1} ${column.name}`}
                               placeholder={column.name}
-                              selectedKeys={row[column.id] ? new Set([String(row[column.id])]) : new Set([])}
-                              onSelectionChange={(keys) => {
-                                const value = Array.from(keys)[0] as string;
-                                if (value) updateCell(rowIndex, column.id, value);
-                              }}
-                              variant="underlined"
+                              value={row[column.id] ? String(row[column.id]) : ""}
+                              onValueChange={(v) => { if (v) updateCell(rowIndex, column.id, v); }}
                               size="sm"
-                              className="min-w-[120px]"
                             >
                               {column.options.map((option) => (
-                                <SelectItem key={option}>{option}</SelectItem>
+                                <HKSelectItem key={option} value={option}>{option}</HKSelectItem>
                               ))}
-                            </Select>
+                            </HKSelect>
                           ) : column.type === "date" ? (
-                            <Input
+                            <input
                               type="date"
                               aria-label={`Row ${rowIndex + 1} ${column.name}`}
                               value={String(row[column.id] || "")}
-                              onValueChange={(value) => updateCell(rowIndex, column.id, value)}
-                              variant="underlined"
-                              size="sm"
-                              className="min-w-[130px]"
+                              onChange={(e) => updateCell(rowIndex, column.id, e.target.value)}
+                              style={{ minWidth: 130, background: "transparent", color: "var(--hk-text)", fontSize: TYPE.bodySmall, fontFamily: SG, outline: "none", border: "none", borderBottom: "1.5px solid var(--hk-border)", padding: "2px 0" }}
                             />
                           ) : (
-                            <Input
+                            <input
                               type="text"
                               aria-label={`Row ${rowIndex + 1} ${column.name}`}
                               value={String(row[column.id] || "")}
-                              onValueChange={(value) => updateCell(rowIndex, column.id, value)}
-                              variant="underlined"
-                              size="sm"
-                              className="min-w-[120px]"
+                              onChange={(e) => updateCell(rowIndex, column.id, e.target.value)}
+                              style={{ minWidth: 120, background: "transparent", color: "var(--hk-text)", fontSize: TYPE.bodySmall, fontFamily: SG, outline: "none", border: "none", borderBottom: "1.5px solid var(--hk-border)", padding: "2px 0" }}
                             />
                           )}
                         </td>
@@ -598,8 +582,8 @@ export default function EditBillPage({
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16, marginBottom: 24 }}>
             {/* Notes */}
             <HKCard style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <Textarea label="Notes" placeholder="Additional notes..." value={notes} onValueChange={setNotes} variant="bordered" minRows={2} />
-              <Textarea label="Terms & Conditions" placeholder="Enter terms..." value={terms} onValueChange={setTerms} variant="bordered" minRows={3} />
+              <HKTextarea label="Notes" placeholder="Additional notes..." value={notes} onValueChange={setNotes} minRows={2} />
+              <HKTextarea label="Terms & Conditions" placeholder="Enter terms..." value={terms} onValueChange={setTerms} minRows={3} />
             </HKCard>
 
             {/* Summary */}
@@ -655,25 +639,19 @@ export default function EditBillPage({
 
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                   <span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG, flexShrink: 0 }}>Place of Supply</span>
-                  <Select
+                  <HKSelect
                     aria-label="Place of supply"
                     placeholder="State select karo"
                     size="sm"
-                    variant="bordered"
-                    className="max-w-[200px]"
-                    selectedKeys={placeOfSupply ? new Set([placeOfSupply]) : new Set([])}
-                    onSelectionChange={(keys) => {
-                      const value = Array.from(keys)[0] as string | undefined;
-                      setPlaceOfSupply(value ?? "");
-                      if (value) setErrors((c) => ({ ...c, placeOfSupply: false }));
-                    }}
+                    value={placeOfSupply}
+                    onValueChange={(v) => { setPlaceOfSupply(v ?? ""); if (v) setErrors((c) => ({ ...c, placeOfSupply: false })); }}
                     isInvalid={Boolean(errors.placeOfSupply)}
                     errorMessage={errors.placeOfSupply ? "Required for final bills" : undefined}
                   >
                     {Object.entries(GST_STATE_CODES).map(([code, name]) => (
-                      <SelectItem key={code} textValue={`${code} - ${name}`}>{code} — {name}</SelectItem>
+                      <HKSelectItem key={code} value={code}>{code} — {name}</HKSelectItem>
                     ))}
-                  </Select>
+                  </HKSelect>
                 </div>
 
                 {!hsnPerRow && (

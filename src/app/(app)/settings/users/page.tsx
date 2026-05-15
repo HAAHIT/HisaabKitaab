@@ -1,11 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import {
-  Select,
-  SelectItem,
-  Skeleton,
-} from "@heroui/react";
+import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
+import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
   GR, AM, OR, PU, SG, IN, TYPE,
@@ -138,7 +135,7 @@ export default function UserManagementPage() {
           <HKCard style={{ padding: 0, overflow: "hidden" }}>
             {loading ? (
               <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 12 }}>
-                {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-16 w-full rounded-2xl" />)}
+                {[1, 2, 3, 4].map((i) => <HKSkeleton key={i} className="h-16 w-full rounded-2xl" />)}
               </div>
             ) : users.length === 0 ? (
               <div style={{ textAlign: "center", padding: "60px 20px" }}>
@@ -305,20 +302,16 @@ export default function UserManagementPage() {
                     </div>
                   }
                 />
-                <Select
+                <HKSelect
                   label={t("users.role")}
                   placeholder={t("users.role")}
-                  selectedKeys={new Set([formRole])}
-                  onSelectionChange={(keys) => {
-                    const selected = Array.from(keys)[0] as string;
-                    if (selected) setFormRole(selected);
-                  }}
-                  variant="bordered"
+                  value={formRole}
+                  onValueChange={(v) => { if (v) setFormRole(v); }}
                 >
-                  <SelectItem key="STAFF" textValue={t("users.staff")}>{t("users.staff")}</SelectItem>
-                  <SelectItem key="ACCOUNTANT" textValue={t("users.accountant")}>{t("users.accountant")}</SelectItem>
-                  <SelectItem key="CUSTOMER" textValue={t("users.customer")}>{t("users.customer")}</SelectItem>
-                </Select>
+                  <HKSelectItem value="STAFF">{t("users.staff")}</HKSelectItem>
+                  <HKSelectItem value="ACCOUNTANT">{t("users.accountant")}</HKSelectItem>
+                  <HKSelectItem value="CUSTOMER">{t("users.customer")}</HKSelectItem>
+                </HKSelect>
 
                 <div style={{ display: "flex", gap: 12, paddingTop: 8 }}>
                   <HKButton variant="secondary" onClick={() => setShowPanel(false)} isDisabled={saving} style={{ flex: 1 }}>{t("common.cancel")}</HKButton>

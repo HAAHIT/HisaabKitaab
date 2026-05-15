@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Skeleton } from "@heroui/react";
+import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
@@ -113,7 +113,7 @@ export default function TemplatesPage() {
       <div style={{ padding: isMobile ? "0 14px 80px" : "0 28px 80px", maxWidth: 1200, margin: "0 auto" }}>
         {loading ? (
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 16 }}>
-            {[1, 2, 3].map((i) => <Skeleton key={i} className="h-44 rounded-2xl" />)}
+            {[1, 2, 3].map((i) => <HKSkeleton key={i} className="h-44 rounded-2xl" />)}
           </div>
         ) : templates.length === 0 ? (
           <HKCard style={{ textAlign: "center", padding: "60px 20px" }}>

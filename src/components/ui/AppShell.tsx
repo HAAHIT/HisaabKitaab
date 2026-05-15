@@ -1,13 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useState, useMemo, useEffect } from "react";
-import {
-  Dropdown,
-  DropdownTrigger,
-  DropdownMenu,
-  DropdownItem,
-} from "@heroui/react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { HKButton } from "@/components/ui/HKButton";
 import { useTheme } from "next-themes";
 import BottomSheet from "./BottomSheet";
@@ -255,6 +249,19 @@ export default function AppShell({
   const [moreSheetOpen, setMoreSheetOpen] = useState(false);
   const [quickBillOpen, setQuickBillOpen] = useState(false);
   const [smartFabOpen, setSmartFabOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [userMenuOpen]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -383,61 +390,72 @@ export default function AppShell({
 
           <ThemeToggleBtn />
 
-          <Dropdown placement="bottom-end">
-            <DropdownTrigger>
-              <button style={{
+          <div ref={userMenuRef} style={{ position: "relative" }}>
+            <button
+              onClick={() => setUserMenuOpen((v) => !v)}
+              style={{
                 width: 40, height: 40, borderRadius: "50%", cursor: "pointer",
                 background: "linear-gradient(135deg, #7b5ef6, #f76000)",
                 display: "flex", alignItems: "center", justifyContent: "center", border: "none",
+              }}
+            >
+              <span style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: "white", fontFamily: "var(--font-inter)" }}>
+                {initials}
+              </span>
+            </button>
+            {userMenuOpen && (
+              <div style={{
+                position: "absolute", top: "calc(100% + 8px)", right: 0,
+                minWidth: 220, background: "var(--hk-card)", border: "1px solid var(--hk-border)",
+                borderRadius: 14, boxShadow: "0 8px 30px rgba(0,0,0,0.15)", zIndex: 300,
+                overflow: "hidden",
               }}>
-                <span style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: "white", fontFamily: "var(--font-inter)" }}>
-                  {initials}
-                </span>
-              </button>
-            </DropdownTrigger>
-            <DropdownMenu aria-label="User menu">
-              <DropdownItem key="profile" className="h-14 gap-2" textValue={user.name}>
-                <p className="font-semibold">{user.name}</p>
-                <p className="text-sm text-default-500">{user.email || user.phone || roleLabel}</p>
-              </DropdownItem>
-              <DropdownItem key="lang" textValue="Language" onPress={() => setLanguage(language === "en" ? "hi" : "en")}>
-                {language === "en" ? "Switch to हिंदी" : "Switch to English"}
-              </DropdownItem>
-              {(user.role === "ADMIN" ? (
-                <DropdownItem key="settings" textValue="Settings" onPress={() => router.push("/settings/company")}>
-                  Settings
-                </DropdownItem>
-              ) : null) as never}
-              {(user.role === "ADMIN" || user.role === "ACCOUNTANT" ? (
-                <DropdownItem key="tally-export" textValue="Tally ko Bhejo" onPress={() => router.push("/settings/tally-export")}>
-                  Tally Export
-                </DropdownItem>
-              ) : null) as never}
-              {(user.role === "ADMIN" ? (
-                <DropdownItem key="tally-import" textValue="Tally se Laao" onPress={() => router.push("/settings/tally-import")}>
-                  Tally Import
-                </DropdownItem>
-              ) : null) as never}
-              {(user.role === "ADMIN" || user.role === "ACCOUNTANT" ? (
-                <DropdownItem key="reconcile" textValue="Bank Reconciliation" onPress={() => router.push("/settings/reconcile")}>
-                  Bank Reconciliation
-                </DropdownItem>
-              ) : null) as never}
-              <DropdownItem key="more" textValue="More" onPress={() => setMoreSheetOpen(true)}>
-                More screens
-              </DropdownItem>
-              <DropdownItem
-                key="logout" color="danger" onPress={handleLogout} textValue="Sign out"
-                startContent={
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--hk-border)" }}>
+                  <p style={{ fontWeight: 700, fontSize: TYPE.body, color: "var(--hk-text)", fontFamily: "var(--font-space-grotesk)" }}>{user.name}</p>
+                  <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: "var(--font-space-grotesk)", marginTop: 2 }}>{user.email || user.phone || roleLabel}</p>
+                </div>
+                {[
+                  { label: language === "en" ? "Switch to हिंदी" : "Switch to English", action: () => { setLanguage(language === "en" ? "hi" : "en"); setUserMenuOpen(false); } },
+                  ...(user.role === "ADMIN" ? [{ label: "Settings", action: () => { router.push("/settings/company"); setUserMenuOpen(false); } }] : []),
+                  ...((user.role === "ADMIN" || user.role === "ACCOUNTANT") ? [{ label: "Tally Export", action: () => { router.push("/settings/tally-export"); setUserMenuOpen(false); } }] : []),
+                  ...(user.role === "ADMIN" ? [{ label: "Tally Import", action: () => { router.push("/settings/tally-import"); setUserMenuOpen(false); } }] : []),
+                  ...((user.role === "ADMIN" || user.role === "ACCOUNTANT") ? [{ label: "Bank Reconciliation", action: () => { router.push("/settings/reconcile"); setUserMenuOpen(false); } }] : []),
+                  { label: "More screens", action: () => { setUserMenuOpen(false); setMoreSheetOpen(true); } },
+                ].map((item) => (
+                  <button
+                    key={item.label}
+                    onClick={item.action}
+                    style={{
+                      width: "100%", padding: "10px 16px", textAlign: "left", background: "transparent",
+                      border: "none", cursor: "pointer", fontSize: TYPE.body, fontWeight: 500,
+                      color: "var(--hk-text)", fontFamily: "var(--font-space-grotesk)",
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--hk-badge)"; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+                <div style={{ height: 1, background: "var(--hk-border)", margin: "4px 0" }} />
+                <button
+                  onClick={handleLogout}
+                  style={{
+                    width: "100%", padding: "10px 16px", textAlign: "left", background: "transparent",
+                    border: "none", cursor: "pointer", fontSize: TYPE.body, fontWeight: 600,
+                    color: "#ef4444", fontFamily: "var(--font-space-grotesk)",
+                    display: "flex", alignItems: "center", gap: 8,
+                  }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "#ef444412"; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
+                >
+                  <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
                   </svg>
-                }
-              >
-                {t("shell.signOut")}
-              </DropdownItem>
-            </DropdownMenu>
-          </Dropdown>
+                  {t("shell.signOut")}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 

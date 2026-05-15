@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
-import { Skeleton } from "@heroui/react";
+import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { useRouter } from "next/navigation";
 import {
   GR, AM, OR, PU, SG, IN, TYPE,
@@ -93,7 +93,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
       <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG }}>
         <div style={{ height: 57, borderBottom: "1px solid var(--hk-border)", background: "var(--hk-nav)" }} />
         <div style={{ padding: "24px 20px", maxWidth: 860, margin: "0 auto" }}>
-          <Skeleton className="h-[500px] w-full rounded-2xl" />
+          <HKSkeleton className="h-[500px] w-full rounded-2xl" />
         </div>
       </div>
     );

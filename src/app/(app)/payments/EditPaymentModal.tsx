@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Select, SelectItem } from "@heroui/react";
+import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
 import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
 import { getSettlementDirectionForParty, type SupportedPartyType } from "@/lib/accounting";
 import {
@@ -230,61 +230,56 @@ export function EditPaymentModal({
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           {/* Direction */}
           {(paymentType === "party" || paymentType === "ledger") && (
-            <Select
+            <HKSelect
               label="Type"
-              selectedKeys={new Set([direction])}
-              onSelectionChange={(keys) => { const v = Array.from(keys)[0] as string; if (v) setDirection(v); }}
-              variant="bordered"
+              value={direction}
+              onValueChange={(v) => { if (v) setDirection(v); }}
               isDisabled={paymentType === "ledger"}
             >
-              <SelectItem key="INCOMING">Mila (Received)</SelectItem>
-              <SelectItem key="OUTGOING">Diya (Paid)</SelectItem>
-            </Select>
+              <HKSelectItem value="INCOMING">Mila (Received)</HKSelectItem>
+              <HKSelectItem value="OUTGOING">Diya (Paid)</HKSelectItem>
+            </HKSelect>
           )}
 
           {/* Source account */}
-          <Select
+          <HKSelect
             label={paymentType === "contra" ? "Source Account" : "Account"}
-            selectedKeys={new Set(accountId ? [accountId] : [])}
-            onSelectionChange={(keys) => {
-              const v = Array.from(keys)[0] as string;
+            value={accountId}
+            onValueChange={(v) => {
               if (!v) return;
               setAccountId(v);
               const acc = bankAccounts.find((a) => a.id === v);
               if (acc) setMode(acc.type === "CASH" ? "CASH" : "BANK_TRANSFER");
             }}
-            variant="bordered"
           >
             {bankAccounts.map((acc) => (
-              <SelectItem key={acc.id} textValue={acc.name}>
+              <HKSelectItem key={acc.id} value={acc.id}>
                 {acc.name} · {fmtBalance(acc.currentBalance)}
-              </SelectItem>
+              </HKSelectItem>
             ))}
-          </Select>
+          </HKSelect>
 
           {/* Destination (contra only) */}
           {paymentType === "contra" && (
-            <Select
+            <HKSelect
               label="Destination Account"
-              selectedKeys={new Set(destAccountId ? [destAccountId] : [])}
-              onSelectionChange={(keys) => { const v = Array.from(keys)[0] as string; if (v) setDestAccountId(v); }}
-              variant="bordered"
+              value={destAccountId}
+              onValueChange={(v) => { if (v) setDestAccountId(v); }}
             >
               {bankAccounts.map((acc) => (
-                <SelectItem key={acc.id} textValue={acc.name}>
+                <HKSelectItem key={acc.id} value={acc.id}>
                   {acc.name} · {fmtBalance(acc.currentBalance)}
-                </SelectItem>
+                </HKSelectItem>
               ))}
-            </Select>
+            </HKSelect>
           )}
 
           {/* Mode */}
           {(paymentType === "party" || paymentType === "ledger") && (
-            <Select
+            <HKSelect
               label="Payment Mode"
-              selectedKeys={new Set([mode])}
-              onSelectionChange={(keys) => {
-                const v = Array.from(keys)[0] as string;
+              value={mode}
+              onValueChange={(v) => {
                 if (!v) return;
                 setMode(v);
                 if (v === "CASH") {
@@ -298,13 +293,12 @@ export function EditPaymentModal({
                   }
                 }
               }}
-              variant="bordered"
             >
-              <SelectItem key="BANK_TRANSFER">Bank Transfer</SelectItem>
-              <SelectItem key="CASH">Cash</SelectItem>
-              <SelectItem key="UPI">UPI</SelectItem>
-              <SelectItem key="CHEQUE">Cheque</SelectItem>
-            </Select>
+              <HKSelectItem value="BANK_TRANSFER">Bank Transfer</HKSelectItem>
+              <HKSelectItem value="CASH">Cash</HKSelectItem>
+              <HKSelectItem value="UPI">UPI</HKSelectItem>
+              <HKSelectItem value="CHEQUE">Cheque</HKSelectItem>
+            </HKSelect>
           )}
         </div>
 

@@ -6,14 +6,7 @@ import {
   getSettlementDirectionForParty,
   type SupportedPartyType,
 } from "@/lib/accounting";
-import {
-  Radio,
-  RadioGroup,
-  Select,
-  SelectItem,
-  Tab,
-  Tabs,
-} from "@heroui/react";
+import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
 import { BillSearch, type BillOption } from "@/components/ui/BillSearch";
@@ -215,97 +208,74 @@ export default function RecordPaymentPage() {
 
       <div style={{ padding: isMobile ? "0 14px 100px" : "0 28px 80px", maxWidth: 680, margin: "0 auto" }}>
         {/* Payment type tabs */}
-        <div style={{ marginBottom: 20 }}>
-          <Tabs
-            aria-label="Payment Type"
-            selectedKey={paymentFlowType}
-            onSelectionChange={(k) => setPaymentFlowType(k as "party" | "ledger" | "contra")}
-            classNames={{ base: "w-full", tabList: "w-full" }}
-          >
-            <Tab key="party" title="Party Payment" />
-            <Tab key="ledger" title="Expense / Income" />
-            <Tab key="contra" title="Bank Transfer (Contra)" />
-          </Tabs>
+        <div style={{ marginBottom: 20, display: "flex", gap: 4, background: "var(--hk-badge)", borderRadius: 14, padding: 4 }}>
+          {(["party", "ledger", "contra"] as const).map((key) => {
+            const labels = { party: "Party Payment", ledger: "Expense / Income", contra: "Bank Transfer (Contra)" };
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setPaymentFlowType(key)}
+                style={{
+                  flex: 1, padding: "8px 12px", borderRadius: 10, cursor: "pointer",
+                  background: paymentFlowType === key ? "var(--hk-card)" : "transparent",
+                  border: paymentFlowType === key ? "1px solid var(--hk-border)" : "1px solid transparent",
+                  color: paymentFlowType === key ? "var(--hk-text)" : "var(--hk-sub)",
+                  fontWeight: paymentFlowType === key ? 700 : 500,
+                  fontSize: TYPE.bodySmall, fontFamily: SG,
+                  boxShadow: paymentFlowType === key ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
+                  transition: "all 0.15s",
+                }}
+              >
+                {labels[key]}
+              </button>
+            );
+          })}
         </div>
 
         {/* Payment status */}
-        <div style={{ marginBottom: 20 }}>
-          <RadioGroup
-            aria-label="Payment status"
-            value={paymentStatus}
-            onValueChange={setPaymentStatus}
-            classNames={{ wrapper: "grid w-full grid-cols-1 gap-4 md:grid-cols-2" }}
-          >
-            <Radio
-              value="COMPLETED"
-              classNames={{
-                base: `group relative m-0 max-w-full cursor-pointer rounded-2xl border p-4 transition-all duration-300 ${
-                  paymentStatus === "COMPLETED"
-                    ? "border-emerald-400/70 bg-gradient-to-br from-emerald-500/15 to-emerald-400/5 shadow-[0_10px_30px_-18px_rgba(16,185,129,0.8)] ring-1 ring-emerald-400/40"
-                    : "border-default-200 bg-content1 hover:border-emerald-300/60 hover:bg-emerald-500/[0.04]"
-                }`,
-                label: "block w-full",
-                wrapper: "hidden",
-              }}
-            >
-              <div className="flex items-center gap-4">
-                <div
-                  className={`rounded-xl p-3 transition-colors ${
-                    paymentStatus === "COMPLETED"
-                      ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30"
-                      : "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
-                  }`}
-                >
-                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} />
-                  </svg>
+        <div style={{ marginBottom: 20, display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
+          {[
+            {
+              value: "COMPLETED",
+              color: GR,
+              label: "Already Received / Paid",
+              sub: "Money has already changed hands",
+              icon: <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} />,
+            },
+            {
+              value: "EXPECTED",
+              color: AM,
+              label: "Expected / Planned",
+              sub: "Payment confirmed for a later date",
+              icon: <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} />,
+            },
+          ].map(({ value, color, label, sub, icon }) => {
+            const active = paymentStatus === value;
+            return (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setPaymentStatus(value)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 14,
+                  padding: 16, borderRadius: 16, cursor: "pointer", textAlign: "left",
+                  border: `1.5px solid ${active ? color + "70" : "var(--hk-border)"}`,
+                  background: active ? color + "12" : "var(--hk-card)",
+                  boxShadow: active ? `0 8px 24px -12px ${color}80` : "none",
+                  transition: "all 0.15s",
+                }}
+              >
+                <div style={{ borderRadius: 12, padding: 12, background: active ? color : color + "18", color: active ? "#fff" : color, flexShrink: 0 }}>
+                  <svg width={24} height={24} fill="none" stroke="currentColor" viewBox="0 0 24 24">{icon}</svg>
                 </div>
-                <div className="flex-1">
-                  <p className={`text-base font-bold ${paymentStatus === "COMPLETED" ? "text-emerald-700 dark:text-emerald-300" : "text-default-900 dark:text-default-100"}`}>
-                    Already Received / Paid
-                  </p>
-                  <p className={`text-xs ${paymentStatus === "COMPLETED" ? "text-emerald-700/80 dark:text-emerald-300/80" : "text-default-500"}`}>
-                    Money has already changed hands
-                  </p>
+                <div>
+                  <p style={{ fontSize: TYPE.body, fontWeight: 700, color: active ? color : "var(--hk-text)", fontFamily: SG }}>{label}</p>
+                  <p style={{ fontSize: TYPE.caption, color: active ? color + "cc" : "var(--hk-sub)", fontFamily: SG, marginTop: 2 }}>{sub}</p>
                 </div>
-              </div>
-            </Radio>
-
-            <Radio
-              value="EXPECTED"
-              classNames={{
-                base: `group relative m-0 max-w-full cursor-pointer rounded-2xl border p-4 transition-all duration-300 ${
-                  paymentStatus === "EXPECTED"
-                    ? "border-amber-400/70 bg-gradient-to-br from-amber-500/15 to-amber-400/5 shadow-[0_10px_30px_-18px_rgba(245,158,11,0.8)] ring-1 ring-amber-400/40"
-                    : "border-default-200 bg-content1 hover:border-amber-300/60 hover:bg-amber-500/[0.04]"
-                }`,
-                label: "block w-full",
-                wrapper: "hidden",
-              }}
-            >
-              <div className="flex items-center gap-4">
-                <div
-                  className={`rounded-xl p-3 transition-colors ${
-                    paymentStatus === "EXPECTED"
-                      ? "bg-amber-500 text-white shadow-lg shadow-amber-500/30"
-                      : "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"
-                  }`}
-                >
-                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} />
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <p className={`text-base font-bold ${paymentStatus === "EXPECTED" ? "text-amber-700 dark:text-amber-300" : "text-default-900 dark:text-default-100"}`}>
-                    Expected / Planned
-                  </p>
-                  <p className={`text-xs ${paymentStatus === "EXPECTED" ? "text-amber-700/80 dark:text-amber-300/80" : "text-default-500"}`}>
-                    Payment confirmed for a later date
-                  </p>
-                </div>
-              </div>
-            </Radio>
-          </RadioGroup>
+              </button>
+            );
+          })}
         </div>
 
         {/* Payment details */}
@@ -415,72 +385,60 @@ export default function RecordPaymentPage() {
 
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
               {(paymentFlowType === "party" || paymentFlowType === "ledger") && (
-                <Select
+                <HKSelect
                   label="Type"
                   placeholder="Select direction"
-                  selectedKeys={new Set([direction])}
-                  onSelectionChange={(keys) => {
-                    const value = Array.from(keys)[0] as string;
-                    if (value) setDirection(value);
-                  }}
-                  variant="bordered"
+                  value={direction}
+                  onValueChange={(v) => { if (v) setDirection(v); }}
                   isDisabled={paymentFlowType === "ledger"}
                 >
-                  <SelectItem key="INCOMING">Received</SelectItem>
-                  <SelectItem key="OUTGOING">Paid</SelectItem>
-                </Select>
+                  <HKSelectItem value="INCOMING">Received</HKSelectItem>
+                  <HKSelectItem value="OUTGOING">Paid</HKSelectItem>
+                </HKSelect>
               )}
 
-              <Select
+              <HKSelect
                 label={paymentFlowType === "contra" ? "Source Account" : "Account"}
                 placeholder="Select account"
-                selectedKeys={new Set(accountId ? [accountId] : [])}
-                onSelectionChange={(keys) => {
-                  const value = Array.from(keys)[0] as string;
-                  if (value) {
-                    setAccountId(value);
-                    const acc = bankAccounts.find((a) => a.id === value);
-                    setMode(acc?.type === "CASH" ? "CASH" : "BANK_TRANSFER");
-                  }
+                value={accountId}
+                onValueChange={(v) => {
+                  if (!v) return;
+                  setAccountId(v);
+                  const acc = bankAccounts.find((a) => a.id === v);
+                  setMode(acc?.type === "CASH" ? "CASH" : "BANK_TRANSFER");
                 }}
-                variant="bordered"
               >
                 {bankAccounts.map((account) => (
-                  <SelectItem key={account.id} textValue={account.name}>
+                  <HKSelectItem key={account.id} value={account.id}>
                     {account.name} (Bal: ₹{account.currentBalance})
-                  </SelectItem>
+                  </HKSelectItem>
                 ))}
-              </Select>
+              </HKSelect>
 
               {paymentFlowType === "contra" && (
-                <Select
+                <HKSelect
                   label="Destination Account"
                   placeholder="Select destination"
-                  selectedKeys={new Set(destinationAccountId ? [destinationAccountId] : [])}
-                  onSelectionChange={(keys) => {
-                    const value = Array.from(keys)[0] as string;
-                    if (value) setDestinationAccountId(value);
-                  }}
-                  variant="bordered"
+                  value={destinationAccountId}
+                  onValueChange={(v) => { if (v) setDestinationAccountId(v); }}
                 >
                   {bankAccounts.map((account) => (
-                    <SelectItem key={account.id} textValue={account.name}>
+                    <HKSelectItem key={account.id} value={account.id}>
                       {account.name} (Bal: ₹{account.currentBalance})
-                    </SelectItem>
+                    </HKSelectItem>
                   ))}
-                </Select>
+                </HKSelect>
               )}
 
               {paymentFlowType === "party" && (
-                <Select
+                <HKSelect
                   label="Payment Mode"
                   placeholder="Select mode"
-                  selectedKeys={new Set([mode])}
-                  onSelectionChange={(keys) => {
-                    const value = Array.from(keys)[0] as string;
-                    if (!value) return;
-                    setMode(value);
-                    if (value === "CASH") {
+                  value={mode}
+                  onValueChange={(v) => {
+                    if (!v) return;
+                    setMode(v);
+                    if (v === "CASH") {
                       const cashAcc = bankAccounts.find((a) => a.type === "CASH");
                       if (cashAcc) setAccountId(cashAcc.id);
                     } else {
@@ -491,13 +449,12 @@ export default function RecordPaymentPage() {
                       }
                     }
                   }}
-                  variant="bordered"
                 >
-                  <SelectItem key="BANK_TRANSFER">Bank Transfer</SelectItem>
-                  <SelectItem key="CASH">Cash</SelectItem>
-                  <SelectItem key="UPI">UPI</SelectItem>
-                  <SelectItem key="CHEQUE">Cheque</SelectItem>
-                </Select>
+                  <HKSelectItem value="BANK_TRANSFER">Bank Transfer</HKSelectItem>
+                  <HKSelectItem value="CASH">Cash</HKSelectItem>
+                  <HKSelectItem value="UPI">UPI</HKSelectItem>
+                  <HKSelectItem value="CHEQUE">Cheque</HKSelectItem>
+                </HKSelect>
               )}
             </div>
 

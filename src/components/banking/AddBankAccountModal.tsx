@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Select, SelectItem } from "@heroui/react";
+import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
 import { HKModal, SG, OR, TYPE } from "@/components/ui/hk-design";
 import { HKButton } from "@/components/ui/HKButton";
 import { HKInput } from "@/components/ui/HKInput";
@@ -85,15 +85,14 @@ export function AddBankAccountModal({ isOpen, onClose, onSuccess }: Props) {
                     </div>
                 )}
 
-                <Select
+                <HKSelect
                     label="Account Type"
-                    variant="bordered"
-                    selectedKeys={[type]}
-                    onSelectionChange={(keys) => setType(Array.from(keys)[0] as string)}
+                    value={type}
+                    onValueChange={(v) => { if (v) setType(v); }}
                 >
-                    <SelectItem key="BANK">Bank Account</SelectItem>
-                    <SelectItem key="CASH">Cash Register</SelectItem>
-                </Select>
+                    <HKSelectItem value="BANK">Bank Account</HKSelectItem>
+                    <HKSelectItem value="CASH">Cash Register</HKSelectItem>
+                </HKSelect>
 
                 <HKInput
                     label="Account Name *"

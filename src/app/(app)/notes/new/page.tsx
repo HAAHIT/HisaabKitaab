@@ -1,11 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  Select,
-  SelectItem,
-  Textarea,
-} from "@heroui/react";
+import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
+import { HKTextarea } from "@/components/ui/HKTextarea";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
 import { GST_STATE_CODES } from "@/lib/gst-states";
@@ -226,28 +223,26 @@ export default function NewNotePage() {
               isInvalid={Boolean(errors.invoiceNo)}
               errorMessage={errors.invoiceNo ? "Required" : undefined}
             />
-            <Select
+            <HKSelect
               label="Reason for Issuance *"
-              variant="bordered"
-              selectedKeys={[reason]}
-              onSelectionChange={(keys) => setReason(Array.from(keys)[0] as string)}
+              value={reason}
+              onValueChange={(v) => { if (v) setReason(v); }}
             >
               {reasons.map((r) => (
-                <SelectItem key={r} textValue={r}>{r}</SelectItem>
+                <HKSelectItem key={r} value={r}>{r}</HKSelectItem>
               ))}
-            </Select>
+            </HKSelect>
           </div>
         </HKCard>
 
         {/* Summary + Notes */}
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16, marginBottom: 16 }}>
           <HKCard>
-            <Textarea
+            <HKTextarea
               label="Additional Notes"
               placeholder="Any additional information about this note…"
               value={additionalNotes}
               onValueChange={setAdditionalNotes}
-              variant="bordered"
               minRows={4}
             />
           </HKCard>
@@ -300,24 +295,21 @@ export default function NewNotePage() {
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
                 <span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG, flexShrink: 0 }}>Place of Supply</span>
-                <Select
+                <HKSelect
                   aria-label="Place of supply"
                   placeholder="Select state"
                   size="sm"
-                  variant="bordered"
-                  className="max-w-[200px]"
                   isInvalid={Boolean(errors.placeOfSupply)}
-                  selectedKeys={placeOfSupply ? new Set([placeOfSupply]) : new Set([])}
-                  onSelectionChange={(keys) => {
-                    const value = Array.from(keys)[0] as string | undefined;
-                    setPlaceOfSupply(value ?? "");
+                  value={placeOfSupply}
+                  onValueChange={(v) => {
+                    setPlaceOfSupply(v ?? "");
                     setErrors((prev) => ({ ...prev, placeOfSupply: false }));
                   }}
                 >
                   {Object.entries(GST_STATE_CODES).map(([code, name]) => (
-                    <SelectItem key={code} textValue={`${code} - ${name}`}>{code} — {name}</SelectItem>
+                    <HKSelectItem key={code} value={code}>{code} — {name}</HKSelectItem>
                   ))}
-                </Select>
+                </HKSelect>
               </div>
 
               <div style={{ height: 1, background: "var(--hk-border)", margin: "4px 0" }} />

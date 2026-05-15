@@ -1,12 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Select,
-  SelectItem,
-  Skeleton,
-  Textarea,
-} from "@heroui/react";
+import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
+import { HKSkeleton } from "@/components/ui/HKSkeleton";
+import { HKTextarea } from "@/components/ui/HKTextarea";
 import { useRouter } from "next/navigation";
 import { db } from "@/lib/db";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -193,8 +190,8 @@ export default function CompanySettingsPage() {
   if (loading) {
     return (
       <div style={{ padding: "20px 28px" }}>
-        <Skeleton className="h-12 w-56 rounded-2xl" style={{ marginBottom: 24 }} />
-        <Skeleton className="h-96 w-full rounded-2xl" />
+        <HKSkeleton className="h-12 w-56 rounded-2xl" style={{ marginBottom: 24 }} />
+        <HKSkeleton className="h-96 w-full rounded-2xl" />
       </div>
     );
   }
@@ -276,17 +273,17 @@ export default function CompanySettingsPage() {
             <div style={{ flex: 1, width: "100%" }}>
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 14, marginBottom: 14 }}>
                 <HKInput label={t("company.businessName")} placeholder={t("company.companyNamePlaceholder")} value={companyName} onValueChange={setCompanyName} />
-                <Select label={t("company.businessType")} selectedKeys={[businessType]} onSelectionChange={(keys) => { const v = Array.from(keys)[0]; if (typeof v === "string") setBusinessType(v); }} variant="bordered">
-                  {businessTypeOptions.map((o) => <SelectItem key={o.value}>{o.label}</SelectItem>)}
-                </Select>
+                <HKSelect label={t("company.businessType")} value={businessType} onValueChange={(v) => { if (v) setBusinessType(v); }}>
+                  {businessTypeOptions.map((o) => <HKSelectItem key={o.value} value={o.value}>{o.label}</HKSelectItem>)}
+                </HKSelect>
                 <HKInput label={t("company.companyPhone")} placeholder={t("company.companyPhonePlaceholder")} value={companyPhone} onValueChange={setCompanyPhone} />
                 <HKInput label={t("company.companyEmail")} placeholder={t("company.companyEmailPlaceholder")} value={companyEmail} onValueChange={setCompanyEmail} />
                 <HKInput label={t("company.gstin")} placeholder="e.g. 29ABCDE1234F1Z5" value={companyGstin} onValueChange={setCompanyGstin} classNames={{ input: "uppercase" }} />
-                <Select label={t("company.taxRegistrationType")} selectedKeys={[taxRegistrationType]} onSelectionChange={(keys) => { const v = Array.from(keys)[0]; if (typeof v === "string") setTaxRegistrationType(v); }} variant="bordered">
-                  {taxRegistrationOptions.map((o) => <SelectItem key={o.value}>{o.label}</SelectItem>)}
-                </Select>
+                <HKSelect label={t("company.taxRegistrationType")} value={taxRegistrationType} onValueChange={(v) => { if (v) setTaxRegistrationType(v); }}>
+                  {taxRegistrationOptions.map((o) => <HKSelectItem key={o.value} value={o.value}>{o.label}</HKSelectItem>)}
+                </HKSelect>
               </div>
-              <Textarea label={t("company.registeredAddress")} placeholder={t("company.registeredAddressPlaceholder")} value={companyAddress} onValueChange={setCompanyAddress} variant="bordered" minRows={3} />
+              <HKTextarea label={t("company.registeredAddress")} placeholder={t("company.registeredAddressPlaceholder")} value={companyAddress} onValueChange={setCompanyAddress} minRows={3} />
             </div>
           </div>
         </HKCard>
@@ -307,7 +304,7 @@ export default function CompanySettingsPage() {
               {taxRegistrationType === "REGISTERED" ? t("company.taxRegistrationHelp.registered") : t("company.taxRegistrationHelp.unregistered")}
             </div>
           </div>
-          <Textarea label={t("company.defaultTerms")} placeholder={t("company.defaultTermsPlaceholder")} value={defaultTerms} onValueChange={setDefaultTerms} variant="bordered" minRows={3} />
+          <HKTextarea label={t("company.defaultTerms")} placeholder={t("company.defaultTermsPlaceholder")} value={defaultTerms} onValueChange={setDefaultTerms} minRows={3} />
         </HKCard>
 
         {/* Bank Account */}

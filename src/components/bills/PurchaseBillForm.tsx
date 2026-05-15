@@ -1,56 +1,25 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Card,
-  CardBody,
-  CardHeader,
-  Chip,
-  Divider,
-  Input,
-  Select,
-  SelectItem,
-  Textarea,
-  Checkbox,
-} from "@heroui/react";
 import { HKButton } from "@/components/ui/HKButton";
 import { HKInput } from "@/components/ui/HKInput";
+import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
+import { HKTextarea } from "@/components/ui/HKTextarea";
+import { HKCheckbox } from "@/components/ui/HKCheckbox";
 import { useRouter } from "next/navigation";
 import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { evaluateRow, type ColumnDef } from "@/lib/formula";
 import { GST_STATE_CODES } from "@/lib/gst-states";
+import {
+  OR, GR, AM, PU, SG, IN, TYPE, TOUCH,
+  HKCard, HKToast, PageHeader, fmtFull, useIsMobile,
+} from "@/components/ui/hk-design";
 
 interface Template {
   id: string;
   name: string;
   columns: ColumnDef[];
-}
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 2,
-  }).format(value);
-}
-
-function formatColumnValue(columnName: string, value: number) {
-  const lower = columnName.toLowerCase();
-  const isCurrency =
-    lower.includes("rate") ||
-    lower.includes("price") ||
-    lower.includes("amount") ||
-    lower.includes("total") ||
-    lower.includes("rs");
-
-  if (isCurrency) {
-    return formatCurrency(value);
-  }
-
-  return new Intl.NumberFormat("en-IN", {
-    maximumFractionDigits: 2,
-  }).format(value);
 }
 
 function buildEmptyRow(template: Template) {
@@ -60,41 +29,63 @@ function buildEmptyRow(template: Template) {
   }, {});
 }
 
+function formatColumnValue(columnName: string, value: number) {
+  const lower = columnName.toLowerCase();
+  const isCurrency =
+    lower.includes("rate") || lower.includes("price") ||
+    lower.includes("amount") || lower.includes("total") || lower.includes("rs");
+  if (isCurrency) return fmtFull(value);
+  return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(value);
+}
+
+function Section({ title, action, children }: { title?: string; action?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <HKCard style={{ marginBottom: 16, padding: 0, overflow: "visible" }}>
+      {(title || action) && (
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "16px 20px 12px", borderBottom: "1px solid var(--hk-border)",
+        }}>
+          {title && <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, margin: 0 }}>{title}</p>}
+          {action}
+        </div>
+      )}
+      <div style={{ padding: 20 }}>{children}</div>
+    </HKCard>
+  );
+}
+
 export function PurchaseBillForm() {
   const router = useRouter();
   const { t } = useLanguage();
+  const isMobile = useIsMobile();
 
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [savingAs, setSavingAs] = useState<"DRAFT" | "FINAL" | null>(null);
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
-  // Form State
   const [selectedParty, setSelectedParty] = useState<PartyOption | null>(null);
   const [supplierInvoiceNo, setSupplierInvoiceNo] = useState("");
-  const [billDate, setBillDate] = useState("");
+  const [billDate, setBillDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [rows, setRows] = useState<Record<string, string | number>[]>([]);
   const [taxPercent, setTaxPercent] = useState(18);
   const [isInterState, setIsInterState] = useState(false);
   const [isReverseCharge, setIsReverseCharge] = useState(false);
   const [placeOfSupply, setPlaceOfSupply] = useState("");
   const [notes, setNotes] = useState("");
+  const [enableRoundOff, setEnableRoundOff] = useState(false);
 
   const fetchFormData = useCallback(async () => {
     setLoading(true);
     try {
-      const [templRes, setRes] = await Promise.all([
-        fetch("/api/templates"),
-        fetch("/api/settings"),
-      ]);
+      const [templRes, setRes] = await Promise.all([fetch("/api/templates"), fetch("/api/settings")]);
       const [tData, sData] = await Promise.all([templRes.json(), setRes.json()]);
-      
       setTemplates(tData.templates || []);
-      if (sData.settings) {
-         setTaxPercent(sData.settings.defaultTaxPercent || 18);
-      }
+      if (sData.settings) setTaxPercent(sData.settings.defaultTaxPercent || 18);
     } catch {
       showToast("Failed to load form data", "error");
     } finally {
@@ -102,9 +93,7 @@ export function PurchaseBillForm() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchFormData();
-  }, [fetchFormData]);
+  useEffect(() => { fetchFormData(); }, [fetchFormData]);
 
   function showToast(message: string, type: "success" | "error") {
     setToast({ message, type });
@@ -116,13 +105,12 @@ export function PurchaseBillForm() {
     if (!template) return;
     setSelectedTemplate(template);
     setRows([buildEmptyRow(template)]);
+    setTemplatePickerOpen(false);
   }, [templates]);
 
-  // Auto-select template if only one exists (just like Sales bill)
   useEffect(() => {
-    if (templates.length === 1 && !selectedTemplate) {
-      selectTemplate(templates[0].id);
-    }
+    if (selectedTemplate || templates.length === 0) return;
+    selectTemplate(templates[0].id);
   }, [selectTemplate, selectedTemplate, templates]);
 
   function addRow() {
@@ -139,57 +127,52 @@ export function PurchaseBillForm() {
     setRows((currentRows) => {
       const nextRows = [...currentRows];
       const column = selectedTemplate?.columns.find((item) => item.id === columnId);
-
       if (column?.type === "number") {
         nextRows[rowIndex][columnId] = value === "" ? 0 : Number.parseFloat(value) || 0;
       } else {
         nextRows[rowIndex][columnId] = value;
       }
-
-      if (selectedTemplate) {
-        nextRows[rowIndex] = evaluateRow(nextRows[rowIndex], selectedTemplate.columns);
-      }
-
+      if (selectedTemplate) nextRows[rowIndex] = evaluateRow(nextRows[rowIndex], selectedTemplate.columns);
       return nextRows;
     });
   }
 
   const { subtotal, taxAmount, grandTotal } = useMemo(() => {
     if (!selectedTemplate) return { subtotal: 0, taxAmount: 0, grandTotal: 0 };
-
-    const lastValueColumn = [...selectedTemplate.columns]
-      .reverse()
-      .find((column) => column.type === "formula" || column.type === "number");
-
+    const lastValueColumn = [...selectedTemplate.columns].reverse().find((c) => c.type === "formula" || c.type === "number");
     if (!lastValueColumn) return { subtotal: 0, taxAmount: 0, grandTotal: 0 };
-
     const nextSubtotal = rows.reduce((sum, row) => {
       const value = typeof row[lastValueColumn.id] === "number" ? (row[lastValueColumn.id] as number) : 0;
       return sum + value;
     }, 0);
-
     const nextTaxAmount = Math.round(((nextSubtotal * taxPercent) / 100) * 100) / 100;
     const nextGrandTotal = Math.round((nextSubtotal + nextTaxAmount) * 100) / 100;
-
     return { subtotal: nextSubtotal, taxAmount: nextTaxAmount, grandTotal: nextGrandTotal };
   }, [rows, selectedTemplate, taxPercent]);
 
-  async function handleSave(status: "DRAFT" | "FINAL") {
-    if (!selectedTemplate) {
-      showToast("Please select a template", "error");
-      return;
-    }
+  const roundOff = useMemo(() => {
+    if (!enableRoundOff || grandTotal === 0) return 0;
+    return Math.round((Math.round(grandTotal) - grandTotal) * 100) / 100;
+  }, [enableRoundOff, grandTotal]);
 
+  const roundedGrandTotal = useMemo(
+    () => (enableRoundOff ? Math.round(grandTotal) : grandTotal),
+    [enableRoundOff, grandTotal]
+  );
+
+  const taxLabelText = isInterState ? "IGST" : "CGST + SGST";
+
+  async function handleSave(status: "DRAFT" | "FINAL") {
+    if (!selectedTemplate) { showToast("Please select a template", "error"); return; }
     const formErrors: Record<string, boolean> = {};
     if (!selectedParty) formErrors.partyId = true;
     if (status === "FINAL" && !placeOfSupply) formErrors.placeOfSupply = true;
-
     if (Object.keys(formErrors).length > 0) {
       setErrors(formErrors);
       showToast("Please fill in required fields", "error");
+      window.setTimeout(() => setErrors({}), 3000);
       return;
     }
-
     setSavingAs(status);
     try {
       const response = await fetch("/api/purchases", {
@@ -201,29 +184,23 @@ export function PurchaseBillForm() {
           supplierName: selectedParty!.name,
           supplierInvoiceNo,
           billDate: billDate ? new Date(billDate).toISOString() : undefined,
-          rows,
-          subtotal,
-          taxPercent,
-          taxAmount,
-          grandTotal,
-          isInterState,
-          isReverseCharge,
+          rows, subtotal, taxPercent, taxAmount,
+          grandTotal: roundedGrandTotal, roundOff,
+          isInterState, isReverseCharge,
           placeOfSupply: placeOfSupply || null,
           notes: notes.trim() || null,
           status,
         }),
       });
-
       if (!response.ok) {
         const data = await response.json();
         throw new Error(data.error || "Failed to create purchase");
       }
-
       const data = await response.json();
       showToast(status === "FINAL" ? "Purchase Bill created" : "Draft saved", "success");
       window.setTimeout(() => router.push(`/bills/${data.bill.id}`), 700);
-    } catch (error: any) {
-      showToast(error.message, "error");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Failed to create purchase", "error");
     } finally {
       setSavingAs(null);
     }
@@ -231,76 +208,97 @@ export function PurchaseBillForm() {
 
   return (
     <>
-      {toast && (
-        <div className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${
-          toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
-        }`}>
-          {toast.message}
-        </div>
-      )}
+      {toast && <HKToast message={toast.message} type={toast.type} />}
 
-      <div className="animate-fade-in p-4 lg:p-8">
-        <div className="mb-6 flex items-center gap-3">
-          <button
-            onClick={() => router.push("/dashboard")}
-            className="flex items-center justify-center w-10 h-10 rounded-xl hover:bg-default-100 transition-colors text-default-600"
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path d="M10 19l-7-7m0 0l7-7m-7 7h18" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} />
-            </svg>
-          </button>
-          <div>
-            <h1 className="text-2xl font-bold">New Purchase Bill</h1>
-            <p className="mt-1 text-sm text-default-500">Record a new incoming purchase from a supplier.</p>
-          </div>
-        </div>
+      <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG }}>
+        <PageHeader
+          title="New Purchase Bill"
+          subtitle="Record an incoming purchase from a supplier"
+          isMobile={isMobile}
+          action={
+            <button
+              onClick={() => router.back()}
+              style={{
+                height: TOUCH.secondary, padding: "0 16px",
+                borderRadius: 12, border: "1.5px solid var(--hk-border)",
+                background: "var(--hk-card)", color: "var(--hk-sub)",
+                fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG,
+                cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+              }}
+            >
+              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 12H5M12 5l-7 7 7 7" />
+              </svg>
+              Back
+            </button>
+          }
+        />
 
-        {!selectedTemplate && (
-          <Card shadow="sm" className="mb-6">
-            <CardBody className="p-6">
-              <h2 className="mb-4 text-lg font-semibold text-default-900">Choose Template</h2>
+        <div style={{ padding: isMobile ? "0 14px 100px" : "0 28px 60px", maxWidth: 1100, margin: "0 auto" }}>
+
+          {/* Template picker */}
+          {(templatePickerOpen || (!loading && !selectedTemplate && templates.length === 0)) && (
+            <HKCard style={{ marginBottom: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG }}>Choose Template</p>
+                {templatePickerOpen && (
+                  <button onClick={() => setTemplatePickerOpen(false)} style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", background: "none", border: "none", cursor: "pointer", fontFamily: SG }}>
+                    Cancel
+                  </button>
+                )}
+              </div>
               {loading ? (
-                <p className="text-default-400">Loading templates...</p>
+                <p style={{ color: "var(--hk-sub)", fontSize: TYPE.body }}>Loading templates...</p>
+              ) : templates.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "32px 0" }}>
+                  <p style={{ color: "var(--hk-sub)", marginBottom: 12, fontSize: TYPE.body }}>No templates found</p>
+                  <HKButton onClick={() => router.push("/settings/templates/new")}>Create Template</HKButton>
+                </div>
               ) : (
-                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
                   {templates.map((template) => (
                     <button
                       key={template.id}
+                      type="button"
                       onClick={() => selectTemplate(template.id)}
-                      className="group relative w-full rounded-2xl border border-default-200 bg-content1 p-4 text-left transition-all duration-300 hover:-translate-y-0.5 hover:border-primary-300/60 hover:bg-primary-500/[0.04] hover:shadow-[0_12px_28px_-20px_rgba(59,130,246,0.9)]"
+                      style={{
+                        padding: 16, borderRadius: 14,
+                        border: "1.5px solid var(--hk-border)",
+                        background: "var(--hk-card)", textAlign: "left",
+                        cursor: "pointer",
+                      }}
                     >
-                      <div className="flex items-start gap-3">
-                        <div className="rounded-xl bg-primary-100 p-3 text-primary transition-colors group-hover:bg-primary group-hover:text-white dark:bg-primary/15">
-                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path d="M9 12h6m-6 4h6M8 4h8a2 2 0 012 2v12a2 2 0 01-2 2H8a2 2 0 01-2-2V6a2 2 0 012-2z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} />
-                          </svg>
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-base font-semibold text-default-900">{template.name}</p>
-                          <p className="mt-1 text-xs text-default-500">{template.columns.length} columns</p>
-                        </div>
-                      </div>
+                      <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG }}>{template.name}</p>
+                      <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", marginTop: 4 }}>{template.columns.length} columns</p>
                     </button>
                   ))}
                 </div>
               )}
-            </CardBody>
-          </Card>
-        )}
+            </HKCard>
+          )}
 
-        {selectedTemplate && (
-          <>
-            <div className="mb-4 flex items-center gap-2">
-              <Chip size="sm" color="primary" variant="flat">{selectedTemplate.name}</Chip>
-              <HKButton variant="ghost" size="sm" onClick={() => setSelectedTemplate(null)}>Change Template</HKButton>
-            </div>
+          {selectedTemplate && (
+            <>
+              {/* Template badge */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                <span style={{
+                  fontSize: TYPE.bodySmall, fontWeight: 700, fontFamily: SG,
+                  padding: "4px 12px", borderRadius: 20,
+                  background: AM + "18", color: AM, border: `1px solid ${AM}30`,
+                }}>
+                  {selectedTemplate.name}
+                </span>
+                <button
+                  onClick={() => setTemplatePickerOpen(true)}
+                  style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", background: "none", border: "none", cursor: "pointer", fontFamily: SG, fontWeight: 600 }}
+                >
+                  Change
+                </button>
+              </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-              <Card shadow="sm">
-                <CardHeader className="px-6 pt-6 pb-0">
-                  <h2 className="text-lg font-semibold">Vendor Details</h2>
-                </CardHeader>
-                <CardBody className="p-6">
+              {/* Vendor + Invoice Details */}
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16, marginBottom: 16 }}>
+                <Section title="Vendor Details">
                   <PartySearch
                     value={selectedParty?.id || null}
                     onChange={(party) => {
@@ -309,143 +307,241 @@ export function PurchaseBillForm() {
                         const code = party.gstin.substring(0, 2);
                         if (GST_STATE_CODES[code]) setPlaceOfSupply(code);
                       }
+                      setErrors((c) => ({ ...c, partyId: false }));
                     }}
                     partyType="VENDOR"
                     placeholder="Search Supplier..."
                     isInvalid={Boolean(errors.partyId)}
                   />
-
                   {selectedParty && (
-                    <div className="mt-4 rounded-xl bg-default-50 dark:bg-default-100/5 p-4 border border-default-200 animate-slide-up">
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="font-semibold text-lg text-default-900">{selectedParty.name}</h3>
-                        <HKButton variant="ghost" size="sm" onClick={() => setSelectedParty(null)}>Change</HKButton>
+                    <div style={{ marginTop: 14, padding: "14px 16px", borderRadius: 12, background: "var(--hk-badge)", border: "1px solid var(--hk-border)" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                        <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG }}>{selectedParty.name}</p>
+                        <button onClick={() => setSelectedParty(null)} style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", background: "none", border: "none", cursor: "pointer", fontFamily: SG, fontWeight: 600 }}>
+                          Change
+                        </button>
                       </div>
-                      <div className="space-y-1 text-sm text-default-500">
-                        {selectedParty.phone && <p>📱 {selectedParty.phone}</p>}
-                        {selectedParty.address && <p>📍 {selectedParty.address}</p>}
-                        {selectedParty.gstin && <p><span className="text-xs font-mono font-bold text-default-400">GST</span> {selectedParty.gstin}</p>}
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        {selectedParty.phone && <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG }}>📱 {selectedParty.phone}</p>}
+                        {selectedParty.address && <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG }}>📍 {selectedParty.address}</p>}
+                        {selectedParty.gstin && <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: IN }}>GST: {selectedParty.gstin}</p>}
                       </div>
                       {selectedParty.currentBalance !== 0 && (
-                        <div className={`mt-3 pt-3 border-t border-default-200 text-sm font-medium ${selectedParty.currentBalance > 0 ? "text-danger" : "text-success"}`}>
-                          {selectedParty.currentBalance > 0 ? `To Pay: ₹${selectedParty.currentBalance.toLocaleString("en-IN")}` : `Advance: ₹${Math.abs(selectedParty.currentBalance).toLocaleString("en-IN")}`}
+                        <div style={{
+                          marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--hk-border)",
+                          fontSize: TYPE.bodySmall, fontWeight: 700, fontFamily: SG,
+                          color: selectedParty.currentBalance > 0 ? OR : GR,
+                        }}>
+                          {selectedParty.currentBalance > 0
+                            ? `To Pay: ${fmtFull(selectedParty.currentBalance)}`
+                            : `Advance: ${fmtFull(Math.abs(selectedParty.currentBalance))}`}
                         </div>
                       )}
                     </div>
                   )}
-                </CardBody>
-              </Card>
+                </Section>
 
-              <Card shadow="sm">
-                <CardHeader className="px-6 pt-6 pb-0">
-                  <h2 className="text-lg font-semibold">Invoice Details</h2>
-                </CardHeader>
-                <CardBody className="p-6 space-y-4">
-                  <HKInput label="Supplier Invoice No" value={supplierInvoiceNo} onValueChange={setSupplierInvoiceNo} placeholder="e.g. INV/2024/001" />
-                  <HKInput label="Bill Date" type="date" value={billDate} onValueChange={setBillDate} />
-                </CardBody>
-              </Card>
-            </div>
+                <Section title="Invoice Details">
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <HKInput label="Supplier Invoice No" value={supplierInvoiceNo} onValueChange={setSupplierInvoiceNo} placeholder="e.g. INV/2024/001" />
+                    <HKInput label="Bill Date" type="date" value={billDate} onValueChange={setBillDate} />
+                  </div>
+                </Section>
+              </div>
 
-            <Card shadow="sm" className="mb-6">
-              <CardHeader className="flex items-center justify-between px-6 pt-6 pb-0">
-                <h2 className="text-lg font-semibold">Line Items</h2>
-                <HKButton size="sm" startContent={<svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} /></svg>} onClick={addRow}>Add Row</HKButton>
-              </CardHeader>
-              <CardBody className="overflow-x-auto p-6">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-divider">
-                      <th className="w-10 px-2 py-3 text-left font-medium text-default-500">#</th>
-                      {selectedTemplate.columns.map((col) => (
-                        <th key={col.id} className="px-2 py-3 text-left font-medium text-default-500">
-                          {col.name} {col.type === "formula" && <span className="text-xs text-warning">fx</span>}
-                        </th>
-                      ))}
-                      <th className="w-10" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((row, rIdx) => (
-                      <tr key={rIdx} className="border-b border-divider/30 hover:bg-default-50">
-                        <td className="px-2 py-2 text-default-400">{rIdx + 1}</td>
+              {/* Line Items */}
+              <HKCard style={{ marginBottom: 16, padding: 0 }}>
+                <div style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "16px 20px 12px", borderBottom: "1px solid var(--hk-border)", flexWrap: "wrap", gap: 8,
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, margin: 0 }}>Line Items</p>
+                    <span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG }}>
+                      Subtotal: <span style={{ fontFamily: IN, fontWeight: 700, color: "var(--hk-text)" }}>{fmtFull(subtotal)}</span>
+                    </span>
+                  </div>
+                  <button
+                    onClick={addRow}
+                    style={{
+                      height: TOUCH.secondary, padding: "0 14px",
+                      borderRadius: 10, border: "none",
+                      background: AM, color: "#fff",
+                      fontSize: TYPE.bodySmall, fontWeight: 700, fontFamily: SG,
+                      cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+                    }}
+                  >
+                    <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                      <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+                    </svg>
+                    Add Row
+                  </button>
+                </div>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: TYPE.bodySmall, fontFamily: SG }}>
+                    <thead>
+                      <tr style={{ borderBottom: "1px solid var(--hk-border)", background: "var(--hk-badge)" }}>
+                        <th style={{ padding: "10px 12px", textAlign: "center", fontWeight: 600, color: "var(--hk-sub)", width: 40 }}>#</th>
                         {selectedTemplate.columns.map((col) => (
-                          <td key={col.id} className="px-2 py-2">
-                            {col.type === "formula" ? (
-                              <span className="font-mono font-medium text-success">
-                                {typeof row[col.id] === "number" ? formatColumnValue(col.name, row[col.id] as number) : "-"}
-                              </span>
-                            ) : col.type === "number" ? (
-                              <Input type="number" value={String(row[col.id] || "")} onValueChange={(v) => updateCell(rIdx, col.id, v)} variant="underlined" size="sm" className="min-w-[80px]" />
-                            ) : (
-                              <Input type="text" value={String(row[col.id] || "")} onValueChange={(v) => updateCell(rIdx, col.id, v)} variant="underlined" size="sm" className="min-w-[120px]" />
-                            )}
-                          </td>
+                          <th key={col.id} style={{ padding: "10px 12px", textAlign: "left", fontWeight: 600, color: "var(--hk-sub)", whiteSpace: "nowrap" }}>
+                            {col.name}
+                            {col.type === "formula" && <span style={{ color: AM, marginLeft: 4, fontSize: 10 }}>fx</span>}
+                          </th>
                         ))}
-                        <td className="px-2 py-2">
-                          <button
-                            onClick={() => removeRow(rIdx)}
-                            disabled={rows.length <= 1}
-                            aria-label="Remove row"
-                            className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-danger/10 text-default-400 hover:text-danger disabled:opacity-40 disabled:pointer-events-none transition-colors"
-                          >
-                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} /></svg>
-                          </button>
-                        </td>
+                        <th style={{ width: 40 }} />
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </CardBody>
-            </Card>
+                    </thead>
+                    <tbody>
+                      {rows.map((row, rIdx) => (
+                        <tr key={rIdx} style={{ borderBottom: "1px solid var(--hk-border)" }}>
+                          <td style={{ padding: "8px 12px", textAlign: "center", color: "var(--hk-sub)", fontSize: TYPE.bodySmall }}>{rIdx + 1}</td>
+                          {selectedTemplate.columns.map((col) => (
+                            <td key={col.id} style={{ padding: "8px 8px" }}>
+                              {col.type === "formula" ? (
+                                <span style={{ fontFamily: IN, fontWeight: 700, color: GR, fontSize: TYPE.bodySmall }}>
+                                  {typeof row[col.id] === "number" ? formatColumnValue(col.name, row[col.id] as number) : "—"}
+                                </span>
+                              ) : col.type === "number" ? (
+                                <input
+                                  type="number"
+                                  aria-label={`Row ${rIdx + 1} ${col.name}`}
+                                  value={String(row[col.id] || "")}
+                                  onChange={(e) => updateCell(rIdx, col.id, e.target.value)}
+                                  style={{ minWidth: 80, background: "transparent", color: "var(--hk-text)", fontSize: TYPE.bodySmall, fontFamily: IN, outline: "none", border: "none", borderBottom: "1.5px solid var(--hk-border)", padding: "2px 0" }}
+                                />
+                              ) : (
+                                <input
+                                  type="text"
+                                  aria-label={`Row ${rIdx + 1} ${col.name}`}
+                                  value={String(row[col.id] || "")}
+                                  onChange={(e) => updateCell(rIdx, col.id, e.target.value)}
+                                  style={{ minWidth: 120, background: "transparent", color: "var(--hk-text)", fontSize: TYPE.bodySmall, fontFamily: SG, outline: "none", border: "none", borderBottom: "1.5px solid var(--hk-border)", padding: "2px 0" }}
+                                />
+                              )}
+                            </td>
+                          ))}
+                          <td style={{ padding: "8px 8px", textAlign: "center" }}>
+                            <button
+                              onClick={() => removeRow(rIdx)}
+                              disabled={rows.length <= 1}
+                              aria-label={`Remove row ${rIdx + 1}`}
+                              style={{
+                                width: 28, height: 28, borderRadius: 8, border: "none",
+                                background: "transparent",
+                                color: rows.length <= 1 ? "var(--hk-border)" : OR,
+                                cursor: rows.length <= 1 ? "default" : "pointer",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                              }}
+                            >
+                              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round">
+                                <path d="M18 6L6 18M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </HKCard>
 
-            <div className="mb-6 grid gap-6 lg:grid-cols-2">
-              <Card shadow="sm">
-                <CardBody className="space-y-4 p-6">
-                  <Textarea label="Notes" placeholder="Additional notes..." value={notes} onValueChange={setNotes} variant="bordered" minRows={2} />
-                  <div className="flex flex-col gap-2">
-                    <Checkbox isSelected={isInterState} onValueChange={setIsInterState}>Inter-State Transaction (IGST)</Checkbox>
-                    <Checkbox isSelected={isReverseCharge} onValueChange={setIsReverseCharge} color="warning">Subject to Reverse Charge (RCM)</Checkbox>
+              {/* Notes + Summary */}
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16, marginBottom: 24 }}>
+                {/* Notes + Checkboxes */}
+                <HKCard style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  <HKTextarea label="Notes" placeholder="Additional notes..." value={notes} onValueChange={setNotes} minRows={3} />
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <HKCheckbox isSelected={isInterState} onValueChange={setIsInterState}>
+                      Inter-State Transaction (IGST)
+                    </HKCheckbox>
+                    <HKCheckbox isSelected={isReverseCharge} onValueChange={setIsReverseCharge}>
+                      Subject to Reverse Charge (RCM)
+                    </HKCheckbox>
                   </div>
-                </CardBody>
-              </Card>
+                </HKCard>
 
-              <Card shadow="sm" className="bg-gradient-to-br from-blue-500/5 to-indigo-500/5">
-                <CardBody className="p-6 space-y-3">
-                  <h3 className="mb-2 text-lg font-semibold">Summary</h3>
-                  <div className="flex justify-between text-default-500">
-                    <span>Subtotal</span>
-                    <span className="font-medium text-default-900">{formatCurrency(subtotal)}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-default-500">Tax</span>
-                      <HKInput type="number" size="sm" className="w-20" value={String(taxPercent)} onValueChange={(v) => setTaxPercent(Number(v))} endContent={<span className="text-xs">%</span>} />
+                {/* Summary */}
+                <HKCard style={{ background: AM + "08", border: `1px solid ${AM}20` }}>
+                  <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, marginBottom: 16 }}>Summary</p>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "var(--hk-sub)", fontSize: TYPE.body, fontFamily: SG }}>Subtotal</span>
+                      <span style={{ fontFamily: IN, fontWeight: 600, color: "var(--hk-text)" }}>{fmtFull(subtotal)}</span>
                     </div>
-                    <span className="font-medium text-default-900">{formatCurrency(taxAmount)}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3 pt-1">
-                    <span className={`text-sm ${errors.placeOfSupply ? 'text-danger font-medium' : 'text-default-500'}`}>Place of Supply *</span>
-                    <Select aria-label="POS" placeholder="Select" size="sm" variant="bordered" className="max-w-[180px]" selectedKeys={placeOfSupply ? [placeOfSupply] : []} onSelectionChange={(k) => setPlaceOfSupply(Array.from(k)[0] as string)} isInvalid={errors.placeOfSupply}>
-                      {Object.entries(GST_STATE_CODES).map(([c, n]) => <SelectItem key={c} textValue={`${c} - ${n}`}>{c} - {n}</SelectItem>)}
-                    </Select>
-                  </div>
-                  <Divider />
-                  <div className="flex justify-between items-center pt-1">
-                    <span className="text-lg font-bold text-default-900">Grand Total</span>
-                    <span className="text-2xl font-bold text-primary">{formatCurrency(grandTotal)}</span>
-                  </div>
-                </CardBody>
-              </Card>
-            </div>
 
-            <div className="flex justify-end gap-3 pb-8">
-              <HKButton variant="secondary" onClick={() => router.back()}>Cancel</HKButton>
-              <HKButton variant="secondary" isLoading={savingAs === "DRAFT"} onClick={() => handleSave("DRAFT")}>Save Draft</HKButton>
-              <HKButton isLoading={savingAs === "FINAL"} onClick={() => handleSave("FINAL")}>Confirm Purchase</HKButton>
-            </div>
-          </>
-        )}
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ color: "var(--hk-sub)", fontSize: TYPE.body, fontFamily: SG }}>{taxLabelText}</span>
+                        <HKInput
+                          type="number"
+                          aria-label="Tax percentage"
+                          value={String(taxPercent)}
+                          onValueChange={(v) => setTaxPercent(Number.parseFloat(v) || 0)}
+                          size="sm"
+                          className="w-20"
+                          endContent={<span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)" }}>%</span>}
+                        />
+                      </div>
+                      <span style={{ fontFamily: IN, fontWeight: 600, color: "var(--hk-text)" }}>{fmtFull(taxAmount)}</span>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                      <span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG, flexShrink: 0 }}>Place of Supply</span>
+                      <HKSelect
+                        aria-label="Place of supply"
+                        placeholder="Select state"
+                        size="sm"
+                        value={placeOfSupply}
+                        onValueChange={(v) => { setPlaceOfSupply(v ?? ""); if (v) setErrors((c) => ({ ...c, placeOfSupply: false })); }}
+                        isInvalid={Boolean(errors.placeOfSupply)}
+                        errorMessage={errors.placeOfSupply ? "Required for final bills" : undefined}
+                      >
+                        {Object.entries(GST_STATE_CODES).map(([code, name]) => (
+                          <HKSelectItem key={code} value={code}>{code} — {name}</HKSelectItem>
+                        ))}
+                      </HKSelect>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: grandTotal === 0 ? "not-allowed" : "pointer", opacity: grandTotal === 0 ? 0.4 : 1 }}>
+                        <input
+                          type="checkbox"
+                          checked={enableRoundOff}
+                          onChange={(e) => { if (grandTotal !== 0) setEnableRoundOff(e.target.checked); }}
+                          disabled={grandTotal === 0}
+                          style={{ accentColor: AM }}
+                        />
+                        <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>Round off to nearest ₹</span>
+                      </label>
+                      {enableRoundOff && roundOff !== 0 && (
+                        <span style={{ fontSize: TYPE.bodySmall, fontFamily: IN, fontWeight: 600, color: roundOff > 0 ? GR : OR }}>
+                          {roundOff > 0 ? "+" : ""}{fmtFull(roundOff)}
+                        </span>
+                      )}
+                    </div>
+
+                    <div style={{ borderTop: "1px solid var(--hk-border)", paddingTop: 12, marginTop: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: TYPE.h2, fontWeight: 800, color: "var(--hk-text)", fontFamily: SG }}>Grand Total</span>
+                      <span style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: AM, fontFamily: IN }}>{fmtFull(roundedGrandTotal)}</span>
+                    </div>
+                  </div>
+                </HKCard>
+              </div>
+
+              {/* Actions */}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                <HKButton variant="secondary" onClick={() => router.back()}>Cancel</HKButton>
+                <HKButton variant="secondary" isLoading={savingAs === "DRAFT"} isDisabled={savingAs === "FINAL"} onClick={() => handleSave("DRAFT")}>
+                  Save Draft
+                </HKButton>
+                <HKButton isLoading={savingAs === "FINAL"} isDisabled={savingAs === "DRAFT"} onClick={() => handleSave("FINAL")}>
+                  Confirm Purchase
+                </HKButton>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </>
   );

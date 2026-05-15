@@ -2,12 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import {
-  Input,
-  Select,
-  SelectItem,
-  Textarea,
-} from "@heroui/react";
+import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
+import { HKTextarea } from "@/components/ui/HKTextarea";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -657,15 +653,13 @@ export default function NewBillPage() {
                         <td style={{ padding: "8px 12px", textAlign: "center", color: "var(--hk-sub)", fontSize: TYPE.bodySmall }}>{rowIndex + 1}</td>
                         {hsnPerRow && taxPercent > 0 && (
                           <td style={{ padding: "8px 8px" }}>
-                            <Input
+                            <input
                               type="text"
                               aria-label={`Row ${rowIndex + 1} HSN/SAC`}
                               placeholder="e.g. 9983"
                               value={String(row._hsnCode || "")}
-                              onValueChange={(value) => updateRowHsn(rowIndex, value)}
-                              variant="underlined"
-                              size="sm"
-                              className="min-w-[80px] max-w-[100px]"
+                              onChange={(e) => updateRowHsn(rowIndex, e.target.value)}
+                              style={{ minWidth: 80, maxWidth: 100, background: "transparent", color: "var(--hk-text)", fontSize: TYPE.bodySmall, fontFamily: SG, outline: "none", border: "none", borderBottom: "1.5px solid var(--hk-border)", padding: "2px 0" }}
                             />
                           </td>
                         )}
@@ -680,41 +674,32 @@ export default function NewBillPage() {
                                 {typeof row[column.id] === "number" ? formatColumnValue(column.name, row[column.id] as number) : "—"}
                               </span>
                             ) : column.type === "number" ? (
-                              <Input
+                              <input
                                 type="number"
                                 aria-label={`Row ${rowIndex + 1} ${column.name}`}
                                 value={String(row[column.id] || "")}
-                                onValueChange={(value) => updateCell(rowIndex, column.id, value)}
-                                variant="underlined"
-                                size="sm"
-                                className="min-w-[80px]"
+                                onChange={(e) => updateCell(rowIndex, column.id, e.target.value)}
+                                style={{ minWidth: 80, background: "transparent", color: "var(--hk-text)", fontSize: TYPE.bodySmall, fontFamily: IN, outline: "none", border: "none", borderBottom: "1.5px solid var(--hk-border)", padding: "2px 0" }}
                               />
                             ) : column.type === "dropdown" && column.options ? (
-                              <Select
+                              <HKSelect
                                 aria-label={`Row ${rowIndex + 1} ${column.name}`}
                                 placeholder={column.name}
-                                selectedKeys={row[column.id] ? new Set([String(row[column.id])]) : new Set([])}
-                                onSelectionChange={(keys) => {
-                                  const value = Array.from(keys)[0] as string;
-                                  if (value) updateCell(rowIndex, column.id, value);
-                                }}
-                                variant="underlined"
+                                value={row[column.id] ? String(row[column.id]) : ""}
+                                onValueChange={(v) => { if (v) updateCell(rowIndex, column.id, v); }}
                                 size="sm"
-                                className="min-w-[120px]"
                               >
                                 {column.options.map((option) => (
-                                  <SelectItem key={option} textValue={option}>{option}</SelectItem>
+                                  <HKSelectItem key={option} value={option}>{option}</HKSelectItem>
                                 ))}
-                              </Select>
+                              </HKSelect>
                             ) : column.type === "date" ? (
-                              <Input
+                              <input
                                 type="date"
                                 aria-label={`Row ${rowIndex + 1} ${column.name}`}
                                 value={String(row[column.id] || "")}
-                                onValueChange={(value) => updateCell(rowIndex, column.id, value)}
-                                variant="underlined"
-                                size="sm"
-                                className="min-w-[130px]"
+                                onChange={(e) => updateCell(rowIndex, column.id, e.target.value)}
+                                style={{ minWidth: 130, background: "transparent", color: "var(--hk-text)", fontSize: TYPE.bodySmall, fontFamily: SG, outline: "none", border: "none", borderBottom: "1.5px solid var(--hk-border)", padding: "2px 0" }}
                               />
                             ) : column.id === nameColId && catalogItems.length > 0 ? (
                               <div
@@ -724,11 +709,11 @@ export default function NewBillPage() {
                                 }}
                                 style={{ minWidth: 160 }}
                               >
-                                <Input
+                                <input
                                   type="text"
                                   aria-label={`Row ${rowIndex + 1} ${column.name}`}
                                   value={String(row[column.id] || "")}
-                                  onValueChange={(value) => updateCell(rowIndex, column.id, value)}
+                                  onChange={(e) => updateCell(rowIndex, column.id, e.target.value)}
                                   onFocus={() => {
                                     setAutoFocusedRow(rowIndex);
                                     const el = nameInputRefs.current.get(rowIndex);
@@ -738,9 +723,8 @@ export default function NewBillPage() {
                                     }
                                   }}
                                   onBlur={() => window.setTimeout(() => setAutoFocusedRow((prev) => (prev === rowIndex ? null : prev)), 150)}
-                                  variant="underlined"
-                                  size="sm"
                                   placeholder={column.name}
+                                  style={{ minWidth: 120, background: "transparent", color: "var(--hk-text)", fontSize: TYPE.bodySmall, fontFamily: SG, outline: "none", border: "none", borderBottom: "1.5px solid var(--hk-border)", padding: "2px 0" }}
                                 />
                                 {autoFocusedRow === rowIndex && autoFilteredItems.length > 0 && dropdownRect &&
                                   createPortal(
@@ -791,14 +775,12 @@ export default function NewBillPage() {
                                 }
                               </div>
                             ) : (
-                              <Input
+                              <input
                                 type="text"
                                 aria-label={`Row ${rowIndex + 1} ${column.name}`}
                                 value={String(row[column.id] || "")}
-                                onValueChange={(value) => updateCell(rowIndex, column.id, value)}
-                                variant="underlined"
-                                size="sm"
-                                className="min-w-[120px]"
+                                onChange={(e) => updateCell(rowIndex, column.id, e.target.value)}
+                                style={{ minWidth: 120, background: "transparent", color: "var(--hk-text)", fontSize: TYPE.bodySmall, fontFamily: SG, outline: "none", border: "none", borderBottom: "1.5px solid var(--hk-border)", padding: "2px 0" }}
                               />
                             )}
                           </td>
@@ -831,20 +813,18 @@ export default function NewBillPage() {
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16, marginBottom: 24 }}>
               {/* Notes */}
               <HKCard style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                <Textarea
+                <HKTextarea
                   label="Notes"
                   placeholder="Additional notes..."
                   value={notes}
                   onValueChange={setNotes}
-                  variant="bordered"
                   minRows={2}
                 />
-                <Textarea
+                <HKTextarea
                   label="Terms & Conditions"
                   placeholder="Enter terms..."
                   value={terms}
                   onValueChange={setTerms}
-                  variant="bordered"
                   minRows={3}
                 />
               </HKCard>
@@ -926,26 +906,20 @@ export default function NewBillPage() {
                         </svg>
                       )}
                     </div>
-                    <Select
+                    <HKSelect
                       aria-label="Place of supply"
                       placeholder="State select karo"
                       size="sm"
-                      variant="bordered"
-                      className="max-w-[200px]"
-                      selectedKeys={placeOfSupply ? new Set([placeOfSupply]) : new Set([])}
-                      onSelectionChange={(keys) => {
-                        const value = Array.from(keys)[0] as string | undefined;
-                        setPlaceOfSupply(value ?? "");
-                        if (value) setErrors((curr) => ({ ...curr, placeOfSupply: false }));
-                      }}
+                      value={placeOfSupply}
+                      onValueChange={(v) => { setPlaceOfSupply(v ?? ""); if (v) setErrors((curr) => ({ ...curr, placeOfSupply: false })); }}
                       isDisabled={gstIsLocked}
                       isInvalid={Boolean(errors.placeOfSupply)}
                       errorMessage={errors.placeOfSupply ? "Final bills ke liye zaroori hai" : undefined}
                     >
                       {Object.entries(GST_STATE_CODES).map(([code, name]) => (
-                        <SelectItem key={code} textValue={`${code} - ${name}`}>{code} — {name}</SelectItem>
+                        <HKSelectItem key={code} value={code}>{code} — {name}</HKSelectItem>
                       ))}
-                    </Select>
+                    </HKSelect>
                   </div>
 
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>

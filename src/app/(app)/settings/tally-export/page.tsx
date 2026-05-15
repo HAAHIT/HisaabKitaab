@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Checkbox, Radio, RadioGroup } from "@heroui/react";
+import { HKCheckbox } from "@/components/ui/HKCheckbox";
+import { HKRadio, HKRadioGroup } from "@/components/ui/HKRadioGroup";
 import { HKButton } from "@/components/ui/HKButton";
 import { HKInput } from "@/components/ui/HKInput";
 import { useRouter } from "next/navigation";
@@ -189,12 +190,12 @@ export default function TallyExportPage() {
                   Kaunsa period?
                 </p>
 
-                <RadioGroup value={periodType} onValueChange={setPeriodType}>
-                  <Radio value="month">Is mahine</Radio>
-                  <Radio value="quarter">Is quarter</Radio>
-                  <Radio value="year">Is saal (Financial Year)</Radio>
-                  <Radio value="custom">Custom dates</Radio>
-                </RadioGroup>
+                <HKRadioGroup value={periodType} onValueChange={setPeriodType}>
+                  <HKRadio value="month">Is mahine</HKRadio>
+                  <HKRadio value="quarter">Is quarter</HKRadio>
+                  <HKRadio value="year">Is saal (Financial Year)</HKRadio>
+                  <HKRadio value="custom">Custom dates</HKRadio>
+                </HKRadioGroup>
 
                 {periodType === "custom" && (
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -216,42 +217,42 @@ export default function TallyExportPage() {
                 </p>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  <Checkbox isSelected={include.sales} onValueChange={(v) => setInclude({ ...include, sales: v })}>
+                  <HKCheckbox isSelected={include.sales} onValueChange={(v) => setInclude({ ...include, sales: v })}>
                     Sales bills{" "}
                     <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>
                       ({preview.salesCount} bills, {fmtFull(preview.salesAmount)})
                     </span>
-                  </Checkbox>
-                  <Checkbox isSelected={include.purchases} onValueChange={(v) => setInclude({ ...include, purchases: v })}>
+                  </HKCheckbox>
+                  <HKCheckbox isSelected={include.purchases} onValueChange={(v) => setInclude({ ...include, purchases: v })}>
                     Purchase bills{" "}
                     <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>
                       ({preview.purchasesCount} bills, {fmtFull(preview.purchasesAmount)})
                     </span>
-                  </Checkbox>
-                  <Checkbox isSelected={include.receipts} onValueChange={(v) => setInclude({ ...include, receipts: v })}>
+                  </HKCheckbox>
+                  <HKCheckbox isSelected={include.receipts} onValueChange={(v) => setInclude({ ...include, receipts: v })}>
                     Receipts (Mila){" "}
                     <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>
                       ({preview.receiptsCount} payments, {fmtFull(preview.receiptsAmount)})
                     </span>
-                  </Checkbox>
-                  <Checkbox isSelected={include.payments} onValueChange={(v) => setInclude({ ...include, payments: v })}>
+                  </HKCheckbox>
+                  <HKCheckbox isSelected={include.payments} onValueChange={(v) => setInclude({ ...include, payments: v })}>
                     Payments out (Diya){" "}
                     <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>
                       ({preview.paymentsCount} payments, {fmtFull(preview.paymentsAmount)})
                     </span>
-                  </Checkbox>
-                  <Checkbox isSelected={include.ledgers} onValueChange={(v) => setInclude({ ...include, ledgers: v })}>
+                  </HKCheckbox>
+                  <HKCheckbox isSelected={include.ledgers} onValueChange={(v) => setInclude({ ...include, ledgers: v })}>
                     Party balances{" "}
                     <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>
                       ({preview.partiesCount} parties)
                     </span>
-                  </Checkbox>
-                  <Checkbox isSelected={include.journals} onValueChange={(v) => setInclude({ ...include, journals: v })}>
+                  </HKCheckbox>
+                  <HKCheckbox isSelected={include.journals} onValueChange={(v) => setInclude({ ...include, journals: v })}>
                     Manual journal entries{" "}
                     <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>
                       ({preview.journalsCount} entries)
                     </span>
-                  </Checkbox>
+                  </HKCheckbox>
                 </div>
 
                 <div style={{ display: "flex", justifyContent: "space-between" }}>

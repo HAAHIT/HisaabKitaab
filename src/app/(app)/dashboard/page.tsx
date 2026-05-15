@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useInstallPrompt } from "@/hooks/useInstallPrompt";
 import { SetupWizard } from "@/components/onboarding/SetupWizard";
-import { Skeleton } from "@heroui/react";
+import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { HKButton } from "@/components/ui/HKButton";
 import { OR, PU, GR, AM, SG, IN, TYPE } from "@/components/ui/hk-design";
 import { OverdueBanner } from "@/components/ui/OverdueBanner";
@@ -626,10 +626,10 @@ export default function DashboardPage() {
     return (
       <div style={{ padding: isMobile ? "16px 14px" : "24px 28px" }}>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr", gap: 16, marginBottom: 16 }}>
-          <Skeleton className="h-64 rounded-2xl"/><Skeleton className="h-64 rounded-2xl"/>
+          <HKSkeleton className="h-64 rounded-2xl"/><HKSkeleton className="h-64 rounded-2xl"/>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: 16 }}>
-          <Skeleton className="h-56 rounded-2xl"/><Skeleton className="h-56 rounded-2xl"/><Skeleton className="h-56 rounded-2xl"/>
+          <HKSkeleton className="h-56 rounded-2xl"/><HKSkeleton className="h-56 rounded-2xl"/><HKSkeleton className="h-56 rounded-2xl"/>
         </div>
       </div>
     );

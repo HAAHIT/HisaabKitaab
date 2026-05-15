@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Select, SelectItem } from "@heroui/react";
+import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { OR, PU, GR, AM, SG, IN, TYPE } from "@/components/ui/hk-design";
@@ -625,12 +625,12 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                   <HKInput label="Business ka naam *" placeholder="Jaise: Sharma Traders" value={businessName} onValueChange={setBusinessName} size="lg" />
-                  <Select label="Business kya karta hai?" selectedKeys={[businessType]} onSelectionChange={(k) => setBusinessType(Array.from(k)[0] as string)} variant="bordered" size="lg">
-                    {BUSINESS_TYPES.map((t) => <SelectItem key={t}>{t}</SelectItem>)}
-                  </Select>
-                  <Select label="State *" selectedKeys={stateName ? [stateName] : []} onSelectionChange={(k) => setStateName(Array.from(k)[0] as string)} variant="bordered" size="lg">
-                    {INDIAN_STATES.map((s) => <SelectItem key={s}>{s}</SelectItem>)}
-                  </Select>
+                  <HKSelect label="Business kya karta hai?" value={businessType} onValueChange={(v) => { if (v) setBusinessType(v); }} size="lg">
+                    {BUSINESS_TYPES.map((t) => <HKSelectItem key={t} value={t}>{t}</HKSelectItem>)}
+                  </HKSelect>
+                  <HKSelect label="State *" value={stateName} onValueChange={(v) => { if (v) setStateName(v); }} size="lg">
+                    {INDIAN_STATES.map((s) => <HKSelectItem key={s} value={s}>{s}</HKSelectItem>)}
+                  </HKSelect>
                   <HKInput label="City" placeholder="Jaise: Mumbai" value={city} onValueChange={setCity} size="lg" />
                 </div>
               </div>
@@ -651,7 +651,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                   value={gstin}
                   onValueChange={onGstinChange}
                   size="lg"
-                  color={gstinValidState === "invalid" ? "danger" : gstinValidState === "valid" ? "success" : "default"}
+                  isInvalid={gstinValidState === "invalid"}
                   description={
                     gstinValidState === "valid" ? "✓ Valid GSTIN format"
                     : gstinValidState === "invalid" ? "Format sahi nahi — 15 characters hone chahiye"
@@ -679,9 +679,9 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                       )}
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                      <Select label="Bank" selectedKeys={bank.bankName ? [bank.bankName] : []} onSelectionChange={(k) => setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, bankName: Array.from(k)[0] as string } : b))} variant="bordered">
-                        {BANKS.map((b) => <SelectItem key={b}>{b}</SelectItem>)}
-                      </Select>
+                      <HKSelect label="Bank" value={bank.bankName} onValueChange={(v) => { if (v) setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, bankName: v } : b)); }}>
+                        {BANKS.map((b) => <HKSelectItem key={b} value={b}>{b}</HKSelectItem>)}
+                      </HKSelect>
                       <HKInput label="Account number (optional)" placeholder="XXXX XXXX XXXX" value={bank.accountNumber} onValueChange={(v) => setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, accountNumber: v } : b))} />
                       <HKInput label="Opening balance (₹)" type="number" value={bank.openingBalance} onValueChange={(v) => setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, openingBalance: v } : b))} />
                     </div>

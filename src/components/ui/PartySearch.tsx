@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useDisclosure } from "@heroui/react";
 import { HKButton } from "@/components/ui/HKButton";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getBalanceStatusLabel } from "@/lib/accounting";
@@ -62,7 +61,9 @@ export function PartySearch({
   const [bankAccountOptions, setBankAccountOptions] = useState<PartyOption[]>([]);
   const [searchTerm, setSearchTerm] = useState(initialParty?.name || "");
   const [isLoading, setIsLoading] = useState(false);
-  const { isOpen, onOpen, onOpenChange } = useDisclosure();
+  const [isOpen, setIsOpen] = useState(false);
+  const onOpen = () => setIsOpen(true);
+  const onClose = () => setIsOpen(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const selectedPartyRef = useRef<PartyOption | null>(initialParty ?? null);
 
@@ -222,7 +223,7 @@ export function PartySearch({
 
       <QuickAddPartyModal
         isOpen={isOpen}
-        onOpenChange={onOpenChange}
+        onClose={onClose}
         initialType={partyType || filterTypes?.[0] || "CUSTOMER"}
         allowedTypes={filterTypes || (partyType ? [partyType] : ["CUSTOMER", "VENDOR"])}
         onSuccess={(newParty) => {

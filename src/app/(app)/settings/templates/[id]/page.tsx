@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
-import { Select, SelectItem, Skeleton } from "@heroui/react";
+import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
+import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { useRouter } from "next/navigation";
 import { validateFormula, translateFormulaToNames, translateFormulaToIds, type ColumnDef } from "@/lib/formula";
 import {
@@ -154,9 +155,9 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
     return (
       <div style={{ padding: isMobile ? "20px 14px" : "20px 28px", maxWidth: 900, margin: "0 auto" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <Skeleton className="h-10 w-48 rounded-2xl" />
-          <Skeleton className="h-20 w-full rounded-2xl" />
-          <Skeleton className="h-60 w-full rounded-2xl" />
+          <HKSkeleton className="h-10 w-48 rounded-2xl" />
+          <HKSkeleton className="h-20 w-full rounded-2xl" />
+          <HKSkeleton className="h-60 w-full rounded-2xl" />
         </div>
       </div>
     );
@@ -260,21 +261,17 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
                         size="sm"
                         isRequired
                       />
-                      <Select
+                      <HKSelect
                         label="Type"
                         placeholder="Type"
-                        selectedKeys={new Set([col.type])}
-                        onSelectionChange={(keys) => {
-                          const val = Array.from(keys)[0] as string;
-                          if (val) updateColumn(index, "type", val);
-                        }}
-                        variant="bordered"
+                        value={col.type}
+                        onValueChange={(val) => { if (val) updateColumn(index, "type", val); }}
                         size="sm"
                       >
                         {COLUMN_TYPES.map((t) => (
-                          <SelectItem key={t.key} textValue={t.label}>{t.label}</SelectItem>
+                          <HKSelectItem key={t.key} value={t.key}>{t.label}</HKSelectItem>
                         ))}
-                      </Select>
+                      </HKSelect>
                     </div>
 
                     {/* Delete button */}
@@ -300,12 +297,11 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
                         <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                         Build Formula
                       </p>
-                      <Input
+                      <HKInput
                         aria-label="Formula expression"
                         placeholder="e.g. {Qty} * {Rate}"
                         value={col.formula || ""}
                         onValueChange={(v) => updateColumn(index, "formula", v)}
-                        variant="faded"
                         isInvalid={!!errors[index]}
                         errorMessage={errors[index] || "Formula must be valid math. Supports +, -, *, /, ()"}
                       />
@@ -348,7 +344,7 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
                         <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" /></svg>
                         Dropdown Options
                       </p>
-                      <Input
+                      <HKInput
                         aria-label="Dropdown options"
                         placeholder="e.g. Main, Internal, Sliding"
                         value={(col.options || []).join(",")}
@@ -357,7 +353,6 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
                           newCols[index].options = v.split(",");
                           setColumns(newCols);
                         }}
-                        variant="faded"
                         description="Separate options with commas. Example: Option 1, Option 2"
                       />
                     </div>

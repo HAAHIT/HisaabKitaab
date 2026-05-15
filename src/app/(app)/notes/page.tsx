@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pagination, Skeleton } from "@heroui/react";
+import { HKSkeleton } from "@/components/ui/HKSkeleton";
+import { HKPagination } from "@/components/ui/HKPagination";
 import { useRouter } from "next/navigation";
 import {
   GR, AM, PU, OR, SG, IN, TYPE,
@@ -143,7 +144,7 @@ export default function NotesListPage() {
 
         {loading ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-20 rounded-2xl" />)}
+            {[1, 2, 3, 4].map((i) => <HKSkeleton key={i} className="h-20 rounded-2xl" />)}
           </div>
         ) : notes.length === 0 ? (
           <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--hk-sub)" }}>
@@ -268,7 +269,7 @@ export default function NotesListPage() {
 
             {totalPages > 1 && (
               <div style={{ marginTop: 24, display: "flex", justifyContent: "center" }}>
-                <Pagination total={totalPages} page={page} onChange={setPage} showControls />
+                <HKPagination total={totalPages} page={page} onChange={setPage} showControls />
               </div>
             )}
           </>

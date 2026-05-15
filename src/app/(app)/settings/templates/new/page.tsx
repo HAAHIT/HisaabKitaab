@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Select, SelectItem } from "@heroui/react";
+import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
 import { useRouter } from "next/navigation";
 import { validateFormula, translateFormulaToIds, type ColumnDef } from "@/lib/formula";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -226,21 +226,17 @@ export default function CreateTemplatePage() {
                         size="sm"
                         isRequired
                       />
-                      <Select
+                      <HKSelect
                         label={t("templates.type")}
                         placeholder={t("templates.type")}
-                        selectedKeys={new Set([col.type])}
-                        onSelectionChange={(keys) => {
-                          const val = Array.from(keys)[0] as string;
-                          if (val) updateColumn(index, "type", val);
-                        }}
-                        variant="bordered"
+                        value={col.type}
+                        onValueChange={(val) => { if (val) updateColumn(index, "type", val); }}
                         size="sm"
                       >
                         {columnTypeOptions.map((option) => (
-                          <SelectItem key={option.key} textValue={option.label}>{option.label}</SelectItem>
+                          <HKSelectItem key={option.key} value={option.key}>{option.label}</HKSelectItem>
                         ))}
-                      </Select>
+                      </HKSelect>
                     </div>
 
                     {/* Delete button */}
@@ -266,12 +262,11 @@ export default function CreateTemplatePage() {
                         <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                         {t("templates.buildFormula")}
                       </p>
-                      <Input
+                      <HKInput
                         aria-label={t("templates.buildFormula")}
                         placeholder={t("templates.formulaPlaceholder")}
                         value={col.formula || ""}
                         onValueChange={(v) => updateColumn(index, "formula", v)}
-                        variant="faded"
                         isInvalid={!!errors[index]}
                         errorMessage={errors[index] || t("templates.formulaHelp")}
                       />
@@ -314,7 +309,7 @@ export default function CreateTemplatePage() {
                         <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" /></svg>
                         {t("templates.dropdownOptions")}
                       </p>
-                      <Input
+                      <HKInput
                         aria-label={t("templates.dropdownOptions")}
                         placeholder={t("templates.dropdownPlaceholder")}
                         value={(col.options || []).join(",")}
@@ -323,7 +318,6 @@ export default function CreateTemplatePage() {
                           newCols[index].options = v.split(",");
                           setColumns(newCols);
                         }}
-                        variant="faded"
                         description={t("templates.dropdownDescription")}
                       />
                     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Skeleton } from "@heroui/react";
+import { HKSkeleton } from "@/components/ui/HKSkeleton";
 
 export default function DashboardLoading() {
   return (
@@ -8,13 +8,13 @@ export default function DashboardLoading() {
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[1, 2, 3, 4].map((i) => (
-          <Skeleton key={i} className="h-28 rounded-xl" />
+          <HKSkeleton key={i} className="h-28 rounded-xl" />
         ))}
       </div>
       {/* Charts */}
       <div className="grid lg:grid-cols-2 gap-4">
-        <Skeleton className="h-64 rounded-xl" />
-        <Skeleton className="h-64 rounded-xl" />
+        <HKSkeleton className="h-64 rounded-xl" />
+        <HKSkeleton className="h-64 rounded-xl" />
       </div>
     </div>
   );

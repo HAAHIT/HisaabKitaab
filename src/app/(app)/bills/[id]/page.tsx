@@ -2,14 +2,8 @@
 
 import { useState, useEffect, use } from "react";
 import Image from "next/image";
-import {
-  Modal,
-  ModalBody,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
-  Skeleton,
-} from "@heroui/react";
+import { HKModal } from "@/components/ui/hk-design";
+import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { useRouter } from "next/navigation";
 import { BillActionBar } from "@/components/bills/BillActionBar";
 import type { ColumnDef } from "@/lib/formula";
@@ -195,7 +189,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
     <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG }}>
       <div style={{ height: 57, borderBottom: "1px solid var(--hk-border)", background: "var(--hk-nav)" }} />
       <div style={{ padding: "24px 20px", maxWidth: 860, margin: "0 auto" }}>
-        <Skeleton className="h-[700px] w-full rounded-2xl" />
+        <HKSkeleton className="h-[700px] w-full rounded-2xl" />
       </div>
     </div>
   );
@@ -636,19 +630,12 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
       />
 
       {/* ── Confirm modal ────────────────────────────────────────────────────── */}
-      <Modal isOpen={confirmAction !== null} onClose={() => setConfirmAction(null)} size="sm" backdrop="blur" placement="center">
-        <ModalContent>
-          <ModalHeader style={{ fontFamily: SG, fontSize: TYPE.h2 }}>
-            {confirmAction === "FINAL" ? "Bill Final Karo?" : "Bill Cancel Karo?"}
-          </ModalHeader>
-          <ModalBody>
-            <p style={{ fontFamily: SG, fontSize: TYPE.body, color: "var(--hk-sub)", lineHeight: 1.6 }}>
-              {confirmAction === "FINAL"
-                ? "Bill lock ho jayega aur books mein record ho jayega. Finalize karne ke baad edit nahi kar sakte."
-                : "Bill permanently cancel ho jayega aur balance changes reverse ho jayenge."}
-            </p>
-          </ModalBody>
-          <ModalFooter>
+      <HKModal
+        isOpen={confirmAction !== null}
+        onClose={() => setConfirmAction(null)}
+        title={confirmAction === "FINAL" ? "Bill Final Karo?" : "Bill Cancel Karo?"}
+        footer={
+          <>
             <HKButton variant="secondary" onClick={() => setConfirmAction(null)}>
               Wapas jao
             </HKButton>
@@ -659,9 +646,15 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
             >
               {confirmAction === "FINAL" ? "Haan, Finalize Karo" : "Haan, Cancel Karo"}
             </HKButton>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+          </>
+        }
+      >
+        <p style={{ fontFamily: SG, fontSize: TYPE.body, color: "var(--hk-sub)", lineHeight: 1.6 }}>
+          {confirmAction === "FINAL"
+            ? "Bill lock ho jayega aur books mein record ho jayega. Finalize karne ke baad edit nahi kar sakte."
+            : "Bill permanently cancel ho jayega aur balance changes reverse ho jayenge."}
+        </p>
+      </HKModal>
     </>
   );
 }

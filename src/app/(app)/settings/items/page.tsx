@@ -1,11 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Select,
-  SelectItem,
-  Skeleton,
-} from "@heroui/react";
+import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
+import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { ITEM_UNITS } from "@/lib/item-catalog";
 import {
@@ -163,19 +160,15 @@ export default function ItemCatalogPage() {
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(5, 1fr)", gap: 12, marginBottom: 16 }}>
             <HKInput label={t("items.name")} value={form.name} onValueChange={(v) => updateForm("name", v)} />
             <HKInput label={t("items.hsnCode")} value={form.hsnCode} onValueChange={(v) => updateForm("hsnCode", v)} />
-            <Select
+            <HKSelect
               label={t("items.unit")}
-              selectedKeys={[form.unit]}
-              onSelectionChange={(keys) => {
-                const v = Array.from(keys)[0];
-                if (typeof v === "string") updateForm("unit", v);
-              }}
-              variant="bordered"
+              value={form.unit}
+              onValueChange={(v) => { if (v) updateForm("unit", v); }}
             >
               {unitOptions.map((option) => (
-                <SelectItem key={option.key} textValue={option.label}>{option.label}</SelectItem>
+                <HKSelectItem key={option.key} value={option.key}>{option.label}</HKSelectItem>
               ))}
-            </Select>
+            </HKSelect>
             <HKInput label={t("items.rate")} type="number" value={form.rate} onValueChange={(v) => updateForm("rate", v)} />
             <HKInput label={t("items.taxRate")} type="number" description={t("items.taxRateHelp")} value={form.taxRate} onValueChange={(v) => updateForm("taxRate", v)} />
           </div>
@@ -189,7 +182,7 @@ export default function ItemCatalogPage() {
         <HKCard>
           {loading ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {[1, 2, 3].map((i) => <Skeleton key={i} className="h-20 rounded-2xl" />)}
+              {[1, 2, 3].map((i) => <HKSkeleton key={i} className="h-20 rounded-2xl" />)}
             </div>
           ) : items.length === 0 ? (
             <div style={{ textAlign: "center", padding: "40px 20px", border: "2px dashed var(--hk-border)", borderRadius: 16 }}>

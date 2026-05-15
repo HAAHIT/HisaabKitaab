@@ -126,7 +126,7 @@ body {
   background-color: hsl(0 0% 6% / 0.72);
 }
 
-/* Dashboard glassmorphism — !important overrides @heroui Card's theme background */
+/* Dashboard glassmorphism */
 .glass-card {
   background: rgba(255, 255, 255, 0.7) !important;
   backdrop-filter: blur(12px) saturate(180%) !important;

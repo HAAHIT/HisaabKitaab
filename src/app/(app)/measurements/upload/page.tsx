@@ -2,22 +2,11 @@
 
 import { useRef, useState } from "react";
 import Image from "next/image";
-import {
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  Chip,
-  Modal,
-  ModalBody,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
-  Select,
-  SelectItem,
-  Textarea,
-  useDisclosure,
-} from "@heroui/react";
+import { HKButton } from "@/components/ui/HKButton";
+import { HKChip } from "@/components/ui/HKChip";
+import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
+import { HKTextarea } from "@/components/ui/HKTextarea";
+import { HKModal } from "@/components/ui/hk-design";
 import { HKInput } from "@/components/ui/HKInput";
 import { useRouter } from "next/navigation";
 import { db } from "@/lib/db";
@@ -92,11 +81,9 @@ export default function UploadMeasurementsPage() {
     message: string;
     type: "success" | "error";
   } | null>(null);
-  const {
-    isOpen: isReviewOpen,
-    onOpen: onReviewOpen,
-    onClose: onReviewClose,
-  } = useDisclosure();
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const onReviewOpen = () => setIsReviewOpen(true);
+  const onReviewClose = () => setIsReviewOpen(false);
 
   function showToast(message: string, type: "success" | "error") {
     setToast({ message, type });
@@ -236,266 +223,142 @@ export default function UploadMeasurementsPage() {
 
       <div className="mb-6 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <Button
-            isIconOnly
-            variant="light"
+          <button
+            type="button"
             aria-label="Back to my uploads"
-            onPress={() => router.push("/measurements/my-uploads")}
+            onClick={() => router.push("/measurements/my-uploads")}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--hk-border)] bg-[var(--hk-card)] text-[var(--hk-sub)] hover:bg-[var(--hk-badge)]"
           >
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                d="M10 19l-7-7m0 0l7-7m-7 7h18"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-              />
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path d="M10 19l-7-7m0 0l7-7m-7 7h18" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} />
             </svg>
-          </Button>
+          </button>
           <div>
-            <h1 className="text-2xl font-bold">{t("measurements.uploadTitle")}</h1>
-            <p className="mt-1 text-sm text-default-500">
-              {t("measurements.uploadSubtitle")}
-            </p>
+            <h1 className="text-2xl font-bold text-[var(--hk-text)]">{t("measurements.uploadTitle")}</h1>
+            <p className="mt-1 text-sm text-[var(--hk-sub)]">{t("measurements.uploadSubtitle")}</p>
           </div>
         </div>
 
         <div className="flex gap-2">
           {!isOnline && (
-            <Chip size="sm" variant="flat" color="warning">
-              {t("common.offline")}
-            </Chip>
+            <HKChip size="sm" variant="flat" color="warning">{t("common.offline")}</HKChip>
           )}
           {isSyncing && (
-            <Chip size="sm" variant="flat" color="primary">
-              {t("common.syncingDrafts")}
-            </Chip>
+            <HKChip size="sm" variant="flat" color="secondary">{t("common.syncingDrafts")}</HKChip>
           )}
         </div>
       </div>
 
-      <Card shadow="sm" className="mb-4">
-        <CardHeader className="px-6 pt-6 pb-0">
-          <h2 className="font-semibold">{t("measurements.photos")}</h2>
-        </CardHeader>
-        <CardBody className="p-6">
+      <div className="mb-4 rounded-2xl border border-[var(--hk-border)] bg-[var(--hk-card)] shadow-sm">
+        <div className="px-6 pt-6 pb-0">
+          <h2 className="font-semibold text-[var(--hk-text)]">{t("measurements.photos")}</h2>
+        </div>
+        <div className="p-6">
           {photos.length > 0 && (
             <div className="mb-4 grid grid-cols-3 gap-3 sm:grid-cols-4">
               {photos.map((photo, index) => (
                 <div
                   key={`${photo.slice(0, 20)}-${index}`}
-                  className="group relative aspect-[4/3] overflow-hidden rounded-xl border border-divider bg-default-100"
+                  className="group relative aspect-[4/3] overflow-hidden rounded-xl border border-[var(--hk-border)] bg-[var(--hk-badge)]"
                 >
-                  <Image
-                    src={photo}
-                    alt={`Photo ${index + 1}`}
-                    fill
-                    unoptimized
-                    className="object-cover"
-                  />
+                  <Image src={photo} alt={`Photo ${index + 1}`} fill unoptimized className="object-cover" />
                   <button
                     type="button"
                     onClick={() => removePhoto(index)}
-                    className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-danger/90 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100"
+                    className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-[#ef4444]/90 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100"
                   >
-                    x
+                    ×
                   </button>
                 </div>
               ))}
             </div>
           )}
 
-          <input
-            ref={cameraRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            onChange={handleFileChange}
-            className="hidden"
-          />
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={handleFileChange}
-            className="hidden"
-          />
+          <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleFileChange} className="hidden" />
+          <input ref={fileRef} type="file" accept="image/*" multiple onChange={handleFileChange} className="hidden" />
 
           <div className="grid grid-cols-2 gap-3">
-            <Button
-              variant="bordered"
-              className="h-20 border-2 border-dashed"
-              onPress={() => cameraRef.current?.click()}
-              isLoading={processing}
+            <button
+              type="button"
+              onClick={() => cameraRef.current?.click()}
+              disabled={processing}
+              className="flex h-20 flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-[var(--hk-border)] bg-transparent text-[var(--hk-sub)] hover:border-[var(--hk-purple)] hover:text-[var(--hk-purple)] disabled:opacity-50"
             >
-              <div className="flex flex-col items-center gap-1">
-                <svg
-                  className="h-7 w-7 text-primary"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                  />
-                  <path
-                    d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                  />
-                </svg>
-                <span className="text-sm font-medium">{t("measurements.takePhoto")}</span>
-              </div>
-            </Button>
+              <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} />
+                <path d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} />
+              </svg>
+              <span className="text-sm font-medium">{t("measurements.takePhoto")}</span>
+            </button>
 
-            <Button
-              variant="bordered"
-              className="h-20 border-2 border-dashed"
-              onPress={() => fileRef.current?.click()}
-              isLoading={processing}
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={processing}
+              className="flex h-20 flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-[var(--hk-border)] bg-transparent text-[var(--hk-sub)] hover:border-[var(--hk-purple)] hover:text-[var(--hk-purple)] disabled:opacity-50"
             >
-              <div className="flex flex-col items-center gap-1">
-                <svg
-                  className="h-7 w-7 text-secondary"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                  />
-                </svg>
-                <span className="text-sm font-medium">{t("measurements.fromGallery")}</span>
-              </div>
-            </Button>
+              <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} />
+              </svg>
+              <span className="text-sm font-medium">{t("measurements.fromGallery")}</span>
+            </button>
           </div>
 
-          <p className="mt-2 text-center text-xs text-default-400">
-            {t("measurements.imagesCompressed")}
-          </p>
-        </CardBody>
-      </Card>
-
-      <Card shadow="sm" className="mb-6">
-        <CardHeader className="px-6 pt-6 pb-0">
-          <h2 className="font-semibold">{t("measurements.details")}</h2>
-        </CardHeader>
-        <CardBody className="space-y-5 p-6">
-          <HKInput
-            label={t("measurements.label")}
-            placeholder={t("measurements.labelPlaceholder")}
-            value={label}
-            onValueChange={setLabel}
-            isRequired
-          />
-
-          <HKInput
-            label={t("measurements.roomName")}
-            placeholder={t("measurements.roomPlaceholder")}
-            value={roomName}
-            onValueChange={setRoomName}
-          />
-
-          <Select
-            label={t("measurements.itemType")}
-            placeholder={t("measurements.itemTypePlaceholder")}
-            selectedKeys={itemType ? new Set([itemType]) : new Set([])}
-            onSelectionChange={(keys) => {
-              const value = Array.from(keys)[0] as string;
-              setItemType(value || "");
-            }}
-            variant="bordered"
-          >
-            {ITEM_TYPES.map((item) => (
-              <SelectItem key={item.key} textValue={item.label}>{item.label}</SelectItem>
-            ))}
-
-          </Select>
-
-          <Textarea
-            label={t("measurements.notes")}
-            placeholder={t("measurements.notesPlaceholder")}
-            value={notes}
-            onValueChange={setNotes}
-            variant="bordered"
-            minRows={3}
-          />
-        </CardBody>
-      </Card>
-
-      <div className="flex justify-end gap-3">
-        <Button variant="flat" onPress={() => router.push("/measurements/my-uploads")}>
-          {t("common.cancel")}
-        </Button>
-        <Button
-          color="primary"
-          className="bg-gradient-to-r from-blue-600 to-indigo-600 font-semibold"
-          onPress={handleSubmit}
-          isLoading={saving}
-          isDisabled={photos.length === 0}
-        >
-          {isOnline ? t("measurements.uploadMeasurement") : t("measurements.saveLocalDraft")}
-        </Button>
+          <p className="mt-2 text-center text-xs text-[var(--hk-sub)]">{t("measurements.imagesCompressed")}</p>
+        </div>
       </div>
 
-      <Modal
+      <div className="mb-6 rounded-2xl border border-[var(--hk-border)] bg-[var(--hk-card)] shadow-sm">
+        <div className="px-6 pt-6 pb-0">
+          <h2 className="font-semibold text-[var(--hk-text)]">{t("measurements.details")}</h2>
+        </div>
+        <div className="space-y-5 p-6">
+          <HKInput label={t("measurements.label")} placeholder={t("measurements.labelPlaceholder")} value={label} onValueChange={setLabel} isRequired />
+          <HKInput label={t("measurements.roomName")} placeholder={t("measurements.roomPlaceholder")} value={roomName} onValueChange={setRoomName} />
+          <HKSelect
+            label={t("measurements.itemType")}
+            placeholder={t("measurements.itemTypePlaceholder")}
+            value={itemType}
+            onValueChange={(v) => setItemType(v || "")}
+          >
+            {ITEM_TYPES.map((item) => (
+              <HKSelectItem key={item.key} value={item.key}>{item.label}</HKSelectItem>
+            ))}
+          </HKSelect>
+          <HKTextarea label={t("measurements.notes")} placeholder={t("measurements.notesPlaceholder")} value={notes} onValueChange={setNotes} minRows={3} />
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-3">
+        <HKButton variant="secondary" onClick={() => router.push("/measurements/my-uploads")}>{t("common.cancel")}</HKButton>
+        <HKButton onClick={handleSubmit} isLoading={saving} isDisabled={photos.length === 0}>
+          {isOnline ? t("measurements.uploadMeasurement") : t("measurements.saveLocalDraft")}
+        </HKButton>
+      </div>
+
+      <HKModal
         isOpen={isReviewOpen}
         onClose={discardPendingPhotos}
-        size="lg"
-        scrollBehavior="inside"
-        backdrop="blur"
+        title={t("measurements.reviewTitle")}
+        footer={
+          <>
+            <HKButton variant="danger" onClick={discardPendingPhotos}>{t("common.discard")}</HKButton>
+            <HKButton onClick={confirmPendingPhotos}>{t("measurements.confirmUse")}</HKButton>
+          </>
+        }
       >
-        <ModalContent>
-          <ModalHeader className="flex flex-col gap-1">
-            <span>{t("measurements.reviewTitle")}</span>
-            <span className="text-xs font-normal text-default-500">
-              {t("measurements.reviewSubtitle")}
-            </span>
-          </ModalHeader>
-          <ModalBody>
-            <div className="grid grid-cols-2 gap-3">
-              {pendingPhotos.map((photo, index) => (
-                <div
-                  key={`${photo.slice(0, 20)}-${index}`}
-                  className="relative aspect-[4/3] overflow-hidden rounded-xl border border-divider shadow-sm"
-                >
-                  <Image
-                    src={photo}
-                    alt={`Review ${index + 1}`}
-                    fill
-                    unoptimized
-                    className="object-cover"
-                  />
-                </div>
-              ))}
-            </div>
-          </ModalBody>
-          <ModalFooter>
-            <Button color="danger" variant="light" onPress={discardPendingPhotos}>
-              {t("common.discard")}
-            </Button>
-            <Button
-              color="primary"
-              className="bg-gradient-to-r from-blue-600 to-indigo-600 font-semibold"
-              onPress={confirmPendingPhotos}
+        <p className="mb-3 text-xs text-[var(--hk-sub)]">{t("measurements.reviewSubtitle")}</p>
+        <div className="grid grid-cols-2 gap-3">
+          {pendingPhotos.map((photo, index) => (
+            <div
+              key={`${photo.slice(0, 20)}-${index}`}
+              className="relative aspect-[4/3] overflow-hidden rounded-xl border border-[var(--hk-border)] shadow-sm"
             >
-              {t("measurements.confirmUse")}
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+              <Image src={photo} alt={`Review ${index + 1}`} fill unoptimized className="object-cover" />
+            </div>
+          ))}
+        </div>
+      </HKModal>
     </div>
   );
 }
