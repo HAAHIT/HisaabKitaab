@@ -284,8 +284,8 @@ export default function ReportsClient({
             setImportError(data.error || "Job failed in background");
           }
         }
-      } catch (err) {
-        console.error(err);
+      } catch {
+        // polling failure is transient; next interval will retry
       }
     }, 2000);
 

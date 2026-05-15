@@ -3,6 +3,7 @@ import { jwtVerify } from "jose";
 import { getJwtSecret } from "@/lib/jwt-secret";
 import { attachRequestIdHeader, logError } from "@/lib/observability";
 import { TENANT_HEADER } from "@/lib/tenant";
+import { SESSION_COOKIE_NAME } from "@/lib/cookie";
 
 const PUBLIC_PATHS = [
   "/login",
@@ -71,7 +72,7 @@ export async function proxy(request: NextRequest) {
     );
   }
 
-  const token = request.cookies.get("hisaabkitaab-session")?.value;
+  const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
   const isAuthPage = pathname === "/login" || pathname === "/register";
 
   if (isAuthPage && token) {
@@ -83,7 +84,7 @@ export async function proxy(request: NextRequest) {
     } catch {
       // Invalid token, remove it and let them see the login page
       const response = nextWithRequestHeaders();
-      response.cookies.delete("hisaabkitaab-session");
+      response.cookies.delete(SESSION_COOKIE_NAME);
       return response;
     }
   }
@@ -156,7 +157,7 @@ export async function proxy(request: NextRequest) {
   } catch {
     const loginUrl = new URL("/login", request.url);
     const response = redirectWithRequestId(loginUrl);
-    response.cookies.delete("hisaabkitaab-session");
+    response.cookies.delete(SESSION_COOKIE_NAME);
     return response;
   }
 }

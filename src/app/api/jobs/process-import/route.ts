@@ -446,7 +446,7 @@ export async function processImportJob(jobId?: string, preparsed?: TallyParseRes
                 templateId: tallyTemplateId,
                 partyId: partyLine?.partyId ?? null,
                 customerName,
-                rows: rows as any,
+                rows: rows as Prisma.InputJsonValue,
                 subtotal: rows.reduce((sum: number, r: any) => sum + (r.Amount || 0), 0),
                 taxPercent: voucher.taxPercent ?? 0,
                 taxAmount: Math.abs(voucher.lines.filter(l => l.accountCode.includes("GST")).reduce((s, l) => s + (l.debit || l.credit), 0)),

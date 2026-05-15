@@ -132,7 +132,7 @@ describe("Purchases API", () => {
     const res = await POST(req);
     const data = await res.json();
     if (res.status !== 400) {
-      console.log("DEBUG: expected 400 but got", res.status, data);
+
     }
     expect(res.status).toBe(400);
     expect(data.error).toContain("Place of Supply");

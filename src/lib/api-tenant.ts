@@ -66,7 +66,7 @@ type SessionResolution =
   | { ok: true; session: SessionPayload }
   | { ok: false; response: NextResponse<{ error: string }> };
 
-const COOKIE_NAME = "hisaabkitaab-session";
+import { SESSION_SESSION_COOKIE_NAME } from "@/lib/cookie";
 
 /**
  * Verifies the JWT cookie and returns the full session (tenantId, userId, role).
@@ -76,7 +76,7 @@ const COOKIE_NAME = "hisaabkitaab-session";
 export async function resolveSession(
   request: NextRequest
 ): Promise<SessionResolution> {
-  const token = request.cookies.get(COOKIE_NAME)?.value;
+  const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
   if (!token) {
     return {
       ok: false,

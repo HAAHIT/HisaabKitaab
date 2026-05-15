@@ -2,6 +2,7 @@ import { jwtVerify } from "jose";
 import { getJwtSecret } from "@/lib/jwt-secret";
 import { cookies } from "next/headers";
 import type { NextRequest } from "next/server";
+import { SESSION_SESSION_COOKIE_NAME } from "@/lib/cookie";
 
 export interface VerifiedSession {
   tenantId: string;
@@ -9,8 +10,6 @@ export interface VerifiedSession {
   role: string;
   name: string;
 }
-
-const COOKIE_NAME = "hisaabkitaab-session";
 
 /**
  * Resolves the tenant ID by verifying the JWT cookie directly.
@@ -24,7 +23,7 @@ const COOKIE_NAME = "hisaabkitaab-session";
 export async function resolveVerifiedTenantId(
   request: NextRequest
 ): Promise<string | null> {
-  const token = request.cookies.get(COOKIE_NAME)?.value;
+  const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
 
   // No token at all — caller is unauthenticated. Never fall back to the env
   // variable here: doing so would let any client forge x-user-role/x-user-id
@@ -51,7 +50,7 @@ export async function resolveVerifiedTenantId(
 export async function resolveVerifiedSession(
   request: NextRequest
 ): Promise<VerifiedSession | null> {
-  const token = request.cookies.get(COOKIE_NAME)?.value;
+  const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
   if (!token) return null;
 
   try {
@@ -84,7 +83,7 @@ export async function resolveVerifiedSession(
  */
 export async function resolveServerSession(): Promise<VerifiedSession | null> {
   const cookieStore = await cookies();
-  const token = cookieStore.get(COOKIE_NAME)?.value;
+  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   if (!token) return null;
 
   try {

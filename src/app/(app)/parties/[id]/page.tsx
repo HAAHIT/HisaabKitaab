@@ -2,8 +2,7 @@ import { buildPartyLedger, asSupportedPartyType } from "@/lib/accounting";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import PartyProfileClient from "./PartyProfileClient";
-import { headers } from "next/headers";
-import { resolveTenantIdFromRequest } from "@/lib/tenant";
+import { resolveServerSession } from "@/lib/session-server";
 
 export const dynamic = "force-dynamic";
 
@@ -13,12 +12,9 @@ export default async function PartyProfilePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const headerStore = await headers();
-  const tenantId = resolveTenantIdFromRequest({ headers: headerStore });
-  const role = headerStore.get("x-user-role");
-  if (!tenantId) {
-    return notFound();
-  }
+  const session = await resolveServerSession();
+  if (!session) return notFound();
+  const { tenantId, role } = session;
 
   const party = await prisma.party.findFirst({
     where: {

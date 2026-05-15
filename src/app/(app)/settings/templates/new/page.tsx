@@ -55,8 +55,7 @@ export default function CreateTemplatePage() {
 
   function updateColumn(index: number, field: keyof ColumnDef, value: string) {
     const newCols = [...columns];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (newCols[index] as any)[field] = value;
+    newCols[index] = { ...newCols[index], [field]: value } as ColumnDef;
     setColumns(newCols);
     const newErrors = { ...errors };
     delete newErrors[index];

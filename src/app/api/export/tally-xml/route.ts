@@ -101,16 +101,19 @@ function extractHsnRatePairs(
   return pairs;
 }
 
+type BillRow = Record<string, unknown>;
+type TemplateColumn = { id: string; name: string };
+
 /**
  * Heuristic mapping of Bill rows to Tally Inventory entries.
  * Searches template columns for keywords to identify Item, Qty, Rate, etc.
  */
 function mapRowsToInventoryEntries(
-  rows: any[],
-  template: { name: string; columns: any[] },
+  rows: BillRow[],
+  template: { name: string; columns: TemplateColumn[] },
   voucherType: TallyVoucherType
 ): TallyInventoryEntry[] {
-  const columns = (template.columns as any[]) || [];
+  const columns = template.columns;
   const isPurchase = voucherType === "Purchase";
 
   // Find column IDs for Item, Qty, Rate, Amount
@@ -135,13 +138,13 @@ function mapRowsToInventoryEntries(
   if (!itemCol) return [];
 
   return rows
-    .map((row: any) => {
-      const rowAmtValue = row[amtCol];
-      const rowAmt = typeof rowAmtValue === "number" ? rowAmtValue : parseFloat(rowAmtValue || "0");
-      if (rowAmt === 0 && !row[itemCol]) return null;
+    .map((row) => {
+      const rowAmtValue = amtCol ? row[amtCol] : undefined;
+      const rowAmt = typeof rowAmtValue === "number" ? rowAmtValue : parseFloat(String(rowAmtValue ?? "0"));
+      if (rowAmt === 0 && !(itemCol && row[itemCol])) return null;
 
-      const qtyValue = row[qtyCol];
-      const qty = typeof qtyValue === "number" ? qtyValue : parseFloat(qtyValue || "1");
+      const qtyValue = qtyCol ? row[qtyCol] : undefined;
+      const qty = typeof qtyValue === "number" ? qtyValue : parseFloat(String(qtyValue ?? "1"));
       const amount = rowAmt;
 
       // Tally Inventory signs:
@@ -149,13 +152,13 @@ function mapRowsToInventoryEntries(
       // Purchase items are Debit (negative in XML with ISDEEMEDPOSITIVE=Yes)
       const entryAmount = isPurchase ? -amount : amount;
 
-      const rateValue = row[rateCol];
-      const rate = typeof rateValue === "number" ? rateValue : parseFloat(rateValue || "0");
+      const rateValue = rateCol ? row[rateCol] : undefined;
+      const rate = typeof rateValue === "number" ? rateValue : parseFloat(String(rateValue ?? "0"));
 
       return {
-        stockItemName: row[itemCol] || "Inventory Item",
+        stockItemName: (itemCol && row[itemCol]) ? String(row[itemCol]) : "Inventory Item",
         qty: qty,
-        unit: row[unitCol] || "Nos",
+        unit: (unitCol && row[unitCol]) ? String(row[unitCol]) : "Nos",
         rate: rate || (qty !== 0 ? amount / qty : amount),
         amount: entryAmount,
       };
@@ -434,10 +437,10 @@ export async function GET(request: NextRequest) {
             billData?.billNumber ?? entry.purchaseId ?? entry.paymentId ?? entry.id,
           narration: entry.narration,
           inventoryEntries:
-            billData && billData.template
+            billData && billData.template && Array.isArray(billData.rows) && Array.isArray(billData.template.columns)
               ? mapRowsToInventoryEntries(
-                billData.rows as any[],
-                billData.template as any,
+                billData.rows as BillRow[],
+                { name: billData.template.name, columns: billData.template.columns as TemplateColumn[] },
                 resolveExportVoucherType(entry.voucherType, entry.narration)
               )
               : undefined,

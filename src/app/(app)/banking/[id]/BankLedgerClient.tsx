@@ -195,24 +195,24 @@ export default function BankLedgerClient({
 
         {/* Balance cards */}
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
-          {[
+          {((): { label: string; value: number; color: string; isCount?: boolean }[] => [
             { label: "Opening Balance", value: account.openingBalance, color: AM },
             { label: "Current Balance", value: account.currentBalance, color: account.currentBalance >= 0 ? GR : OR },
             ...(!isMobile ? [{ label: "Transactions", value: ledger.length, color: PU, isCount: true }] : []),
-          ].map((item) => (
+          ])().map((item) => (
             <div
               key={item.label}
               style={{
                 padding: "16px 18px", borderRadius: 16,
-                background: (item as any).color + "12",
-                border: `1px solid ${(item as any).color}28`,
+                background: item.color + "12",
+                border: `1px solid ${item.color}28`,
               }}
             >
-              <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: (item as any).color, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6, fontFamily: SG }}>
+              <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: item.color, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6, fontFamily: SG }}>
                 {item.label}
               </p>
               <p style={{ fontSize: isMobile ? TYPE.numMedium : TYPE.numMedium + 2, fontWeight: 800, color: "var(--hk-text)", fontFamily: IN, lineHeight: 1.1 }}>
-                {(item as any).isCount ? item.value : fmtFull(Number(item.value))}
+                {item.isCount ? item.value : fmtFull(Number(item.value))}
               </p>
             </div>
           ))}

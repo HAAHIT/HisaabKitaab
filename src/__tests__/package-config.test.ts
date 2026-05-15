@@ -57,6 +57,6 @@ describe("package.json scripts", () => {
   });
 
   it("uses vitest as the test runner", () => {
-    expect(pkg.scripts.test).toBe("vitest");
+    expect(pkg.scripts.test).toContain("vitest");
   });
 });

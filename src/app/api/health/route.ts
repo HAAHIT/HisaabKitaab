@@ -36,19 +36,32 @@ export async function GET(request: NextRequest) {
   try {
     await prisma.$queryRaw`SELECT 1`;
 
-    const status = storage.status === "ok" ? "ok" : "degraded";
+    // Check for unapplied migrations — a finished_at of NULL means the migration
+    // ran but never completed (interrupted), which signals a bad deploy.
+    const [migRow] = await prisma.$queryRaw<[{ pending: bigint }]>`
+      SELECT COUNT(*) AS pending
+      FROM "_prisma_migrations"
+      WHERE finished_at IS NULL
+        AND rolled_back_at IS NULL
+    `;
+    const migrationStatus: "ok" | "pending" = Number(migRow.pending) === 0 ? "ok" : "pending";
+
+    const overallStatus =
+      storage.status !== "ok" || migrationStatus !== "ok" ? "degraded" : "ok";
+
     const response = NextResponse.json(
       {
-        status,
+        status: overallStatus,
         requestId,
         timestamp: new Date().toISOString(),
         durationMs: Date.now() - startedAt,
         checks: {
           database: "ok",
+          migrations: migrationStatus,
           storage: storage.status,
         },
       },
-      { status: status === "ok" ? 200 : 503 }
+      { status: overallStatus === "ok" ? 200 : 503 }
     );
 
     response.headers.set("Cache-Control", "no-store");
@@ -69,6 +82,7 @@ export async function GET(request: NextRequest) {
         durationMs: Date.now() - startedAt,
         checks: {
           database: "error",
+          migrations: "unknown",
           storage: storage.status,
         },
       },
