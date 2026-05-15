@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Checkbox, Input, Radio, RadioGroup } from "@heroui/react";
+import { Checkbox, Radio, RadioGroup } from "@heroui/react";
+import { HKButton } from "@/components/ui/HKButton";
+import { HKInput } from "@/components/ui/HKInput";
 import { useRouter } from "next/navigation";
 import {
   GR, AM, OR, PU, SG, IN, TYPE,
   fmtFull,
-  HKCard, HKToast, PageHeader, GradientButton, useIsMobile,
+  HKCard, HKToast, PageHeader, useIsMobile,
 } from "@/components/ui/hk-design";
 
 export default function TallyExportPage() {
@@ -196,15 +198,13 @@ export default function TallyExportPage() {
 
                 {periodType === "custom" && (
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                    <Input type="date" label="From" value={customFrom} onValueChange={setCustomFrom} variant="bordered" />
-                    <Input type="date" label="To" value={customTo} onValueChange={setCustomTo} variant="bordered" />
+                    <HKInput type="date" label="From" value={customFrom} onValueChange={setCustomFrom} />
+                    <HKInput type="date" label="To" value={customTo} onValueChange={setCustomTo} />
                   </div>
                 )}
 
                 <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                  <GradientButton onClick={handleFetchPreview} disabled={loading}>
-                    {loading ? "Loading..." : "Aage Badho →"}
-                  </GradientButton>
+                  <HKButton onClick={handleFetchPreview} isLoading={loading}>Aage Badho →</HKButton>
                 </div>
               </div>
             )}
@@ -256,7 +256,7 @@ export default function TallyExportPage() {
 
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
                   <button onClick={() => setStep(1)} style={navBtnStyle}>← Wapas</button>
-                  <GradientButton onClick={() => setStep(3)}>Aage Badho →</GradientButton>
+                  <HKButton onClick={() => setStep(3)}>Aage Badho →</HKButton>
                 </div>
               </div>
             )}

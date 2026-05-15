@@ -16,9 +16,11 @@ import { GST_STATE_CODES } from "@/lib/gst-states";
 import { deriveIsInterState, extractGstinStateCode } from "@/lib/gst-helpers";
 import {
   OR, GR, AM, PU, SG, IN, TYPE, TOUCH,
-  HKCard, HKToast, PageHeader, GradientButton,
+  HKCard, HKToast, PageHeader,
   fmtFull, useIsMobile,
 } from "@/components/ui/hk-design";
+import { HKButton } from "@/components/ui/HKButton";
+import { HKInput } from "@/components/ui/HKInput";
 
 interface Template {
   id: string;
@@ -444,7 +446,7 @@ export default function NewBillPage() {
             ) : templates.length === 0 ? (
               <div style={{ textAlign: "center", padding: "32px 0" }}>
                 <p style={{ color: "var(--hk-sub)", marginBottom: 12, fontSize: TYPE.body }}>Koi template nahi mila</p>
-                <GradientButton onClick={() => router.push("/settings/templates/new")}>Template Banao</GradientButton>
+                <HKButton onClick={() => router.push("/settings/templates/new")}>Template Banao</HKButton>
               </div>
             ) : (
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
@@ -854,12 +856,11 @@ export default function NewBillPage() {
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                     <span style={{ color: "var(--hk-sub)", fontSize: TYPE.body, fontFamily: SG, flexShrink: 0 }}>Bill Date</span>
-                    <Input
+                    <HKInput
                       type="date"
                       aria-label="Bill date"
                       value={billDate}
                       onValueChange={setBillDate}
-                      variant="bordered"
                       size="sm"
                       className="max-w-[180px]"
                     />
@@ -874,12 +875,11 @@ export default function NewBillPage() {
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <span style={{ color: "var(--hk-sub)", fontSize: TYPE.body, fontFamily: SG }}>{taxLabelText}</span>
                       {taxRateColId === null && (
-                        <Input
+                        <HKInput
                           type="number"
                           aria-label="Tax percentage"
                           value={String(taxPercent)}
                           onValueChange={(value) => setTaxPercent(Number.parseFloat(value) || 0)}
-                          variant="bordered"
                           size="sm"
                           className="w-20"
                           endContent={<span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)" }}>%</span>}
@@ -1003,12 +1003,13 @@ export default function NewBillPage() {
               >
                 {savingAs === "DRAFT" ? "Saving..." : t("bills.saveDraft")}
               </button>
-              <GradientButton
+              <HKButton
                 onClick={() => handleSave("FINAL")}
-                disabled={savingAs === "DRAFT"}
+                isLoading={savingAs === "FINAL"}
+                isDisabled={savingAs === "DRAFT"}
               >
-                {savingAs === "FINAL" ? "Saving..." : t("bills.finalize")}
-              </GradientButton>
+                {t("bills.finalize")}
+              </HKButton>
             </div>
           </>
         )}

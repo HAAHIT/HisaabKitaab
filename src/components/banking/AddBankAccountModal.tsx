@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Input, Select, SelectItem } from "@heroui/react";
-import { HKModal, GradientButton, SG, OR, TYPE } from "@/components/ui/hk-design";
+import { Select, SelectItem } from "@heroui/react";
+import { HKModal, SG, OR, TYPE } from "@/components/ui/hk-design";
+import { HKButton } from "@/components/ui/HKButton";
+import { HKInput } from "@/components/ui/HKInput";
 
 interface Props {
     isOpen: boolean;
@@ -67,21 +69,8 @@ export function AddBankAccountModal({ isOpen, onClose, onSuccess }: Props) {
             title="Account Jodo"
             footer={
                 <>
-                    <button
-                        onClick={onClose}
-                        disabled={isLoading}
-                        style={{
-                            padding: "10px 20px", borderRadius: 12, border: "1px solid var(--hk-border)",
-                            background: "var(--hk-badge)", color: "var(--hk-text)", fontFamily: SG,
-                            fontSize: TYPE.body, fontWeight: 600, cursor: isLoading ? "not-allowed" : "pointer",
-                            opacity: isLoading ? 0.5 : 1,
-                        }}
-                    >
-                        Cancel
-                    </button>
-                    <GradientButton onClick={handleSave} disabled={isLoading}>
-                        {isLoading ? "Bana raha hai..." : "Account Banao"}
-                    </GradientButton>
+                    <HKButton variant="secondary" onClick={onClose} isDisabled={isLoading}>Cancel</HKButton>
+                    <HKButton onClick={handleSave} isLoading={isLoading}>Account Banao</HKButton>
                 </>
             }
         >
@@ -106,41 +95,37 @@ export function AddBankAccountModal({ isOpen, onClose, onSuccess }: Props) {
                     <SelectItem key="CASH">Cash Register</SelectItem>
                 </Select>
 
-                <Input
+                <HKInput
                     label="Account Name *"
                     autoFocus
                     placeholder="e.g. HDFC Current Account"
                     value={name}
                     onValueChange={setName}
-                    variant="bordered"
                 />
 
                 {type === "BANK" && (
                     <>
-                        <Input
+                        <HKInput
                             label="Account Number"
                             placeholder="Optional"
                             value={accountNumber}
                             onValueChange={setAccountNumber}
-                            variant="bordered"
                         />
-                        <Input
+                        <HKInput
                             label="IFSC Code"
                             placeholder="Optional"
                             value={ifscCode}
                             onValueChange={setIfscCode}
-                            variant="bordered"
                         />
                     </>
                 )}
 
-                <Input
+                <HKInput
                     label="Opening Balance (₹)"
                     type="number"
                     placeholder="0"
                     value={openingBalance}
                     onValueChange={setOpeningBalance}
-                    variant="bordered"
                 />
             </div>
         </HKModal>

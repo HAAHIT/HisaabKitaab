@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Button, useDisclosure } from "@heroui/react";
+import { useDisclosure } from "@heroui/react";
+import { HKButton } from "@/components/ui/HKButton";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getBalanceStatusLabel } from "@/lib/accounting";
 import { QuickAddPartyModal } from "@/components/parties/QuickAddPartyModal";
@@ -142,18 +143,17 @@ export function PartySearch({
 
   const bottomSection = (closePopover: () => void) => (
     <div className="p-2 pt-1 border-t border-divider/50 mt-1">
-      <Button
+      <HKButton
         className="w-full justify-start font-medium"
         size="sm"
-        color="primary"
-        variant="light"
-        onPress={() => {
+        variant="ghost"
+        onClick={() => {
           closePopover();
           onOpen();
         }}
       >
         + Add New {partyType ? t(`parties.${partyType.toLowerCase()}Type` as Parameters<typeof t>[0]) : "Party / Ledger"}
-      </Button>
+      </HKButton>
     </div>
   );
 

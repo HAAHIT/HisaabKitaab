@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import {
-  Input,
   Select,
   SelectItem,
   Skeleton,
@@ -10,8 +9,10 @@ import {
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
   GR, AM, OR, PU, SG, IN, TYPE,
-  HKCard, HKToast, PageHeader, GradientButton, useIsMobile,
+  HKCard, HKToast, PageHeader, useIsMobile,
 } from "@/components/ui/hk-design";
+import { HKButton } from "@/components/ui/HKButton";
+import { HKInput } from "@/components/ui/HKInput";
 
 interface User {
   id: string;
@@ -127,9 +128,9 @@ export default function UserManagementPage() {
           subtitle={t("users.subtitle")}
           isMobile={isMobile}
           action={
-            <GradientButton onClick={openCreatePanel}>
+            <HKButton onClick={openCreatePanel}>
               + {t("users.add")}
-            </GradientButton>
+            </HKButton>
           }
         />
 
@@ -142,7 +143,7 @@ export default function UserManagementPage() {
             ) : users.length === 0 ? (
               <div style={{ textAlign: "center", padding: "60px 20px" }}>
                 <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", fontFamily: SG, marginBottom: 16 }}>No users found</p>
-                <GradientButton onClick={openCreatePanel}>{t("users.createFirst")}</GradientButton>
+                <HKButton onClick={openCreatePanel}>{t("users.createFirst")}</HKButton>
               </div>
             ) : (
               <div>
@@ -275,16 +276,15 @@ export default function UserManagementPage() {
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                <Input label={t("users.name")} placeholder="Enter full name" value={formName} onValueChange={setFormName} variant="bordered" isRequired />
-                <Input label={t("users.email")} placeholder="Enter email (optional)" type="email" value={formEmail} onValueChange={setFormEmail} variant="bordered" />
-                <Input label={t("users.phone")} placeholder="Enter phone number" type="tel" value={formPhone} onValueChange={setFormPhone} variant="bordered" isRequired />
-                <Input
+                <HKInput label={t("users.name")} placeholder="Enter full name" value={formName} onValueChange={setFormName} isRequired />
+                <HKInput label={t("users.email")} placeholder="Enter email (optional)" type="email" value={formEmail} onValueChange={setFormEmail} />
+                <HKInput label={t("users.phone")} placeholder="Enter phone number" type="tel" value={formPhone} onValueChange={setFormPhone} isRequired />
+                <HKInput
                   label={t("users.password")}
                   placeholder={editingUser ? t("users.leaveBlank") : t("users.minChars")}
                   type={showPassword ? "text" : "password"}
                   value={formPassword}
                   onValueChange={setFormPassword}
-                  variant="bordered"
                   isRequired={!editingUser}
                   endContent={
                     <div style={{ display: "flex", gap: 4 }}>
@@ -321,19 +321,8 @@ export default function UserManagementPage() {
                 </Select>
 
                 <div style={{ display: "flex", gap: 12, paddingTop: 8 }}>
-                  <button
-                    onClick={() => setShowPanel(false)}
-                    style={{
-                      flex: 1, minHeight: 48, borderRadius: 14,
-                      background: "var(--hk-badge)", border: "1px solid var(--hk-border)",
-                      color: "var(--hk-text)", fontFamily: SG, fontSize: TYPE.body, fontWeight: 600, cursor: "pointer",
-                    }}
-                  >
-                    {t("common.cancel")}
-                  </button>
-                  <GradientButton onClick={handleSave} disabled={saving} style={{ flex: 1 }}>
-                    {saving ? "Saving..." : editingUser ? t("common.update") : t("users.createUser")}
-                  </GradientButton>
+                  <HKButton variant="secondary" onClick={() => setShowPanel(false)} isDisabled={saving} style={{ flex: 1 }}>{t("common.cancel")}</HKButton>
+                  <HKButton onClick={handleSave} isLoading={saving} style={{ flex: 1 }}>{editingUser ? t("common.update") : t("users.createUser")}</HKButton>
                 </div>
               </div>
             </div>

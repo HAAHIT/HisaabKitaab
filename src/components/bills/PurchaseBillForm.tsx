@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Button,
   Card,
   CardBody,
   CardHeader,
@@ -14,6 +13,8 @@ import {
   Textarea,
   Checkbox,
 } from "@heroui/react";
+import { HKButton } from "@/components/ui/HKButton";
+import { HKInput } from "@/components/ui/HKInput";
 import { useRouter } from "next/navigation";
 import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -240,11 +241,14 @@ export function PurchaseBillForm() {
 
       <div className="animate-fade-in p-4 lg:p-8">
         <div className="mb-6 flex items-center gap-3">
-          <Button isIconOnly variant="light" onPress={() => router.push("/dashboard")}>
-             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <button
+            onClick={() => router.push("/dashboard")}
+            className="flex items-center justify-center w-10 h-10 rounded-xl hover:bg-default-100 transition-colors text-default-600"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M10 19l-7-7m0 0l7-7m-7 7h18" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} />
             </svg>
-          </Button>
+          </button>
           <div>
             <h1 className="text-2xl font-bold">New Purchase Bill</h1>
             <p className="mt-1 text-sm text-default-500">Record a new incoming purchase from a supplier.</p>
@@ -288,7 +292,7 @@ export function PurchaseBillForm() {
           <>
             <div className="mb-4 flex items-center gap-2">
               <Chip size="sm" color="primary" variant="flat">{selectedTemplate.name}</Chip>
-              <Button size="sm" variant="light" onPress={() => setSelectedTemplate(null)}>Change Template</Button>
+              <HKButton variant="ghost" size="sm" onClick={() => setSelectedTemplate(null)}>Change Template</HKButton>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
@@ -315,7 +319,7 @@ export function PurchaseBillForm() {
                     <div className="mt-4 rounded-xl bg-default-50 dark:bg-default-100/5 p-4 border border-default-200 animate-slide-up">
                       <div className="flex items-center justify-between mb-2">
                         <h3 className="font-semibold text-lg text-default-900">{selectedParty.name}</h3>
-                        <Button size="sm" variant="light" onPress={() => setSelectedParty(null)}>Change</Button>
+                        <HKButton variant="ghost" size="sm" onClick={() => setSelectedParty(null)}>Change</HKButton>
                       </div>
                       <div className="space-y-1 text-sm text-default-500">
                         {selectedParty.phone && <p>📱 {selectedParty.phone}</p>}
@@ -337,8 +341,8 @@ export function PurchaseBillForm() {
                   <h2 className="text-lg font-semibold">Invoice Details</h2>
                 </CardHeader>
                 <CardBody className="p-6 space-y-4">
-                  <Input label="Supplier Invoice No" value={supplierInvoiceNo} onValueChange={setSupplierInvoiceNo} placeholder="e.g. INV/2024/001" variant="bordered" />
-                  <Input label="Bill Date" type="date" value={billDate} onValueChange={setBillDate} variant="bordered" />
+                  <HKInput label="Supplier Invoice No" value={supplierInvoiceNo} onValueChange={setSupplierInvoiceNo} placeholder="e.g. INV/2024/001" />
+                  <HKInput label="Bill Date" type="date" value={billDate} onValueChange={setBillDate} />
                 </CardBody>
               </Card>
             </div>
@@ -346,7 +350,7 @@ export function PurchaseBillForm() {
             <Card shadow="sm" className="mb-6">
               <CardHeader className="flex items-center justify-between px-6 pt-6 pb-0">
                 <h2 className="text-lg font-semibold">Line Items</h2>
-                <Button size="sm" variant="flat" color="primary" onPress={addRow} startContent={<svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} /></svg>}>Add Row</Button>
+                <HKButton size="sm" startContent={<svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} /></svg>} onClick={addRow}>Add Row</HKButton>
               </CardHeader>
               <CardBody className="overflow-x-auto p-6">
                 <table className="w-full text-sm">
@@ -379,9 +383,14 @@ export function PurchaseBillForm() {
                           </td>
                         ))}
                         <td className="px-2 py-2">
-                          <Button isIconOnly size="sm" variant="light" color="danger" onPress={() => removeRow(rIdx)} isDisabled={rows.length <= 1}>
+                          <button
+                            onClick={() => removeRow(rIdx)}
+                            disabled={rows.length <= 1}
+                            aria-label="Remove row"
+                            className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-danger/10 text-default-400 hover:text-danger disabled:opacity-40 disabled:pointer-events-none transition-colors"
+                          >
                             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} /></svg>
-                          </Button>
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -411,7 +420,7 @@ export function PurchaseBillForm() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="text-default-500">Tax</span>
-                      <Input type="number" size="sm" variant="bordered" className="w-20" value={String(taxPercent)} onValueChange={(v) => setTaxPercent(Number(v))} endContent={<span className="text-xs">%</span>} />
+                      <HKInput type="number" size="sm" className="w-20" value={String(taxPercent)} onValueChange={(v) => setTaxPercent(Number(v))} endContent={<span className="text-xs">%</span>} />
                     </div>
                     <span className="font-medium text-default-900">{formatCurrency(taxAmount)}</span>
                   </div>
@@ -431,9 +440,9 @@ export function PurchaseBillForm() {
             </div>
 
             <div className="flex justify-end gap-3 pb-8">
-              <Button variant="flat" onPress={() => router.back()}>Cancel</Button>
-              <Button variant="bordered" onPress={() => handleSave("DRAFT")} isLoading={savingAs === "DRAFT"}>Save Draft</Button>
-              <Button color="primary" className="bg-gradient-to-r from-blue-600 to-indigo-600 font-semibold" onPress={() => handleSave("FINAL")} isLoading={savingAs === "FINAL"}>Confirm Purchase</Button>
+              <HKButton variant="secondary" onClick={() => router.back()}>Cancel</HKButton>
+              <HKButton variant="secondary" isLoading={savingAs === "DRAFT"} onClick={() => handleSave("DRAFT")}>Save Draft</HKButton>
+              <HKButton isLoading={savingAs === "FINAL"} onClick={() => handleSave("FINAL")}>Confirm Purchase</HKButton>
             </div>
           </>
         )}

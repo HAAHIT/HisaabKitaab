@@ -332,59 +332,6 @@ export function PageHeader({
   );
 }
 
-// ── Gradient action button — primary CTA ────────────────────────────────────
-
-export function GradientButton({
-  children,
-  onClick,
-  variant = "orange-purple",
-  disabled,
-  style = {},
-}: {
-  children: React.ReactNode;
-  onClick?: () => void;
-  variant?: "orange-purple" | "green";
-  disabled?: boolean;
-  style?: React.CSSProperties;
-}) {
-  const gradients = {
-    "orange-purple": `linear-gradient(135deg, ${OR}, ${PU})`,
-    green: `linear-gradient(135deg, ${GR}, #0aab74)`,
-  };
-  const shadows = {
-    "orange-purple": `0 4px 16px ${OR}44`,
-    green: `0 4px 12px ${GR}44`,
-  };
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 8,
-        minHeight: TOUCH.primary,
-        padding: "0 22px",
-        borderRadius: 14,
-        background: gradients[variant],
-        color: "#fff",
-        fontSize: TYPE.body,
-        fontWeight: 700,
-        fontFamily: SG,
-        border: "none",
-        cursor: disabled ? "not-allowed" : "pointer",
-        boxShadow: shadows[variant],
-        opacity: disabled ? 0.6 : 1,
-        transition: "transform 0.15s, opacity 0.15s",
-        ...style,
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
 // ── HKModal — centered overlay modal ────────────────────────────────────────
 
 export function HKModal({

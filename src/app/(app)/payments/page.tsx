@@ -9,8 +9,9 @@ import {
   OR, PU, GR, AM, SG, IN, TYPE,
   fmt, fmtFull, useIsMobile,
   HKCard, HKToast, SearchBox, PillFilter,
-  PageHeader, GradientButton, HKModal,
+  PageHeader, HKModal,
 } from "@/components/ui/hk-design";
+import { HKButton } from "@/components/ui/HKButton";
 
 interface Payment {
   id: string;
@@ -220,9 +221,9 @@ export default function PaymentsListPage() {
         subtitle="Aana-jaana sab yahaan"
         isMobile={isMobile}
         action={
-          <GradientButton variant="green" onClick={() => router.push("/payments/new")}>
+          <HKButton variant="success" onClick={() => router.push("/payments/new")}>
             + Payment Likho
-          </GradientButton>
+          </HKButton>
         }
       />
 
@@ -331,9 +332,9 @@ export default function PaymentsListPage() {
                 ? "Filters badlo ya nayi payment likho"
                 : "Pehli payment record karo"}
             </p>
-            <GradientButton variant="green" onClick={() => router.push("/payments/new")}>
+            <HKButton variant="success" onClick={() => router.push("/payments/new")}>
               + Payment Likho
-            </GradientButton>
+            </HKButton>
           </div>
         ) : (
           <>
@@ -750,20 +751,8 @@ export default function PaymentsListPage() {
         title="Transaction Delete Karo?"
         footer={
           <>
-            <button
-              onClick={() => { setIsDeleteModalOpen(false); setPaymentToDelete(null); }}
-              disabled={isDeleting}
-              style={{ padding: "10px 20px", borderRadius: 12, border: "1px solid var(--hk-border)", background: "var(--hk-badge)", color: "var(--hk-text)", fontFamily: SG, fontSize: TYPE.body, fontWeight: 600, cursor: "pointer", opacity: isDeleting ? 0.5 : 1 }}
-            >
-              Wapas Jao
-            </button>
-            <button
-              onClick={handleDeletePayment}
-              disabled={isDeleting}
-              style={{ padding: "10px 20px", borderRadius: 12, border: "none", background: OR, color: "#fff", fontFamily: SG, fontSize: TYPE.body, fontWeight: 700, cursor: isDeleting ? "wait" : "pointer", opacity: isDeleting ? 0.7 : 1 }}
-            >
-              {isDeleting ? "Deleting..." : "Haan, Delete Karo"}
-            </button>
+            <HKButton variant="secondary" onClick={() => { setIsDeleteModalOpen(false); setPaymentToDelete(null); }} isDisabled={isDeleting}>Wapas Jao</HKButton>
+            <HKButton variant="danger" onClick={handleDeletePayment} isLoading={isDeleting}>Haan, Delete Karo</HKButton>
           </>
         }
       >

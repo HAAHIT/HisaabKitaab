@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Input, Select, SelectItem } from "@heroui/react";
+import { Select, SelectItem } from "@heroui/react";
 import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
 import { getSettlementDirectionForParty, type SupportedPartyType } from "@/lib/accounting";
 import {
   OR, GR, AM, SG, IN, TYPE,
-  HKModal, GradientButton,
+  HKModal,
 } from "@/components/ui/hk-design";
+import { HKButton } from "@/components/ui/HKButton";
+import { HKInput } from "@/components/ui/HKInput";
 
 type BankAccount = {
   id: string;
@@ -163,21 +165,8 @@ export function EditPaymentModal({
       title="Payment Edit Karo"
       footer={
         <>
-          <button
-            onClick={onClose}
-            disabled={isSaving}
-            style={{
-              padding: "10px 20px", borderRadius: 12, border: "1px solid var(--hk-border)",
-              background: "var(--hk-badge)", color: "var(--hk-text)", fontFamily: SG,
-              fontSize: TYPE.body, fontWeight: 600, cursor: isSaving ? "not-allowed" : "pointer",
-              opacity: isSaving ? 0.5 : 1,
-            }}
-          >
-            Cancel
-          </button>
-          <GradientButton onClick={handleSave} disabled={isSaving}>
-            {isSaving ? "Saving..." : "Save Karo"}
-          </GradientButton>
+          <HKButton variant="secondary" onClick={onClose} isDisabled={isSaving}>Cancel</HKButton>
+          <HKButton onClick={handleSave} isLoading={isSaving}>Save Karo</HKButton>
         </>
       }
     >
@@ -228,12 +217,11 @@ export function EditPaymentModal({
         )}
 
         {/* Amount */}
-        <Input
+        <HKInput
           label="Amount (₹)"
           type="text"
           value={amount}
           onValueChange={(v) => setAmount(sanitizeAmount(v))}
-          variant="bordered"
           inputMode="decimal"
           startContent={<span style={{ color: "var(--hk-sub)", fontFamily: IN }}>₹</span>}
           classNames={{ label: "font-semibold" }}
@@ -320,20 +308,18 @@ export function EditPaymentModal({
           )}
         </div>
 
-        <Input
+        <HKInput
           label="Date"
           type="date"
           value={date}
           onValueChange={setDate}
-          variant="bordered"
         />
 
-        <Input
+        <HKInput
           label="Notes"
           placeholder="Optional..."
           value={notes}
           onValueChange={setNotes}
-          variant="bordered"
         />
 
         {/* Error */}

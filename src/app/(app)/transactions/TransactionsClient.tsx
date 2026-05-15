@@ -1,8 +1,8 @@
 "use client";
 
-import { 
-  Card, 
-  CardBody, 
+import {
+  Card,
+  CardBody,
   Chip,
   Table,
   TableHeader,
@@ -10,10 +10,9 @@ import {
   TableColumn,
   TableRow,
   TableCell,
-  Button,
 } from "@heroui/react";
-import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
+import { HKButton } from "@/components/ui/HKButton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Activity } from "@/components/ui/icons";
 
@@ -96,49 +95,42 @@ export default function TransactionsClient({ initialTransactions }: Transactions
         </div>
         
         <div className="flex gap-2">
-           <Button 
-             size="sm" 
-             variant="flat" 
-             color="secondary"
-             className="font-semibold"
-             onPress={exportCSV}
-           >
-             Export CSV
-           </Button>
-           <Button 
-             size="sm" 
-             variant="flat" 
-             color="primary"
-             className="font-semibold"
-             as={Link}
-             href="/reports"
-           >
-             Go to Reports
-           </Button>
+          <HKButton
+            size="sm"
+            variant="secondary"
+            onClick={exportCSV}
+          >
+            Export CSV
+          </HKButton>
+          <HKButton
+            size="sm"
+            onClick={() => router.push("/reports")}
+          >
+            Go to Reports
+          </HKButton>
         </div>
       </div>
 
       <div className="flex flex-wrap gap-2 items-center">
         <span className="text-xs font-semibold text-default-400 uppercase tracking-wider mr-2">Filter By:</span>
-        <Button 
-          size="sm" 
-          variant={!type ? "solid" : "flat"}
-          color={!type ? "primary" : "default"}
-          onPress={() => handleTypeFilter(null)}
+        <button
+          onClick={() => handleTypeFilter(null)}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+            !type ? "bg-[var(--hk-orange)] text-white" : "bg-default-100 text-default-600 hover:bg-default-200"
+          }`}
         >
           All
-        </Button>
+        </button>
         {voucherTypes.map((vt) => (
-          <Button
+          <button
             key={vt}
-            size="sm"
-            variant={type === vt ? "solid" : "flat"}
-            color={type === vt ? getVoucherColor(vt) : "default"}
-            onPress={() => handleTypeFilter(vt)}
-            className="capitalize"
+            onClick={() => handleTypeFilter(vt)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors ${
+              type === vt ? "bg-[var(--hk-orange)] text-white" : "bg-default-100 text-default-600 hover:bg-default-200"
+            }`}
           >
             {vt === "SALES" ? "BILL" : vt.replace("_", " ")}
-          </Button>
+          </button>
         ))}
       </div>
 

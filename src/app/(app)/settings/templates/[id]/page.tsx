@@ -1,13 +1,15 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
-import { Input, Select, SelectItem, Skeleton } from "@heroui/react";
+import { Select, SelectItem, Skeleton } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { validateFormula, translateFormulaToNames, translateFormulaToIds, type ColumnDef } from "@/lib/formula";
 import {
   GR, AM, OR, PU, SG, TYPE,
-  HKCard, HKToast, PageHeader, GradientButton, useIsMobile,
+  HKCard, HKToast, PageHeader, useIsMobile,
 } from "@/components/ui/hk-design";
+import { HKButton } from "@/components/ui/HKButton";
+import { HKInput } from "@/components/ui/HKInput";
 
 const COLUMN_TYPES = [
   { key: "text", label: "Text" },
@@ -186,12 +188,11 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
         <div style={{ padding: isMobile ? "0 14px 80px" : "0 28px 80px", maxWidth: 900, margin: "0 auto" }}>
           {/* Template name */}
           <HKCard style={{ marginBottom: 20 }}>
-            <Input
+            <HKInput
               label="Template Name"
               placeholder="e.g. Order Invoice"
               value={name}
               onValueChange={setName}
-              variant="bordered"
               size="lg"
               isRequired
             />
@@ -251,12 +252,11 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
 
                     {/* Name + Type inputs */}
                     <div style={{ flex: 1, display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
-                      <Input
+                      <HKInput
                         label="Column Name"
                         placeholder="e.g. Qty, Rate, Amount"
                         value={col.name}
                         onValueChange={(v) => updateColumn(index, "name", v)}
-                        variant="bordered"
                         size="sm"
                         isRequired
                       />
@@ -390,19 +390,12 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
 
           {/* Actions */}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
-            <button
-              onClick={() => router.push("/settings/templates")}
-              style={{
-                minHeight: 48, padding: "0 20px", borderRadius: 14,
-                background: "var(--hk-badge)", border: "1px solid var(--hk-border)",
-                color: "var(--hk-text)", fontFamily: SG, fontSize: TYPE.body, fontWeight: 600, cursor: "pointer",
-              }}
-            >
+            <HKButton variant="secondary" onClick={() => router.push("/settings/templates")}>
               Cancel
-            </button>
-            <GradientButton onClick={handleSave} disabled={saving}>
-              {saving ? "Saving..." : "Update Template"}
-            </GradientButton>
+            </HKButton>
+            <HKButton onClick={handleSave} isLoading={saving}>
+              Update Template
+            </HKButton>
           </div>
         </div>
       </div>

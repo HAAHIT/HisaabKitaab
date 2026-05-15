@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import {
-  Input,
   Select,
   SelectItem,
   Textarea,
@@ -13,8 +12,10 @@ import { GST_STATE_CODES } from "@/lib/gst-states";
 import {
   GR, AM, PU, SG, IN, TYPE,
   fmtFull,
-  HKCard, HKToast, PageHeader, GradientButton, useIsMobile,
+  HKCard, HKToast, PageHeader, useIsMobile,
 } from "@/components/ui/hk-design";
+import { HKButton } from "@/components/ui/HKButton";
+import { HKInput } from "@/components/ui/HKInput";
 
 type NoteType = "CREDIT_NOTE" | "DEBIT_NOTE";
 
@@ -214,7 +215,7 @@ export default function NewNotePage() {
         <HKCard style={{ marginBottom: 16 }}>
           <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, marginBottom: 16 }}>Note Details</p>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16 }}>
-            <Input
+            <HKInput
               label="Original Invoice / Bill Reference *"
               placeholder="e.g. INV-2024-001"
               value={originalInvoiceNo}
@@ -222,7 +223,6 @@ export default function NewNotePage() {
                 setOriginalInvoiceNo(v);
                 setErrors((prev) => ({ ...prev, invoiceNo: false }));
               }}
-              variant="bordered"
               isInvalid={Boolean(errors.invoiceNo)}
               errorMessage={errors.invoiceNo ? "Required" : undefined}
             />
@@ -257,12 +257,11 @@ export default function NewNotePage() {
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ fontSize: TYPE.body, color: "var(--hk-sub)", fontFamily: SG }}>Subtotal (Taxable)</span>
-                <Input
+                <HKInput
                   type="number"
                   aria-label="Subtotal"
                   value={String(subtotal || "")}
                   onValueChange={(v) => setSubtotal(Number(v) || 0)}
-                  variant="bordered"
                   size="sm"
                   className="w-36"
                   startContent={<span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)" }}>₹</span>}
@@ -272,12 +271,11 @@ export default function NewNotePage() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ fontSize: TYPE.body, color: "var(--hk-sub)", fontFamily: SG }}>Tax</span>
-                  <Input
+                  <HKInput
                     type="number"
                     aria-label="Tax percentage"
                     value={String(taxPercent)}
                     onValueChange={(v) => setTaxPercent(parseFloat(v) || 0)}
-                    variant="bordered"
                     size="sm"
                     className="w-20"
                     endContent={<span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)" }}>%</span>}
@@ -340,19 +338,12 @@ export default function NewNotePage() {
 
         {/* Footer */}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
-          <button
-            onClick={() => router.push("/notes")}
-            style={{
-              minHeight: 48, padding: "0 22px", borderRadius: 14,
-              background: "var(--hk-badge)", border: "1px solid var(--hk-border)",
-              color: "var(--hk-text)", fontFamily: SG, fontSize: TYPE.body, fontWeight: 600, cursor: "pointer",
-            }}
-          >
+          <HKButton variant="secondary" onClick={() => router.push("/notes")}>
             Cancel
-          </button>
-          <GradientButton onClick={handleCreate} disabled={isSaving}>
-            {isSaving ? "Saving..." : isCredit ? "Create Credit Note" : "Create Debit Note"}
-          </GradientButton>
+          </HKButton>
+          <HKButton onClick={handleCreate} isLoading={isSaving}>
+            {isCredit ? "Create Credit Note" : "Create Debit Note"}
+          </HKButton>
         </div>
       </div>
     </div>

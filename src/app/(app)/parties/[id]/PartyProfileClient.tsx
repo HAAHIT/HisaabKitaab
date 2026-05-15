@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
   GR, AM, OR, PU, SG, IN, TYPE,
-  fmtFull, useIsMobile, HKCard, HKToast, GradientButton,
+  fmtFull, useIsMobile, HKCard, HKToast,
 } from "@/components/ui/hk-design";
+import { HKButton } from "@/components/ui/HKButton";
 import {
   getBalanceIndicator,
   getBalanceStatusLabel,
@@ -172,9 +173,9 @@ export default function PartyProfileClient({
               >
                 {t("bills.new")}
               </button>
-              <GradientButton onClick={() => router.push(`/payments/new?partyId=${partyId}`)}>
+              <HKButton onClick={() => router.push(`/payments/new?partyId=${partyId}`)}>
                 {t("payments.record")}
-              </GradientButton>
+              </HKButton>
             </div>
           </div>
         </HKCard>

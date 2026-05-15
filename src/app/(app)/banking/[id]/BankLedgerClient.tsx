@@ -3,7 +3,8 @@
 import React, { useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Skeleton, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Button, useDisclosure } from "@heroui/react";
+import { Skeleton, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure } from "@heroui/react";
+import { HKButton } from "@/components/ui/HKButton";
 import {
   OR, PU, GR, AM, SG, IN, TYPE, TOUCH,
   fmtFull, useIsMobile, HKCard, HKToast,
@@ -450,10 +451,10 @@ export default function BankLedgerClient({
                 </p>
               </ModalBody>
               <ModalFooter>
-                <Button variant="flat" onPress={onClose} isDisabled={isDeleting}>Cancel</Button>
-                <Button color="danger" onPress={handleDeletePayment} isLoading={isDeleting} className="font-semibold">
+                <HKButton variant="secondary" isDisabled={isDeleting} onClick={onClose}>Cancel</HKButton>
+                <HKButton variant="danger" isLoading={isDeleting} onClick={handleDeletePayment} className="font-semibold">
                   Delete Karo
-                </Button>
+                </HKButton>
               </ModalFooter>
             </>
           )}

@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Button, Chip } from "@heroui/react";
+import { Chip } from "@heroui/react";
+import { HKButton } from "@/components/ui/HKButton";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
@@ -152,22 +153,20 @@ export default function LedgerChat({
       </div>
 
       <div className="sticky bottom-0 flex gap-3 border-t border-divider bg-background/90 p-4 backdrop-blur">
-        <Button
+        <HKButton
           className="flex-1"
-          color="danger"
-          variant="flat"
-          onPress={() => router.push(`/bills/new?partyId=${partyId}`)}
+          variant="secondary"
+          onClick={() => router.push(`/bills/new?partyId=${partyId}`)}
         >
           {t("bills.new")}
-        </Button>
-        <Button
+        </HKButton>
+        <HKButton
           className="flex-1"
-          color="success"
-          variant="flat"
-          onPress={() => router.push(`/payments/new?partyId=${partyId}`)}
+          variant="success"
+          onClick={() => router.push(`/payments/new?partyId=${partyId}`)}
         >
           {t("payments.record")}
-        </Button>
+        </HKButton>
       </div>
     </div>
   );

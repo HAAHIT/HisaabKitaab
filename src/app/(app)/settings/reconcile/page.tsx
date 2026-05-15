@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { Button } from "@heroui/react";
+import { HKButton } from "@/components/ui/HKButton";
 import { OR, PU, GR, AM, SG, IN, TYPE } from "@/components/ui/hk-design";
 import { SUPPORTED_BANKS } from "@/lib/bank-reconciliation/parsers/index";
 
@@ -225,12 +225,11 @@ export default function ReconcilePage() {
             <p style={{ fontSize: TYPE.bodyLarge, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG }}>
               Uploaded Statements
             </p>
-            <Button
-              onPress={() => setStep("upload")}
-              style={{ background: OR, color: "#fff", fontFamily: SG, fontWeight: 700, fontSize: TYPE.body, borderRadius: 12, minHeight: 44 }}
+            <HKButton
+              onClick={() => setStep("upload")}
             >
               + Naya Statement
-            </Button>
+            </HKButton>
           </div>
 
           {loading && (
@@ -418,16 +417,13 @@ export default function ReconcilePage() {
               />
             </div>
 
-            <Button
-              onPress={handleUpload}
+            <HKButton
+              fullWidth
+              onClick={handleUpload}
               isLoading={loading}
-              style={{
-                background: OR, color: "#fff", fontFamily: SG, fontWeight: 800,
-                fontSize: TYPE.bodyLarge, borderRadius: 14, minHeight: 52,
-              }}
             >
               Upload & Parse Karo
-            </Button>
+            </HKButton>
           </div>
         </div>
       )}
@@ -528,12 +524,12 @@ export default function ReconcilePage() {
             })}
           </div>
 
-          <Button
-            onPress={() => setStep("review")}
-            style={{ background: OR, color: "#fff", fontFamily: SG, fontWeight: 800, fontSize: TYPE.bodyLarge, borderRadius: 14, minHeight: 52, width: "100%" }}
+          <HKButton
+            fullWidth
+            onClick={() => setStep("review")}
           >
             Review & Confirm Karo →
-          </Button>
+          </HKButton>
         </div>
       )}
 
@@ -567,13 +563,14 @@ export default function ReconcilePage() {
             ))}
           </div>
 
-          <Button
-            onPress={handleCommit}
+          <HKButton
+            variant="success"
+            fullWidth
+            onClick={handleCommit}
             isLoading={loading}
-            style={{ background: GR, color: "#fff", fontFamily: SG, fontWeight: 800, fontSize: TYPE.bodyLarge, borderRadius: 14, minHeight: 52, width: "100%" }}
           >
             Reconcile Commit Karo ✓
-          </Button>
+          </HKButton>
         </div>
       )}
 
@@ -587,12 +584,11 @@ export default function ReconcilePage() {
           <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", fontFamily: SG, marginBottom: 24 }}>
             {commitResult.matchedCount} rows matched · {commitResult.ambiguousCount} ambiguous
           </p>
-          <Button
-            onPress={() => { setStep("history"); setUploadResult(null); setCommitResult(null); }}
-            style={{ background: OR, color: "#fff", fontFamily: SG, fontWeight: 800, fontSize: TYPE.bodyLarge, borderRadius: 14, minHeight: 52, paddingLeft: 32, paddingRight: 32 }}
+          <HKButton
+            onClick={() => { setStep("history"); setUploadResult(null); setCommitResult(null); }}
           >
             History Dekho
-          </Button>
+          </HKButton>
         </div>
       )}
     </div>

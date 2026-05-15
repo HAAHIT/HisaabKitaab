@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
-import { Card, CardBody, Button } from "@heroui/react";
+import { Card, CardBody } from "@heroui/react";
+import { HKButton } from "@/components/ui/HKButton";
 
 export default function AppError({
   error,
@@ -51,14 +52,9 @@ export default function AppError({
               )}
             </p>
           </div>
-          <Button
-            color="primary"
-            variant="shadow"
-            className="w-full"
-            onPress={reset}
-          >
+          <HKButton fullWidth onClick={reset}>
             Try again
-          </Button>
+          </HKButton>
         </CardBody>
       </Card>
     </div>

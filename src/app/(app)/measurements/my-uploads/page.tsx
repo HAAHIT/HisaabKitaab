@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
-import { Button, Card, CardBody, Chip, Skeleton } from "@heroui/react";
+import { Card, CardBody, Chip, Skeleton } from "@heroui/react";
+import { HKButton } from "@/components/ui/HKButton";
 import { useRouter } from "next/navigation";
 import { db, type MeasurementDraft } from "@/lib/db";
 import { useSync } from "@/hooks/useSync";
@@ -95,14 +96,12 @@ export default function MyUploadsPage() {
             </Chip>
           )}
           {drafts.length > 0 && isOnline && (
-            <Button variant="flat" color="secondary" onPress={syncAll}>
+            <HKButton variant="secondary" onClick={syncAll}>
               {t("measurements.syncNow")}
-            </Button>
+            </HKButton>
           )}
-          <Button
-            color="primary"
-            className="bg-gradient-to-r from-blue-600 to-indigo-600 font-semibold shadow-lg shadow-blue-500/25"
-            onPress={() => router.push("/measurements/upload")}
+          <HKButton
+            onClick={() => router.push("/measurements/upload")}
             startContent={
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -115,7 +114,7 @@ export default function MyUploadsPage() {
             }
           >
             {t("measurements.newUpload")}
-          </Button>
+          </HKButton>
         </div>
       </div>
 
@@ -148,15 +147,14 @@ export default function MyUploadsPage() {
             <p className="mt-1 max-w-sm text-center text-sm text-default-400">
               {t("measurements.noUploadsSubtitle")}
             </p>
-            <Button
-              color="primary"
-              variant="flat"
+            <HKButton
               size="sm"
+              variant="ghost"
               className="mt-4"
-              onPress={() => router.push("/measurements/upload")}
+              onClick={() => router.push("/measurements/upload")}
             >
               {t("measurements.firstUpload")}
-            </Button>
+            </HKButton>
           </CardBody>
         </Card>
       ) : (

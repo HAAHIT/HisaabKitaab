@@ -7,7 +7,6 @@ import {
   type SupportedPartyType,
 } from "@/lib/accounting";
 import {
-  Input,
   Radio,
   RadioGroup,
   Select,
@@ -20,8 +19,10 @@ import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
 import { BillSearch, type BillOption } from "@/components/ui/BillSearch";
 import {
   GR, AM, PU, OR, SG, TYPE,
-  HKCard, HKToast, PageHeader, GradientButton, useIsMobile,
+  HKCard, HKToast, PageHeader, useIsMobile,
 } from "@/components/ui/hk-design";
+import { HKButton } from "@/components/ui/HKButton";
+import { HKInput } from "@/components/ui/HKInput";
 
 type BankAccount = {
   id: string;
@@ -398,13 +399,12 @@ export default function RecordPaymentPage() {
               </>
             )}
 
-            <Input
+            <HKInput
               label="Amount (INR)"
               placeholder="Enter amount"
               type="text"
               value={amount}
               onValueChange={(value) => setAmount(sanitizeAmountInput(value))}
-              variant="bordered"
               size="lg"
               isRequired
               inputMode="decimal"
@@ -501,25 +501,18 @@ export default function RecordPaymentPage() {
               )}
             </div>
 
-            <Input label="Date" type="date" value={date} onValueChange={setDate} variant="bordered" />
-            <Input label="Notes" placeholder="Optional notes..." value={notes} onValueChange={setNotes} variant="bordered" />
+            <HKInput label="Date" type="date" value={date} onValueChange={setDate} />
+            <HKInput label="Notes" placeholder="Optional notes..." value={notes} onValueChange={setNotes} />
           </div>
         </HKCard>
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
-          <button
-            onClick={() => router.push("/payments")}
-            style={{
-              minHeight: 48, padding: "0 22px", borderRadius: 14,
-              background: "var(--hk-badge)", border: "1px solid var(--hk-border)",
-              color: "var(--hk-text)", fontFamily: SG, fontSize: TYPE.body, fontWeight: 600, cursor: "pointer",
-            }}
-          >
+          <HKButton variant="secondary" onClick={() => router.push("/payments")}>
             Cancel
-          </button>
-          <GradientButton onClick={handleSave} disabled={saving}>
-            {saving ? "Saving..." : paymentStatus === "COMPLETED" ? "Record Payment" : "Save Expected Payment"}
-          </GradientButton>
+          </HKButton>
+          <HKButton onClick={handleSave} isLoading={saving}>
+            {paymentStatus === "COMPLETED" ? "Record Payment" : "Save Expected Payment"}
+          </HKButton>
         </div>
       </div>
     </div>

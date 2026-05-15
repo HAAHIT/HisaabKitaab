@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Input,
   Select,
   SelectItem,
   Skeleton,
@@ -17,8 +16,10 @@ import {
 } from "@/lib/tenant-settings";
 import {
   OR, PU, GR, SG, TYPE,
-  HKCard, HKToast, PageHeader, GradientButton, useIsMobile,
+  HKCard, HKToast, PageHeader, useIsMobile,
 } from "@/components/ui/hk-design";
+import { HKButton } from "@/components/ui/HKButton";
+import { HKInput } from "@/components/ui/HKInput";
 
 async function readError(response: Response) {
   const data = await response.json().catch(() => null);
@@ -274,13 +275,13 @@ export default function CompanySettingsPage() {
             {/* Business fields */}
             <div style={{ flex: 1, width: "100%" }}>
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 14, marginBottom: 14 }}>
-                <Input label={t("company.businessName")} placeholder={t("company.companyNamePlaceholder")} value={companyName} onValueChange={setCompanyName} variant="bordered" />
+                <HKInput label={t("company.businessName")} placeholder={t("company.companyNamePlaceholder")} value={companyName} onValueChange={setCompanyName} />
                 <Select label={t("company.businessType")} selectedKeys={[businessType]} onSelectionChange={(keys) => { const v = Array.from(keys)[0]; if (typeof v === "string") setBusinessType(v); }} variant="bordered">
                   {businessTypeOptions.map((o) => <SelectItem key={o.value}>{o.label}</SelectItem>)}
                 </Select>
-                <Input label={t("company.companyPhone")} placeholder={t("company.companyPhonePlaceholder")} value={companyPhone} onValueChange={setCompanyPhone} variant="bordered" />
-                <Input label={t("company.companyEmail")} placeholder={t("company.companyEmailPlaceholder")} value={companyEmail} onValueChange={setCompanyEmail} variant="bordered" />
-                <Input label={t("company.gstin")} placeholder="e.g. 29ABCDE1234F1Z5" value={companyGstin} onValueChange={setCompanyGstin} variant="bordered" classNames={{ input: "uppercase" }} />
+                <HKInput label={t("company.companyPhone")} placeholder={t("company.companyPhonePlaceholder")} value={companyPhone} onValueChange={setCompanyPhone} />
+                <HKInput label={t("company.companyEmail")} placeholder={t("company.companyEmailPlaceholder")} value={companyEmail} onValueChange={setCompanyEmail} />
+                <HKInput label={t("company.gstin")} placeholder="e.g. 29ABCDE1234F1Z5" value={companyGstin} onValueChange={setCompanyGstin} classNames={{ input: "uppercase" }} />
                 <Select label={t("company.taxRegistrationType")} selectedKeys={[taxRegistrationType]} onSelectionChange={(keys) => { const v = Array.from(keys)[0]; if (typeof v === "string") setTaxRegistrationType(v); }} variant="bordered">
                   {taxRegistrationOptions.map((o) => <SelectItem key={o.value}>{o.label}</SelectItem>)}
                 </Select>
@@ -294,8 +295,8 @@ export default function CompanySettingsPage() {
         <HKCard style={{ marginBottom: 16 }}>
           <p style={sectionTitleStyle}>{t("settings.billingConfig")}</p>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 14, marginBottom: 14 }}>
-            <Input label={t("company.billPrefix")} placeholder={t("company.billPrefixPlaceholder")} value={billPrefix} onValueChange={setBillPrefix} variant="bordered" description={t("company.billPrefixDescription")} />
-            <Input label={t("company.defaultTax")} placeholder="0" type="number" value={defaultTaxPercent} onValueChange={setDefaultTaxPercent} variant="bordered" endContent={<span className="text-default-400">%</span>} description={t("bills.autoTaxNote")} />
+            <HKInput label={t("company.billPrefix")} placeholder={t("company.billPrefixPlaceholder")} value={billPrefix} onValueChange={setBillPrefix} description={t("company.billPrefixDescription")} />
+            <HKInput label={t("company.defaultTax")} placeholder="0" type="number" value={defaultTaxPercent} onValueChange={setDefaultTaxPercent} endContent={<span className="text-default-400">%</span>} description={t("bills.autoTaxNote")} />
             <div
               style={{
                 borderRadius: 12, border: "1px solid var(--hk-border)", background: "var(--hk-bg)",
@@ -316,11 +317,11 @@ export default function CompanySettingsPage() {
             Shown on every invoice footer. Helps customers pay via NEFT / IMPS.
           </p>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 14 }}>
-            <Input label="Bank Name" placeholder="e.g. HDFC Bank" value={bankName} onValueChange={setBankName} variant="bordered" />
-            <Input label="Account Number" placeholder="e.g. 50100123456789" value={bankAccountNumber} onValueChange={setBankAccountNumber} variant="bordered" classNames={{ input: "font-mono" }} />
-            <Input label="Branch" placeholder="e.g. Andheri West, Mumbai" value={bankBranch} onValueChange={setBankBranch} variant="bordered" />
-            <Input label="IFSC Code" placeholder="e.g. HDFC0001234" value={bankIfscCode} onValueChange={(v) => setBankIfscCode(v.toUpperCase())} variant="bordered" classNames={{ input: "font-mono uppercase" }} />
-            <Input label={t("company.upiId")} placeholder={t("company.upiIdPlaceholder")} description={t("company.upiIdDescription")} value={upiId} onValueChange={setUpiId} variant="bordered" />
+            <HKInput label="Bank Name" placeholder="e.g. HDFC Bank" value={bankName} onValueChange={setBankName} />
+            <HKInput label="Account Number" placeholder="e.g. 50100123456789" value={bankAccountNumber} onValueChange={setBankAccountNumber} classNames={{ input: "font-mono" }} />
+            <HKInput label="Branch" placeholder="e.g. Andheri West, Mumbai" value={bankBranch} onValueChange={setBankBranch} />
+            <HKInput label="IFSC Code" placeholder="e.g. HDFC0001234" value={bankIfscCode} onValueChange={(v) => setBankIfscCode(v.toUpperCase())} classNames={{ input: "font-mono uppercase" }} />
+            <HKInput label={t("company.upiId")} placeholder={t("company.upiIdPlaceholder")} description={t("company.upiIdDescription")} value={upiId} onValueChange={setUpiId} />
           </div>
         </HKCard>
 
@@ -373,9 +374,7 @@ export default function CompanySettingsPage() {
 
         {/* Save */}
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 24 }}>
-          <GradientButton onClick={handleSave} disabled={saving}>
-            {saving ? "Saving..." : t("common.saveChanges")}
-          </GradientButton>
+          <HKButton onClick={handleSave} isLoading={saving}>{t("common.saveChanges")}</HKButton>
         </div>
 
         {/* Danger Zone */}

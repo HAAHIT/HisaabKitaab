@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useInstallPrompt } from "@/hooks/useInstallPrompt";
 import { SetupWizard } from "@/components/onboarding/SetupWizard";
-import { Button, Skeleton } from "@heroui/react";
+import { Skeleton } from "@heroui/react";
+import { HKButton } from "@/components/ui/HKButton";
 import { OR, PU, GR, AM, SG, IN, TYPE } from "@/components/ui/hk-design";
 import { OverdueBanner } from "@/components/ui/OverdueBanner";
 
@@ -640,7 +641,7 @@ export default function DashboardPage() {
           <h2 style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", marginBottom: 8, fontFamily: SG }}>{error}</h2>
           <p style={{ fontSize: TYPE.body, fontWeight: 500, color: "var(--hk-sub)", fontFamily: SG }}>Data load nahi hua. Dobara try karo.</p>
         </div>
-        <Button color="primary" variant="flat" onPress={() => { setLoading(true); fetchDashboard(); }}>Try Again</Button>
+        <HKButton onClick={() => { setLoading(true); fetchDashboard(); }}>Try Again</HKButton>
       </div>
     );
   }
@@ -679,8 +680,8 @@ export default function DashboardPage() {
             </div>
           </div>
           <div style={{ display: "flex", gap: 6 }}>
-            <Button size="sm" variant="flat" onPress={() => setBannerDismissed(true)}>✕</Button>
-            <Button size="sm" color="primary" variant="flat" onPress={promptInstall}>Install</Button>
+            <HKButton size="sm" variant="ghost" onClick={() => setBannerDismissed(true)}>✕</HKButton>
+            <HKButton size="sm" onClick={promptInstall}>Install</HKButton>
           </div>
         </div>
       )}

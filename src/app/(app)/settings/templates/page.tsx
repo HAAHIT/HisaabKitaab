@@ -6,8 +6,9 @@ import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
   GR, AM, OR, PU, SG, TYPE,
-  HKCard, HKToast, PageHeader, GradientButton, useIsMobile,
+  HKCard, HKToast, PageHeader, useIsMobile,
 } from "@/components/ui/hk-design";
+import { HKButton } from "@/components/ui/HKButton";
 
 interface Template {
   id: string;
@@ -103,9 +104,9 @@ export default function TemplatesPage() {
         subtitle={t("templates.subtitle")}
         isMobile={isMobile}
         action={
-          <GradientButton onClick={() => router.push("/settings/templates/new")}>
+          <HKButton onClick={() => router.push("/settings/templates/new")}>
             + {t("templates.create")}
-          </GradientButton>
+          </HKButton>
         }
       />
 
@@ -123,9 +124,9 @@ export default function TemplatesPage() {
             <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", fontFamily: SG, marginBottom: 20 }}>
               {t("templates.emptySubtitle")}
             </p>
-            <GradientButton onClick={() => router.push("/settings/templates/new")}>
+            <HKButton onClick={() => router.push("/settings/templates/new")}>
               {t("templates.create")}
-            </GradientButton>
+            </HKButton>
           </HKCard>
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 16 }}>

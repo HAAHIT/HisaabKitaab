@@ -8,8 +8,9 @@ import {
   OR, GR, AM, SG, IN, TYPE,
   fmtFull, useIsMobile,
   HKCard, StatusChip, HKToast, SearchBox, PillFilter,
-  PageHeader, GradientButton,
+  PageHeader,
 } from "@/components/ui/hk-design";
+import { HKButton } from "@/components/ui/HKButton";
 import { OverdueBanner } from "@/components/ui/OverdueBanner";
 import { useOverdueData } from "@/hooks/useOverdueData";
 
@@ -172,9 +173,9 @@ export default function BillsListPage() {
         isMobile={isMobile}
         action={
           !isMobile && (
-            <GradientButton onClick={() => router.push("/bills/new")}>
+            <HKButton onClick={() => router.push("/bills/new")}>
               + Naya Bill Banao
-            </GradientButton>
+            </HKButton>
           )
         }
       />
@@ -361,9 +362,9 @@ export default function BillsListPage() {
               {search || statusFilter !== "ALL" ? "Search badlo ya naya bill banao" : "Pehla bill banakar shuru karo"}
             </p>
             {!search && statusFilter === "ALL" && (
-              <GradientButton onClick={() => router.push("/bills/new")}>
+              <HKButton onClick={() => router.push("/bills/new")}>
                 + Naya Bill Banao
-              </GradientButton>
+              </HKButton>
             )}
           </div>
         ) : (

@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useCallback, useEffect, useMemo, useState } from "react";
-import { Input, Select, SelectItem, Textarea } from "@heroui/react";
+import { Select, SelectItem, Textarea } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { evaluateRow, type ColumnDef } from "@/lib/formula";
@@ -10,8 +10,10 @@ import ItemCatalogPicker from "@/components/bills/ItemCatalogPicker";
 import {
   GR, AM, OR, PU, SG, IN, TYPE, TOUCH,
   fmtFull,
-  HKCard, HKToast, PageHeader, GradientButton, useIsMobile,
+  HKCard, HKToast, PageHeader, useIsMobile,
 } from "@/components/ui/hk-design";
+import { HKButton } from "@/components/ui/HKButton";
+import { HKInput } from "@/components/ui/HKInput";
 
 interface Template {
   id: string;
@@ -395,19 +397,18 @@ export default function EditBillPage({
             </Select>
 
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12, marginTop: 12 }}>
-              <Input
+              <HKInput
                 label={t("bills.customer")}
                 placeholder="Invoice display name"
                 value={customerName}
                 onValueChange={(v) => { setCustomerName(v); if (v.trim()) setErrors((c) => ({ ...c, customerName: false })); }}
-                variant="bordered"
                 isRequired
                 isInvalid={Boolean(errors.customerName)}
                 errorMessage={errors.customerName ? "Customer name is required" : undefined}
               />
-              <Input label="Phone" placeholder="Phone number" value={customerPhone} onValueChange={setCustomerPhone} variant="bordered" type="tel" />
-              <Input label="Address" placeholder="Billing address" value={customerAddress} onValueChange={setCustomerAddress} variant="bordered" />
-              <Input label="GSTIN" placeholder="GST Number (optional)" value={gstin} onValueChange={setGstin} variant="bordered" />
+              <HKInput label="Phone" placeholder="Phone number" value={customerPhone} onValueChange={setCustomerPhone} type="tel" />
+              <HKInput label="Address" placeholder="Billing address" value={customerAddress} onValueChange={setCustomerAddress} />
+              <HKInput label="GSTIN" placeholder="GST Number (optional)" value={gstin} onValueChange={setGstin} />
             </div>
           </Section>
 
@@ -608,12 +609,11 @@ export default function EditBillPage({
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                   <span style={{ color: "var(--hk-sub)", fontSize: TYPE.body, fontFamily: SG, flexShrink: 0 }}>Bill Date</span>
-                  <Input
+                  <HKInput
                     type="date"
                     aria-label="Bill date"
                     value={billDate}
                     onValueChange={setBillDate}
-                    variant="bordered"
                     size="sm"
                     className="max-w-[180px]"
                   />
@@ -627,12 +627,11 @@ export default function EditBillPage({
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ color: "var(--hk-sub)", fontSize: TYPE.body, fontFamily: SG }}>{taxLabelText}</span>
-                    <Input
+                    <HKInput
                       type="number"
                       aria-label="Tax percentage"
                       value={String(taxPercent)}
                       onValueChange={(value) => setTaxPercent(Number.parseFloat(value) || 0)}
-                      variant="bordered"
                       size="sm"
                       className="w-20"
                       endContent={<span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)" }}>%</span>}
@@ -680,11 +679,10 @@ export default function EditBillPage({
                 {!hsnPerRow && (
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
                     <span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG, flexShrink: 0 }}>HSN/SAC Code</span>
-                    <Input
+                    <HKInput
                       aria-label="HSN/SAC Code"
                       placeholder="e.g. 9983"
                       size="sm"
-                      variant="bordered"
                       value={hsnCode}
                       onValueChange={setHsnCode}
                       className="max-w-[200px]"
@@ -752,9 +750,9 @@ export default function EditBillPage({
             >
               {savingAs === "DRAFT" ? "Saving..." : t("bills.saveDraft")}
             </button>
-            <GradientButton onClick={() => handleSave("FINAL")} disabled={savingAs === "DRAFT"}>
-              {savingAs === "FINAL" ? "Saving..." : "Finalize Update"}
-            </GradientButton>
+            <HKButton onClick={() => handleSave("FINAL")} isLoading={savingAs === "FINAL"} isDisabled={savingAs === "DRAFT"}>
+              Finalize Update
+            </HKButton>
           </div>
         </div>
       </div>

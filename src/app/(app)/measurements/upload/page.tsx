@@ -8,7 +8,6 @@ import {
   CardBody,
   CardHeader,
   Chip,
-  Input,
   Modal,
   ModalBody,
   ModalContent,
@@ -19,6 +18,7 @@ import {
   Textarea,
   useDisclosure,
 } from "@heroui/react";
+import { HKInput } from "@/components/ui/HKInput";
 import { useRouter } from "next/navigation";
 import { db } from "@/lib/db";
 import { useSync } from "@/hooks/useSync";
@@ -393,21 +393,19 @@ export default function UploadMeasurementsPage() {
           <h2 className="font-semibold">{t("measurements.details")}</h2>
         </CardHeader>
         <CardBody className="space-y-5 p-6">
-          <Input
+          <HKInput
             label={t("measurements.label")}
             placeholder={t("measurements.labelPlaceholder")}
             value={label}
             onValueChange={setLabel}
-            variant="bordered"
             isRequired
           />
 
-          <Input
+          <HKInput
             label={t("measurements.roomName")}
             placeholder={t("measurements.roomPlaceholder")}
             value={roomName}
             onValueChange={setRoomName}
-            variant="bordered"
           />
 
           <Select

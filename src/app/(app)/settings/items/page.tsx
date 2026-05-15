@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Input,
   Select,
   SelectItem,
   Skeleton,
@@ -12,8 +11,10 @@ import { ITEM_UNITS } from "@/lib/item-catalog";
 import {
   GR, AM, OR, SG, IN, TYPE,
   fmtFull,
-  HKCard, HKToast, PageHeader, GradientButton, useIsMobile,
+  HKCard, HKToast, PageHeader, useIsMobile,
 } from "@/components/ui/hk-design";
+import { HKButton } from "@/components/ui/HKButton";
+import { HKInput } from "@/components/ui/HKInput";
 
 interface ItemRecord {
   id: string;
@@ -160,8 +161,8 @@ export default function ItemCatalogPage() {
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(5, 1fr)", gap: 12, marginBottom: 16 }}>
-            <Input label={t("items.name")} value={form.name} onValueChange={(v) => updateForm("name", v)} variant="bordered" />
-            <Input label={t("items.hsnCode")} value={form.hsnCode} onValueChange={(v) => updateForm("hsnCode", v)} variant="bordered" />
+            <HKInput label={t("items.name")} value={form.name} onValueChange={(v) => updateForm("name", v)} />
+            <HKInput label={t("items.hsnCode")} value={form.hsnCode} onValueChange={(v) => updateForm("hsnCode", v)} />
             <Select
               label={t("items.unit")}
               selectedKeys={[form.unit]}
@@ -175,14 +176,12 @@ export default function ItemCatalogPage() {
                 <SelectItem key={option.key} textValue={option.label}>{option.label}</SelectItem>
               ))}
             </Select>
-            <Input label={t("items.rate")} type="number" value={form.rate} onValueChange={(v) => updateForm("rate", v)} variant="bordered" />
-            <Input label={t("items.taxRate")} type="number" description={t("items.taxRateHelp")} value={form.taxRate} onValueChange={(v) => updateForm("taxRate", v)} variant="bordered" />
+            <HKInput label={t("items.rate")} type="number" value={form.rate} onValueChange={(v) => updateForm("rate", v)} />
+            <HKInput label={t("items.taxRate")} type="number" description={t("items.taxRateHelp")} value={form.taxRate} onValueChange={(v) => updateForm("taxRate", v)} />
           </div>
 
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <GradientButton onClick={handleSave} disabled={saving}>
-              {saving ? "Saving..." : editingId ? t("common.update") : t("items.add")}
-            </GradientButton>
+            <HKButton onClick={handleSave} isLoading={saving}>{editingId ? t("common.update") : t("items.add")}</HKButton>
           </div>
         </HKCard>
 

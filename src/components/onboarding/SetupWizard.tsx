@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Button, Input, Select, SelectItem } from "@heroui/react";
+import { Select, SelectItem } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { OR, PU, GR, AM, SG, IN, TYPE } from "@/components/ui/hk-design";
+import { HKInput } from "@/components/ui/HKInput";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -623,14 +624,14 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                   Apna karobaar ka naam aur jagah batao.
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                  <Input label="Business ka naam *" placeholder="Jaise: Sharma Traders" value={businessName} onValueChange={setBusinessName} variant="bordered" size="lg" />
+                  <HKInput label="Business ka naam *" placeholder="Jaise: Sharma Traders" value={businessName} onValueChange={setBusinessName} size="lg" />
                   <Select label="Business kya karta hai?" selectedKeys={[businessType]} onSelectionChange={(k) => setBusinessType(Array.from(k)[0] as string)} variant="bordered" size="lg">
                     {BUSINESS_TYPES.map((t) => <SelectItem key={t}>{t}</SelectItem>)}
                   </Select>
                   <Select label="State *" selectedKeys={stateName ? [stateName] : []} onSelectionChange={(k) => setStateName(Array.from(k)[0] as string)} variant="bordered" size="lg">
                     {INDIAN_STATES.map((s) => <SelectItem key={s}>{s}</SelectItem>)}
                   </Select>
-                  <Input label="City" placeholder="Jaise: Mumbai" value={city} onValueChange={setCity} variant="bordered" size="lg" />
+                  <HKInput label="City" placeholder="Jaise: Mumbai" value={city} onValueChange={setCity} size="lg" />
                 </div>
               </div>
             )}
@@ -644,12 +645,11 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                 <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", marginBottom: 28, fontFamily: SG }}>
                   Optional, par bills mein zaroori hota hai. Baad mein bhi add kar sakte ho.
                 </p>
-                <Input
+                <HKInput
                   label="GSTIN Number"
                   placeholder="27AAAAA0000A1Z5"
                   value={gstin}
                   onValueChange={onGstinChange}
-                  variant="bordered"
                   size="lg"
                   color={gstinValidState === "invalid" ? "danger" : gstinValidState === "valid" ? "success" : "default"}
                   description={
@@ -682,8 +682,8 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                       <Select label="Bank" selectedKeys={bank.bankName ? [bank.bankName] : []} onSelectionChange={(k) => setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, bankName: Array.from(k)[0] as string } : b))} variant="bordered">
                         {BANKS.map((b) => <SelectItem key={b}>{b}</SelectItem>)}
                       </Select>
-                      <Input label="Account number (optional)" placeholder="XXXX XXXX XXXX" value={bank.accountNumber} onValueChange={(v) => setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, accountNumber: v } : b))} variant="bordered" />
-                      <Input label="Opening balance (₹)" type="number" value={bank.openingBalance} onValueChange={(v) => setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, openingBalance: v } : b))} variant="bordered" />
+                      <HKInput label="Account number (optional)" placeholder="XXXX XXXX XXXX" value={bank.accountNumber} onValueChange={(v) => setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, accountNumber: v } : b))} />
+                      <HKInput label="Opening balance (₹)" type="number" value={bank.openingBalance} onValueChange={(v) => setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, openingBalance: v } : b))} />
                     </div>
                   </div>
                 ))}
@@ -714,8 +714,8 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                 <div style={{ padding: "16px", borderRadius: 14, border: "1.5px solid var(--hk-border)", background: "var(--hk-card)", marginTop: parties.length ? 12 : 0 }}>
                   <p style={{ fontSize: TYPE.caption, fontWeight: 700, textTransform: "uppercase", color: "var(--hk-sub)", letterSpacing: "0.5px", marginBottom: 12, fontFamily: SG }}>Nayi party add karo</p>
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    <Input label="Naam *" value={addPartyName} onValueChange={setAddPartyName} variant="bordered" />
-                    <Input label="Phone (optional)" value={addPartyPhone} onValueChange={setAddPartyPhone} variant="bordered" type="tel" />
+                    <HKInput label="Naam *" value={addPartyName} onValueChange={setAddPartyName} />
+                    <HKInput label="Phone (optional)" value={addPartyPhone} onValueChange={setAddPartyPhone} type="tel" />
                     <div style={{ display: "flex", gap: 8 }}>
                       {(["CUSTOMER", "VENDOR"] as const).map((t) => (
                         <button key={t} onClick={() => setAddPartyType(t)} style={{ flex: 1, padding: "10px", borderRadius: 8, border: `1.5px solid ${addPartyType === t ? (t === "CUSTOMER" ? PU : OR) : "var(--hk-border)"}`, background: addPartyType === t ? (t === "CUSTOMER" ? PU + "18" : OR + "18") : "transparent", color: addPartyType === t ? (t === "CUSTOMER" ? PU : OR) : "var(--hk-sub)", fontSize: TYPE.bodySmall, fontWeight: 700, cursor: "pointer", fontFamily: SG }}>
@@ -753,12 +753,12 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                 <div style={{ padding: "16px", borderRadius: 14, border: "1.5px solid var(--hk-border)", background: "var(--hk-card)", marginTop: items.length ? 12 : 0 }}>
                   <p style={{ fontSize: TYPE.caption, fontWeight: 700, textTransform: "uppercase", color: "var(--hk-sub)", letterSpacing: "0.5px", marginBottom: 12, fontFamily: SG }}>Naya item add karo</p>
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    <Input label="Item ka naam *" value={addItemName} onValueChange={setAddItemName} variant="bordered" />
+                    <HKInput label="Item ka naam *" value={addItemName} onValueChange={setAddItemName} />
                     <div style={{ display: "flex", gap: 10 }}>
-                      <Input label="Unit" value={addItemUnit} onValueChange={setAddItemUnit} variant="bordered" placeholder="pcs / kg / m" style={{ flex: 1 }} />
-                      <Input label="Rate (₹)" type="number" value={addItemRate} onValueChange={setAddItemRate} variant="bordered" style={{ flex: 1 }} />
+                      <HKInput label="Unit" value={addItemUnit} onValueChange={setAddItemUnit} placeholder="pcs / kg / m" style={{ flex: 1 }} />
+                      <HKInput label="Rate (₹)" type="number" value={addItemRate} onValueChange={setAddItemRate} style={{ flex: 1 }} />
                     </div>
-                    <Input label="HSN Code (optional)" value={addItemHsn} onValueChange={setAddItemHsn} variant="bordered" placeholder="E.g. 5208" />
+                    <HKInput label="HSN Code (optional)" value={addItemHsn} onValueChange={setAddItemHsn} placeholder="E.g. 5208" />
                     <button onClick={addItem} style={{ padding: "12px", borderRadius: 10, border: "none", background: `linear-gradient(135deg, ${GR}, ${PU})`, color: "white", fontSize: TYPE.body, fontWeight: 700, cursor: "pointer", fontFamily: SG }}>+ Jodo</button>
                   </div>
                 </div>
@@ -840,9 +840,9 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                   Tally file bhejna hoga toh CA ka email auto-fill ho jayega.
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                  <Input label="CA ka naam" value={caName} onValueChange={setCaName} variant="bordered" size="lg" placeholder="Jaise: Pradeep Sharma" />
-                  <Input label="CA ka email" type="email" value={caEmail} onValueChange={setCaEmail} variant="bordered" size="lg" placeholder="ca@example.com" />
-                  <Input label="CA ka phone" type="tel" value={caPhone} onValueChange={setCaPhone} variant="bordered" size="lg" placeholder="+91 98765 43210" />
+                  <HKInput label="CA ka naam" value={caName} onValueChange={setCaName} size="lg" placeholder="Jaise: Pradeep Sharma" />
+                  <HKInput label="CA ka email" type="email" value={caEmail} onValueChange={setCaEmail} size="lg" placeholder="ca@example.com" />
+                  <HKInput label="CA ka phone" type="tel" value={caPhone} onValueChange={setCaPhone} size="lg" placeholder="+91 98765 43210" />
                 </div>
               </div>
             )}

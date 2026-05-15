@@ -6,8 +6,9 @@ import { Skeleton } from "@heroui/react";
 import {
   OR, PU, GR, AM, SG, IN, TYPE, TOUCH,
   fmtFull, useIsMobile, HKCard, HKToast, HKModal,
-  PageHeader, GradientButton,
+  PageHeader,
 } from "@/components/ui/hk-design";
+import { HKButton } from "@/components/ui/HKButton";
 import { AddBankAccountModal } from "@/components/banking/AddBankAccountModal";
 
 interface BankAccount {
@@ -178,7 +179,7 @@ export default function BankingPage() {
                 <ArrowsIcon /> Contra
               </button>
             </Link>
-            <GradientButton onClick={() => setIsAddOpen(true)}>+ Account Jodo</GradientButton>
+            <HKButton onClick={() => setIsAddOpen(true)}>+ Account Jodo</HKButton>
           </div>
         }
       />
@@ -225,7 +226,7 @@ export default function BankingPage() {
             <p style={{ fontSize: TYPE.body, fontWeight: 500, fontFamily: SG, marginBottom: 20 }}>
               Bank ya cash account add karo
             </p>
-            <GradientButton onClick={() => setIsAddOpen(true)}>+ Account Jodo</GradientButton>
+            <HKButton onClick={() => setIsAddOpen(true)}>+ Account Jodo</HKButton>
           </div>
         ) : (
           <HKCard style={{ padding: 0, overflow: "hidden" }}>
@@ -360,21 +361,8 @@ export default function BankingPage() {
         width={440}
         footer={
           <>
-            <button
-              onClick={() => setIsDeleteOpen(false)}
-              disabled={isDeleting}
-              style={{
-                padding: "10px 20px", borderRadius: 12, border: "1px solid var(--hk-border)",
-                background: "var(--hk-badge)", color: "var(--hk-text)", fontFamily: SG,
-                fontSize: TYPE.body, fontWeight: 600, cursor: isDeleting ? "not-allowed" : "pointer",
-                opacity: isDeleting ? 0.5 : 1,
-              }}
-            >
-              Cancel
-            </button>
-            <GradientButton onClick={handleDelete} disabled={isDeleting} variant="orange-purple">
-              {isDeleting ? "Delete ho raha hai..." : "Delete Karo"}
-            </GradientButton>
+            <HKButton variant="secondary" onClick={() => setIsDeleteOpen(false)} isDisabled={isDeleting}>Cancel</HKButton>
+            <HKButton variant="danger" onClick={handleDelete} isLoading={isDeleting}>Delete Karo</HKButton>
           </>
         }
       >

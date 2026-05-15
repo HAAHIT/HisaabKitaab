@@ -6,11 +6,11 @@ import {
   Card,
   CardBody,
   Chip,
-  Input,
   Select,
   SelectItem,
   Skeleton,
 } from "@heroui/react";
+import { HKInput } from "@/components/ui/HKInput";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -92,12 +92,11 @@ export default function MeasurementsListPage() {
       </div>
 
       <div className="mb-6 flex flex-col gap-3 sm:flex-row">
-        <Input
+        <HKInput
           aria-label={t("measurements.searchPlaceholder")}
           placeholder={t("measurements.searchPlaceholder")}
           value={search}
           onValueChange={setSearch}
-          variant="bordered"
           className="flex-1"
           startContent={
             <svg className="h-4 w-4 text-default-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

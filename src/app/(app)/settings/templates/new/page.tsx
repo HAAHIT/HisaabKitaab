@@ -1,14 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Input, Select, SelectItem } from "@heroui/react";
+import { Select, SelectItem } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { validateFormula, translateFormulaToIds, type ColumnDef } from "@/lib/formula";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
   GR, AM, OR, PU, SG, TYPE,
-  HKCard, HKToast, PageHeader, GradientButton, useIsMobile,
+  HKCard, HKToast, PageHeader, useIsMobile,
 } from "@/components/ui/hk-design";
+import { HKButton } from "@/components/ui/HKButton";
+import { HKInput } from "@/components/ui/HKInput";
 
 export default function CreateTemplatePage() {
   const router = useRouter();
@@ -152,12 +154,11 @@ export default function CreateTemplatePage() {
         <div style={{ padding: isMobile ? "0 14px 80px" : "0 28px 80px", maxWidth: 900, margin: "0 auto" }}>
           {/* Template name */}
           <HKCard style={{ marginBottom: 20 }}>
-            <Input
+            <HKInput
               label={t("templates.templateName")}
               placeholder={t("templates.templateNamePlaceholder")}
               value={name}
               onValueChange={setName}
-              variant="bordered"
               size="lg"
               isRequired
             />
@@ -217,12 +218,11 @@ export default function CreateTemplatePage() {
 
                     {/* Name + Type inputs */}
                     <div style={{ flex: 1, display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
-                      <Input
+                      <HKInput
                         label={t("templates.columnName")}
                         placeholder={t("templates.columnNamePlaceholder")}
                         value={col.name}
                         onValueChange={(v) => updateColumn(index, "name", v)}
-                        variant="bordered"
                         size="sm"
                         isRequired
                       />
@@ -356,19 +356,12 @@ export default function CreateTemplatePage() {
 
           {/* Actions */}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
-            <button
-              onClick={() => router.push("/settings/templates")}
-              style={{
-                minHeight: 48, padding: "0 20px", borderRadius: 14,
-                background: "var(--hk-badge)", border: "1px solid var(--hk-border)",
-                color: "var(--hk-text)", fontFamily: SG, fontSize: TYPE.body, fontWeight: 600, cursor: "pointer",
-              }}
-            >
+            <HKButton variant="secondary" onClick={() => router.push("/settings/templates")}>
               {t("common.cancel")}
-            </button>
-            <GradientButton onClick={handleSave} disabled={saving}>
-              {saving ? "Saving..." : t("templates.saveTemplate")}
-            </GradientButton>
+            </HKButton>
+            <HKButton onClick={handleSave} isLoading={saving}>
+              {t("templates.saveTemplate")}
+            </HKButton>
           </div>
         </div>
       </div>

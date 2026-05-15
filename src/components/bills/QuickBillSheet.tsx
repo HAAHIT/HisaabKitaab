@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, ButtonGroup, Input } from "@heroui/react";
 import BottomSheet from "@/components/ui/BottomSheet";
+import { HKButton } from "@/components/ui/HKButton";
+import { PillFilter } from "@/components/ui/hk-design";
+import { HKInput } from "@/components/ui/HKInput";
 import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -180,26 +182,24 @@ export function QuickBillSheet({
 
         {/* Amount + Description side by side */}
         <div className="flex gap-2">
-          <Input
+          <HKInput
             type="text"
             inputMode="decimal"
             label="Amount"
             placeholder="0.00"
             value={amount}
             onValueChange={handleAmountChange}
-            variant="bordered"
             isRequired
             pattern="[0-9]*[.]?[0-9]{0,2}"
             startContent={<span className="text-default-400">₹</span>}
             isInvalid={Boolean(error) && !amount}
             className="w-36 shrink-0"
           />
-          <Input
+          <HKInput
             label={t("bills.quickDescription")}
             placeholder="e.g. Hardware supplies"
             value={description}
             onValueChange={setDescription}
-            variant="bordered"
             className="flex-1"
           />
         </div>
@@ -209,19 +209,13 @@ export function QuickBillSheet({
           <span className="shrink-0 text-xs font-medium text-default-500">Pay via</span>
 
           {recordPayment ? (
-            <ButtonGroup size="sm" className="flex-1">
-              {QUICK_BILL_PAYMENT_MODES.map((mode) => (
-                <Button
-                  key={mode.value}
-                  onPress={() => setPaymentMode(mode.value)}
-                  color={paymentMode === mode.value ? "primary" : "default"}
-                  variant={paymentMode === mode.value ? "solid" : "flat"}
-                  className="flex-1"
-                >
-                  {mode.label}
-                </Button>
-              ))}
-            </ButtonGroup>
+            <div className="flex-1">
+              <PillFilter
+                options={QUICK_BILL_PAYMENT_MODES.map((m) => ({ key: m.value, label: m.label }))}
+                value={paymentMode}
+                onChange={setPaymentMode}
+              />
+            </div>
           ) : (
             <span className="flex-1 text-xs text-default-400">Record from bill page later</span>
           )}
@@ -239,18 +233,15 @@ export function QuickBillSheet({
 
         {error && <p className="text-sm text-danger">{error}</p>}
 
-        <Button
-          color="primary"
-          size="lg"
+        <HKButton
           fullWidth
+          size="lg"
           isLoading={loading}
-          onPress={handleSubmit}
+          onClick={handleSubmit}
           className="font-bold tracking-wide"
         >
-          {loading
-            ? "Creating..."
-            : `${t("bills.quickCreate")}${amountDisplay ? ` · ${amountDisplay}` : ""}`}
-        </Button>
+          {`${t("bills.quickCreate")}${amountDisplay ? ` · ${amountDisplay}` : ""}`}
+        </HKButton>
       </div>
     </BottomSheet>
   );

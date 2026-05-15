@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Chip } from "@heroui/react";
+import { Chip } from "@heroui/react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getBalanceStatusLabel, getPartyBalanceColor, formatPartyBalance, type SupportedPartyType } from "@/lib/accounting";
 
@@ -70,15 +70,12 @@ export default function BalanceHeader({
           </div>
 
           {partyPhone ? (
-            <Button
-              as="a"
+            <a
               href={`tel:${partyPhone}`}
-              size="sm"
-              variant="flat"
-              color="primary"
+              className="inline-flex h-9 items-center rounded-lg bg-primary/10 px-3 text-sm font-medium text-primary transition-colors hover:bg-primary/20"
             >
               {t("khata.call")} +91 {partyPhone}
-            </Button>
+            </a>
           ) : null}
         </div>
       </div>

@@ -1,6 +1,7 @@
 "use client";
 
-import { Card, CardBody, Button } from "@heroui/react";
+import { Card, CardBody } from "@heroui/react";
+import { HKButton } from "@/components/ui/HKButton";
 import { useRouter } from "next/navigation";
 
 export default function NotFound() {
@@ -38,14 +39,9 @@ export default function NotFound() {
               The page you are looking for doesn't exist or has been moved.
             </p>
           </div>
-          <Button
-            color="primary"
-            variant="shadow"
-            className="w-full"
-            onPress={() => router.push("/")}
-          >
+          <HKButton fullWidth onClick={() => router.push("/")}>
             Return to Dashboard
-          </Button>
+          </HKButton>
         </CardBody>
       </Card>
     </div>

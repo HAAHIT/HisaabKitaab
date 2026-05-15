@@ -9,7 +9,6 @@ import {
   ModalFooter,
   ModalHeader,
   Skeleton,
-  Button,
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { BillActionBar } from "@/components/bills/BillActionBar";
@@ -18,8 +17,9 @@ import { shareBill } from "@/lib/share";
 import { GST_STATE_CODES } from "@/lib/gst-states";
 import {
   OR, GR, AM, SG, IN, TYPE, TOUCH,
-  HKToast, StatusChip, GradientButton,
+  HKToast, StatusChip,
 } from "@/components/ui/hk-design";
+import { HKButton } from "@/components/ui/HKButton";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -206,7 +206,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
         <div style={{ fontSize: 52, marginBottom: 16 }}>📋</div>
         <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", marginBottom: 8 }}>Bill nahi mila</p>
         <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", marginBottom: 24 }}>Yeh bill exist nahi karta ya delete ho gaya</p>
-        <GradientButton onClick={() => router.push("/bills")}>Bills par wapas jao</GradientButton>
+        <HKButton onClick={() => router.push("/bills")}>Bills par wapas jao</HKButton>
       </div>
     </div>
   );
@@ -649,17 +649,16 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
             </p>
           </ModalBody>
           <ModalFooter>
-            <Button variant="flat" onPress={() => setConfirmAction(null)} style={{ fontFamily: SG }}>
+            <HKButton variant="secondary" onClick={() => setConfirmAction(null)}>
               Wapas jao
-            </Button>
-            <Button
-              color={confirmAction === "FINAL" ? "success" : "danger"}
+            </HKButton>
+            <HKButton
+              variant={confirmAction === "FINAL" ? "success" : "danger"}
               isLoading={actionLoading}
-              onPress={() => confirmAction && execStatus(confirmAction)}
-              style={{ fontFamily: SG, fontWeight: 700 }}
+              onClick={() => confirmAction && execStatus(confirmAction)}
             >
               {confirmAction === "FINAL" ? "Haan, Finalize Karo" : "Haan, Cancel Karo"}
-            </Button>
+            </HKButton>
           </ModalFooter>
         </ModalContent>
       </Modal>

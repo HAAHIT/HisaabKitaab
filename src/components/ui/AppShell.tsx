@@ -7,8 +7,8 @@ import {
   DropdownTrigger,
   DropdownMenu,
   DropdownItem,
-  Button,
 } from "@heroui/react";
+import { HKButton } from "@/components/ui/HKButton";
 import { useTheme } from "next-themes";
 import BottomSheet from "./BottomSheet";
 import { QuickBillSheet } from "@/components/bills/QuickBillSheet";
@@ -521,9 +521,9 @@ export default function AppShell({
 
           <div className="flex items-center justify-between px-3 py-2">
             <span className="text-default-500 font-medium">Language</span>
-            <Button size="sm" variant="flat" color="primary" onPress={() => setLanguage(language === "en" ? "hi" : "en")}>
+            <HKButton size="sm" onClick={() => setLanguage(language === "en" ? "hi" : "en")}>
               {language === "en" ? "HI" : "EN"}
-            </Button>
+            </HKButton>
           </div>
 
           <button

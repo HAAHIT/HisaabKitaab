@@ -2,14 +2,14 @@
 
 import { useEffect, useMemo, useState, startTransition } from "react";
 import {
-  Button,
   Card,
   CardBody,
-  Input,
   Select,
   SelectItem,
   Skeleton,
 } from "@heroui/react";
+import { HKInput } from "@/components/ui/HKInput";
+import { HKButton } from "@/components/ui/HKButton";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
   getCurrentFinancialYearRange,
@@ -376,7 +376,7 @@ export default function ReportsClient({
               ))}
             </Select>
 
-            <Input
+            <HKInput
               label={t("reports.from")}
               type="date"
               value={from}
@@ -386,10 +386,9 @@ export default function ReportsClient({
                 setPreviewError(null);
                 setFrom(value);
               }}
-              variant="bordered"
             />
 
-            <Input
+            <HKInput
               label={t("reports.to")}
               type="date"
               value={to}
@@ -399,7 +398,6 @@ export default function ReportsClient({
                 setPreviewError(null);
                 setTo(value);
               }}
-              variant="bordered"
             />
           </div>
         </CardBody>
@@ -588,14 +586,12 @@ export default function ReportsClient({
               <h3 className="text-lg font-semibold">{t("reports.transactionRegister")}</h3>
               <p className="text-sm text-default-500">{t("reports.transactionDesc")}</p>
             </div>
-            <Button
-              color="primary"
-              className="bg-gradient-to-r from-blue-600 to-indigo-600 font-semibold"
+            <HKButton
               isDisabled={exportBlocked}
-              onPress={() => downloadFile(transactionUrl)}
+              onClick={() => downloadFile(transactionUrl)}
             >
               {t("reports.downloadCSV")}
-            </Button>
+            </HKButton>
           </CardBody>
         </Card>
 
@@ -605,14 +601,12 @@ export default function ReportsClient({
               <h3 className="text-lg font-semibold">{t("reports.trialBalance")}</h3>
               <p className="text-sm text-default-500">{t("reports.trialBalanceDesc")}</p>
             </div>
-            <Button
-              color="primary"
-              variant="flat"
+            <HKButton
               isDisabled={exportBlocked}
-              onPress={() => downloadFile(trialBalanceUrl)}
+              onClick={() => downloadFile(trialBalanceUrl)}
             >
               {t("reports.downloadCSV")}
-            </Button>
+            </HKButton>
           </CardBody>
         </Card>
 
@@ -640,14 +634,12 @@ export default function ReportsClient({
                 </SelectItem>
               ))}
             </Select>
-            <Button
-              color="primary"
-              variant="flat"
+            <HKButton
               isDisabled={exportBlocked || !selectedPartyId}
-              onPress={() => downloadFile(partyLedgerUrl)}
+              onClick={() => downloadFile(partyLedgerUrl)}
             >
               {t("reports.downloadCSV")}
-            </Button>
+            </HKButton>
           </CardBody>
         </Card>
       </div>
@@ -664,13 +656,12 @@ export default function ReportsClient({
                 Tally
               </span>
             </div>
-            <Button
-              color="warning"
-              className="bg-gradient-to-r from-[#f76000] to-[#7b5ef6] text-white font-semibold shadow-md w-full sm:w-auto"
-              onPress={() => window.location.href = "/settings/tally-export"}
+            <HKButton
+              className="w-full sm:w-auto"
+              onClick={() => window.location.href = "/settings/tally-export"}
             >
               Send to CA →
-            </Button>
+            </HKButton>
           </CardBody>
         </Card>
 
@@ -685,14 +676,13 @@ export default function ReportsClient({
                 Tally
               </span>
             </div>
-            <Button
-              color="warning"
-              variant="flat"
-              className="font-semibold w-full sm:w-auto"
-              onPress={() => window.location.href = "/settings/tally-import"}
+            <HKButton
+              variant="secondary"
+              className="w-full sm:w-auto"
+              onClick={() => window.location.href = "/settings/tally-import"}
             >
               Start Import →
-            </Button>
+            </HKButton>
           </CardBody>
         </Card>
       </div>

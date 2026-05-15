@@ -7,11 +7,11 @@ import {
   ModalHeader,
   ModalBody,
   ModalFooter,
-  Button,
-  Input,
   Select,
   SelectItem,
 } from "@heroui/react";
+import { HKButton } from "@/components/ui/HKButton";
+import { HKInput } from "@/components/ui/HKInput";
 import { motion } from "framer-motion";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -117,27 +117,24 @@ export function QuickAddPartyModal({
                 transition={{ duration: 0.3, ease: "easeOut" }}
                 className="flex flex-col gap-4"
               >
-                <Input
+                <HKInput
                   label="Party Name *"
                   autoFocus
                   placeholder="Enter name"
                   value={name}
                   onValueChange={setName}
-                  variant="bordered"
                 />
-                <Input
+                <HKInput
                   label="Phone"
                   placeholder="10 digit mobile number"
                   value={phone}
                   onValueChange={setPhone}
-                  variant="bordered"
                 />
-                <Input
+                <HKInput
                   label="GSTIN"
                   placeholder="22AAAAA0000A1Z5"
                   value={gstin}
                   onValueChange={setGstin}
-                  variant="bordered"
                 />
                 <Select
                   label="Type"
@@ -156,12 +153,12 @@ export function QuickAddPartyModal({
               </motion.div>
             </ModalBody>
             <ModalFooter>
-              <Button color="danger" variant="light" onPress={onClose}>
+              <HKButton variant="secondary" onClick={onClose}>
                 Cancel
-              </Button>
-              <Button color="primary" onPress={() => handleSave(onClose)} isLoading={isLoading}>
+              </HKButton>
+              <HKButton onClick={() => handleSave(onClose)} isLoading={isLoading}>
                 Create Party
-              </Button>
+              </HKButton>
             </ModalFooter>
           </>
         )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@heroui/react";
+import { HKButton } from "@/components/ui/HKButton";
 import { ElementType } from "react";
 import { motion } from "framer-motion";
 
@@ -39,14 +39,12 @@ export function EmptyState({
         {description}
       </p>
       {actionLabel && onAction && (
-        <Button 
-          color="primary" 
-          variant="shadow" 
-          onPress={onAction}
+        <HKButton
+          onClick={onAction}
           className="mt-8 font-medium px-8"
         >
           {actionLabel}
-        </Button>
+        </HKButton>
       )}
     </motion.div>
   );

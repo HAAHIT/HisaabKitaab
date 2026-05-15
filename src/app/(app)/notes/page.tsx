@@ -7,8 +7,9 @@ import {
   GR, AM, PU, OR, SG, IN, TYPE,
   fmtFull, useIsMobile,
   HKCard, HKToast, SearchBox, PillFilter,
-  PageHeader, GradientButton,
+  PageHeader,
 } from "@/components/ui/hk-design";
+import { HKButton } from "@/components/ui/HKButton";
 
 interface Note {
   id: string;
@@ -110,9 +111,9 @@ export default function NotesListPage() {
         action={
           !isMobile && (
             <div style={{ display: "flex", gap: 8 }}>
-              <GradientButton onClick={() => router.push("/notes/new?type=CREDIT_NOTE")}>
+              <HKButton onClick={() => router.push("/notes/new?type=CREDIT_NOTE")}>
                 + Credit Note
-              </GradientButton>
+              </HKButton>
               <button
                 onClick={() => router.push("/notes/new?type=DEBIT_NOTE")}
                 style={{
@@ -154,9 +155,9 @@ export default function NotesListPage() {
               {search || typeFilter !== "ALL" ? "Search badlo ya naya note banao" : "Pehla credit ya debit note banao"}
             </p>
             {!search && typeFilter === "ALL" && (
-              <GradientButton onClick={() => router.push("/notes/new?type=CREDIT_NOTE")}>
+              <HKButton onClick={() => router.push("/notes/new?type=CREDIT_NOTE")}>
                 + Credit Note Banao
-              </GradientButton>
+              </HKButton>
             )}
           </div>
         ) : (

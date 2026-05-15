@@ -8,8 +8,9 @@ import {
   OR, GR, AM, SG, IN, TYPE,
   fmtFull, useIsMobile,
   HKCard, StatusChip, HKToast, SearchBox, PillFilter,
-  PageHeader, GradientButton,
+  PageHeader,
 } from "@/components/ui/hk-design";
+import { HKButton } from "@/components/ui/HKButton";
 
 interface Bill {
   id: string;
@@ -115,9 +116,9 @@ export default function PurchasesListPage() {
         isMobile={isMobile}
         action={
           !isMobile && (
-            <GradientButton onClick={() => router.push("/purchases/new")}>
+            <HKButton onClick={() => router.push("/purchases/new")}>
               + Record Purchase
-            </GradientButton>
+            </HKButton>
           )
         }
       />
@@ -149,9 +150,9 @@ export default function PurchasesListPage() {
               {search || statusFilter !== "ALL" ? "Search badlo ya naya purchase record karo" : "Pehla purchase record karke shuru karo"}
             </p>
             {!search && statusFilter === "ALL" && (
-              <GradientButton onClick={() => router.push("/purchases/new")}>
+              <HKButton onClick={() => router.push("/purchases/new")}>
                 + Record Purchase
-              </GradientButton>
+              </HKButton>
             )}
           </div>
         ) : (

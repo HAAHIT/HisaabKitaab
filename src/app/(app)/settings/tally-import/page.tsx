@@ -4,8 +4,9 @@ import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   GR, AM, OR, PU, SG, IN, TYPE,
-  HKCard, HKToast, PageHeader, GradientButton, useIsMobile,
+  HKCard, HKToast, PageHeader, useIsMobile,
 } from "@/components/ui/hk-design";
+import { HKButton } from "@/components/ui/HKButton";
 
 function TallyImportContent() {
   const router = useRouter();
@@ -214,9 +215,7 @@ function TallyImportContent() {
                 </div>
 
                 <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                  <GradientButton onClick={handleFetchPreview} disabled={loading || !importFile}>
-                    {loading ? "Loading..." : "Aage Badho →"}
-                  </GradientButton>
+                  <HKButton onClick={handleFetchPreview} isLoading={loading} isDisabled={!importFile}>Aage Badho →</HKButton>
                 </div>
               </div>
             )}
@@ -267,7 +266,7 @@ function TallyImportContent() {
 
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
                   <button onClick={() => setStep(1)} style={navBtnStyle()}>← Wapas</button>
-                  <GradientButton onClick={handleImport}>Haan, Import Karo →</GradientButton>
+                  <HKButton onClick={handleImport}>Haan, Import Karo →</HKButton>
                 </div>
               </div>
             )}
@@ -344,9 +343,9 @@ function TallyImportContent() {
                 </div>
 
                 <div style={{ marginTop: 24 }}>
-                  <GradientButton onClick={() => router.push(returnTo)}>
+                  <HKButton onClick={() => router.push(returnTo)}>
                     {returnTo === "/dashboard" ? "Dashboard Par Jao" : "Wapas Jao"}
-                  </GradientButton>
+                  </HKButton>
                 </div>
               </div>
             )}

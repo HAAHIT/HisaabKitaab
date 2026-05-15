@@ -7,8 +7,6 @@ import {
   type SupportedPartyType,
 } from "@/lib/accounting";
 import {
-  Button,
-  Input,
   Select,
   SelectItem,
   Skeleton,
@@ -19,8 +17,10 @@ import {
   OR, PU, GR, SG, IN, TYPE,
   fmt, fmtFull, useIsMobile,
   HKCard, HKToast, SearchBox, PillFilter,
-  PageHeader, GradientButton,
+  PageHeader,
 } from "@/components/ui/hk-design";
+import { HKButton } from "@/components/ui/HKButton";
+import { HKInput } from "@/components/ui/HKInput";
 import { OverdueBanner } from "@/components/ui/OverdueBanner";
 import { normalizeIndianPhone, buildWhatsAppReminderUrl } from "@/lib/phone";
 import { useOverdueData } from "@/hooks/useOverdueData";
@@ -244,7 +244,7 @@ export default function PartiesPage() {
           title="Udhar Khata"
           subtitle="Party-wise hisaab"
           isMobile={isMobile}
-          action={<GradientButton onClick={openCreate}>+ Party Jodo</GradientButton>}
+          action={<HKButton onClick={openCreate}>+ Party Jodo</HKButton>}
         />
 
         <div style={{ padding: isMobile ? "0 14px" : "0 28px", maxWidth: 1440, margin: "0 auto" }}>
@@ -395,7 +395,7 @@ export default function PartiesPage() {
                   : "Pehli party jodke hisaab shuru karo"}
               </p>
               {!search && typeFilter === "ALL" && (
-                <GradientButton onClick={openCreate}>+ Pehli Party Jodo</GradientButton>
+                <HKButton onClick={openCreate}>+ Pehli Party Jodo</HKButton>
               )}
             </div>
           ) : (
@@ -809,43 +809,38 @@ export default function PartiesPage() {
                 gap: 14,
               }}
             >
-              <Input
+              <HKInput
                 label="Naam"
                 placeholder={t("parties.namePlaceholder")}
                 value={formName}
                 onValueChange={setFormName}
-                variant="bordered"
                 isRequired
               />
-              <Input
+              <HKInput
                 label="Phone"
                 placeholder={t("bills.phonePlaceholder")}
                 value={formPhone}
                 onValueChange={setFormPhone}
-                variant="bordered"
                 type="tel"
               />
-              <Input
+              <HKInput
                 label="Email"
                 placeholder={t("parties.emailPlaceholder")}
                 value={formEmail}
                 onValueChange={setFormEmail}
-                variant="bordered"
                 type="email"
               />
-              <Input
+              <HKInput
                 label="Pata"
                 placeholder={t("bills.addressPlaceholder")}
                 value={formAddress}
                 onValueChange={setFormAddress}
-                variant="bordered"
               />
-              <Input
+              <HKInput
                 label="GSTIN"
                 placeholder={t("bills.gstinPlaceholder")}
                 value={formGstin}
                 onValueChange={setFormGstin}
-                variant="bordered"
               />
               <Select
                 label="Type"
@@ -861,13 +856,12 @@ export default function PartiesPage() {
                 <SelectItem key="VENDOR">Supplier (Vendor)</SelectItem>
               </Select>
               {!editingParty && (
-                <Input
+                <HKInput
                   label="Opening Balance"
                   placeholder="0"
                   type="number"
                   value={formBalance}
                   onValueChange={setFormBalance}
-                  variant="bordered"
                   description={
                     formType === "CUSTOMER"
                       ? t("parties.customerBalanceHelp")
@@ -887,57 +881,21 @@ export default function PartiesPage() {
                 flexShrink: 0,
               }}
             >
-              <Button
-                variant="flat"
+              <HKButton
+                variant="secondary"
                 style={{ flex: 1 }}
-                onPress={() => setShowPanel(false)}
+                onClick={() => setShowPanel(false)}
+                isDisabled={saving}
               >
                 Cancel
-              </Button>
-              <button
+              </HKButton>
+              <HKButton
                 onClick={handleSave}
-                disabled={saving}
-                style={{
-                  flex: 2,
-                  minHeight: 48,
-                  padding: "0 20px",
-                  borderRadius: 14,
-                  background: `linear-gradient(135deg, ${OR}, ${PU})`,
-                  color: "#fff",
-                  fontWeight: 700,
-                  fontSize: TYPE.body,
-                  cursor: saving ? "not-allowed" : "pointer",
-                  border: "none",
-                  fontFamily: SG,
-                  boxShadow: `0 4px 16px ${OR}44`,
-                  opacity: saving ? 0.7 : 1,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 8,
-                }}
+                isLoading={saving}
+                style={{ flex: 2 }}
               >
-                {saving ? (
-                  <>
-                    <span
-                      style={{
-                        width: 18,
-                        height: 18,
-                        borderRadius: "50%",
-                        border: "2.5px solid rgba(255,255,255,0.3)",
-                        borderTopColor: "white",
-                        display: "inline-block",
-                        animation: "hk-spin 0.7s linear infinite",
-                      }}
-                    />{" "}
-                    Saving...
-                  </>
-                ) : editingParty ? (
-                  "Update Karo ✓"
-                ) : (
-                  "Party Jodo ✓"
-                )}
-              </button>
+                {editingParty ? "Update Karo ✓" : "Party Jodo ✓"}
+              </HKButton>
             </div>
           </div>
         </>
