@@ -150,6 +150,7 @@ function momDelta(current: number, last: number): number | null {
 }
 
 function OverviewCard({ data, isMobile }: { data: DashboardData; isMobile: boolean }) {
+  const { t } = useLanguage();
   const allCashFlow = data.cashFlow ?? [];
   const [chartMonths, setChartMonths] = useState(6);
   const cashFlow = chartMonths >= allCashFlow.length ? allCashFlow : allCashFlow.slice(allCashFlow.length - chartMonths);
@@ -169,9 +170,9 @@ function OverviewCard({ data, isMobile }: { data: DashboardData; isMobile: boole
   const billedDelta = momDelta(thisMonthBilled, lastMonthBilled);
 
   const metrics = [
-    { label: "Kul Billed", sub: "is mahine", value: thisMonthBilled, color: PU, delta: billedDelta },
-    { label: "Mila", sub: "collected", value: s.collectedThisMonth, color: OR, delta: collectedDelta },
-    { label: "Baaki", sub: "outstanding", value: Math.abs(s.receivable), color: GR, delta: null },
+    { label: t("dash.kulBilled"), sub: t("dash.kulBilledSub"), value: thisMonthBilled, color: PU, delta: billedDelta },
+    { label: t("dash.milaLabel"), sub: t("dash.milaSub"), value: s.collectedThisMonth, color: OR, delta: collectedDelta },
+    { label: t("dash.receivable"), sub: t("dash.baakiSub"), value: Math.abs(s.receivable), color: GR, delta: null },
   ];
 
   const timeFilters: { label: string; months: number }[] = [
@@ -263,12 +264,12 @@ function OverviewCard({ data, isMobile }: { data: DashboardData; isMobile: boole
         </>
       ) : (
         <div style={{ height: H, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--hk-sub)", fontSize: 13 }}>
-          Koi data nahi — bills ya payments record karo
+          {t("dash.noChartData")}
         </div>
       )}
 
       <div style={{ display: "flex", gap: 20, marginTop: 14 }}>
-        {[{ c: PU, l: "Kul Billed" }, { c: OR, l: "Mila" }].map((item) => (
+        {[{ c: PU, l: t("dash.kulBilled") }, { c: OR, l: t("dash.milaLabel") }].map((item) => (
           <div key={item.l} style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ width: 22, height: 3, borderRadius: 2, background: item.c }}/>
             <span style={{ fontSize: TYPE.bodySmall, fontWeight: 600, color: "var(--hk-sub)", fontFamily: SG }}>{item.l}</span>
@@ -282,7 +283,8 @@ function OverviewCard({ data, isMobile }: { data: DashboardData; isMobile: boole
 // ── Bills Bar Card ────────────────────────────────────────────────────────────
 
 function BillsBarCard({ data, onNavigate }: { data: DashboardData; onNavigate: () => void }) {
-  // Use this-month stats for the "Is Mahine" card; fall back to all-time if API is older
+  const { t } = useLanguage();
+  // Use this-month stats for the card; fall back to all-time if API is older
   const stats = data.thisMonthBillStats ?? data.billStats ?? [];
   const finalCount = stats.find((s) => s.status === "FINAL")?._count ?? 0;
   const draftCount = stats.find((s) => s.status === "DRAFT")?._count ?? 0;
@@ -290,14 +292,14 @@ function BillsBarCard({ data, onNavigate }: { data: DashboardData; onNavigate: (
   const totalBills = finalCount + draftCount + cancelCount;
   const maxCount = Math.max(finalCount, draftCount, cancelCount, 1);
   const bars = [
-    { label: "Final ✓", count: finalCount, color: GR },
-    { label: "Draft", count: draftCount, color: AM },
-    { label: "Cancel", count: cancelCount, color: OR },
+    { label: t("bills.filter.final") + " ✓", count: finalCount, color: GR },
+    { label: t("bills.filter.draft"), count: draftCount, color: AM },
+    { label: t("bills.filter.cancelled"), count: cancelCount, color: OR },
   ];
 
   return (
     <HKCard>
-      <CardHead label="Bills" title="Is Mahine" />
+      <CardHead label={t("nav.bills")} title={t("dash.billsThisMonth")} />
       <div style={{ display: "flex", gap: 14, marginBottom: 16, flexWrap: "wrap" }}>
         {bars.map((b) => (
           <div key={b.label} style={{ display: "flex", alignItems: "center", gap: 7 }}>
@@ -326,7 +328,7 @@ function BillsBarCard({ data, onNavigate }: { data: DashboardData; onNavigate: (
         </div>
       ) : (
         <div style={{ height: 140, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--hk-sub)", fontSize: TYPE.body, fontWeight: 500 }}>
-          Koi bill nahi abhi tak
+          {t("dash.noBillsYet")}
         </div>
       )}
       <div style={{ marginTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "11px 14px", borderRadius: 12, background: "var(--hk-badge)" }}>
@@ -336,10 +338,10 @@ function BillsBarCard({ data, onNavigate }: { data: DashboardData; onNavigate: (
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
             </svg>
           </div>
-          <span style={{ color: "var(--hk-sub)", fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG }}>{totalBills} bills total</span>
+          <span style={{ color: "var(--hk-sub)", fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG }}>{totalBills} {t("dash.billsTotal")}</span>
         </div>
         <button onClick={onNavigate} style={{ color: OR, fontSize: TYPE.bodySmall, fontWeight: 700, fontFamily: SG, cursor: "pointer", background: "none", border: "none", padding: "6px 4px" }}>
-          Dekho →
+          {t("dash.viewBills")}
         </button>
       </div>
     </HKCard>
@@ -349,6 +351,7 @@ function BillsBarCard({ data, onNavigate }: { data: DashboardData; onNavigate: (
 // ── Payments Flow Card ────────────────────────────────────────────────────────
 
 function PaymentsFlowCard({ data }: { data: DashboardData }) {
+  const { t } = useLanguage();
   const cashFlow = data.cashFlow ?? [];
   const max = Math.max(...cashFlow.flatMap((d) => [d.received, d.paid]), 1);
   const totalIn = cashFlow.reduce((s, d) => s + d.received, 0);
@@ -357,7 +360,7 @@ function PaymentsFlowCard({ data }: { data: DashboardData }) {
 
   return (
     <HKCard>
-      <CardHead label="Payments" title="6 Mahine" right={<DeltaBadge val={delta} color={delta >= 0 ? GR : OR} />} />
+      <CardHead label={t("nav.payments")} title={t("dash.paymentsMonths")} right={<DeltaBadge val={delta} color={delta >= 0 ? GR : OR} />} />
       {cashFlow.length >= 2 ? (
         <>
           <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 130 }}>
@@ -376,7 +379,7 @@ function PaymentsFlowCard({ data }: { data: DashboardData }) {
             })}
           </div>
           <div style={{ display: "flex", gap: 18, marginTop: 14 }}>
-            {[{ c: GR, l: "Mila" }, { c: OR + "88", l: "Diya" }].map((item) => (
+            {[{ c: GR, l: t("dash.milaLabel") }, { c: OR + "88", l: t("dash.spent") }].map((item) => (
               <div key={item.l} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <div style={{ width: 12, height: 12, borderRadius: 3, background: item.c }}/>
                 <span style={{ fontSize: TYPE.bodySmall, fontWeight: 600, color: "var(--hk-sub)", fontFamily: SG }}>{item.l}</span>
@@ -386,7 +389,7 @@ function PaymentsFlowCard({ data }: { data: DashboardData }) {
         </>
       ) : (
         <div style={{ height: 130, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--hk-sub)", fontSize: TYPE.body, fontWeight: 500, textAlign: "center" }}>
-          Payments record karo chart dekhne ke liye
+          {t("dash.noPaymentsChart")}
         </div>
       )}
     </HKCard>
@@ -396,6 +399,7 @@ function PaymentsFlowCard({ data }: { data: DashboardData }) {
 // ── Party Ledger Card ─────────────────────────────────────────────────────────
 
 function LedgerCard({ data, onNavigate }: { data: DashboardData; onNavigate: () => void }) {
+  const { t } = useLanguage();
   const parties = data.topParties ?? [];
   const maxBal = Math.max(...parties.map((p) => Math.abs(p.currentBalance)), 1);
   const s = data.summary;
@@ -404,15 +408,15 @@ function LedgerCard({ data, onNavigate }: { data: DashboardData; onNavigate: () 
 
   return (
     <HKCard>
-      <CardHead label="Udhar Khata" title="Party Ledger" right={
+      <CardHead label={t("nav.khata")} title={t("dash.partyLedger")} right={
         <button onClick={onNavigate} style={{ fontSize: TYPE.bodySmall, color: OR, fontWeight: 700, fontFamily: SG, cursor: "pointer", background: "none", border: "none", padding: "6px 4px" }}>
-          Sab Dekho →
+          {t("dash.viewAllParties")}
         </button>
       }/>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 18 }}>
         {[
-          { l: "Lena Baki", v: recAmt, c: GR, i: "↑" },
-          { l: "Dena Baki", v: payAmt, c: OR, i: "↓" },
+          { l: t("dash.receivableLabel"), v: recAmt, c: GR, i: "↑" },
+          { l: t("dash.payableLabel"), v: payAmt, c: OR, i: "↓" },
         ].map((item) => (
           <div key={item.l} style={{ padding: "12px 14px", borderRadius: 12, background: item.c + "14", border: `1px solid ${item.c}22` }}>
             <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4 }}>
@@ -448,7 +452,7 @@ function LedgerCard({ data, onNavigate }: { data: DashboardData; onNavigate: () 
       })}
       {parties.length === 0 && (
         <div style={{ textAlign: "center", padding: "24px 0", color: "var(--hk-sub)", fontSize: TYPE.body, fontWeight: 500 }}>
-          Parties add karo Udhar Khata dekhne ke liye
+          {t("dash.noParties")}
         </div>
       )}
     </HKCard>
@@ -458,6 +462,7 @@ function LedgerCard({ data, onNavigate }: { data: DashboardData; onNavigate: () 
 // ── Collections Donut Card ────────────────────────────────────────────────────
 
 function DonutCard({ data }: { data: DashboardData }) {
+  const { t } = useLanguage();
   const stats = data.billStats ?? [];
   const finalAmt = Number(stats.find((s) => s.status === "FINAL")?._sum.grandTotal ?? 0);
   const draftAmt = Number(stats.find((s) => s.status === "DRAFT")?._sum.grandTotal ?? 0);
@@ -469,9 +474,9 @@ function DonutCard({ data }: { data: DashboardData }) {
   const r = 60, cx = 93, cy = 93;
   const circ = 2 * Math.PI * r;
   const segs = [
-    { pct: finalPct, color: GR, label: "Collect", val: `${Math.round(finalPct * 100)}%` },
-    { pct: draftPct, color: PU, label: "Baaki", val: `${Math.round(draftPct * 100)}%` },
-    { pct: restPct, color: OR, label: "Overdue", val: `${Math.round(restPct * 100)}%` },
+    { pct: finalPct, color: GR, label: t("dash.collectLabel"), val: `${Math.round(finalPct * 100)}%` },
+    { pct: draftPct, color: PU, label: t("dash.pendingLabel"), val: `${Math.round(draftPct * 100)}%` },
+    { pct: restPct, color: OR, label: t("dash.overdueLabel"), val: `${Math.round(restPct * 100)}%` },
   ];
   let cum = -0.25;
   const arcs = segs.map((s) => {
@@ -483,7 +488,7 @@ function DonutCard({ data }: { data: DashboardData }) {
 
   return (
     <HKCard>
-      <CardHead label="Collections" title="Breakdown" />
+      <CardHead label={t("dash.collections")} title={t("dash.breakdown")} />
       <div style={{ display: "flex", justifyContent: "center", margin: "0 0 14px" }}>
         <svg width="186" height="186" viewBox="0 0 186 186">
           <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--hk-badge)" strokeWidth="18"/>
@@ -495,7 +500,7 @@ function DonutCard({ data }: { data: DashboardData }) {
             {Math.round(finalPct * 100)}%
           </text>
           <text x={cx} y={cy + 16} textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--hk-sub)" fontFamily={SG}>
-            Mila
+            {t("dash.collectLabel")}
           </text>
         </svg>
       </div>
@@ -515,12 +520,13 @@ function DonutCard({ data }: { data: DashboardData }) {
 // ── Recent Payments Card ──────────────────────────────────────────────────────
 
 function RecentPaymentsCard({ data, onNavigate }: { data: DashboardData; onNavigate: () => void }) {
+  const { t } = useLanguage();
   const payments = data.recentPayments ?? [];
   return (
     <HKCard>
-      <CardHead label="Payments" title="Recent" right={
+      <CardHead label={t("nav.payments")} title={t("dash.recentLabel")} right={
         <button onClick={onNavigate} style={{ fontSize: TYPE.bodySmall, color: OR, fontWeight: 700, fontFamily: SG, cursor: "pointer", background: "none", border: "none", padding: "6px 4px" }}>
-          Sab Dekho →
+          {t("dash.viewAllParties")}
         </button>
       }/>
       {payments.length > 0 ? (
@@ -559,7 +565,7 @@ function RecentPaymentsCard({ data, onNavigate }: { data: DashboardData; onNavig
         </div>
       ) : (
         <div style={{ textAlign: "center", padding: "36px 0", color: "var(--hk-sub)", fontSize: TYPE.body, fontWeight: 500 }}>
-          Koi payment nahi abhi tak
+          {t("dash.noPaymentsYet")}
         </div>
       )}
     </HKCard>
@@ -639,7 +645,7 @@ export default function DashboardPage() {
         </div>
         <div>
           <h2 style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", marginBottom: 8, fontFamily: SG }}>{error}</h2>
-          <p style={{ fontSize: TYPE.body, fontWeight: 500, color: "var(--hk-sub)", fontFamily: SG }}>Data load nahi hua. Dobara try karo.</p>
+          <p style={{ fontSize: TYPE.body, fontWeight: 500, color: "var(--hk-sub)", fontFamily: SG }}>{t("dash.errorRetry")}</p>
         </div>
         <HKButton onClick={() => { setLoading(true); fetchDashboard(); }}>Try Again</HKButton>
       </div>
@@ -699,15 +705,15 @@ export default function DashboardPage() {
             <span style={{ fontSize: 20 }}>📁</span>
             <div>
               <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG }}>
-                Quarter end aa raha hai
+                {t("dash.tallyNudgeTitle")}
               </p>
               <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--hk-sub)", marginTop: 2 }}>
-                Tally file CA ko bhejo
+                {t("dash.tallyNudgeSubtitle")}
               </p>
             </div>
           </div>
           <span style={{ color: "var(--hk-text)", fontWeight: 700, fontSize: 14 }}>
-            Bhejo →
+            {t("dash.tallyNudgeAction")}
           </span>
         </div>
       )}
@@ -723,7 +729,7 @@ export default function DashboardPage() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22, gap: 12, flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <h1 style={{ fontSize: isMobile ? TYPE.h1Mobile : TYPE.h1, fontWeight: 700, color: "var(--hk-text)", letterSpacing: "-0.5px", fontFamily: SG, lineHeight: 1.2 }}>
-            Apna Karobaar
+            {t("dash.pageTitle")}
           </h1>
           <div style={{
             display: "flex", alignItems: "center", gap: 7,

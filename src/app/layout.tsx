@@ -20,9 +20,9 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "HisaabKitaab — Manufacturing Management",
+  title: "HisaabKitaab — Business Accounting & Billing",
   description:
-    "Manage bills, payments, and measurements for your manufacturing business.",
+    "Cloud billing, payments, and Tally-compatible accounting for Indian businesses. GST-ready invoicing with double-entry bookkeeping.",
   icons: { icon: "/favicon.ico" },
 };
 

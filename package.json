@@ -15,7 +15,8 @@
     "media:migrate": "npx tsx scripts/migrate-legacy-media.ts",
     "postinstall": "prisma generate",
     "clean": "node -e \"fs.rmSync('.next', { recursive: true, force: true })\"",
-    "test": "vitest"
+    "test": "node --max-old-space-size=4096 ./node_modules/vitest/vitest.mjs",
+    "test:ci": "node --max-old-space-size=4096 ./node_modules/vitest/vitest.mjs run"
   },
   "overrides": {
     "picomatch": "^2.3.2",

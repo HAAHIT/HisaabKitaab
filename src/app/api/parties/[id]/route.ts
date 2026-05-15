@@ -152,49 +152,54 @@ export async function PATCH(
       );
     }
 
-    const party = await prisma.party.update({
-      where: { id },
-      data: {
-        name: nextName,
-        phone: normalizeOptionalString(body.phone),
-        email: normalizeOptionalString(body.email),
-        address: normalizeOptionalString(body.address),
-        gstin: normalizedGstin,
-        type: nextType,
-      },
-    });
-
-    // [MCA GSR 247(E)] Append-only edit log — mandatory since April 1 2023.
-    // Captures field-level changes for statutory audit compliance.
-    const changedFields = Object.keys(body);
-    if (changedFields.length > 0) {
-      await prisma.auditLog.create({
+    const party = await prisma.$transaction(async (tx) => {
+      const updatedParty = await tx.party.update({
+        where: { id },
         data: {
-          tenantId,
-          entityType: "Party",
-          entityId: party.id,
-          userId: userId,
-          action: "UPDATE",
-          fieldName: changedFields.join(","),
-          oldValue: JSON.stringify(
-            Object.fromEntries(
-              changedFields.map((f) => [
-                f,
-                (existingParty as Record<string, unknown>)[f] ?? null,
-              ])
-            )
-          ),
-          newValue: JSON.stringify(
-            Object.fromEntries(
-              changedFields.map((f) => [
-                f,
-                (party as Record<string, unknown>)[f] ?? null,
-              ])
-            )
-          ),
+          name: nextName,
+          phone: normalizeOptionalString(body.phone),
+          email: normalizeOptionalString(body.email),
+          address: normalizeOptionalString(body.address),
+          gstin: normalizedGstin,
+          type: nextType,
         },
       });
-    }
+
+      // [MCA GSR 247(E)] Append-only edit log — mandatory since April 1 2023.
+      // Captures field-level changes for statutory audit compliance.
+      // Runs inside the same transaction as the update so both succeed or both fail.
+      const changedFields = Object.keys(body);
+      if (changedFields.length > 0) {
+        await tx.auditLog.create({
+          data: {
+            tenantId,
+            entityType: "Party",
+            entityId: updatedParty.id,
+            userId: userId,
+            action: "UPDATE",
+            fieldName: changedFields.join(","),
+            oldValue: JSON.stringify(
+              Object.fromEntries(
+                changedFields.map((f) => [
+                  f,
+                  (existingParty as Record<string, unknown>)[f] ?? null,
+                ])
+              )
+            ),
+            newValue: JSON.stringify(
+              Object.fromEntries(
+                changedFields.map((f) => [
+                  f,
+                  (updatedParty as Record<string, unknown>)[f] ?? null,
+                ])
+              )
+            ),
+          },
+        });
+      }
+
+      return updatedParty;
+    });
 
     return NextResponse.json({ party });
   } catch (error) {
