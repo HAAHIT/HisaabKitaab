@@ -76,6 +76,11 @@ export const translations = {
     "register.hasAccount": "Already have an account?",
     "register.login": "Sign in",
     "register.error": "Registration failed",
+    "auth.brand.tagline": "Accounting that speaks your language",
+    "auth.brand.headline": "Run your books the way India runs business",
+    "auth.brand.subheadline":
+      "Double-entry bookkeeping, GST-ready vouchers, and Tally-compatible exports — built for Indian SMBs.",
+    "auth.brand.trust": "Tally ERP 9 & Prime compatible · GST-ready · Indian FY (Apr–Mar)",
     "dash.title": "Dashboard",
     "dash.overview": "Business overview at a glance",
     "dash.receivable": "Receivable",
@@ -587,6 +592,11 @@ export const translations = {
     "register.hasAccount": "क्या आपके पास पहले से खाता है?",
     "register.login": "साइन इन करें",
     "register.error": "पंजीकरण विफल",
+    "auth.brand.tagline": "आपकी भाषा में बोलने वाला अकाउंटिंग सिस्टम",
+    "auth.brand.headline": "भारत के व्यापार के तरीके से अपनी बही चलाएं",
+    "auth.brand.subheadline":
+      "डबल-एंट्री बहीखाता, GST-तैयार वाउचर, और Tally के साथ संगत एक्सपोर्ट — भारतीय SMB के लिए बना।",
+    "auth.brand.trust": "Tally ERP 9 और Prime संगत · GST-तैयार · भारतीय FY (अप्रैल–मार्च)",
     "dash.title": "डैशबोर्ड",
     "dash.overview": "व्यापार का त्वरित अवलोकन",
     "dash.receivable": "प्राप्य",

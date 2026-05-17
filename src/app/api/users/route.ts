@@ -33,21 +33,38 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const users = await prisma.user.findMany({
-    where: { tenantId },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      phone: true,
-      role: true,
-      isActive: true,
-      createdAt: true,
-    },
-    orderBy: { createdAt: "desc" },
-  });
+  const { searchParams } = new URL(request.url);
+  const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1);
+  const limit = Math.min(
+    Math.max(1, parseInt(searchParams.get("limit") || "50", 10) || 50),
+    200
+  );
 
-  return NextResponse.json({ users });
+  const [users, total] = await Promise.all([
+    prisma.user.findMany({
+      where: { tenantId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.user.count({ where: { tenantId } }),
+  ]);
+
+  return NextResponse.json({
+    users,
+    total,
+    page,
+    totalPages: Math.max(1, Math.ceil(total / limit)),
+  });
 }
 
 // POST /api/users — Create a new user (Admin only)

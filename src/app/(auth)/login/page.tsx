@@ -55,86 +55,63 @@ export default async function LoginPage({
 
   return (
     <div
+      className="hk-auth-shell"
       style={{
         minHeight: "100vh",
-        background: "var(--hk-bg)",
         display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "24px 16px",
-        position: "relative",
-        overflow: "hidden",
+        background: "var(--hk-bg)",
         fontFamily: "var(--font-space-grotesk), sans-serif",
       }}
     >
-      {/* Background decorative blurs */}
-      <div
+      {/* Marketing side — 60% */}
+      <aside
+        className="hk-auth-marketing"
         style={{
-          position: "absolute",
-          top: -120,
-          right: -120,
-          width: 320,
-          height: 320,
-          borderRadius: "50%",
-          background: "rgba(247, 96, 0, 0.12)",
-          filter: "blur(80px)",
-          pointerEvents: "none",
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          bottom: -120,
-          left: -120,
-          width: 320,
-          height: 320,
-          borderRadius: "50%",
-          background: "rgba(123, 94, 246, 0.12)",
-          filter: "blur(80px)",
-          pointerEvents: "none",
-        }}
-      />
-
-      {/* Card */}
-      <div
-        style={{
+          flex: "0 0 60%",
           position: "relative",
-          width: "100%",
-          maxWidth: 420,
-          background: "var(--hk-card)",
-          borderRadius: 24,
-          border: "1px solid var(--hk-border)",
-          boxShadow: "0 20px 60px rgba(0,0,0,0.12)",
           overflow: "hidden",
+          background: "#0b0a1a",
+          color: "#fff",
+          padding: "56px 64px",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
         }}
       >
-        {/* Header */}
+        {/* Single soft gradient bloom — anchors the brand without competing with the CTA */}
         <div
+          aria-hidden="true"
           style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 14,
-            padding: "36px 28px 24px",
-            textAlign: "center",
+            position: "absolute",
+            bottom: -200,
+            right: -180,
+            width: 620,
+            height: 620,
+            borderRadius: "50%",
+            background:
+              "radial-gradient(circle at center, rgba(247, 96, 0, 0.35) 0%, rgba(123, 94, 246, 0.22) 45%, transparent 70%)",
+            filter: "blur(40px)",
+            pointerEvents: "none",
           }}
-        >
-          {/* HK Logo */}
+        />
+
+        {/* Brand mark */}
+        <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 12 }}>
           <div
             style={{
-              width: 56,
-              height: 56,
-              borderRadius: 16,
+              width: 40,
+              height: 40,
+              borderRadius: 12,
               background: "linear-gradient(135deg, #f76000, #7b5ef6)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              boxShadow: "0 8px 24px rgba(247, 96, 0, 0.3)",
+              boxShadow: "0 6px 20px rgba(247, 96, 0, 0.35)",
             }}
           >
             <svg
-              width="28"
-              height="28"
+              width="20"
+              height="20"
               viewBox="0 0 24 24"
               fill="none"
               stroke="white"
@@ -148,60 +125,148 @@ export default async function LoginPage({
               <line x1="9" y1="12" x2="12" y2="12" />
             </svg>
           </div>
-          <div>
+          <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.2px" }}>
+            HisaabKitaab
+          </div>
+        </div>
+
+        {/* Headline block — the only thing competing for attention with the form */}
+        <div style={{ position: "relative", maxWidth: 640 }}>
+          <h2
+            style={{
+              fontSize: "clamp(36px, 4.4vw, 56px)",
+              fontWeight: 700,
+              letterSpacing: "-1.2px",
+              lineHeight: 1.05,
+              margin: 0,
+            }}
+          >
+            {t("auth.brand.headline")}
+          </h2>
+          <p
+            style={{
+              fontSize: 18,
+              fontWeight: 400,
+              color: "rgba(255, 255, 255, 0.72)",
+              lineHeight: 1.55,
+              marginTop: 20,
+              maxWidth: 540,
+            }}
+          >
+            {t("auth.brand.subheadline")}
+          </p>
+
+          {/* Single trust line */}
+          <div
+            style={{
+              marginTop: 32,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "10px 16px",
+              borderRadius: 999,
+              background: "rgba(255, 255, 255, 0.06)",
+              border: "1px solid rgba(255, 255, 255, 0.12)",
+              fontSize: 13,
+              fontWeight: 500,
+              color: "rgba(255, 255, 255, 0.86)",
+            }}
+          >
+            <svg
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{ color: "#f76000" }}
+            >
+              <path d="M9 12l2 2 4-4" />
+              <circle cx="12" cy="12" r="9" />
+            </svg>
+            {t("auth.brand.trust")}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div
+          style={{
+            position: "relative",
+            fontSize: 12,
+            fontWeight: 500,
+            color: "rgba(255, 255, 255, 0.48)",
+          }}
+        >
+          © {new Date().getFullYear()} HisaabKitaab
+        </div>
+      </aside>
+
+      {/* Form side — 40% */}
+      <main
+        className="hk-auth-form-panel"
+        style={{
+          flex: "0 0 40%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "48px 32px",
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            position: "relative",
+            width: "100%",
+            maxWidth: 400,
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          {/* Heading */}
+          <div style={{ marginBottom: 32 }}>
             <h1
               style={{
                 fontSize: 28,
                 fontWeight: 700,
                 letterSpacing: "-0.5px",
-                background: "linear-gradient(135deg, #f76000, #7b5ef6)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                backgroundClip: "text",
+                color: "var(--hk-text)",
                 lineHeight: 1.2,
-                fontFamily: "var(--font-space-grotesk), sans-serif",
+                margin: 0,
               }}
             >
-              HisaabKitaab
+              {t("login.signIn")}
             </h1>
             <p
               style={{
                 fontSize: 14,
-                fontWeight: 500,
+                fontWeight: 400,
                 color: "var(--hk-sub)",
-                marginTop: 6,
-                fontFamily: "var(--font-space-grotesk), sans-serif",
+                marginTop: 8,
               }}
             >
               {t("login.subtitle")}
             </p>
           </div>
-        </div>
 
-        {/* Form */}
-        <div
-          style={{
-            borderTop: "1px solid var(--hk-border)",
-            padding: "24px 28px 32px",
-          }}
-        >
           {/* Language switch */}
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 20 }}>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
             <a
               href={languageSwitchUrl}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
-                minHeight: 36,
-                minWidth: 56,
-                padding: "0 14px",
-                borderRadius: 10,
-                background: "rgba(123, 94, 246, 0.12)",
+                minHeight: 30,
+                minWidth: 48,
+                padding: "0 10px",
+                borderRadius: 8,
+                background: "rgba(123, 94, 246, 0.10)",
                 color: "#7b5ef6",
-                fontSize: 13,
+                fontSize: 12,
                 fontWeight: 700,
-                fontFamily: "var(--font-space-grotesk), sans-serif",
                 textDecoration: "none",
                 transition: "background 0.15s",
               }}
@@ -220,11 +285,10 @@ export default async function LoginPage({
               <span
                 style={{
                   display: "block",
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: 600,
-                  color: "var(--hk-sub)",
+                  color: "var(--hk-text)",
                   marginBottom: 8,
-                  fontFamily: "var(--font-space-grotesk), sans-serif",
                 }}
               >
                 {t("login.credentialLabel")}
@@ -235,12 +299,12 @@ export default async function LoginPage({
                   display: "flex",
                   alignItems: "center",
                   gap: 12,
-                  padding: "0 16px",
+                  padding: "0 14px",
                   height: 48,
-                  borderRadius: 12,
+                  borderRadius: 10,
                   border: "1.5px solid var(--hk-border)",
                   background: "var(--hk-input)",
-                  transition: "border-color 0.15s",
+                  transition: "border-color 0.15s, box-shadow 0.15s",
                 }}
               >
                 <svg
@@ -269,38 +333,53 @@ export default async function LoginPage({
                     fontSize: 15,
                     fontWeight: 500,
                     color: "var(--hk-text)",
-                    fontFamily: "var(--font-space-grotesk), sans-serif",
                   }}
                 />
               </div>
             </label>
 
-            {/* Password input */}
+            {/* Password input + Forgot link above */}
             <label htmlFor="password-input" style={{ display: "block" }}>
-              <span
+              <div
                 style={{
-                  display: "block",
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: "var(--hk-sub)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
                   marginBottom: 8,
-                  fontFamily: "var(--font-space-grotesk), sans-serif",
                 }}
               >
-                {t("login.passwordLabel")}
-              </span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--hk-text)" }}>
+                  {t("login.passwordLabel")}
+                </span>
+                <button
+                  id="forgot-password-trigger"
+                  type="button"
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: "#7b5ef6",
+                    padding: 0,
+                    transition: "opacity 0.15s",
+                  }}
+                >
+                  {t("login.forgotPassword")}
+                </button>
+              </div>
               <div
                 className="hk-login-input-group"
                 style={{
                   display: "flex",
                   alignItems: "center",
                   gap: 12,
-                  padding: "0 16px",
+                  padding: "0 14px",
                   height: 48,
-                  borderRadius: 12,
+                  borderRadius: 10,
                   border: "1.5px solid var(--hk-border)",
                   background: "var(--hk-input)",
-                  transition: "border-color 0.15s",
+                  transition: "border-color 0.15s, box-shadow 0.15s",
                 }}
               >
                 <svg
@@ -329,7 +408,6 @@ export default async function LoginPage({
                     fontSize: 15,
                     fontWeight: 500,
                     color: "var(--hk-text)",
-                    fontFamily: "var(--font-space-grotesk), sans-serif",
                   }}
                 />
                 <button
@@ -390,14 +468,13 @@ export default async function LoginPage({
               <p
                 id="login-error-text"
                 style={{
-                  padding: "12px 16px",
-                  borderRadius: 12,
+                  padding: "10px 14px",
+                  borderRadius: 10,
                   border: "1px solid rgba(247, 96, 0, 0.25)",
                   background: "rgba(247, 96, 0, 0.08)",
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: 600,
                   color: "#f76000",
-                  fontFamily: "var(--font-space-grotesk), sans-serif",
                 }}
                 aria-live="polite"
               >
@@ -405,23 +482,22 @@ export default async function LoginPage({
               </p>
             </div>
 
-            {/* Submit button */}
+            {/* Primary CTA */}
             <button
               id="login-button"
               type="submit"
               style={{
-                marginTop: 4,
+                marginTop: 8,
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
                 gap: 10,
                 height: 50,
-                borderRadius: 14,
+                borderRadius: 12,
                 background: "linear-gradient(135deg, #f76000, #7b5ef6)",
                 color: "#fff",
-                fontSize: 16,
+                fontSize: 15,
                 fontWeight: 700,
-                fontFamily: "var(--font-space-grotesk), sans-serif",
                 border: "none",
                 cursor: "pointer",
                 boxShadow: "0 6px 20px rgba(247, 96, 0, 0.3)",
@@ -447,37 +523,16 @@ export default async function LoginPage({
               </div>
               <span id="login-label">{t("login.signIn")}</span>
             </button>
-
-            {/* Forgot password */}
-            <button
-              id="forgot-password-trigger"
-              type="button"
-              style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                textAlign: "center",
-                fontSize: 14,
-                fontWeight: 600,
-                color: "#7b5ef6",
-                fontFamily: "var(--font-space-grotesk), sans-serif",
-                padding: "4px 0",
-                transition: "opacity 0.15s",
-              }}
-            >
-              {t("login.forgotPassword")}
-            </button>
           </form>
 
           {/* Sign up link */}
           <div
             style={{
-              marginTop: 24,
+              marginTop: 28,
               textAlign: "center",
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: 500,
               color: "var(--hk-sub)",
-              fontFamily: "var(--font-space-grotesk), sans-serif",
             }}
           >
             {t("login.noAccount")}{" "}
@@ -493,7 +548,7 @@ export default async function LoginPage({
             </a>
           </div>
         </div>
-      </div>
+      </main>
 
       {/* Forgot password dialog */}
       <dialog
@@ -515,33 +570,13 @@ export default async function LoginPage({
           fontFamily: "var(--font-space-grotesk), sans-serif",
         }}
       >
-        <div
-          style={{
-            borderBottom: "1px solid var(--hk-border)",
-            padding: "18px 24px",
-          }}
-        >
-          <h2
-            style={{
-              fontSize: 18,
-              fontWeight: 700,
-              color: "var(--hk-text)",
-              fontFamily: "var(--font-space-grotesk), sans-serif",
-            }}
-          >
+        <div style={{ borderBottom: "1px solid var(--hk-border)", padding: "18px 24px" }}>
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--hk-text)" }}>
             {t("login.forgotPasswordTitle")}
           </h2>
         </div>
         <div style={{ padding: "20px 24px" }}>
-          <p
-            style={{
-              fontSize: 14,
-              fontWeight: 500,
-              lineHeight: 1.6,
-              color: "var(--hk-sub)",
-              fontFamily: "var(--font-space-grotesk), sans-serif",
-            }}
-          >
+          <p style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.6, color: "var(--hk-sub)" }}>
             {t("login.forgotPasswordBody")}
           </p>
         </div>
@@ -564,7 +599,6 @@ export default async function LoginPage({
               color: "#7b5ef6",
               fontSize: 14,
               fontWeight: 700,
-              fontFamily: "var(--font-space-grotesk), sans-serif",
               border: "none",
               cursor: "pointer",
               transition: "background 0.15s",
@@ -575,7 +609,6 @@ export default async function LoginPage({
         </div>
       </dialog>
 
-      {/* Inline styles for focus + spinner animation */}
       <style
         dangerouslySetInnerHTML={{
           __html: `
@@ -585,11 +618,15 @@ export default async function LoginPage({
             }
             .hk-login-input-group:focus-within {
               border-color: #f76000 !important;
-              box-shadow: 0 0 0 3px rgba(247, 96, 0, 0.1);
+              box-shadow: 0 0 0 3px rgba(247, 96, 0, 0.12);
             }
             #forgot-password-dialog::backdrop {
               background: rgba(0, 0, 0, 0.45);
               backdrop-filter: blur(4px);
+            }
+            @media (max-width: 1023px) {
+              .hk-auth-marketing { display: none !important; }
+              .hk-auth-form-panel { flex: 1 1 100% !important; }
             }
           `,
         }}
@@ -612,14 +649,12 @@ export default async function LoginPage({
               if (form && loginBtn && loginSpinner && loginLabel) {
                 form.addEventListener("submit", async (e) => {
                   e.preventDefault();
-                  
-                  // Clear previous errors
+
                   if (errorContainer && errorText) {
                     errorContainer.style.display = "none";
                     errorText.textContent = "";
                   }
 
-                  // Set loading state
                   loginBtn.setAttribute("disabled", "true");
                   loginBtn.style.opacity = "0.7";
                   loginBtn.style.cursor = "not-allowed";
@@ -637,21 +672,18 @@ export default async function LoginPage({
                     });
 
                     const json = await res.json();
-                    
+
                     if (!res.ok) {
                       throw new Error(json.error || "An unexpected error occurred");
                     }
 
-                    // Success - redirect to dashboard natively
                     window.location.href = json.redirectTo || "/dashboard";
-                    
+
                   } catch (err) {
-                    // Show error gracefully without URL refresh
                     if (errorContainer && errorText) {
                       errorText.textContent = err.message;
                       errorContainer.style.display = "block";
-                      
-                      // Clean up URL if it previously had an error
+
                       const url = new URL(window.location.href);
                       if (url.searchParams.has("error")) {
                         url.searchParams.delete("error");
@@ -659,7 +691,6 @@ export default async function LoginPage({
                       }
                     }
                   } finally {
-                    // Reset UI State if error (if success, page will navigate away)
                     loginBtn.removeAttribute("disabled");
                     loginBtn.style.opacity = "1";
                     loginBtn.style.cursor = "pointer";
@@ -725,5 +756,4 @@ export default async function LoginPage({
       />
     </div>
   );
-
 }

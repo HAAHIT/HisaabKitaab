@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { resolveSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
+import { getIstCalendar, istMidnightUtc } from "@/lib/journal-reporting";
+
+const MAX_REPORT_BILLS = 50_000;
 
 interface RowRecord { [key: string]: unknown }
 
@@ -54,17 +57,20 @@ export async function GET(request: NextRequest) {
     const fromParam = searchParams.get("from");
     const toParam = searchParams.get("to");
 
-    // Default: current financial year
-    const now = new Date();
-    const fyStart = now.getMonth() >= 3
-      ? new Date(now.getFullYear(), 3, 1)
-      : new Date(now.getFullYear() - 1, 3, 1);
-    const fyEnd = new Date(fyStart.getFullYear() + 1, 3, 1);
+    // Default: current financial year (FY runs Apr 1 → Mar 31, IST).
+    // The FY label must be derived from the IST calendar, not server-local
+    // time, or a UTC host will roll the boundary 5h30m early on Mar 31 / Apr 1.
+    const ist = getIstCalendar(new Date());
+    const fyStartYear = ist.month >= 3 ? ist.year : ist.year - 1;
+    const fyStart = istMidnightUtc(fyStartYear, 3, 1);
+    const fyEnd = istMidnightUtc(fyStartYear + 1, 3, 1);
 
     const from = fromParam ? new Date(fromParam) : fyStart;
     const to   = toParam   ? new Date(toParam)   : fyEnd;
 
-    // Fetch all FINAL bills in range with relevant fields
+    // Fetch FINAL bills in range. Capped to MAX_REPORT_BILLS so a tenant with
+    // tens of thousands of bills cannot OOM the worker; we surface a truncation
+    // flag so the caller can re-query with a narrower date range.
     const bills = await prisma.bill.findMany({
       where: {
         tenantId,
@@ -88,7 +94,10 @@ export async function GET(request: NextRequest) {
         party: { select: { name: true, gstin: true } },
       },
       orderBy: { createdAt: "asc" },
+      take: MAX_REPORT_BILLS + 1,
     });
+    const truncated = bills.length > MAX_REPORT_BILLS;
+    if (truncated) bills.length = MAX_REPORT_BILLS;
 
     // ── Aggregate buckets ─────────────────────────────────────────────────────
     const monthMap = new Map<string, MonthBucket>();
@@ -118,9 +127,17 @@ export async function GET(request: NextRequest) {
       totalGrand   += grandTotal;
 
       // ── Month bucket ──────────────────────────────────────────────────────
+      // Bucket by IST calendar month — GSTR-1 filing periods are calendar months
+      // in IST, and a UTC-evaluated month would split late-evening invoices
+      // into the wrong bucket.
       const d       = new Date(bill.createdAt);
-      const sortKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      const monthLabel = d.toLocaleDateString("en-IN", { month: "short", year: "2-digit" });
+      const dIst    = getIstCalendar(d);
+      const sortKey = `${dIst.year}-${String(dIst.month + 1).padStart(2, "0")}`;
+      const monthLabel = d.toLocaleDateString("en-IN", {
+        month: "short",
+        year: "2-digit",
+        timeZone: "Asia/Kolkata",
+      });
       const isB2B   = Boolean(bill.gstin || bill.party?.gstin);
 
       const mb = monthMap.get(sortKey) ?? {
@@ -226,6 +243,7 @@ export async function GET(request: NextRequest) {
       from: from.toISOString(),
       to:   to.toISOString(),
       totalBills: bills.length,
+      truncated,
       totals: {
         taxableValue: round2(totalTaxable),
         cgst: round2(totalCgst),

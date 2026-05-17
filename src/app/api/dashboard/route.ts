@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { logError, getRequestId } from "@/lib/observability";
 import { resolveSession } from "@/lib/api-tenant";
+import { getIstCalendar, istMidnightUtc } from "@/lib/journal-reporting";
 
 // GET /api/dashboard — Dashboard aggregated data
 export async function GET(request: NextRequest) {
@@ -14,17 +15,20 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    // Month boundaries are computed in IST. On a UTC host, server-local
+    // getMonth() rolls 5h30m early, causing "this month" totals to flip into
+    // the wrong bucket around IST midnight on month boundaries.
+    const ist = getIstCalendar(new Date());
+    const monthStart = istMidnightUtc(ist.year, ist.month, 1);
+    const monthEnd = istMidnightUtc(ist.year, ist.month + 1, 1);
+    const lastMonthStart = istMidnightUtc(ist.year, ist.month - 1, 1);
     const lastMonthEnd = monthStart;
 
-    // Monthly cash flow intervals (last 6 months)
+    // Monthly cash flow intervals (last 6 months) — also IST-anchored
     const monthDetails = Array.from({ length: 6 }, (_, i) => {
       const monthIdx = 5 - i;
-      const mStart = new Date(now.getFullYear(), now.getMonth() - monthIdx, 1);
-      const mEnd = new Date(now.getFullYear(), now.getMonth() - monthIdx + 1, 1);
+      const mStart = istMidnightUtc(ist.year, ist.month - monthIdx, 1);
+      const mEnd = istMidnightUtc(ist.year, ist.month - monthIdx + 1, 1);
       return { mStart, mEnd };
     });
 

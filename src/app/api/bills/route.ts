@@ -24,6 +24,7 @@ import { resolveSession } from "@/lib/api-tenant";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { logError, getRequestId } from "@/lib/observability";
 import { generateLockKey } from "@/lib/locks";
+import { getIstCalendar, istMidnightUtc } from "@/lib/journal-reporting";
 import { z } from "zod";
 
 type SupportedPaymentMode = "CASH" | "UPI" | "BANK_TRANSFER" | "CHEQUE";
@@ -255,10 +256,11 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Current month boundaries for summary
-    const now = new Date();
-    const summaryMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const summaryMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    // Current-month summary boundaries computed in IST so the "this month"
+    // total doesn't shift by 5h30m on a UTC host.
+    const nowIst = getIstCalendar(new Date());
+    const summaryMonthStart = istMidnightUtc(nowIst.year, nowIst.month, 1);
+    const summaryMonthEnd = istMidnightUtc(nowIst.year, nowIst.month + 1, 1);
 
     const [bills, total, kulBilledAgg, milaAgg] = await Promise.all([
       prisma.bill.findMany({
@@ -491,9 +493,15 @@ export async function POST(request: NextRequest) {
     const isInterState = deriveIsInterState(effectiveGstin, tenant?.gstin, body.isInterState);
     const normalizedPaymentMode = normalizePaymentMode(body.paymentMode);
     const billDate = body.billDate ? new Date(body.billDate) : new Date();
-    const yearMonth = `${billDate.getFullYear()}${String(billDate.getMonth() + 1).padStart(2, "0")}`;
-    const monthStart = new Date(billDate.getFullYear(), billDate.getMonth(), 1);
-    const nextMonthStart = new Date(billDate.getFullYear(), billDate.getMonth() + 1, 1);
+    // Bill numbers (BILL-YYYYMM-NNN) must reflect the IST calendar month, not
+    // the server's local month. On a UTC host a bill filed at 00:30 IST on
+    // Apr 1 would otherwise be stamped 202503 and re-use the prior month's
+    // sequence — breaking GSTR-1 reconciliation and producing duplicate
+    // numbers across the IST midnight boundary.
+    const billIst = getIstCalendar(billDate);
+    const yearMonth = `${billIst.year}${String(billIst.month + 1).padStart(2, "0")}`;
+    const monthStart = istMidnightUtc(billIst.year, billIst.month, 1);
+    const nextMonthStart = istMidnightUtc(billIst.year, billIst.month + 1, 1);
     
     const snapshot = buildBillSnapshotFromParty(party, {
       customerName,

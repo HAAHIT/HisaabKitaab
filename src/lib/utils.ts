@@ -60,19 +60,6 @@ export function truncate(text: string, maxLength: number): string {
 }
 
 /**
- * Generate bill number: BILL-YYYYMM-NNN
- */
-export function generateBillNumber(
-  prefix: string,
-  existingCount: number
-): string {
-  const now = new Date();
-  const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const serial = String(existingCount + 1).padStart(3, "0");
-  return `${prefix}-${yearMonth}-${serial}`;
-}
-
-/**
  * Classnames helper (simple cn utility)
  */
 export function cn(...classes: (string | boolean | undefined | null)[]): string {

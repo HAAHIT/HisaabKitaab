@@ -6,7 +6,11 @@ import { logInfo, logError, getRequestId } from "@/lib/observability";
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
-  if (process.env.NEXT_PUBLIC_FEATURE_TESTING_WIPE_DATA !== "true") {
+  // Server-only flag. The matching NEXT_PUBLIC_* variable still controls
+  // whether the button renders in the UI, but the actual destructive gate
+  // must not be readable from the client bundle — otherwise the flag's
+  // state is itself a leaked secret about the deployment.
+  if (process.env.FEATURE_TESTING_WIPE_DATA !== "true") {
     return NextResponse.json({ error: "Not available" }, { status: 404 });
   }
 
