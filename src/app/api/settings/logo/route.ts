@@ -5,12 +5,90 @@ import {
 } from "@/lib/media";
 import { prisma } from "@/lib/prisma";
 import { resolveSession } from "@/lib/api-tenant";
+import { checkRateLimit } from "@/lib/api-rate-limit";
 import { serializeTenantSettings } from "@/lib/tenant-settings";
 import { logError, getRequestId } from "@/lib/observability";
 
 export const runtime = "nodejs";
 
+const MAX_LOGO_BYTES = 2 * 1024 * 1024;
+const ASSET_ID_REGEX = /^[a-zA-Z0-9_-]{16,64}$/;
+
+// Magic byte signatures for the image formats we accept. File.type is
+// client-supplied and can be spoofed, so we verify the binary header.
+function detectImageMime(bytes: Uint8Array): string | null {
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
+  ) {
+    return "image/png";
+  }
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return "image/jpeg";
+  }
+  if (
+    bytes.length >= 12 &&
+    bytes[0] === 0x52 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  ) {
+    return "image/webp";
+  }
+  if (
+    bytes.length >= 6 &&
+    bytes[0] === 0x47 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x38 &&
+    (bytes[4] === 0x37 || bytes[4] === 0x39) &&
+    bytes[5] === 0x61
+  ) {
+    return "image/gif";
+  }
+  return null;
+}
+
+function extractAssetId(logoUrl: string | null | undefined): string | null {
+  if (!logoUrl || !logoUrl.startsWith("/api/assets/")) return null;
+  const candidate = logoUrl.slice("/api/assets/".length);
+  return ASSET_ID_REGEX.test(candidate) ? candidate : null;
+}
+
+async function cleanupPreviousLogo(oldId: string, tenantId: string) {
+  // Defense in depth: only delete if the asset is a COMPANY_LOGO and no other
+  // tenant currently references it. MediaAsset has no tenantId column, so the
+  // tenant scoping is enforced via the referencing tenant.logoUrl.
+  const oldAsset = await prisma.mediaAsset.findFirst({
+    where: { id: oldId, kind: "COMPANY_LOGO" },
+  });
+  if (!oldAsset) return;
+
+  const otherReference = await prisma.tenant.findFirst({
+    where: { id: { not: tenantId }, logoUrl: `/api/assets/${oldId}` },
+    select: { id: true },
+  });
+  if (otherReference) return;
+
+  await prisma.mediaAsset.delete({ where: { id: oldId } });
+  await deleteMediaAsset(oldAsset);
+}
+
 export async function POST(request: NextRequest) {
+  const rateLimitResponse = await checkRateLimit(request, "settings.logo.upload", 10);
+  if (rateLimitResponse) return rateLimitResponse;
+
   const sessionResolution = await resolveSession(request);
   if (!sessionResolution.ok) return sessionResolution.response;
   const { tenantId, userId, role } = sessionResolution.session;
@@ -31,13 +109,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Logo file is required" }, { status: 400 });
     }
 
-    if (!file.type.startsWith("image/")) {
-      return NextResponse.json({ error: "Logo must be an image" }, { status: 400 });
-    }
-
-    if (file.size > 2 * 1024 * 1024) {
+    if (file.size > MAX_LOGO_BYTES) {
       return NextResponse.json(
         { error: "Logo must be smaller than 2MB" },
+        { status: 400 }
+      );
+    }
+
+    const headerBytes = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+    const detectedMime = detectImageMime(headerBytes);
+    if (!detectedMime) {
+      return NextResponse.json(
+        { error: "Logo must be a PNG, JPEG, WebP, or GIF image" },
         { status: 400 }
       );
     }
@@ -47,44 +130,51 @@ export async function POST(request: NextRequest) {
       kind: "COMPANY_LOGO",
       namespace: "company-logos",
     });
+    // Override the client-supplied mime with the verified one
+    nextAsset.mimeType = detectedMime;
 
-    const previousTenant = await prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { logoUrl: true },
+    const { updatedTenant, oldAssetId } = await prisma.$transaction(async (tx) => {
+      const previousTenant = await tx.tenant.findUnique({
+        where: { id: tenantId },
+        select: { logoUrl: true },
+      });
+
+      const asset = await tx.mediaAsset.create({ data: nextAsset! });
+
+      const updated = await tx.tenant.update({
+        where: { id: tenantId },
+        data: { logoUrl: `/api/assets/${asset.id}` },
+      });
+
+      // [MCA GSR 247(E)] Append-only audit log for logo upload
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          entityType: "Tenant",
+          entityId: tenantId,
+          userId,
+          action: "UPDATE",
+          fieldName: "logoUrl",
+          newValue: `/api/assets/${asset.id}`,
+        },
+      });
+
+      return {
+        updatedTenant: updated,
+        oldAssetId: extractAssetId(previousTenant?.logoUrl),
+      };
     });
 
-    const asset = await prisma.mediaAsset.create({ data: nextAsset! });
-
-    // Update the logo URL on the tenant
-    const updatedTenant = await prisma.tenant.update({
-      where: { id: tenantId },
-      data: {
-        logoUrl: `/api/assets/${asset.id}`,
-      },
-    });
-
-    // Best effort cleanup of previous logo if it was a media asset
-    if (previousTenant?.logoUrl && previousTenant.logoUrl.startsWith("/api/assets/")) {
-      const oldId = previousTenant.logoUrl.replace("/api/assets/", "");
-      const oldAsset = await prisma.mediaAsset.findUnique({ where: { id: oldId } });
-      if (oldAsset) {
-        await prisma.mediaAsset.delete({ where: { id: oldId } });
-        await deleteMediaAsset(oldAsset);
-      }
+    if (oldAssetId) {
+      // Best-effort cleanup outside the transaction so a stale orphan never
+      // blocks the user-visible update.
+      await cleanupPreviousLogo(oldAssetId, tenantId).catch((error) => {
+        logError("settings.logo.cleanup.error", {
+          requestId: getRequestId(request),
+          error,
+        });
+      });
     }
-
-    // [MCA GSR 247(E)] Append-only audit log for logo upload
-    await prisma.auditLog.create({
-      data: {
-        tenantId,
-        entityType: "Tenant",
-        entityId: tenantId,
-        userId,
-        action: "UPDATE",
-        fieldName: "logoUrl",
-        newValue: `/api/assets/${asset.id}`,
-      },
-    });
 
     return NextResponse.json({
       settings: serializeTenantSettings(updatedTenant),
@@ -103,6 +193,9 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const rateLimitResponse = await checkRateLimit(request, "settings.logo.delete", 10);
+  if (rateLimitResponse) return rateLimitResponse;
+
   const sessionResolution = await resolveSession(request);
   if (!sessionResolution.ok) return sessionResolution.response;
   const { tenantId, userId, role } = sessionResolution.session;
@@ -112,40 +205,44 @@ export async function DELETE(request: NextRequest) {
   }
 
   try {
-    const previousTenant = await prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { logoUrl: true },
+    const { updatedTenant, oldAssetId } = await prisma.$transaction(async (tx) => {
+      const previousTenant = await tx.tenant.findUnique({
+        where: { id: tenantId },
+        select: { logoUrl: true },
+      });
+
+      const updated = await tx.tenant.update({
+        where: { id: tenantId },
+        data: { logoUrl: null },
+      });
+
+      // [MCA GSR 247(E)] Append-only audit log for logo deletion
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          entityType: "Tenant",
+          entityId: tenantId,
+          userId,
+          action: "UPDATE",
+          fieldName: "logoUrl",
+          oldValue: previousTenant?.logoUrl || null,
+          newValue: null,
+        },
+      });
+
+      return {
+        updatedTenant: updated,
+        oldAssetId: extractAssetId(previousTenant?.logoUrl),
+      };
     });
 
-    const updatedTenant = await prisma.tenant.update({
-      where: { id: tenantId },
-      data: {
-        logoUrl: null,
-      },
-    });
-
-    // [MCA GSR 247(E)] Append-only audit log for logo deletion
-    await prisma.auditLog.create({
-      data: {
-        tenantId,
-        entityType: "Tenant",
-        entityId: tenantId,
-        userId,
-        action: "UPDATE",
-        fieldName: "logoUrl",
-        oldValue: previousTenant?.logoUrl || null,
-        newValue: null,
-      },
-    });
-
-    // Cleanup
-    if (previousTenant?.logoUrl && previousTenant.logoUrl.startsWith("/api/assets/")) {
-      const oldId = previousTenant.logoUrl.replace("/api/assets/", "");
-      const oldAsset = await prisma.mediaAsset.findUnique({ where: { id: oldId } });
-      if (oldAsset) {
-        await prisma.mediaAsset.delete({ where: { id: oldId } });
-        await deleteMediaAsset(oldAsset);
-      }
+    if (oldAssetId) {
+      await cleanupPreviousLogo(oldAssetId, tenantId).catch((error) => {
+        logError("settings.logo.cleanup.error", {
+          requestId: getRequestId(request),
+          error,
+        });
+      });
     }
 
     return NextResponse.json({

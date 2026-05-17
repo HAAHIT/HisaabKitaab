@@ -1,9 +1,9 @@
-import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { resolveSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 import { getPaymentBalanceDelta, asSupportedPartyType } from "@/lib/accounting";
+import { generateLockKey } from "@/lib/locks";
 import {
     journalForPaymentReceived,
     journalForPaymentMade,
@@ -12,11 +12,6 @@ import {
 } from "@/lib/journal";
 
 const LEDGER_PARTY_TYPES = new Set(["EXPENSE", "INCOME", "ASSET", "LIABILITY", "EQUITY"]);
-
-function generateLockKey(tenantId: string): bigint {
-    const hash = crypto.createHash("sha256").update(tenantId).digest("hex");
-    return BigInt("0x" + hash.substring(0, 15));
-}
 
 const VALID_MODES = new Set(["CASH", "UPI", "BANK_TRANSFER", "CHEQUE"]);
 type SupportedPaymentMode = "CASH" | "UPI" | "BANK_TRANSFER" | "CHEQUE";

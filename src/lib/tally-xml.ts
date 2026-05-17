@@ -192,9 +192,15 @@ function formatTallyDate(date: Date): string {
   const day = parts.find((p) => p.type === "day")?.value;
 
   if (!year || !month || !day) {
-    // Fallback if Intl fails unusually
-    const isoStr = date.toISOString();
-    return isoStr.slice(0, 10).replace(/-/g, "");
+    // Fallback if Intl fails unusually. Shift the UTC instant by +5:30 so the
+    // resulting calendar date is the IST date, not the UTC date — Tally's
+    // contract is IST always.
+    const istMs = date.getTime() + 5.5 * 60 * 60 * 1000;
+    const shifted = new Date(istMs);
+    const y = shifted.getUTCFullYear();
+    const m = String(shifted.getUTCMonth() + 1).padStart(2, "0");
+    const d = String(shifted.getUTCDate()).padStart(2, "0");
+    return `${y}${m}${d}`;
   }
 
   return `${year}${month}${day}`;

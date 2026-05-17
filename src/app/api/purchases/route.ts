@@ -14,16 +14,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveSession } from "@/lib/api-tenant";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { logError, getRequestId } from "@/lib/observability";
-import crypto from "crypto";
+import { generateLockKey } from "@/lib/locks";
 import { z } from "zod";
 
 type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 type BillRowsJson = NonNullable<Parameters<typeof prisma.bill.create>[0]["data"]>["rows"];
-
-function generateLockKey(tenantId: string): bigint {
-  const hash = crypto.createHash("sha256").update(tenantId).digest("hex");
-  return BigInt("0x" + hash.substring(0, 15));
-}
 
 const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
 

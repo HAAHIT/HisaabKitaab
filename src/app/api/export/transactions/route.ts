@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { resolveSession } from "@/lib/api-tenant";
+import { logError, getRequestId } from "@/lib/observability";
 import {
   escapeCsv,
   formatDateForCsv,
@@ -42,6 +43,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  try {
   const unbalanced = await prisma.journalEntry.count({
     where: { tenantId, isBalanced: false },
   });
@@ -130,4 +132,14 @@ export async function GET(request: NextRequest) {
       "Content-Disposition": `attachment; filename="${filename}"`,
     },
   });
+  } catch (error) {
+    logError("export.transactions.error", {
+      requestId: getRequestId(request),
+      error,
+    });
+    return NextResponse.json(
+      { error: "Failed to export transactions" },
+      { status: 500 }
+    );
+  }
 }

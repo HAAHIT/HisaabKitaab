@@ -4,15 +4,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveSession } from "@/lib/api-tenant";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { logError, getRequestId } from "@/lib/observability";
-import crypto from "crypto";
+import { generateLockKey } from "@/lib/locks";
 import { z } from "zod";
 
 type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
-
-function generateLockKey(tenantId: string): bigint {
-  const hash = crypto.createHash("sha256").update(tenantId).digest("hex");
-  return BigInt("0x" + hash.substring(0, 15));
-}
 
 const CreateNoteSchema = z.object({
   partyId: z.string().min(1, "Party is required"),

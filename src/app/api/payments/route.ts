@@ -1,4 +1,3 @@
-import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
@@ -16,15 +15,9 @@ import {
 import { resolveSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
+import { generateLockKey } from "@/lib/locks";
 
 export const runtime = "nodejs";
-
-// [T-W2] Same lock-key generator used by bills/purchases/credit-notes.
-// Serialises all balance-mutating txns for a given tenant.
-function generateLockKey(tenantId: string): bigint {
-  const hash = crypto.createHash("sha256").update(tenantId).digest("hex");
-  return BigInt("0x" + hash.substring(0, 15));
-}
 
 const VALID_DIRECTIONS = new Set(["INCOMING", "OUTGOING"]);
 const VALID_MODES = new Set(["CASH", "UPI", "BANK_TRANSFER", "CHEQUE"]);

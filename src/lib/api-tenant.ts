@@ -66,7 +66,7 @@ type SessionResolution =
   | { ok: true; session: SessionPayload }
   | { ok: false; response: NextResponse<{ error: string }> };
 
-import { SESSION_SESSION_COOKIE_NAME } from "@/lib/cookie";
+import { SESSION_COOKIE_NAME } from "@/lib/cookie";
 
 /**
  * Verifies the JWT cookie and returns the full session (tenantId, userId, role).

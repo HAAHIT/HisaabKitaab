@@ -52,9 +52,22 @@ export function parseIndianDateRange(from: string, to: string) {
   return { fromDate, toDate };
 }
 
+// Returns the calendar year/month of `referenceDate` as seen in IST. The
+// Indian financial year boundary (Apr 1) is defined in IST, so server-local
+// getMonth()/getFullYear() would roll the boundary 5h30m early on UTC hosts.
+function getIstYearMonth(referenceDate: Date): { year: number; month: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: INDIA_TIMEZONE,
+    year: "numeric",
+    month: "numeric",
+  }).formatToParts(referenceDate);
+  const year = Number(parts.find((p) => p.type === "year")?.value);
+  const month = Number(parts.find((p) => p.type === "month")?.value) - 1;
+  return { year, month };
+}
+
 export function getCurrentFinancialYearRange(referenceDate = new Date()) {
-  const year = referenceDate.getFullYear();
-  const month = referenceDate.getMonth();
+  const { year, month } = getIstYearMonth(referenceDate);
   const startYear = month >= 3 ? year : year - 1;
   const endYear = startYear + 1;
 
@@ -66,8 +79,7 @@ export function getCurrentFinancialYearRange(referenceDate = new Date()) {
 }
 
 export function getCurrentQuarterRange(referenceDate = new Date()) {
-  const year = referenceDate.getFullYear();
-  const month = referenceDate.getMonth();
+  const { year, month } = getIstYearMonth(referenceDate);
 
   if (month >= 3 && month <= 5) {
     return { label: "Q1", from: `${year}-04-01`, to: `${year}-06-30` };

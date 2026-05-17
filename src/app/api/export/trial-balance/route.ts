@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { resolveSession } from "@/lib/api-tenant";
 import { CHART_OF_ACCOUNTS } from "@/lib/chart-of-accounts";
+import { logError, getRequestId } from "@/lib/observability";
 import {
   escapeCsv,
   parseIndianDateRange,
@@ -43,6 +44,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  try {
   const unbalanced = await prisma.journalEntry.count({
     where: { tenantId, isBalanced: false },
   });
@@ -174,4 +176,14 @@ export async function GET(request: NextRequest) {
       "Content-Disposition": `attachment; filename="${filename}"`,
     },
   });
+  } catch (error) {
+    logError("export.trial-balance.error", {
+      requestId: getRequestId(request),
+      error,
+    });
+    return NextResponse.json(
+      { error: "Failed to export trial balance" },
+      { status: 500 }
+    );
+  }
 }

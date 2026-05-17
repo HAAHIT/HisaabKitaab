@@ -23,14 +23,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveSession } from "@/lib/api-tenant";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { logError, getRequestId } from "@/lib/observability";
-import crypto from "crypto";
+import { generateLockKey } from "@/lib/locks";
 import { z } from "zod";
-
-function generateLockKey(tenantId: string): bigint {
-  const hash = crypto.createHash("sha256").update(tenantId).digest("hex");
-  // Use the first 15 hex characters (60 bits) to fit easily into PostgreSQL's 64-bit bigint lock space
-  return BigInt("0x" + hash.substring(0, 15));
-}
 
 type SupportedPaymentMode = "CASH" | "UPI" | "BANK_TRANSFER" | "CHEQUE";
 const VALID_PAYMENT_MODES = new Set([

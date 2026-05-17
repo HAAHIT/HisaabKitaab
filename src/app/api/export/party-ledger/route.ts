@@ -6,6 +6,7 @@ import {
   asSupportedPartyType,
 } from "@/lib/accounting";
 import { resolveSession } from "@/lib/api-tenant";
+import { logError, getRequestId } from "@/lib/observability";
 import {
   escapeCsv,
   formatDateForCsv,
@@ -48,6 +49,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  try {
   const unbalanced = await prisma.journalEntry.count({
     where: { tenantId, isBalanced: false },
   });
@@ -194,4 +196,14 @@ export async function GET(request: NextRequest) {
       "Content-Disposition": `attachment; filename="${filename}"`,
     },
   });
+  } catch (error) {
+    logError("export.party-ledger.error", {
+      requestId: getRequestId(request),
+      error,
+    });
+    return NextResponse.json(
+      { error: "Failed to export party ledger" },
+      { status: 500 }
+    );
+  }
 }

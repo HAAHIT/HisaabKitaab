@@ -2,7 +2,7 @@ import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { getJwtSecret } from "@/lib/jwt-secret";
-import { SESSION_SESSION_COOKIE_NAME } from "@/lib/cookie";
+import { SESSION_COOKIE_NAME } from "@/lib/cookie";
 
 const SESSION_DURATION = 7 * 24 * 60 * 60; // 7 days in seconds
 

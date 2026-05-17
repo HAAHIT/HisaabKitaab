@@ -2,7 +2,7 @@ import { jwtVerify } from "jose";
 import { getJwtSecret } from "@/lib/jwt-secret";
 import { cookies } from "next/headers";
 import type { NextRequest } from "next/server";
-import { SESSION_SESSION_COOKIE_NAME } from "@/lib/cookie";
+import { SESSION_COOKIE_NAME } from "@/lib/cookie";
 
 export interface VerifiedSession {
   tenantId: string;
