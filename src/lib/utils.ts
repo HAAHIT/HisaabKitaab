@@ -46,7 +46,8 @@ export function generateRandomPassword(length: number = 8): string {
     "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$";
   let password = "";
   for (let i = 0; i < length; i++) {
-    password += chars.charAt(Math.floor(Math.random() * chars.length));
+    const randomFraction = crypto.getRandomValues(new Uint32Array(1))[0] / 0x100000000;
+    password += chars.charAt(Math.floor(randomFraction * chars.length));
   }
   return password;
 }
