@@ -320,7 +320,10 @@ export function parseTallyDate(raw: unknown): Date | null {
 function parseAmount(raw: unknown): number {
   if (raw === undefined || raw === null || raw === "") return 0;
   const n = typeof raw === "number" ? raw : parseFloat(String(raw));
-  return isNaN(n) ? 0 : n;
+  if (isNaN(n)) return 0;
+  // Tally exports to 4 decimals; clamp to paise (2 decimals) immediately so
+  // downstream sums, fingerprints, and balance checks operate on stable values.
+  return Math.round(n * 100) / 100;
 }
 
 function extractBillAllocationName(entry: Record<string, unknown>): string | null {

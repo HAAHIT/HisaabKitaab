@@ -223,7 +223,7 @@ export async function GET(request: NextRequest) {
   try {
     // [FIX #38] Scope unbalanced check to export date range (was blocking all exports)
     const unbalanced = await prisma.journalEntry.count({
-      where: { tenantId, isBalanced: false, entryDate: { gte: fromDate, lte: toDate } },
+      where: { tenantId, isBalanced: false, isDeleted: false, entryDate: { gte: fromDate, lte: toDate } },
     });
     if (unbalanced > 0) {
       return NextResponse.json(
@@ -315,7 +315,7 @@ export async function GET(request: NextRequest) {
       // Callers should split large ranges by quarter or month.
       const MAX_VOUCHERS = 5_000;
       const voucherCount = await prisma.journalEntry.count({
-        where: { tenantId, entryDate: { gte: fromDate, lte: toDate } },
+        where: { tenantId, isDeleted: false, entryDate: { gte: fromDate, lte: toDate } },
       });
 
       if (voucherCount > MAX_VOUCHERS) {
@@ -335,6 +335,7 @@ export async function GET(request: NextRequest) {
       const entries = await prisma.journalEntry.findMany({
         where: {
           tenantId,
+          isDeleted: false,
           entryDate: { gte: fromDate, lte: toDate },
         },
         orderBy: [{ entryDate: "asc" }, { createdAt: "asc" }],

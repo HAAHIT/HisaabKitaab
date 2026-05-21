@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { parseTallyXml, type TallyParseResult } from "@/lib/tally-xml-import";
 import { createJournalEntry } from "@/lib/journal";
 import { recomputePartyBalance } from "@/lib/party-balance.server";
-import { logError } from "@/lib/observability";
+import { logError, logWarn } from "@/lib/observability";
 import { gunzipSync } from "zlib";
 import crypto from "crypto";
 import type { AccountCode } from "@/lib/chart-of-accounts";
@@ -321,10 +321,11 @@ export async function processImportJob(jobId?: string, preparsed?: TallyParseRes
           "voucherType", '|',
           TO_CHAR("entryDate", 'YYYY-MM-DD'), '|',
           COALESCE("narration", ''), '|',
-          "totalDebit"::float8::text
+          TO_CHAR(ROUND("totalDebit"::numeric, 2), 'FM999999999990.00')
         ) as fp
         FROM "JournalEntry"
         WHERE "tenantId" = ${tid}
+          AND "isDeleted" = false
           AND "entryDate" >= ${rangeMin}
           AND "entryDate" <= ${rangeMax}
           AND "remoteId" IS NULL
@@ -349,7 +350,8 @@ export async function processImportJob(jobId?: string, preparsed?: TallyParseRes
         // mismatch where Tally's YYYYMMDD date becomes the previous day in UTC.
         const dateStr = voucher.entryDate.toISOString().slice(0, 10);
         const resolvedType = resolveImportVoucherType(voucher.originalTypeName, voucher.voucherType);
-        const fingerprint = `${resolvedType}|${dateStr}|${voucher.narration}|${String(voucher.totalDebit)}`;
+        const totalDebitForFp = (Math.round(voucher.totalDebit * 100) / 100).toFixed(2);
+        const fingerprint = `${resolvedType}|${dateStr}|${voucher.narration}|${totalDebitForFp}`;
         if (duplicateFingerprints.has(fingerprint)) {
           return "skipped";
         }
@@ -373,14 +375,37 @@ export async function processImportJob(jobId?: string, preparsed?: TallyParseRes
         );
 
         // ── Auto-adjust rounding for Tally imports ────────────────────────
-        // Tally's internal rounding can produce vouchers where debit ≠ credit
-        // by a few paise/rupees. Absorb small differences (≤ ₹5) into a
-        // ROUND_OFF line so createJournalEntry's strict balance check passes.
+        // Tally's per-item GST splits and inventory rounding regularly produce
+        // vouchers where debit ≠ credit by a few rupees. ₹5 tolerance matches
+        // real-world Tally export behavior. Every absorption is warn-logged so
+        // the trail is auditable (the original bug was *silent* absorption, not
+        // the tolerance itself).
         const totalDebit = lines.reduce((s, l) => s + l.debit, 0);
         const totalCredit = lines.reduce((s, l) => s + l.credit, 0);
         const imbalance = Math.round((totalDebit - totalCredit) * 100) / 100;
+        const IMBALANCE_TOLERANCE = 5;
 
-        if (imbalance !== 0 && Math.abs(imbalance) <= 5) {
+        if (imbalance !== 0 && Math.abs(imbalance) > IMBALANCE_TOLERANCE) {
+          logWarn("import.tally-xml.imbalance-rejected", {
+            jobId: job.id,
+            tenantId: tid,
+            voucherType: voucher.voucherType,
+            entryDate: voucher.entryDate.toISOString(),
+            narration: voucher.narration,
+            imbalance,
+            totalDebit,
+            totalCredit,
+          });
+        }
+
+        if (imbalance !== 0 && Math.abs(imbalance) <= IMBALANCE_TOLERANCE) {
+          logWarn("import.tally-xml.imbalance-absorbed", {
+            jobId: job.id,
+            tenantId: tid,
+            voucherType: voucher.voucherType,
+            entryDate: voucher.entryDate.toISOString(),
+            imbalance,
+          });
           const existingRoundOff = lines.find((l) => l.accountCode === "ROUND_OFF");
           if (existingRoundOff) {
             const netBefore = existingRoundOff.debit - existingRoundOff.credit;
@@ -439,6 +464,18 @@ export async function processImportJob(jobId?: string, preparsed?: TallyParseRes
                 Amount: grandTotal,
               }];
 
+            const subtotal = Math.round(
+              rows.reduce((sum: number, r: any) => sum + (r.Amount || 0), 0) * 100
+            ) / 100;
+            const taxAmount = Math.round(
+              Math.abs(
+                voucher.lines
+                  .filter((l) => l.accountCode.includes("GST"))
+                  .reduce((s, l) => s + (l.debit || l.credit), 0)
+              ) * 100
+            ) / 100;
+            const roundedGrandTotal = Math.round(grandTotal * 100) / 100;
+
             const createdBill = await tx.bill.create({
               data: {
                 tenantId: tid,
@@ -447,10 +484,10 @@ export async function processImportJob(jobId?: string, preparsed?: TallyParseRes
                 partyId: partyLine?.partyId ?? null,
                 customerName,
                 rows: rows as Prisma.InputJsonValue,
-                subtotal: rows.reduce((sum: number, r: any) => sum + (r.Amount || 0), 0),
+                subtotal,
                 taxPercent: voucher.taxPercent ?? 0,
-                taxAmount: Math.abs(voucher.lines.filter(l => l.accountCode.includes("GST")).reduce((s, l) => s + (l.debit || l.credit), 0)),
-                grandTotal,
+                taxAmount,
+                grandTotal: roundedGrandTotal,
                 status: "FINAL",
                 isInterState: voucher.isInterState ?? false,
                 placeOfSupply: voucher.placeOfSupply,

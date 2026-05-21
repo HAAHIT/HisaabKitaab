@@ -14,7 +14,7 @@ export default async function TransactionsPage({
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const where: Prisma.JournalEntryWhereInput = await tenantScope();
+  const where: Prisma.JournalEntryWhereInput = { ...(await tenantScope()), isDeleted: false };
 
   const entryDateFilter: Prisma.DateTimeFilter = {};
   if (searchParams.from) {

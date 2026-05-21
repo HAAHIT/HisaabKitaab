@@ -46,36 +46,36 @@ export async function POST(request: NextRequest) {
   try {
     // 1. Unbalanced Count
     const unbalancedCount = await prisma.journalEntry.count({
-      where: { tenantId, isBalanced: false },
+      where: { tenantId, isBalanced: false, isDeleted: false },
     });
 
     // 2. Vouchers aggregates
     const salesAgg = await prisma.journalEntry.aggregate({
-      where: { tenantId, entryDate: { gte: fromDate, lte: toDate }, voucherType: { in: ["SALES", "CREDIT_NOTE"] } },
+      where: { tenantId, isDeleted: false, entryDate: { gte: fromDate, lte: toDate }, voucherType: { in: ["SALES", "CREDIT_NOTE"] } },
       _count: { id: true },
       _sum: { totalDebit: true }
     });
 
     const purchasesAgg = await prisma.journalEntry.aggregate({
-      where: { tenantId, entryDate: { gte: fromDate, lte: toDate }, voucherType: { in: ["PURCHASE", "DEBIT_NOTE"] } },
+      where: { tenantId, isDeleted: false, entryDate: { gte: fromDate, lte: toDate }, voucherType: { in: ["PURCHASE", "DEBIT_NOTE"] } },
       _count: { id: true },
       _sum: { totalDebit: true }
     });
 
     const receiptsAgg = await prisma.journalEntry.aggregate({
-      where: { tenantId, entryDate: { gte: fromDate, lte: toDate }, voucherType: "RECEIPT" },
+      where: { tenantId, isDeleted: false, entryDate: { gte: fromDate, lte: toDate }, voucherType: "RECEIPT" },
       _count: { id: true },
       _sum: { totalDebit: true }
     });
 
     const paymentsAgg = await prisma.journalEntry.aggregate({
-      where: { tenantId, entryDate: { gte: fromDate, lte: toDate }, voucherType: "PAYMENT" },
+      where: { tenantId, isDeleted: false, entryDate: { gte: fromDate, lte: toDate }, voucherType: "PAYMENT" },
       _count: { id: true },
       _sum: { totalDebit: true }
     });
 
     const journalsAgg = await prisma.journalEntry.aggregate({
-      where: { tenantId, entryDate: { gte: fromDate, lte: toDate }, voucherType: "JOURNAL" },
+      where: { tenantId, isDeleted: false, entryDate: { gte: fromDate, lte: toDate }, voucherType: "JOURNAL" },
       _count: { id: true },
       _sum: { totalDebit: true }
     });

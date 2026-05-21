@@ -265,7 +265,7 @@ export async function GET(request: NextRequest) {
     const [bills, total, kulBilledAgg, milaAgg] = await Promise.all([
       prisma.bill.findMany({
         where,
-        orderBy: { createdAt: "desc" },
+        orderBy: { date: "desc" },
         skip: (page - 1) * limit,
         take: limit,
         select: {
@@ -283,6 +283,7 @@ export async function GET(request: NextRequest) {
           grandTotal: true,
           status: true,
           createdAt: true,
+          date: true,
         },
       }),
       prisma.bill.count({ where }),

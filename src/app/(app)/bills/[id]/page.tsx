@@ -271,7 +271,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
             </span>
             <StatusChip status={bill.status} />
             <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG, whiteSpace: "nowrap", display: "none" }} className="sm-visible">
-              {fmtDate(bill.createdAt)} · {bill.creator.name}
+              {fmtDate(bill.date ?? bill.createdAt)} · {bill.creator.name}
             </span>
           </div>
 

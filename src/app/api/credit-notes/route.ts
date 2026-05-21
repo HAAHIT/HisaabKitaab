@@ -57,6 +57,7 @@ export async function GET(request: NextRequest) {
 
     const where = {
       tenantId,
+      isDeleted: false,
       voucherType: { in: voucherTypeFilter as ("CREDIT_NOTE" | "DEBIT_NOTE")[] },
       ...(search
         ? { narration: { contains: search, mode: "insensitive" as const } }

@@ -19,6 +19,7 @@ export async function GET(
             where: {
                 id,
                 tenantId,
+                isDeleted: false,
                 voucherType: { in: ["CREDIT_NOTE", "DEBIT_NOTE"] },
             },
             include: {

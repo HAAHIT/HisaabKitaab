@@ -654,6 +654,25 @@ export async function DELETE(
       return NextResponse.json({ error: "Bill not found" }, { status: 404 });
     }
 
+    // Block cancellation if any non-deleted payments are linked to this bill.
+    // Cancelling would orphan the payment row (linked to a CANCELLED bill) and
+    // leave the audit trail inconsistent. Force the user to reverse/refund
+    // the payment first.
+    const linkedPaymentCount = await prisma.payment.count({
+      where: { linkedBillId: id, tenantId, isDeleted: false },
+    });
+    if (linkedPaymentCount > 0) {
+      return NextResponse.json(
+        {
+          error:
+            `Cannot cancel: ${linkedPaymentCount} payment(s) are linked to this bill. ` +
+            `Reverse or delete those payments first.`,
+          linkedPaymentCount,
+        },
+        { status: 409 }
+      );
+    }
+
     await prisma.$transaction(async (tx: PrismaTx) => {
       await tx.bill.update({
         where: { id },

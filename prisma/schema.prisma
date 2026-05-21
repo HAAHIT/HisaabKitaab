@@ -267,6 +267,7 @@ model JournalEntry {
   ///    * in Tally XML so GSTR-3B ITC columns are correctly populated.
   isReverseCharge Boolean       @default(false)
   syncState       SyncState     @default(SYNCED)
+  isDeleted       Boolean       @default(false)
   bill            Bill?         @relation(fields: [billId], references: [id])
   tenant          Tenant        @relation(fields: [tenantId], references: [id])
   lines           JournalLine[]
@@ -278,6 +279,7 @@ model JournalEntry {
   @@index([billId])
   @@index([purchaseId])
   @@index([paymentId])
+  @@index([tenantId, isDeleted])
 }
 
 model JournalLine {

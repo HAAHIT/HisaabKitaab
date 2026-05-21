@@ -105,9 +105,12 @@ export async function PATCH(
                         data: { currentBalance: { decrement: payment.amount.toNumber() } },
                     });
                 }
+                // Soft-delete the prior journal entry so its effect is removed from
+                // ledger/exports. A fresh entry is posted below for the new values.
+                // Marking syncState MODIFIED preserves the Tally re-export signal.
                 await tx.journalEntry.updateMany({
-                    where: { paymentId: id, tenantId },
-                    data: { isBalanced: false, syncState: "MODIFIED" },
+                    where: { paymentId: id, tenantId, isDeleted: false },
+                    data: { isDeleted: true, syncState: "MODIFIED" },
                 });
             }
 
@@ -268,9 +271,11 @@ export async function DELETE(
                         data: { currentBalance: { decrement: payment.amount.toNumber() } },
                     });
                 }
+                // Soft-delete payment's journal entry so it no longer affects
+                // ledger totals or Tally exports. Payment row itself is soft-deleted below.
                 await tx.journalEntry.updateMany({
-                    where: { paymentId: payment.id, tenantId },
-                    data: { isBalanced: false, syncState: "MODIFIED" },
+                    where: { paymentId: payment.id, tenantId, isDeleted: false },
+                    data: { isDeleted: true, syncState: "MODIFIED" },
                 });
             }
 

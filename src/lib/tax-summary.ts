@@ -49,13 +49,14 @@ export function aggregateTaxByRate(
     });
 
     if (!taxPctCol) {
+        const cgstHalf = isInterState ? 0 : roundTo2(billLevelTax.taxAmount / 2);
         return [
             {
                 rate: billLevelTax.taxPercent || 0,
                 hsnCode: billLevelTax.hsnCode || "—",
                 taxableValue: billLevelTax.subtotal,
-                cgst: isInterState ? 0 : roundTo2(billLevelTax.taxAmount / 2),
-                sgst: isInterState ? 0 : roundTo2(billLevelTax.taxAmount / 2),
+                cgst: cgstHalf,
+                sgst: isInterState ? 0 : roundTo2(billLevelTax.taxAmount - cgstHalf),
                 igst: isInterState ? billLevelTax.taxAmount : 0,
                 totalTax: billLevelTax.taxAmount,
             },
@@ -88,23 +89,27 @@ export function aggregateTaxByRate(
         const existing = slabMap.get(rate);
         if (existing) {
             existing.taxableValue = roundTo2(existing.taxableValue + taxable);
-            existing.totalTax = roundTo2(existing.totalTax + taxAmt);
+            const newTotalTax = roundTo2(existing.totalTax + taxAmt);
+            existing.totalTax = newTotalTax;
             if (isInterState) {
                 existing.igst = roundTo2(existing.igst + taxAmt);
             } else {
-                existing.cgst = roundTo2(existing.cgst + roundTo2(taxAmt / 2));
-                existing.sgst = roundTo2(existing.sgst + roundTo2(taxAmt / 2));
+                // Recompute halves off the running totalTax so cgst+sgst===totalTax
+                const cgstHalf = roundTo2(newTotalTax / 2);
+                existing.cgst = cgstHalf;
+                existing.sgst = roundTo2(newTotalTax - cgstHalf);
             }
             if (hsn !== "—" && existing.hsnCode !== hsn && !existing.hsnCode.includes(hsn)) {
                 existing.hsnCode += `, ${hsn}`;
             }
         } else {
+            const cgstHalf = isInterState ? 0 : roundTo2(taxAmt / 2);
             slabMap.set(rate, {
                 rate,
                 hsnCode: hsn,
                 taxableValue: taxable,
-                cgst: isInterState ? 0 : roundTo2(taxAmt / 2),
-                sgst: isInterState ? 0 : roundTo2(taxAmt / 2),
+                cgst: cgstHalf,
+                sgst: isInterState ? 0 : roundTo2(taxAmt - cgstHalf),
                 igst: isInterState ? taxAmt : 0,
                 totalTax: taxAmt,
             });

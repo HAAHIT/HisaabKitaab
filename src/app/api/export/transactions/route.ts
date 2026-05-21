@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
 
   try {
   const unbalanced = await prisma.journalEntry.count({
-    where: { tenantId, isBalanced: false },
+    where: { tenantId, isBalanced: false, isDeleted: false },
   });
 
   if (unbalanced > 0) {
@@ -61,6 +61,7 @@ export async function GET(request: NextRequest) {
   const entries = await prisma.journalEntry.findMany({
     where: {
       tenantId,
+      isDeleted: false,
       entryDate: {
         gte: fromDate,
         lte: toDate,

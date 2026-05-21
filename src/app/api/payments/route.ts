@@ -382,6 +382,20 @@ export async function PATCH(request: NextRequest) {
         },
       });
 
+      // Bring bank account balance in sync with the now-completed cash movement.
+      // EXPECTED payments don't touch bank balance (no real cash flow yet); on
+      // completion we must mirror the POST path's increment.
+      if (payment.accountId) {
+        const bankDelta =
+          payment.direction === "INCOMING"
+            ? payment.amount.toNumber()
+            : -payment.amount.toNumber();
+        await tx.bankAccount.update({
+          where: { id: payment.accountId },
+          data: { currentBalance: { increment: bankDelta } },
+        });
+      }
+
       if (!updated.party || !updated.party.name) {
         throw new Error("Payment party missing after update");
       }

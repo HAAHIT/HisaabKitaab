@@ -45,6 +45,7 @@ interface Bill {
   grandTotal: number;
   status: string;
   createdAt: string;
+  date?: string;
 }
 
 async function readError(response: Response) {
@@ -78,7 +79,7 @@ export default function BillsListPage() {
     });
     const groups = new Map<string, { label: string; bills: Bill[]; total: number }>();
     for (const bill of bills) {
-      const d = new Date(bill.createdAt);
+      const d = new Date(bill.date ?? bill.createdAt);
       const key = `${d.getFullYear()}-${d.getMonth()}`;
       const existing = groups.get(key);
       if (existing) {
@@ -529,7 +530,7 @@ export default function BillsListPage() {
                                   fontFamily: SG,
                                 }}
                               >
-                                {new Date(bill.createdAt).toLocaleDateString("en-IN", {
+                                {new Date(bill.date ?? bill.createdAt).toLocaleDateString("en-IN", {
                                   day: "numeric",
                                   month: "short",
                                   year: "numeric",
