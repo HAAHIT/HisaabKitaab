@@ -3,17 +3,27 @@
 import { useSearchParams, useRouter } from "next/navigation";
 import { HKButton } from "@/components/ui/HKButton";
 import { HKChip } from "@/components/ui/HKChip";
+import { HKPagination } from "@/components/ui/HKPagination";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Activity } from "@/components/ui/icons";
 
 interface TransactionsClientProps {
   initialTransactions: any[];
+  page: number;
+  totalPages: number;
+  total: number;
 }
 
-export default function TransactionsClient({ initialTransactions }: TransactionsClientProps) {
+export default function TransactionsClient({ initialTransactions, page, totalPages, total }: TransactionsClientProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const type = searchParams.get("type");
+
+  const handlePageChange = (newPage: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("page", String(newPage));
+    router.push(`/transactions?${params.toString()}`);
+  };
 
   const getVoucherColor = (type: string): "primary" | "secondary" | "success" | "warning" | "danger" | "default" => {
     switch (type) {
@@ -42,6 +52,8 @@ export default function TransactionsClient({ initialTransactions }: Transactions
     } else {
       params.delete("type");
     }
+    // Reset to first page when filter changes so user doesn't sit on an empty page.
+    params.delete("page");
     router.push(`/transactions?${params.toString()}`);
   };
 
@@ -194,8 +206,14 @@ export default function TransactionsClient({ initialTransactions }: Transactions
         </div>
       </div>
 
+      {totalPages > 1 && (
+        <div className="flex justify-center mt-4">
+          <HKPagination total={totalPages} page={page} onChange={handlePageChange} showControls />
+        </div>
+      )}
+
       <p className="text-center text-[10px] text-default-400">
-        Showing last {initialTransactions.length} entries. Use Reports for full exports.
+        Page {page} of {totalPages} · {total.toLocaleString("en-IN")} total entries. Use Reports for full exports.
       </p>
     </div>
   );

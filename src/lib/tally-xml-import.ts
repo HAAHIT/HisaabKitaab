@@ -597,20 +597,34 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       const isDeemedPositive =
         String(e["ISDEEMEDPOSITIVE"] ?? "").trim().toLowerCase() === "yes";
 
-      // ISDEEMEDPOSITIVE is the authoritative side indicator in TallyPrime XML.
-      // ISDEEMEDPOSITIVE=Yes → debit side; No → credit side (take abs of amount).
+      // Tally XML convention: AMOUNT sign is canonical.
+      //   AMOUNT < 0 → debit side
+      //   AMOUNT > 0 → credit side
+      // ISDEEMEDPOSITIVE mirrors this for HK-generated exports but native Tally
+      // exports (especially Round Off lines) sometimes disagree. Trust the sign.
+      // Fall back to ISDEEMEDPOSITIVE only when AMOUNT is exactly zero.
       const absAmount = Math.abs(amountRaw);
-      const isDebit = isDeemedPositive;
+      const isDebit = amountRaw !== 0 ? amountRaw < 0 : isDeemedPositive;
       const debit = isDebit ? absAmount : 0;
       const credit = isDebit ? 0 : absAmount;
 
       if (absAmount === 0) continue;
 
       // ── AccountCode resolution chain ──────────────────────────────────────
+      // 0. PARTYLEDGERNAME override: when this line's ledger matches the
+      //    voucher's PARTYLEDGERNAME, Tally has *declared* it a party.
+      //    The line's own pattern can be misleading (e.g. "Online Payment
+      //    Sales A/c" looks like a sales income account but Tally treats it
+      //    as a party ledger). PARTYLEDGERNAME is authoritative — honor it
+      //    over any pattern heuristic.
       // 1. Exact match in LEDGER_TO_CODE (HisaabKitaab exports + common Tally names)
       // 2. Group-based: use PARENT from LEDGER records in the same XML
       // 3. Pattern-based: heuristic on the ledger name itself
       // 4. Fallback: infer from voucher type (assumes unknown name is a party)
+      const isVoucherDeclaredParty =
+        !!partyLedgerName && ledgerName === partyLedgerName;
+      const partyFallback = FALLBACK_BY_VOUCHER[voucherType] ?? "SUNDRY_DEBTORS";
+
       const exactCode = LEDGER_TO_CODE[ledgerName];
       const groupCode = !exactCode && ledgerGroupMap.has(ledgerName)
         ? resolveFromTallyGroup(ledgerGroupMap.get(ledgerName)!, ledgerName)
@@ -618,21 +632,28 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       const patternCode = !exactCode && !groupCode
         ? resolveAccountCodeByPattern(ledgerName)
         : null;
-      const accountCode: AccountCode =
-        exactCode ?? groupCode ?? patternCode ?? FALLBACK_BY_VOUCHER[voucherType] ?? "SUNDRY_DEBTORS";
+      const accountCode: AccountCode = isVoucherDeclaredParty
+        ? (isPartyAccountCode(exactCode ?? groupCode ?? "SUNDRY_DEBTORS")
+            ? (exactCode ?? groupCode ?? partyFallback)
+            : partyFallback)
+        : (exactCode ?? groupCode ?? patternCode ?? partyFallback);
 
-      const isResolvedAsKnownAccount = !!(exactCode || groupCode || patternCode);
+      const isResolvedAsKnownAccount =
+        !isVoucherDeclaredParty && !!(exactCode || groupCode || patternCode);
 
       const billAllocName = extractBillAllocationName(e);
 
       // Party name resolution:
+      // - Voucher declared this ledger as the party (Tally PARTYLEDGERNAME match)
+      //   → the ledger name itself IS the party
       // - Unknown ledger (fell through to fallback) AND resolved to party account
       //   → the ledger name itself IS the party (native Tally naming convention)
       // - Exact-match to a party account code (e.g. HisaabKitaab "Sundry Debtors")
       //   → use voucher-level PARTYLEDGERNAME or BILLALLOCATIONS
       // - Non-party account → null
-      const partyName =
-        (!isResolvedAsKnownAccount && isPartyAccountCode(accountCode))
+      const partyName = isVoucherDeclaredParty
+        ? ledgerName
+        : (!isResolvedAsKnownAccount && isPartyAccountCode(accountCode))
           ? ledgerName
           : isPartyAccountCode(accountCode)
             ? partyLedgerName ?? (billAllocName && billAllocName !== reference ? billAllocName : null)

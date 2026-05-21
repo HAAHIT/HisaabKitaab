@@ -36,7 +36,11 @@ function TallyImportContent() {
   const [jobProgress, setJobProgress] = useState({ processed: 0, total: 0, status: "", failed: 0 });
   const [importResult, setImportResult] = useState<{
     imported: number; skipped: number; partiesCreated: number; failed: number; parseErrors: string[]; importErrors: string[];
+    failures: Array<{ voucherType: string; narration: string; entryDate: string; reason: string }>;
+    roundOffAdjustments: Array<{ voucherType: string; narration: string; entryDate: string; imbalance: number }>;
   } | null>(null);
+  const [showFailures, setShowFailures] = useState(false);
+  const [showRoundOff, setShowRoundOff] = useState(false);
 
   useEffect(() => {
     fetch("/api/import/active")
@@ -110,13 +114,16 @@ function TallyImportContent() {
           setImporting(false);
           setImportJobId(null);
           if (data.status === "COMPLETED") {
+            const skipped = data.skipped ?? 0;
             setImportResult({
               partiesCreated: data.partiesCreated ?? 0,
-              imported: data.processed,
-              skipped: 0,
+              imported: Math.max(0, (data.processed ?? 0) - skipped),
+              skipped,
               failed: data.failed,
               parseErrors: preview?.parseErrors || [],
               importErrors: [],
+              failures: Array.isArray(data.failures) ? data.failures : [],
+              roundOffAdjustments: Array.isArray(data.roundOffAdjustments) ? data.roundOffAdjustments : [],
             });
             setStep(4);
           } else {
@@ -334,13 +341,89 @@ function TallyImportContent() {
                       <p style={{ fontSize: TYPE.numMedium, fontWeight: 700, color: PU, fontFamily: IN, margin: 0 }}>{importResult.partiesCreated}</p>
                     </div>
                   )}
+                  {importResult.skipped > 0 && (
+                    <div style={{ padding: "14px 16px", borderRadius: 12, background: "var(--hk-badge)", border: "1px solid var(--hk-border)", minWidth: 130 }}>
+                      <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: "var(--hk-sub)", textTransform: "uppercase", fontFamily: SG, marginBottom: 4 }}>Skipped</p>
+                      <p style={{ fontSize: TYPE.numMedium, fontWeight: 700, color: "var(--hk-sub)", fontFamily: IN, margin: 0 }}>{importResult.skipped}</p>
+                    </div>
+                  )}
                   {importResult.failed > 0 && (
                     <div style={{ padding: "14px 16px", borderRadius: 12, background: OR + "10", border: `1px solid ${OR}33`, minWidth: 130 }}>
                       <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: OR, textTransform: "uppercase", fontFamily: SG, marginBottom: 4 }}>Failed</p>
                       <p style={{ fontSize: TYPE.numMedium, fontWeight: 700, color: OR, fontFamily: IN, margin: 0 }}>{importResult.failed}</p>
                     </div>
                   )}
+                  {importResult.roundOffAdjustments.length > 0 && (() => {
+                    const totalAbs = importResult.roundOffAdjustments.reduce(
+                      (s, a) => s + Math.abs(a.imbalance), 0
+                    );
+                    return (
+                      <div style={{ padding: "14px 16px", borderRadius: 12, background: AM + "10", border: `1px solid ${AM}33`, minWidth: 130 }}>
+                        <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: AM, textTransform: "uppercase", fontFamily: SG, marginBottom: 4 }}>Round Off</p>
+                        <p style={{ fontSize: TYPE.numMedium, fontWeight: 700, color: AM, fontFamily: IN, margin: 0 }}>₹{totalAbs.toFixed(2)}</p>
+                        <p style={{ fontSize: TYPE.caption, color: AM, fontFamily: SG, margin: "2px 0 0" }}>{importResult.roundOffAdjustments.length} voucher{importResult.roundOffAdjustments.length === 1 ? "" : "s"}</p>
+                      </div>
+                    );
+                  })()}
                 </div>
+
+                {importResult.roundOffAdjustments.length > 0 && (
+                  <div style={{ marginTop: 16, width: "100%", maxWidth: 560 }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowRoundOff((v) => !v)}
+                      style={{
+                        background: "none", border: "none", padding: 0,
+                        color: AM, fontFamily: SG, fontSize: TYPE.caption,
+                        fontWeight: 600, cursor: "pointer", textDecoration: "underline",
+                      }}
+                    >
+                      {showRoundOff ? "Hide" : "Show"} round-off detail
+                    </button>
+                    {showRoundOff && (
+                      <div style={{ marginTop: 8, maxHeight: 240, overflowY: "auto", textAlign: "left", border: "1px solid var(--hk-border)", borderRadius: 8 }}>
+                        {importResult.roundOffAdjustments.map((a, idx) => (
+                          <div key={idx} style={{ padding: "10px 12px", borderBottom: idx === importResult.roundOffAdjustments.length - 1 ? "none" : "1px solid var(--hk-border)", fontSize: TYPE.caption, fontFamily: SG, display: "flex", justifyContent: "space-between", gap: 12 }}>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div style={{ color: AM, fontWeight: 600 }}>{a.voucherType} · {new Date(a.entryDate).toLocaleDateString("en-IN")}</div>
+                              {a.narration && <div style={{ color: "var(--hk-sub)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.narration}</div>}
+                            </div>
+                            <div style={{ color: "var(--hk-text)", fontFamily: IN, fontWeight: 600, whiteSpace: "nowrap" }}>
+                              {a.imbalance > 0 ? "+" : ""}₹{a.imbalance.toFixed(2)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {importResult.failures.length > 0 && (
+                  <div style={{ marginTop: 16, width: "100%", maxWidth: 560 }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowFailures((v) => !v)}
+                      style={{
+                        background: "none", border: "none", padding: 0,
+                        color: OR, fontFamily: SG, fontSize: TYPE.caption,
+                        fontWeight: 600, cursor: "pointer", textDecoration: "underline",
+                      }}
+                    >
+                      {showFailures ? "Hide" : "Show"} {importResult.failures.length} failure{importResult.failures.length === 1 ? "" : "s"}
+                    </button>
+                    {showFailures && (
+                      <div style={{ marginTop: 8, maxHeight: 240, overflowY: "auto", textAlign: "left", border: "1px solid var(--hk-border)", borderRadius: 8 }}>
+                        {importResult.failures.map((f, idx) => (
+                          <div key={idx} style={{ padding: "10px 12px", borderBottom: idx === importResult.failures.length - 1 ? "none" : "1px solid var(--hk-border)", fontSize: TYPE.caption, fontFamily: SG }}>
+                            <div style={{ color: OR, fontWeight: 600 }}>{f.voucherType} · {new Date(f.entryDate).toLocaleDateString("en-IN")}</div>
+                            {f.narration && <div style={{ color: "var(--hk-sub)", marginTop: 2 }}>{f.narration}</div>}
+                            <div style={{ color: "var(--hk-text)", marginTop: 4 }}>{f.reason}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div style={{ marginTop: 24 }}>
                   <HKButton onClick={() => router.push(returnTo)}>

@@ -355,8 +355,17 @@ model ImportJob {
   totalItems     Int       @default(0)
   processed      Int       @default(0)
   failed         Int       @default(0)
+  skipped        Int       @default(0)
   xmlData        String
   error          String?
+  /// Array of { voucherType, narration, entryDate, reason } objects for per-voucher
+  /// failure inspection. Populated by process-import worker.
+  failures       Json?
+  /// Array of { voucherType, narration, entryDate, imbalance } objects captured
+  /// every time the import absorbed a Tally rounding imbalance into ROUND_OFF.
+  /// Lets CAs audit exactly what was patched, since the journal stores only the
+  /// balanced result. Capped at 100 entries to bound row size.
+  roundOffAdjustments Json?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   createdBy      String?

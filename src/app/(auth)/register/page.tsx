@@ -9,91 +9,6 @@ import {
   type TranslationKey,
 } from "@/lib/i18n/translations";
 
-type Feature = {
-  titleKey: TranslationKey;
-  bodyKey: TranslationKey;
-  icon: React.ReactNode;
-};
-
-const FEATURE_ICON_PROPS = {
-  width: 22,
-  height: 22,
-  fill: "none",
-  stroke: "currentColor",
-  viewBox: "0 0 24 24",
-  strokeWidth: 1.8,
-  strokeLinecap: "round" as const,
-  strokeLinejoin: "round" as const,
-};
-
-const FEATURES: Feature[] = [
-  {
-    titleKey: "auth.brand.feature1Title",
-    bodyKey: "auth.brand.feature1Body",
-    icon: (
-      <svg {...FEATURE_ICON_PROPS}>
-        <path d="M4 7h12l4 4v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z" />
-        <path d="M8 11h8M8 15h5" />
-      </svg>
-    ),
-  },
-  {
-    titleKey: "auth.brand.feature2Title",
-    bodyKey: "auth.brand.feature2Body",
-    icon: (
-      <svg {...FEATURE_ICON_PROPS}>
-        <path d="M12 3v18" />
-        <path d="M5 8h14" />
-        <path d="M5 8l-3 6a3 3 0 0 0 6 0L5 8z" />
-        <path d="M19 8l-3 6a3 3 0 0 0 6 0l-3-6z" />
-      </svg>
-    ),
-  },
-  {
-    titleKey: "auth.brand.feature3Title",
-    bodyKey: "auth.brand.feature3Body",
-    icon: (
-      <svg {...FEATURE_ICON_PROPS}>
-        <line x1="19" y1="5" x2="5" y2="19" />
-        <circle cx="7.5" cy="7.5" r="2.5" />
-        <circle cx="16.5" cy="16.5" r="2.5" />
-      </svg>
-    ),
-  },
-  {
-    titleKey: "auth.brand.feature4Title",
-    bodyKey: "auth.brand.feature4Body",
-    icon: (
-      <svg {...FEATURE_ICON_PROPS}>
-        <rect x="3" y="5" width="18" height="16" rx="2" />
-        <path d="M3 10h18" />
-        <path d="M8 3v4M16 3v4" />
-      </svg>
-    ),
-  },
-  {
-    titleKey: "auth.brand.feature5Title",
-    bodyKey: "auth.brand.feature5Body",
-    icon: (
-      <svg {...FEATURE_ICON_PROPS}>
-        <path d="M12 3l8 3v5c0 4.5-3.4 8.6-8 10-4.6-1.4-8-5.5-8-10V6l8-3z" />
-        <path d="M9 12l2 2 4-4" />
-      </svg>
-    ),
-  },
-  {
-    titleKey: "auth.brand.feature6Title",
-    bodyKey: "auth.brand.feature6Body",
-    icon: (
-      <svg {...FEATURE_ICON_PROPS}>
-        <circle cx="12" cy="12" r="9" />
-        <path d="M3 12h18" />
-        <path d="M12 3a13 13 0 0 1 0 18a13 13 0 0 1 0-18z" />
-      </svg>
-    ),
-  },
-];
-
 export default function RegisterPage() {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -102,7 +17,6 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
-    // Basic language extraction from cookies on client-side
     const match = document.cookie.match(/(?:^|;)\s*hisaabkitaab-lang=([^;]*)/);
     setLanguage(normalizeLanguage(match ? match[1] : undefined));
   }, []);
@@ -167,13 +81,13 @@ export default function RegisterPage() {
   const inputGroupStyle: React.CSSProperties = {
     display: "flex",
     alignItems: "center",
-    gap: 10,
+    gap: 12,
     padding: "0 14px",
-    height: 46,
-    borderRadius: 12,
+    height: 48,
+    borderRadius: 10,
     border: "1.5px solid var(--hk-border)",
     background: "var(--hk-input)",
-    transition: "border-color 0.15s",
+    transition: "border-color 0.15s, box-shadow 0.15s",
   };
 
   const inputStyle: React.CSSProperties = {
@@ -181,19 +95,28 @@ export default function RegisterPage() {
     background: "transparent",
     border: "none",
     outline: "none",
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: 500,
     color: "var(--hk-text)",
-    fontFamily: "var(--font-space-grotesk), sans-serif",
   };
 
-  const labelStyle: React.CSSProperties = {
+  const labelTextStyle: React.CSSProperties = {
     display: "block",
     fontSize: 13,
     fontWeight: 600,
-    color: "var(--hk-sub)",
-    marginBottom: 6,
-    fontFamily: "var(--font-space-grotesk), sans-serif",
+    color: "var(--hk-text)",
+    marginBottom: 8,
+  };
+
+  const iconProps = {
+    width: 18,
+    height: 18,
+    fill: "none",
+    stroke: "var(--hk-sub)",
+    viewBox: "0 0 24 24",
+    strokeWidth: 1.8,
+    strokeLinecap: "round" as const,
+    style: { flexShrink: 0 },
   };
 
   return (
@@ -206,15 +129,14 @@ export default function RegisterPage() {
         fontFamily: "var(--font-space-grotesk), sans-serif",
       }}
     >
-      {/* Left highlights panel — 75% */}
+      {/* Marketing side — 60% */}
       <aside
-        className="hk-auth-highlights"
+        className="hk-auth-marketing"
         style={{
-          flex: "0 0 70%",
+          flex: "0 0 60%",
           position: "relative",
           overflow: "hidden",
-          background:
-            "linear-gradient(135deg, #f76000 0%, #ef4a3a 35%, #7b5ef6 100%)",
+          background: "#0b0a1a",
           color: "#fff",
           padding: "56px 64px",
           display: "flex",
@@ -226,48 +148,35 @@ export default function RegisterPage() {
           aria-hidden="true"
           style={{
             position: "absolute",
-            top: -160,
-            left: -120,
-            width: 420,
-            height: 420,
+            bottom: -200,
+            right: -180,
+            width: 620,
+            height: 620,
             borderRadius: "50%",
-            background: "rgba(255, 255, 255, 0.18)",
-            filter: "blur(100px)",
-            pointerEvents: "none",
-          }}
-        />
-        <div
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            bottom: -160,
-            right: -120,
-            width: 460,
-            height: 460,
-            borderRadius: "50%",
-            background: "rgba(0, 0, 0, 0.18)",
-            filter: "blur(120px)",
+            background:
+              "radial-gradient(circle at center, rgba(247, 96, 0, 0.35) 0%, rgba(123, 94, 246, 0.22) 45%, transparent 70%)",
+            filter: "blur(40px)",
             pointerEvents: "none",
           }}
         />
 
-        <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 14 }}>
+        {/* Brand mark */}
+        <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 12 }}>
           <div
             style={{
-              width: 48,
-              height: 48,
-              borderRadius: 14,
-              background: "rgba(255, 255, 255, 0.18)",
-              border: "1px solid rgba(255, 255, 255, 0.28)",
+              width: 40,
+              height: 40,
+              borderRadius: 12,
+              background: "linear-gradient(135deg, #f76000, #7b5ef6)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              backdropFilter: "blur(6px)",
+              boxShadow: "0 6px 20px rgba(247, 96, 0, 0.35)",
             }}
           >
             <svg
-              width="24"
-              height="24"
+              width="20"
+              height="20"
               viewBox="0 0 24 24"
               fill="none"
               stroke="white"
@@ -281,138 +190,93 @@ export default function RegisterPage() {
               <line x1="9" y1="12" x2="12" y2="12" />
             </svg>
           </div>
-          <div>
-            <div
-              style={{
-                fontSize: 22,
-                fontWeight: 700,
-                letterSpacing: "-0.3px",
-                lineHeight: 1.1,
-              }}
-            >
-              HisaabKitaab
-            </div>
-            <div
-              style={{
-                fontSize: 13,
-                fontWeight: 500,
-                color: "rgba(255, 255, 255, 0.82)",
-                marginTop: 2,
-              }}
-            >
-              {t("auth.brand.tagline")}
-            </div>
+          <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.2px" }}>
+            HisaabKitaab
           </div>
         </div>
 
-        <div style={{ position: "relative", display: "flex", flexDirection: "column", gap: 36 }}>
-          <div style={{ maxWidth: 720 }}>
-            <h2
-              style={{
-                fontSize: 44,
-                fontWeight: 700,
-                letterSpacing: "-1px",
-                lineHeight: 1.1,
-                margin: 0,
-              }}
-            >
-              {t("auth.brand.headline")}
-            </h2>
-            <p
-              style={{
-                fontSize: 17,
-                fontWeight: 500,
-                color: "rgba(255, 255, 255, 0.88)",
-                lineHeight: 1.55,
-                marginTop: 16,
-                maxWidth: 640,
-              }}
-            >
-              {t("auth.brand.subheadline")}
-            </p>
-          </div>
-
-          <ul
-            className="hk-auth-feature-grid"
+        {/* Headline block */}
+        <div style={{ position: "relative", maxWidth: 640 }}>
+          <h2
             style={{
-              listStyle: "none",
+              fontSize: "clamp(36px, 4.4vw, 56px)",
+              fontWeight: 700,
+              letterSpacing: "-1.2px",
+              lineHeight: 1.05,
               margin: 0,
-              padding: 0,
-              display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-              gap: 18,
-              maxWidth: 760,
             }}
           >
-            {FEATURES.map((feature) => (
-              <li
-                key={feature.titleKey}
-                style={{
-                  display: "flex",
-                  gap: 14,
-                  padding: "16px 18px",
-                  borderRadius: 16,
-                  background: "rgba(255, 255, 255, 0.12)",
-                  border: "1px solid rgba(255, 255, 255, 0.18)",
-                  backdropFilter: "blur(6px)",
-                }}
-              >
-                <div
-                  style={{
-                    flexShrink: 0,
-                    width: 40,
-                    height: 40,
-                    borderRadius: 12,
-                    background: "rgba(255, 255, 255, 0.22)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "#fff",
-                  }}
-                >
-                  {feature.icon}
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.3 }}>
-                    {t(feature.titleKey)}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 500,
-                      color: "rgba(255, 255, 255, 0.82)",
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    {t(feature.bodyKey)}
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
+            {t("auth.brand.headline")}
+          </h2>
+          <p
+            style={{
+              fontSize: 18,
+              fontWeight: 400,
+              color: "rgba(255, 255, 255, 0.72)",
+              lineHeight: 1.55,
+              marginTop: 20,
+              maxWidth: 540,
+            }}
+          >
+            {t("auth.brand.subheadline")}
+          </p>
+
+          {/* Single trust line */}
+          <div
+            style={{
+              marginTop: 32,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "10px 16px",
+              borderRadius: 999,
+              background: "rgba(255, 255, 255, 0.06)",
+              border: "1px solid rgba(255, 255, 255, 0.12)",
+              fontSize: 13,
+              fontWeight: 500,
+              color: "rgba(255, 255, 255, 0.86)",
+            }}
+          >
+            <svg
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{ color: "#f76000" }}
+            >
+              <path d="M9 12l2 2 4-4" />
+              <circle cx="12" cy="12" r="9" />
+            </svg>
+            {t("auth.brand.trust")}
+          </div>
         </div>
 
+        {/* Footer */}
         <div
           style={{
             position: "relative",
-            fontSize: 13,
+            fontSize: 12,
             fontWeight: 500,
-            color: "rgba(255, 255, 255, 0.72)",
+            color: "rgba(255, 255, 255, 0.48)",
           }}
         >
           © {new Date().getFullYear()} HisaabKitaab
         </div>
       </aside>
 
-      {/* Right form panel — 25% */}
+      {/* Form side — 40% */}
       <main
         className="hk-auth-form-panel"
         style={{
-          flex: "0 0 30%",
+          flex: "0 0 40%",
           display: "flex",
           alignItems: "center",
-          justifyContent: "stretch",
-          padding: "48px 56px",
+          justifyContent: "center",
+          padding: "48px 32px",
           position: "relative",
           overflow: "hidden",
         }}
@@ -421,89 +285,50 @@ export default function RegisterPage() {
           style={{
             position: "relative",
             width: "100%",
+            maxWidth: 400,
             display: "flex",
             flexDirection: "column",
           }}
         >
-          {/* Header */}
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: 12,
-              marginBottom: 24,
-              textAlign: "center",
-            }}
-          >
-            <div
+          {/* Heading */}
+          <div style={{ marginBottom: 32 }}>
+            <h1
               style={{
-                width: 52,
-                height: 52,
-                borderRadius: 14,
-                background: "linear-gradient(135deg, #f76000, #7b5ef6)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                boxShadow: "0 8px 24px rgba(247, 96, 0, 0.3)",
+                fontSize: 28,
+                fontWeight: 700,
+                letterSpacing: "-0.5px",
+                color: "var(--hk-text)",
+                lineHeight: 1.2,
+                margin: 0,
               }}
             >
-              <svg
-                width="26"
-                height="26"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="white"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-            </div>
-            <div>
-              <h1
-                style={{
-                  fontSize: 26,
-                  fontWeight: 700,
-                  letterSpacing: "-0.5px",
-                  background: "linear-gradient(135deg, #f76000, #7b5ef6)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  backgroundClip: "text",
-                  lineHeight: 1.2,
-                  margin: 0,
-                }}
-              >
-                {t("register.title")}
-              </h1>
-              <p
-                style={{
-                  fontSize: 13,
-                  fontWeight: 500,
-                  color: "var(--hk-sub)",
-                  marginTop: 6,
-                }}
-              >
-                {t("register.subtitle")}
-              </p>
-            </div>
+              {t("register.title")}
+            </h1>
+            <p
+              style={{
+                fontSize: 14,
+                fontWeight: 400,
+                color: "var(--hk-sub)",
+                marginTop: 8,
+              }}
+            >
+              {t("register.subtitle")}
+            </p>
           </div>
 
           {/* Language switch */}
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14 }}>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
             <a
               href={languageSwitchUrl}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
-                minHeight: 32,
-                minWidth: 52,
-                padding: "0 12px",
-                borderRadius: 10,
-                background: "rgba(123, 94, 246, 0.12)",
+                minHeight: 30,
+                minWidth: 48,
+                padding: "0 10px",
+                borderRadius: 8,
+                background: "rgba(123, 94, 246, 0.10)",
                 color: "#7b5ef6",
                 fontSize: 12,
                 fontWeight: 700,
@@ -515,74 +340,93 @@ export default function RegisterPage() {
             </a>
           </div>
 
-          <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {/* Company Name */}
             <label htmlFor="company-input" style={{ display: "block" }}>
-              <span style={labelStyle}>{t("register.companyName")}</span>
+              <span style={labelTextStyle}>{t("register.companyName")}</span>
               <div className="hk-login-input-group" style={inputGroupStyle}>
+                <svg {...iconProps}>
+                  <path d="M3 21V7l9-4 9 4v14" />
+                  <path d="M9 21V12h6v9" />
+                  <path d="M3 21h18" />
+                </svg>
                 <input
                   id="company-input"
                   name="companyName"
                   type="text"
                   required
-                  style={inputStyle}
+                  autoComplete="organization"
                   placeholder={t("register.companyNamePlaceholder")}
+                  style={inputStyle}
                 />
               </div>
             </label>
 
             {/* Full Name */}
             <label htmlFor="name-input" style={{ display: "block" }}>
-              <span style={labelStyle}>{t("register.name")}</span>
+              <span style={labelTextStyle}>{t("register.name")}</span>
               <div className="hk-login-input-group" style={inputGroupStyle}>
+                <svg {...iconProps}>
+                  <path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zm-4 7a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
                 <input
                   id="name-input"
                   name="name"
                   type="text"
                   required
                   autoComplete="name"
-                  style={inputStyle}
                   placeholder={t("register.namePlaceholder")}
+                  style={inputStyle}
                 />
               </div>
             </label>
 
             {/* Credential */}
             <label htmlFor="credential-input" style={{ display: "block" }}>
-              <span style={labelStyle}>{t("login.credentialLabel")}</span>
+              <span style={labelTextStyle}>{t("login.credentialLabel")}</span>
               <div className="hk-login-input-group" style={inputGroupStyle}>
+                <svg {...iconProps}>
+                  <path d="M4 6h16v12H4z" />
+                  <path d="M4 6l8 7 8-7" />
+                </svg>
                 <input
                   id="credential-input"
                   name="credential"
                   type="text"
                   required
-                  style={inputStyle}
+                  autoComplete="username"
                   placeholder={t("login.credentialPlaceholder")}
+                  style={inputStyle}
                 />
               </div>
             </label>
 
             {/* Password */}
             <label htmlFor="password-input" style={{ display: "block" }}>
-              <span style={labelStyle}>{t("login.passwordLabel")}</span>
+              <span style={labelTextStyle}>{t("login.passwordLabel")}</span>
               <div className="hk-login-input-group" style={inputGroupStyle}>
+                <svg {...iconProps}>
+                  <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
                 <input
                   id="password-input"
                   name="password"
                   type={showPassword ? "text" : "password"}
                   required
                   minLength={12}
-                  style={inputStyle}
+                  autoComplete="new-password"
                   placeholder={t("login.passwordPlaceholder")}
+                  style={inputStyle}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
+                  aria-pressed={showPassword}
                   aria-label={showPassword ? t("common.hide") : t("common.show")}
                   style={{
                     flexShrink: 0,
-                    width: 30,
-                    height: 30,
+                    width: 32,
+                    height: 32,
                     borderRadius: 8,
                     border: "none",
                     background: "transparent",
@@ -591,6 +435,7 @@ export default function RegisterPage() {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
+                    transition: "background 0.15s",
                   }}
                 >
                   <span className="sr-only">{showPassword ? t("common.hide") : t("common.show")}</span>
@@ -613,13 +458,12 @@ export default function RegisterPage() {
               <p
                 style={{
                   padding: "10px 14px",
-                  borderRadius: 12,
+                  borderRadius: 10,
                   border: "1px solid rgba(247, 96, 0, 0.25)",
                   background: "rgba(247, 96, 0, 0.08)",
                   fontSize: 13,
                   fontWeight: 600,
                   color: "#f76000",
-                  fontFamily: "var(--font-space-grotesk), sans-serif",
                 }}
                 aria-live="polite"
               >
@@ -632,18 +476,17 @@ export default function RegisterPage() {
               type="submit"
               disabled={isPending}
               style={{
-                marginTop: 4,
+                marginTop: 8,
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
                 gap: 10,
-                height: 48,
-                borderRadius: 14,
+                height: 50,
+                borderRadius: 12,
                 background: "linear-gradient(135deg, #f76000, #7b5ef6)",
                 color: "#fff",
                 fontSize: 15,
                 fontWeight: 700,
-                fontFamily: "var(--font-space-grotesk), sans-serif",
                 border: "none",
                 cursor: isPending ? "not-allowed" : "pointer",
                 boxShadow: "0 6px 20px rgba(247, 96, 0, 0.3)",
@@ -671,12 +514,11 @@ export default function RegisterPage() {
           {/* Login link */}
           <div
             style={{
-              marginTop: 20,
+              marginTop: 28,
               textAlign: "center",
               fontSize: 13,
               fontWeight: 500,
               color: "var(--hk-sub)",
-              fontFamily: "var(--font-space-grotesk), sans-serif",
             }}
           >
             {t("register.hasAccount")}{" "}
@@ -703,10 +545,10 @@ export default function RegisterPage() {
             }
             .hk-login-input-group:focus-within {
               border-color: #f76000 !important;
-              box-shadow: 0 0 0 3px rgba(247, 96, 0, 0.1);
+              box-shadow: 0 0 0 3px rgba(247, 96, 0, 0.12);
             }
             @media (max-width: 1023px) {
-              .hk-auth-highlights { display: none !important; }
+              .hk-auth-marketing { display: none !important; }
               .hk-auth-form-panel { flex: 1 1 100% !important; }
             }
           `,

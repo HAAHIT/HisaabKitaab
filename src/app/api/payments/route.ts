@@ -123,6 +123,8 @@ export async function GET(request: NextRequest) {
         notes: true,
         party: { select: { name: true, type: true } },
         linkedBill: { select: { id: true, billNumber: true } },
+        BankAccount_Payment_accountIdToBankAccount: { select: { name: true, type: true } },
+        BankAccount_Payment_destinationAccountIdToBankAccount: { select: { name: true, type: true } },
       },
     }),
     prisma.payment.count({ where }),

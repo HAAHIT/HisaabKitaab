@@ -326,7 +326,7 @@ export default function BillsListPage() {
 
         {/* Search + filter */}
         <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
-          <SearchBox value={search} onChange={setSearch} placeholder="Bill dhundho..." />
+          <SearchBox value={search} onChange={setSearch} placeholder="Bill number, party ya customer dhundho..." />
           <PillFilter
             options={filterOptions}
             value={statusFilter}

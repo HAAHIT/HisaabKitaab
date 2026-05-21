@@ -45,6 +45,11 @@ export async function GET(request: NextRequest) {
   const type = searchParams.get("type") || "";
   const sortBy = searchParams.get("sortBy") || "balance"; // "balance" or "name"
   const overdueFilter = searchParams.get("overdue") === "true";
+  const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1);
+  const limit = Math.min(
+    Math.max(1, parseInt(searchParams.get("limit") || "20", 10) || 20),
+    100
+  );
 
   const where: Prisma.PartyWhereInput = { isActive: true, isDeleted: false, tenantId };
 
@@ -75,15 +80,26 @@ export async function GET(request: NextRequest) {
       ? { name: "asc" }
       : { currentBalance: "asc" }; // Most negative (biggest debtors) first
 
-  const parties = await prisma.party.findMany({
-    where,
-    orderBy,
-    include: {
-      _count: { select: { payments: true } },
-    },
-  });
+  const [parties, total] = await Promise.all([
+    prisma.party.findMany({
+      where,
+      orderBy,
+      skip: (page - 1) * limit,
+      take: limit,
+      include: {
+        _count: { select: { payments: true } },
+      },
+    }),
+    prisma.party.count({ where }),
+  ]);
 
-  return NextResponse.json({ parties });
+  return NextResponse.json({
+    parties,
+    page,
+    limit,
+    total,
+    totalPages: Math.max(1, Math.ceil(total / limit)),
+  });
 }
 
 // POST /api/parties — Create a new party

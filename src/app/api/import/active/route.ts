@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
     totalItems: job.totalItems,
     processed: job.processed,
     failed: job.failed,
+    skipped: job.skipped,
     partiesCreated: job.partiesCreated,
   });
 }

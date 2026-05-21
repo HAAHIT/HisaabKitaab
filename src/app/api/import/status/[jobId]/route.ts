@@ -30,7 +30,10 @@ export async function GET(
     totalItems: job.totalItems,
     processed: job.processed,
     failed: job.failed,
+    skipped: job.skipped,
     partiesCreated: job.partiesCreated,
+    failures: job.failures ?? null,
+    roundOffAdjustments: job.roundOffAdjustments ?? null,
     error: job.error
   });
 }

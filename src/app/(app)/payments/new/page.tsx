@@ -439,8 +439,12 @@ export default function RecordPaymentPage() {
                     if (!v) return;
                     setMode(v);
                     if (v === "CASH") {
+                      // Auto-select cash account if one exists, otherwise
+                      // clear so the user notices and creates one — don't
+                      // leave a bank account silently selected against a
+                      // CASH payment.
                       const cashAcc = bankAccounts.find((a) => a.type === "CASH");
-                      if (cashAcc) setAccountId(cashAcc.id);
+                      setAccountId(cashAcc ? cashAcc.id : "");
                     } else {
                       const currentAcc = bankAccounts.find((a) => a.id === accountId);
                       if (currentAcc?.type === "CASH") {

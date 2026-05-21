@@ -7,6 +7,7 @@ import {
   type SupportedPartyType,
 } from "@/lib/accounting";
 import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
+import { HKPagination } from "@/components/ui/HKPagination";
 import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -55,6 +56,8 @@ export default function PartiesPage() {
   const [parties, setParties] = useState<Party[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [overflowPartyId, setOverflowPartyId] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<"ALL" | "CUSTOMER" | "VENDOR">("ALL");
   const [overdueFilter, setOverdueFilter] = useState(false);
@@ -90,6 +93,7 @@ export default function PartiesPage() {
     try {
       const params = new URLSearchParams();
       params.set("sortBy", "balance");
+      params.set("page", String(page));
       if (search) params.set("search", search);
       if (typeFilter !== "ALL") params.set("type", typeFilter);
       if (overdueFilter) params.set("overdue", "true");
@@ -102,6 +106,7 @@ export default function PartiesPage() {
 
       const data = await response.json();
       setParties((data.parties || []) as Party[]);
+      setTotalPages(typeof data.totalPages === "number" && data.totalPages > 0 ? data.totalPages : 1);
       if (settingsRes) {
         const s = await settingsRes.json().catch(() => null);
         if (s?.settings?.companyName) setCompanyName(s.settings.companyName as string);
@@ -115,7 +120,12 @@ export default function PartiesPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, t, typeFilter, overdueFilter]);
+  }, [search, t, typeFilter, overdueFilter, page, companyName]);
+
+  // Reset to page 1 when filters change so we don't sit on a now-empty page.
+  useEffect(() => {
+    setPage(1);
+  }, [search, typeFilter, overdueFilter]);
 
   useEffect(() => {
     fetchParties();
@@ -702,6 +712,12 @@ export default function PartiesPage() {
                 );
               })}
             </HKCard>
+          )}
+
+          {!loading && totalPages > 1 && (
+            <div style={{ marginTop: 24, display: "flex", justifyContent: "center" }}>
+              <HKPagination total={totalPages} page={page} onChange={setPage} showControls />
+            </div>
           )}
         </div>
       </div>

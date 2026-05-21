@@ -228,6 +228,45 @@ export async function processImportJob(jobId?: string, preparsed?: TallyParseRes
       }
     }
 
+    // Pre-create bank accounts for every bank/cash/UPI ledger referenced in any
+    // voucher in this import. Doing this sequentially up-front avoids the race
+    // where two concurrent voucher transactions try to upsert the same bank
+    // account name and one hits a (tenantId, name) unique-constraint violation.
+    const bankLedgerNames = new Set<string>();
+    const bankLedgerTypes = new Map<string, "CASH" | "BANK">();
+    for (const v of vouchers) {
+      for (const line of v.lines) {
+        if (
+          (line.accountCode === "CASH" || line.accountCode === "BANK" || line.accountCode === "UPI") &&
+          line.ledgerName &&
+          !bankAccountCache.has(line.ledgerName)
+        ) {
+          bankLedgerNames.add(line.ledgerName);
+          // CASH ledgers always map to type CASH; BANK/UPI both map to BANK.
+          if (!bankLedgerTypes.has(line.ledgerName)) {
+            bankLedgerTypes.set(line.ledgerName, line.accountCode === "CASH" ? "CASH" : "BANK");
+          }
+        }
+      }
+    }
+    for (const name of bankLedgerNames) {
+      const upserted = await prisma.bankAccount.upsert({
+        where: { tenantId_name: { tenantId: tid, name } },
+        update: {},
+        create: {
+          tenantId: tid,
+          name,
+          type: bankLedgerTypes.get(name) ?? "BANK",
+          openingBalance: 0,
+          currentBalance: 0,
+          createdBy: actorId,
+          updatedAt: new Date(),
+        },
+        select: { id: true },
+      });
+      bankAccountCache.set(name, upserted.id);
+    }
+
     async function resolvePartyId(
       name: string,
       accountCode: AccountCode
@@ -338,6 +377,17 @@ export async function processImportJob(jobId?: string, preparsed?: TallyParseRes
     const BATCH_SIZE = 50;
     const CONCURRENCY = 10;
 
+    // Captured every time importVoucher absorbs a Tally rounding imbalance into
+    // ROUND_OFF. Surfaced in the import success card so CAs can audit exactly
+    // what was patched (the journal only stores the balanced result).
+    const MAX_ROUND_OFF_DETAILS = 100;
+    const roundOffAdjustments: Array<{
+      voucherType: string;
+      narration: string;
+      entryDate: string;
+      imbalance: number;
+    }> = [];
+
     // [PERF-2/5] importVoucher uses ReadCommitted isolation (pure INSERTs, no
     // read-modify-write cycles) and returns audit log rows for bulk insert
     // outside the transaction, reducing per-transaction scope.
@@ -353,6 +403,14 @@ export async function processImportJob(jobId?: string, preparsed?: TallyParseRes
         const totalDebitForFp = (Math.round(voucher.totalDebit * 100) / 100).toFixed(2);
         const fingerprint = `${resolvedType}|${dateStr}|${voucher.narration}|${totalDebitForFp}`;
         if (duplicateFingerprints.has(fingerprint)) {
+          logWarn("import.tally-xml.skipped-fingerprint", {
+            jobId: job.id,
+            tenantId: tid,
+            voucherType: voucher.voucherType,
+            entryDate: voucher.entryDate.toISOString(),
+            narration: voucher.narration,
+            fingerprint,
+          });
           return "skipped";
         }
       }
@@ -406,6 +464,14 @@ export async function processImportJob(jobId?: string, preparsed?: TallyParseRes
             entryDate: voucher.entryDate.toISOString(),
             imbalance,
           });
+          if (roundOffAdjustments.length < MAX_ROUND_OFF_DETAILS) {
+            roundOffAdjustments.push({
+              voucherType: voucher.voucherType,
+              narration: voucher.narration ?? "",
+              entryDate: voucher.entryDate.toISOString(),
+              imbalance,
+            });
+          }
           const existingRoundOff = lines.find((l) => l.accountCode === "ROUND_OFF");
           if (existingRoundOff) {
             const netBefore = existingRoundOff.debit - existingRoundOff.credit;
@@ -454,19 +520,7 @@ export async function processImportJob(jobId?: string, preparsed?: TallyParseRes
               ?? primaryLine?.ledgerName
               ?? (isPurchase ? "Vendor" : "Cash Customer");
 
-            const rows = voucher.inventoryRows && voucher.inventoryRows.length > 0
-              ? voucher.inventoryRows
-              : [{
-                Item: isPurchase ? "Purchases" : "Sales",
-                Qty: 1,
-                Unit: "nos",
-                Rate: grandTotal,
-                Amount: grandTotal,
-              }];
-
-            const subtotal = Math.round(
-              rows.reduce((sum: number, r: any) => sum + (r.Amount || 0), 0) * 100
-            ) / 100;
+            // Compute tax first — it depends only on ledger lines, not on rows.
             const taxAmount = Math.round(
               Math.abs(
                 voucher.lines
@@ -475,6 +529,28 @@ export async function processImportJob(jobId?: string, preparsed?: TallyParseRes
               ) * 100
             ) / 100;
             const roundedGrandTotal = Math.round(grandTotal * 100) / 100;
+
+            // For vouchers with no inventory rows, synthesize a single row using
+            // the pre-tax amount (grandTotal - taxAmount). Using grandTotal here
+            // would double-count tax into the subtotal.
+            const syntheticRowAmount = Math.round((roundedGrandTotal - taxAmount) * 100) / 100;
+            const rows = voucher.inventoryRows && voucher.inventoryRows.length > 0
+              ? voucher.inventoryRows
+              : [{
+                Item: isPurchase ? "Purchases" : "Sales",
+                Qty: 1,
+                Unit: "nos",
+                Rate: syntheticRowAmount,
+                Amount: syntheticRowAmount,
+              }];
+
+            const subtotal = Math.round(
+              rows.reduce((sum: number, r: any) => sum + (r.Amount || 0), 0) * 100
+            ) / 100;
+            // Derive bill-level roundOff so subtotal + taxAmount + roundOff === grandTotal.
+            // This makes imported bills display the same way Tally renders them and keeps
+            // the printed bill internally consistent.
+            const roundOff = Math.round((roundedGrandTotal - subtotal - taxAmount) * 100) / 100;
 
             const createdBill = await tx.bill.create({
               data: {
@@ -488,6 +564,7 @@ export async function processImportJob(jobId?: string, preparsed?: TallyParseRes
                 taxPercent: voucher.taxPercent ?? 0,
                 taxAmount,
                 grandTotal: roundedGrandTotal,
+                roundOff,
                 status: "FINAL",
                 isInterState: voucher.isInterState ?? false,
                 placeOfSupply: voucher.placeOfSupply,
@@ -520,6 +597,7 @@ export async function processImportJob(jobId?: string, preparsed?: TallyParseRes
               : cashBankLine?.accountCode === "UPI" ? "UPI"
               : "BANK_TRANSFER";
 
+            // Bank accounts are pre-created above (line ~221); just look up.
             const accountId = cashBankLine?.ledgerName
               ? (bankAccountCache.get(cashBankLine.ledgerName) ?? null)
               : null;
@@ -590,6 +668,15 @@ export async function processImportJob(jobId?: string, preparsed?: TallyParseRes
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         if (msg.includes("Unique constraint") && voucher.remoteId) {
+          logWarn("import.tally-xml.skipped-unique-constraint", {
+            jobId: job.id,
+            tenantId: tid,
+            voucherType: voucher.voucherType,
+            entryDate: voucher.entryDate.toISOString(),
+            narration: voucher.narration,
+            remoteId: voucher.remoteId,
+            error: msg,
+          });
           return "skipped";
         }
         return err instanceof Error ? err : new Error(msg);
@@ -598,6 +685,15 @@ export async function processImportJob(jobId?: string, preparsed?: TallyParseRes
 
     const allVouchers = [...vouchersWithRemoteId, ...vouchersWithoutRemoteId];
 
+    // Cap stored failure details so a hugely-broken import doesn't bloat the row.
+    const MAX_FAILURE_DETAILS = 100;
+    const failureDetails: Array<{
+      voucherType: string;
+      narration: string;
+      entryDate: string;
+      reason: string;
+    }> = [];
+
     for (let i = 0; i < allVouchers.length; i += BATCH_SIZE) {
       const batch = allVouchers.slice(i, i + BATCH_SIZE);
       const pendingAuditLogs: Prisma.AuditLogCreateManyInput[] = [];
@@ -605,15 +701,34 @@ export async function processImportJob(jobId?: string, preparsed?: TallyParseRes
       for (let j = 0; j < batch.length; j += CONCURRENCY) {
         const chunk = batch.slice(j, j + CONCURRENCY);
         const results = await Promise.allSettled(chunk.map((v) => importVoucher(v, pendingAuditLogs)));
-        for (const r of results) {
+        results.forEach((r, idx) => {
+          const voucher = chunk[idx];
           if (r.status === "fulfilled") {
             if (r.value === "skipped") skipped++;
             else if (r.value === "imported") imported++;
-            else failed++;
+            else {
+              failed++;
+              if (failureDetails.length < MAX_FAILURE_DETAILS) {
+                failureDetails.push({
+                  voucherType: voucher.voucherType,
+                  narration: voucher.narration ?? "",
+                  entryDate: voucher.entryDate.toISOString(),
+                  reason: r.value instanceof Error ? r.value.message : String(r.value),
+                });
+              }
+            }
           } else {
             failed++;
+            if (failureDetails.length < MAX_FAILURE_DETAILS) {
+              failureDetails.push({
+                voucherType: voucher.voucherType,
+                narration: voucher.narration ?? "",
+                entryDate: voucher.entryDate.toISOString(),
+                reason: r.reason instanceof Error ? r.reason.message : String(r.reason),
+              });
+            }
           }
-        }
+        });
       }
 
       // [PERF-5] Bulk insert all audit logs accumulated during this batch
@@ -626,7 +741,8 @@ export async function processImportJob(jobId?: string, preparsed?: TallyParseRes
         where: { id: job.id },
         data: {
           processed: imported + skipped,
-          failed: failed,
+          failed,
+          skipped,
         },
       });
     }
@@ -636,7 +752,14 @@ export async function processImportJob(jobId?: string, preparsed?: TallyParseRes
       data: {
         status: "COMPLETED",
         processed: imported + skipped,
-        failed: failed,
+        failed,
+        skipped,
+        failures: failureDetails.length > 0
+          ? (failureDetails as unknown as Prisma.InputJsonValue)
+          : Prisma.JsonNull,
+        roundOffAdjustments: roundOffAdjustments.length > 0
+          ? (roundOffAdjustments as unknown as Prisma.InputJsonValue)
+          : Prisma.JsonNull,
         partiesCreated,
         // [S1] Clear raw XML to prevent storage bloat (up to 5MB per job).
         // All relevant data is already persisted in JournalEntries + AuditLog.

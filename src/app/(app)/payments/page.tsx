@@ -27,6 +27,23 @@ interface Payment {
   notes: string | null;
   party: { name: string; type: string } | null;
   linkedBill: { id: string; billNumber: string } | null;
+  BankAccount_Payment_accountIdToBankAccount?: { name: string; type: string } | null;
+  BankAccount_Payment_destinationAccountIdToBankAccount?: { name: string; type: string } | null;
+}
+
+/**
+ * The counter-ledger for a payment — what shows up in the "to/from" cell.
+ *   1. Party (customer/vendor/expense/income) — most payments
+ *   2. Destination bank — for contra (bank-to-bank) transfers
+ *   3. Source bank — last-resort fallback (untyped/legacy data)
+ */
+function counterLedgerLabel(p: Payment): string {
+  if (p.party?.name) return p.party.name;
+  const dest = p.BankAccount_Payment_destinationAccountIdToBankAccount?.name;
+  if (dest) return `→ ${dest}`;
+  const src = p.BankAccount_Payment_accountIdToBankAccount?.name;
+  if (src) return src;
+  return "—";
 }
 
 const MODE_COLOR: Record<string, string> = {
@@ -382,7 +399,7 @@ export default function PaymentsListPage() {
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, lineHeight: 1.3 }}>
-                            {p.party?.name ?? "—"}
+                            {counterLedgerLabel(p)}
                           </p>
                           <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--hk-sub)", fontFamily: SG, marginTop: 2 }}>
                             {isIn ? "Milega" : "Dena hai"} • {modeLabel(p.mode)}
@@ -581,7 +598,7 @@ export default function PaymentsListPage() {
                                       whiteSpace: "nowrap",
                                     }}
                                   >
-                                    {p.party?.name ?? "—"}
+                                    {counterLedgerLabel(p)}
                                   </p>
                                   <div
                                     style={{

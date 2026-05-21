@@ -37,6 +37,11 @@
 
 /* ── HisaabKitaab Design Tokens ───────────────────────── */
 :root {
+  /* Tell the browser to render OS-native widgets (select dropdowns, scrollbars,
+     date pickers, etc.) in light mode by default. The .dark override below
+     switches them to dark — fixes invisible <option> text in dark theme. */
+  color-scheme: light;
+
   --hk-orange: #f76000;
   --hk-purple: #7b5ef6;
   --hk-green:  #00ca88;
@@ -65,6 +70,9 @@
 }
 
 .dark {
+  /* Native OS widgets follow this — fixes white-on-white <option> text. */
+  color-scheme: dark;
+
   /* Dark theme surface tokens */
   --hk-bg:          #0d0d1b;
   --hk-nav:         #111120;

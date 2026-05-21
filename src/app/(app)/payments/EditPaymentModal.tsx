@@ -98,9 +98,19 @@ export function EditPaymentModal({
   useEffect(() => {
     if (!isOpen || bankAccounts.length > 0) return;
     fetch("/api/bank-accounts")
-      .then((r) => r.json())
-      .then((d) => setBankAccounts(d.accounts || []))
-      .catch(() => {});
+      .then(async (r) => {
+        if (!r.ok) {
+          setError(`Bank accounts load nahi hua (${r.status})`);
+          return null;
+        }
+        return r.json();
+      })
+      .then((d) => {
+        if (d && Array.isArray(d.accounts)) setBankAccounts(d.accounts);
+      })
+      .catch(() => {
+        setError("Bank accounts load nahi hua. Network check karo.");
+      });
   }, [isOpen, bankAccounts.length]);
 
   async function handleSave() {
@@ -199,6 +209,19 @@ export function EditPaymentModal({
         {(paymentType === "party" || paymentType === "ledger") && (
           <PartySearch
             value={selectedParty?.id ?? payment?.partyId ?? null}
+            initialParty={
+              payment?.partyId && payment.party
+                ? {
+                    id: payment.partyId,
+                    name: payment.party.name,
+                    type: payment.party.type,
+                    phone: null,
+                    currentBalance: 0,
+                    address: null,
+                    gstin: null,
+                  }
+                : null
+            }
             onChange={(party) => {
               setSelectedParty(party);
               if (party) setDirection(getSettlementDirectionForParty(party.type as SupportedPartyType));
@@ -245,6 +268,7 @@ export function EditPaymentModal({
           <HKSelect
             label={paymentType === "contra" ? "Source Account" : "Account"}
             value={accountId}
+            placeholder={bankAccounts.length === 0 ? "Koi bank account nahi" : "Account chuno"}
             onValueChange={(v) => {
               if (!v) return;
               setAccountId(v);
@@ -264,6 +288,7 @@ export function EditPaymentModal({
             <HKSelect
               label="Destination Account"
               value={destAccountId}
+              placeholder={bankAccounts.length === 0 ? "Koi bank account nahi" : "Destination chuno"}
               onValueChange={(v) => { if (v) setDestAccountId(v); }}
             >
               {bankAccounts.map((acc) => (
@@ -283,8 +308,11 @@ export function EditPaymentModal({
                 if (!v) return;
                 setMode(v);
                 if (v === "CASH") {
+                  // Auto-pick the cash account if one exists; otherwise
+                  // clear so the user doesn't accidentally leave a bank
+                  // account selected for a CASH payment.
                   const cashAcc = bankAccounts.find((a) => a.type === "CASH");
-                  if (cashAcc) setAccountId(cashAcc.id);
+                  setAccountId(cashAcc ? cashAcc.id : "");
                 } else {
                   const cur = bankAccounts.find((a) => a.id === accountId);
                   if (cur?.type === "CASH") {
