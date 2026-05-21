@@ -385,10 +385,7 @@ export default function EditBillPage({
             >
               {parties.map((party) => (
                 <HKSelectItem key={party.id} value={party.id}>
-                  <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
-                    <span>{party.name}</span>
-                    <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)" }}>{party.type.toLowerCase()}</span>
-                  </div>
+                  {`${party.name} — ${party.type.toLowerCase()}`}
                 </HKSelectItem>
               ))}
             </HKSelect>
