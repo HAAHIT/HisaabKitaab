@@ -35,7 +35,8 @@ type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 export async function recomputePartyBalance(
   _db: unknown,
   partyId: string,
-  tenantId: string
+  tenantId: string,
+  options: { dryRun?: boolean } = {}
 ): Promise<number> {
   return prisma.$transaction(
     async (tx: PrismaTx) => {
@@ -115,10 +116,12 @@ export async function recomputePartyBalance(
       const newBalance =
         party.openingBalance.toNumber() + billDelta + paymentDelta + noteDelta;
 
-      await tx.party.update({
-        where: { id: partyId },
-        data: { currentBalance: newBalance },
-      });
+      if (!options.dryRun) {
+        await tx.party.update({
+          where: { id: partyId },
+          data: { currentBalance: newBalance },
+        });
+      }
 
       return newBalance;
     },

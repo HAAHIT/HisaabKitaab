@@ -34,7 +34,8 @@ export async function GET(request: NextRequest) {
   const storage = getStorageStatus();
 
   try {
-    await prisma.$queryRaw`SELECT 1`;
+    // [FIX #42] Use ORM method instead of $queryRaw (AGENTS.md compliance)
+    await prisma.tenant.findFirst({ take: 1, select: { id: true } });
 
     // Check for unapplied migrations — a finished_at of NULL means the migration
     // ran but never completed (interrupted), which signals a bad deploy.

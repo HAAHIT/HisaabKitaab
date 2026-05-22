@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { paymentModeToAccount } from "@/lib/chart-of-accounts";
+import { paymentModeToAccount, partyTypeToAccountCode } from "@/lib/chart-of-accounts";
 import {
   createJournalEntry,
   journalForPaymentMade,
   journalForPaymentReceived,
   journalForSalesBill,
+  journalForLedgerPayment,
 } from "@/lib/journal";
 
 function createFakeTx() {
@@ -28,6 +29,19 @@ describe("paymentModeToAccount", () => {
     expect(paymentModeToAccount("BANK_TRANSFER")).toBe("BANK");
     expect(paymentModeToAccount("CHEQUE")).toBe("BANK");
     expect(paymentModeToAccount("BANK")).toBe("BANK");
+  });
+});
+
+describe("partyTypeToAccountCode", () => {
+  it("maps party types to right ledger groups", () => {
+    expect(partyTypeToAccountCode("EXPENSE")).toBe("INDIRECT_EXPENSE");
+    expect(partyTypeToAccountCode("INCOME")).toBe("INDIRECT_INCOME");
+    expect(partyTypeToAccountCode("ASSET")).toBe("FIXED_ASSETS");
+    expect(partyTypeToAccountCode("LIABILITY")).toBe("CURRENT_LIABILITIES");
+    expect(partyTypeToAccountCode("EQUITY")).toBe("OWNER_EQUITY");
+    expect(partyTypeToAccountCode("CUSTOMER")).toBe("SUNDRY_DEBTORS");
+    expect(partyTypeToAccountCode("VENDOR")).toBe("SUNDRY_CREDITORS");
+    expect(partyTypeToAccountCode("UNKNOWN_TYPE")).toBe("SUNDRY_DEBTORS");
   });
 });
 
@@ -184,6 +198,82 @@ describe("journal helpers", () => {
         accountCode: "BANK",
         debit: 0,
         credit: 2400,
+      })
+    );
+  });
+
+  it("builds a journal for expense ledger payments", async () => {
+    const { tx, calls } = createFakeTx();
+
+    await journalForLedgerPayment(tx as never, "tenant_1", {
+      id: "payment_1",
+      partyId: "party_expense",
+      partyName: "Office Rent",
+      partyType: "EXPENSE",
+      amount: 5000,
+      mode: "BANK_TRANSFER",
+      date: new Date("2026-03-31T10:00:00.000Z"),
+      createdBy: "user_1",
+    });
+
+    const createArgs = calls[0] as {
+      data: {
+        voucherType: string;
+        lines: { create: Array<{ accountCode: string; debit: number; credit: number }> };
+      };
+    };
+
+    expect(createArgs.data.voucherType).toBe("PAYMENT");
+    expect(createArgs.data.lines.create[0]).toEqual(
+      expect.objectContaining({
+        accountCode: "INDIRECT_EXPENSE",
+        debit: 5000,
+        credit: 0,
+      })
+    );
+    expect(createArgs.data.lines.create[1]).toEqual(
+      expect.objectContaining({
+        accountCode: "BANK",
+        debit: 0,
+        credit: 5000,
+      })
+    );
+  });
+
+  it("builds a journal for income ledger receipts", async () => {
+    const { tx, calls } = createFakeTx();
+
+    await journalForLedgerPayment(tx as never, "tenant_1", {
+      id: "payment_2",
+      partyId: "party_income",
+      partyName: "Bank Interest",
+      partyType: "INCOME",
+      amount: 1500,
+      mode: "CASH",
+      date: new Date("2026-03-31T10:00:00.000Z"),
+      createdBy: "user_1",
+    });
+
+    const createArgs = calls[0] as {
+      data: {
+        voucherType: string;
+        lines: { create: Array<{ accountCode: string; debit: number; credit: number }> };
+      };
+    };
+
+    expect(createArgs.data.voucherType).toBe("RECEIPT");
+    expect(createArgs.data.lines.create[0]).toEqual(
+      expect.objectContaining({
+        accountCode: "CASH",
+        debit: 1500,
+        credit: 0,
+      })
+    );
+    expect(createArgs.data.lines.create[1]).toEqual(
+      expect.objectContaining({
+        accountCode: "INDIRECT_INCOME",
+        debit: 0,
+        credit: 1500,
       })
     );
   });

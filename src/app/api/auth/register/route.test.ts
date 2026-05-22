@@ -25,11 +25,9 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 const hashPasswordMock = vi.hoisted(() => vi.fn());
-const createSessionMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/auth", () => ({
   hashPassword: hashPasswordMock,
-  createSession: createSessionMock,
 }));
 
 describe("POST /api/auth/register", () => {
@@ -130,7 +128,7 @@ describe("POST /api/auth/register", () => {
   it("successfully creates tenant and user atomically", async () => {
     findFirstUserMock.mockResolvedValue(null);
     hashPasswordMock.mockResolvedValue("hashed-password-123");
-    
+
     // Simulate no existing tenant slug
     findUniqueTenantMock.mockResolvedValue(null);
 
@@ -156,7 +154,7 @@ describe("POST /api/auth/register", () => {
 
     const response = await POST(request);
     expect(response.status).toBe(201);
-    
+
     const data = await response.json();
     expect(data.success).toBe(true);
 
@@ -175,7 +173,7 @@ describe("POST /api/auth/register", () => {
       data: {
         name: "Acme Corp",
         slug: "acme-corp",
-        settings: { companyName: "Acme Corp" },
+        settings: { companyName: "Acme Corp", onboardingComplete: false },
       },
     });
 
@@ -191,14 +189,5 @@ describe("POST /api/auth/register", () => {
       },
     });
 
-    // Verify automatic sign-in
-    expect(createSessionMock).toHaveBeenCalledWith({
-      userId: "user-id-1",
-      tenantId: "tenant-id-1",
-      name: "John Doe",
-      role: "ADMIN",
-      email: "john@acme.com",
-      phone: undefined,
-    });
   });
 });

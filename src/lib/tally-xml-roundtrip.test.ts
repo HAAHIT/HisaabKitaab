@@ -36,6 +36,7 @@ describe("Sales voucher round-trip", () => {
     expect(parsed.remoteId).toBe("test-guid-001");
     expect(parsed.entryDate.toISOString().slice(0, 10)).toBe("2025-04-01");
     expect(parsed.lines.length).toBeGreaterThanOrEqual(2);
+    expect(parsed.lines.find((line) => line.accountCode === "SUNDRY_DEBTORS")?.partyName).toBe("Test Party");
   });
 });
 

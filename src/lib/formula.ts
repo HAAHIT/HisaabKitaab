@@ -7,6 +7,7 @@ export interface ColumnDef {
   formula?: string;
   options?: string[];
   position: number;
+  isSystem?: boolean;
 }
 
 /**

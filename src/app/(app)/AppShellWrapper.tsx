@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import AppShell from "@/components/ui/AppShell";
+import { SetupWizard } from "@/components/onboarding/SetupWizard";
 
 interface UserSession {
   userId: string;
@@ -14,10 +16,15 @@ interface UserSession {
 export default function AppShellWrapper({
   children,
   user,
+  showOnboarding = false,
 }: {
   children: React.ReactNode;
   user: UserSession;
+  showOnboarding?: boolean;
 }) {
+  const router = useRouter();
+  const [wizardVisible, setWizardVisible] = useState(showOnboarding);
+
   useEffect(() => {
     if (process.env.NODE_ENV === "production" && "serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {
@@ -33,5 +40,19 @@ export default function AppShellWrapper({
     return () => window.removeEventListener("popstate", reload);
   }, []);
 
-  return <AppShell user={user}>{children}</AppShell>;
+  function handleOnboardingComplete() {
+    setWizardVisible(false);
+    router.refresh();
+  }
+
+  return (
+    <AppShell user={user}>
+      {wizardVisible && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-default-50 dark:bg-zinc-950">
+          <SetupWizard onComplete={handleOnboardingComplete} />
+        </div>
+      )}
+      {children}
+    </AppShell>
+  );
 }
