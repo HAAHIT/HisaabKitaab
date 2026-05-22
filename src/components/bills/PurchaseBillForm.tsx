@@ -9,6 +9,7 @@ import { HKCheckbox } from "@/components/ui/HKCheckbox";
 import { useRouter } from "next/navigation";
 import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { type TranslationKey } from "@/lib/i18n/translations";
 import { evaluateRow, type ColumnDef } from "@/lib/formula";
 import { GST_STATE_CODES } from "@/lib/gst-states";
 import {
@@ -87,11 +88,11 @@ export function PurchaseBillForm() {
       setTemplates(tData.templates || []);
       if (sData.settings) setTaxPercent(sData.settings.defaultTaxPercent || 18);
     } catch {
-      showToast("Failed to load form data", "error");
+      showToast(t("purchases.new.errorSave" as TranslationKey), "error");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => { fetchFormData(); }, [fetchFormData]);
 
@@ -163,13 +164,13 @@ export function PurchaseBillForm() {
   const taxLabelText = isInterState ? "IGST" : "CGST + SGST";
 
   async function handleSave(status: "DRAFT" | "FINAL") {
-    if (!selectedTemplate) { showToast("Please select a template", "error"); return; }
+    if (!selectedTemplate) { showToast(t("bills.new.selectTemplateError" as TranslationKey), "error"); return; }
     const formErrors: Record<string, boolean> = {};
     if (!selectedParty) formErrors.partyId = true;
     if (status === "FINAL" && !placeOfSupply) formErrors.placeOfSupply = true;
     if (Object.keys(formErrors).length > 0) {
       setErrors(formErrors);
-      showToast("Please fill in required fields", "error");
+      showToast(t("purchases.new.errorFields" as TranslationKey), "error");
       window.setTimeout(() => setErrors({}), 3000);
       return;
     }
@@ -194,13 +195,13 @@ export function PurchaseBillForm() {
       });
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || "Failed to create purchase");
+        throw new Error(data.error || t("purchases.new.errorSave" as TranslationKey));
       }
       const data = await response.json();
-      showToast(status === "FINAL" ? "Purchase Bill created" : "Draft saved", "success");
+      showToast(status === "FINAL" ? t("purchases.new.successFinal" as TranslationKey) : t("purchases.new.successDraft" as TranslationKey), "success");
       window.setTimeout(() => router.push(`/bills/${data.bill.id}`), 700);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Failed to create purchase", "error");
+      showToast(error instanceof Error ? error.message : t("purchases.new.errorSave" as TranslationKey), "error");
     } finally {
       setSavingAs(null);
     }
@@ -230,10 +231,10 @@ export function PurchaseBillForm() {
             </button>
             <div>
               <h1 style={{ fontFamily: DISPLAY, fontSize: isMobile ? 24 : 30, fontWeight: 600, color: "var(--sb-text)", margin: 0, letterSpacing: "-0.01em", lineHeight: 1.2 }}>
-                New Purchase Bill
+                {t("purchases.new.title" as TranslationKey)}
               </h1>
               <p style={{ fontSize: 14, fontWeight: 500, color: "var(--sb-sub)", marginTop: 4 }}>
-                Record an incoming purchase from a supplier
+                {t("purchases.new.subtitle" as TranslationKey)}
               </p>
             </div>
           </div>
@@ -242,19 +243,19 @@ export function PurchaseBillForm() {
           {(templatePickerOpen || (!loading && !selectedTemplate && templates.length === 0)) && (
             <HKCard style={{ marginBottom: 16 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-                <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG }}>Choose Template</p>
+                <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG }}>{t("bills.new.chooseTemplate" as TranslationKey)}</p>
                 {templatePickerOpen && (
                   <button onClick={() => setTemplatePickerOpen(false)} style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", background: "none", border: "none", cursor: "pointer", fontFamily: SG }}>
-                    Cancel
+                    {t("common.cancel" as TranslationKey)}
                   </button>
                 )}
               </div>
               {loading ? (
-                <p style={{ color: "var(--sb-sub)", fontSize: TYPE.body }}>Loading templates...</p>
+                <p style={{ color: "var(--sb-sub)", fontSize: TYPE.body }}>{t("bills.new.loadingTemplates" as TranslationKey)}</p>
               ) : templates.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "32px 0" }}>
-                  <p style={{ color: "var(--sb-sub)", marginBottom: 12, fontSize: TYPE.body }}>No templates found</p>
-                  <HKButton onClick={() => router.push("/settings/templates/new")}>Create Template</HKButton>
+                  <p style={{ color: "var(--sb-sub)", marginBottom: 12, fontSize: TYPE.body }}>{t("bills.new.noTemplates" as TranslationKey)}</p>
+                  <HKButton onClick={() => router.push("/settings/templates/new")}>{t("bills.new.createTemplate" as TranslationKey)}</HKButton>
                 </div>
               ) : (
                 <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
@@ -271,7 +272,7 @@ export function PurchaseBillForm() {
                       }}
                     >
                       <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG }}>{template.name}</p>
-                      <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", marginTop: 4 }}>{template.columns.length} columns</p>
+                      <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", marginTop: 4 }}>{template.columns.length} {t("templates.columns" as TranslationKey).toLowerCase()}</p>
                     </button>
                   ))}
                 </div>
@@ -294,13 +295,13 @@ export function PurchaseBillForm() {
                   onClick={() => setTemplatePickerOpen(true)}
                   style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", background: "none", border: "none", cursor: "pointer", fontFamily: SG, fontWeight: 600 }}
                 >
-                  Change
+                  {t("bills.new.changeTemplate" as TranslationKey)}
                 </button>
               </div>
 
               {/* Vendor + Invoice Details */}
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16, marginBottom: 16 }}>
-                <Section title="Vendor Details">
+                <Section title={t("purchases.new.vendorDetails" as TranslationKey)}>
                   <PartySearch
                     value={selectedParty?.id || null}
                     onChange={(party) => {
@@ -312,7 +313,7 @@ export function PurchaseBillForm() {
                       setErrors((c) => ({ ...c, partyId: false }));
                     }}
                     partyType="VENDOR"
-                    placeholder="Search Supplier..."
+                    placeholder={t("purchases.new.searchSupplier" as TranslationKey)}
                     isInvalid={Boolean(errors.partyId)}
                   />
                   {selectedParty && (
@@ -320,7 +321,7 @@ export function PurchaseBillForm() {
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                         <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG }}>{selectedParty.name}</p>
                         <button onClick={() => setSelectedParty(null)} style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", background: "none", border: "none", cursor: "pointer", fontFamily: SG, fontWeight: 600 }}>
-                          Change
+                          {t("bills.new.changeTemplate" as TranslationKey)}
                         </button>
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -335,18 +336,18 @@ export function PurchaseBillForm() {
                           color: selectedParty.currentBalance > 0 ? OR : GR,
                         }}>
                           {selectedParty.currentBalance > 0
-                            ? `To Pay: ${fmtFull(selectedParty.currentBalance)}`
-                            : `Advance: ${fmtFull(Math.abs(selectedParty.currentBalance))}`}
+                            ? `${t("purchases.new.toPay" as TranslationKey)}: ${fmtFull(selectedParty.currentBalance)}`
+                            : `${t("purchases.new.advance" as TranslationKey)}: ${fmtFull(Math.abs(selectedParty.currentBalance))}`}
                         </div>
                       )}
                     </div>
                   )}
                 </Section>
 
-                <Section title="Invoice Details">
+                <Section title={t("purchases.new.invoiceDetails" as TranslationKey)}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                    <HKInput label="Supplier Invoice No" value={supplierInvoiceNo} onValueChange={setSupplierInvoiceNo} placeholder="e.g. INV/2024/001" />
-                    <HKInput label="Bill Date" type="date" value={billDate} onValueChange={setBillDate} />
+                    <HKInput label={t("purchases.new.supplierInvoice" as TranslationKey)} value={supplierInvoiceNo} onValueChange={setSupplierInvoiceNo} placeholder="e.g. INV/2024/001" />
+                    <HKInput label={t("bills.new.date" as TranslationKey)} type="date" value={billDate} onValueChange={setBillDate} />
                   </div>
                 </Section>
               </div>
@@ -358,9 +359,9 @@ export function PurchaseBillForm() {
                   padding: "16px 20px 12px", borderBottom: "1px solid var(--sb-border)", flexWrap: "wrap", gap: 8,
                 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>Line Items</p>
+                    <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>{t("bills.new.lineItems" as TranslationKey)}</p>
                     <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG }}>
-                      Subtotal: <span style={{ fontFamily: IN, fontWeight: 700, color: "var(--sb-text)" }}>{fmtFull(subtotal)}</span>
+                      {t("bills.new.subtotal" as TranslationKey)}: <span style={{ fontFamily: IN, fontWeight: 700, color: "var(--sb-text)" }}>{fmtFull(subtotal)}</span>
                     </span>
                   </div>
                   <button
@@ -376,7 +377,7 @@ export function PurchaseBillForm() {
                     <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
                       <path d="M12 5v14M5 12h14" strokeLinecap="round" />
                     </svg>
-                    Add Row
+                    {t("bills.new.addRow" as TranslationKey)}
                   </button>
                 </div>
                 <div style={{ overflowX: "auto" }}>
@@ -451,24 +452,24 @@ export function PurchaseBillForm() {
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16, marginBottom: 24 }}>
                 {/* Notes + Checkboxes */}
                 <HKCard style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                  <HKTextarea label="Notes" placeholder="Additional notes..." value={notes} onValueChange={setNotes} minRows={3} />
+                  <HKTextarea label={t("bills.new.notes" as TranslationKey)} placeholder={t("bills.new.notes" as TranslationKey) + "..."} value={notes} onValueChange={setNotes} minRows={3} />
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     <HKCheckbox isSelected={isInterState} onValueChange={setIsInterState}>
-                      Inter-State Transaction (IGST)
+                      {t("bills.new.interState" as TranslationKey)}
                     </HKCheckbox>
                     <HKCheckbox isSelected={isReverseCharge} onValueChange={setIsReverseCharge}>
-                      Subject to Reverse Charge (RCM)
+                      {t("purchases.new.rcm" as TranslationKey)}
                     </HKCheckbox>
                   </div>
                 </HKCard>
 
                 {/* Summary */}
                 <HKCard style={{ background: AM + "08", border: `1px solid ${AM}20` }}>
-                  <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, marginBottom: 16 }}>Summary</p>
+                  <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, marginBottom: 16 }}>{t("bills.new.summary" as TranslationKey)}</p>
 
                   <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ color: "var(--sb-sub)", fontSize: TYPE.body, fontFamily: SG }}>Subtotal</span>
+                      <span style={{ color: "var(--sb-sub)", fontSize: TYPE.body, fontFamily: SG }}>{t("bills.new.subtotal" as TranslationKey)}</span>
                       <span style={{ fontFamily: IN, fontWeight: 600, color: "var(--sb-text)" }}>{fmtFull(subtotal)}</span>
                     </div>
 
@@ -489,15 +490,15 @@ export function PurchaseBillForm() {
                     </div>
 
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                      <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG, flexShrink: 0 }}>Place of Supply</span>
+                      <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG, flexShrink: 0 }}>{t("bills.new.placeOfSupply" as TranslationKey)}</span>
                       <HKSelect
                         aria-label="Place of supply"
-                        placeholder="Select state"
+                        placeholder={t("bills.new.selectState" as TranslationKey)}
                         size="sm"
                         value={placeOfSupply}
                         onValueChange={(v) => { setPlaceOfSupply(v ?? ""); if (v) setErrors((c) => ({ ...c, placeOfSupply: false })); }}
                         isInvalid={Boolean(errors.placeOfSupply)}
-                        errorMessage={errors.placeOfSupply ? "Required for final bills" : undefined}
+                        errorMessage={errors.placeOfSupply ? t("bills.new.supplyRequired" as TranslationKey) : undefined}
                       >
                         {Object.entries(GST_STATE_CODES).map(([code, name]) => (
                           <HKSelectItem key={code} value={code}>{code} — {name}</HKSelectItem>
@@ -514,7 +515,7 @@ export function PurchaseBillForm() {
                           disabled={grandTotal === 0}
                           style={{ accentColor: AM }}
                         />
-                        <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}>Round off to nearest ₹</span>
+                        <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}>{t("bills.new.roundOff" as TranslationKey)}</span>
                       </label>
                       {enableRoundOff && roundOff !== 0 && (
                         <span style={{ fontSize: TYPE.bodySmall, fontFamily: IN, fontWeight: 600, color: roundOff > 0 ? GR : OR }}>
@@ -524,7 +525,7 @@ export function PurchaseBillForm() {
                     </div>
 
                     <div style={{ borderTop: "1px solid var(--sb-border)", paddingTop: 12, marginTop: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ fontSize: TYPE.h2, fontWeight: 800, color: "var(--sb-text)", fontFamily: SG }}>Grand Total</span>
+                      <span style={{ fontSize: TYPE.h2, fontWeight: 800, color: "var(--sb-text)", fontFamily: SG }}>{t("bills.new.grandTotal" as TranslationKey)}</span>
                       <span style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: AM, fontFamily: IN }}>{fmtFull(roundedGrandTotal)}</span>
                     </div>
                   </div>
@@ -533,12 +534,12 @@ export function PurchaseBillForm() {
 
               {/* Actions */}
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-                <HKButton variant="secondary" onClick={() => router.back()}>Cancel</HKButton>
+                <HKButton variant="secondary" onClick={() => router.back()}>{t("common.cancel" as TranslationKey)}</HKButton>
                 <HKButton variant="secondary" isLoading={savingAs === "DRAFT"} isDisabled={savingAs === "FINAL"} onClick={() => handleSave("DRAFT")}>
-                  Save Draft
+                  {t("purchases.new.saveDraft" as TranslationKey)}
                 </HKButton>
                 <HKButton isLoading={savingAs === "FINAL"} isDisabled={savingAs === "DRAFT"} onClick={() => handleSave("FINAL")}>
-                  Confirm Purchase
+                  {t("purchases.new.confirmPurchase" as TranslationKey)}
                 </HKButton>
               </div>
             </>

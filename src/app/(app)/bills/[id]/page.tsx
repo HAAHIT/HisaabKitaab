@@ -5,6 +5,8 @@ import Image from "next/image";
 import { HKModal } from "@/components/ui/hk-design";
 import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { useRouter } from "next/navigation";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { type TranslationKey } from "@/lib/i18n/translations";
 import { BillActionBar } from "@/components/bills/BillActionBar";
 import type { ColumnDef } from "@/lib/formula";
 import { shareBill } from "@/lib/share";
@@ -116,6 +118,7 @@ const PRINT_CSS = `
 
 export default function BillDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
+  const { t } = useLanguage();
   const { id } = use(params);
 
   const [bill,          setBill]          = useState<BillDetail | null>(null);
@@ -166,7 +169,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
         }),
       });
       if (!res.ok) throw new Error((await res.json()).error);
-      showToast(status === "FINAL" ? "Bill final ho gaya!" : "Bill cancel ho gaya", "success");
+      showToast(status === "FINAL" ? t("bills.detail.finalizeSuccess" as TranslationKey) : t("bills.detail.cancelSuccess" as TranslationKey), "success");
       setBill((await fetch(`/api/bills/${id}`).then(r => r.json())).bill);
     } catch (e) { showToast(e instanceof Error ? e.message : "Failed", "error"); }
     finally { setActionLoading(false); setConfirmAction(null); }
@@ -198,9 +201,9 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
     <div style={{ background: "var(--sb-bg)", minHeight: "100%", fontFamily: SG, display: "flex", alignItems: "center", justifyContent: "center", padding: 40 }}>
       <div style={{ textAlign: "center" }}>
         <div style={{ fontSize: 52, marginBottom: 16 }}>📋</div>
-        <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", marginBottom: 8 }}>Bill nahi mila</p>
-        <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", marginBottom: 24 }}>Yeh bill exist nahi karta ya delete ho gaya</p>
-        <HKButton onClick={() => router.push("/bills")}>Bills par wapas jao</HKButton>
+        <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", marginBottom: 8 }}>{t("bills.detail.notFound" as TranslationKey)}</p>
+        <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", marginBottom: 24 }}>{t("bills.detail.notFoundDesc" as TranslationKey)}</p>
+        <HKButton onClick={() => router.push("/bills")}>{t("bills.detail.backToBills" as TranslationKey)}</HKButton>
       </div>
     </div>
   );
@@ -290,7 +293,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
               <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6v-8z" />
               </svg>
-              Print
+              {t("common.print" as TranslationKey)}
             </button>
 
             {bill.status === "DRAFT" && (
@@ -308,7 +311,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
                   <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
                   </svg>
-                  Edit
+                  {t("templates.edit" as TranslationKey)}
                 </button>
                 <button
                   onClick={() => setConfirmAction("FINAL")}
@@ -324,7 +327,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
                   <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M5 13l4 4L19 7" />
                   </svg>
-                  Finalize
+                  {t("bills.finalize" as TranslationKey)}
                 </button>
               </>
             )}
@@ -340,7 +343,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
                   cursor: "pointer", whiteSpace: "nowrap",
                 }}
               >
-                Cancel
+                {t("common.cancel" as TranslationKey)}
               </button>
             )}
           </div>
@@ -633,26 +636,26 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
       <HKModal
         isOpen={confirmAction !== null}
         onClose={() => setConfirmAction(null)}
-        title={confirmAction === "FINAL" ? "Bill Final Karo?" : "Bill Cancel Karo?"}
+        title={confirmAction === "FINAL" ? t("bills.detail.finalizeConfirmTitle" as TranslationKey) : t("bills.detail.cancelConfirmTitle" as TranslationKey)}
         footer={
           <>
             <HKButton variant="secondary" onClick={() => setConfirmAction(null)}>
-              Wapas jao
+              {t("common.back" as TranslationKey)}
             </HKButton>
             <HKButton
               variant={confirmAction === "FINAL" ? "success" : "danger"}
               isLoading={actionLoading}
               onClick={() => confirmAction && execStatus(confirmAction)}
             >
-              {confirmAction === "FINAL" ? "Haan, Finalize Karo" : "Haan, Cancel Karo"}
+              {confirmAction === "FINAL" ? t("bills.detail.finalizeConfirmBtn" as TranslationKey) : t("bills.detail.cancelConfirmBtn" as TranslationKey)}
             </HKButton>
           </>
         }
       >
         <p style={{ fontFamily: SG, fontSize: TYPE.body, color: "var(--sb-sub)", lineHeight: 1.6 }}>
           {confirmAction === "FINAL"
-            ? "Bill lock ho jayega aur books mein record ho jayega. Finalize karne ke baad edit nahi kar sakte."
-            : "Bill permanently cancel ho jayega aur balance changes reverse ho jayenge."}
+            ? t("bills.detail.finalizeConfirmDesc" as TranslationKey)
+            : t("bills.detail.cancelConfirmDesc" as TranslationKey)}
         </p>
       </HKModal>
     </>

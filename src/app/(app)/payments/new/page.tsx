@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { type TranslationKey } from "@/lib/i18n/translations";
 import {
   getBalanceStatusLabel,
   getSettlementDirectionForParty,
@@ -32,6 +34,14 @@ function formatSignedBalance(value: number) {
   return `+INR ${absolute}`;
 }
 
+function getTranslatedBalanceStatusLabel(label: string, t: any) {
+  if (label === "settled") return t("khata.settled" as TranslationKey);
+  if (label === "advance balance") return t("khata.advance" as TranslationKey);
+  if (label === "to receive") return t("khata.toReceive" as TranslationKey);
+  if (label === "to pay") return t("khata.toPay" as TranslationKey);
+  return label;
+}
+
 function getBalanceBannerStyle(partyType: SupportedPartyType, balance: number) {
   const v = Math.round(balance * 100) / 100;
   if (v === 0) return { background: "var(--sb-badge)", color: "var(--sb-sub)" };
@@ -58,6 +68,7 @@ export default function RecordPaymentPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isMobile = useIsMobile();
+  const { t } = useLanguage();
   const preselectedPartyId = searchParams.get("partyId");
 
   const [initialParty, setInitialParty] = useState<PartyOption | null | undefined>(
@@ -124,26 +135,31 @@ export default function RecordPaymentPage() {
   async function handleSave() {
     if (paymentFlowType === "party" || paymentFlowType === "ledger") {
       if (!partyId) {
-        showToast(paymentFlowType === "ledger" ? "Select an expense/income ledger" : "Select a party", "error");
+        showToast(
+          paymentFlowType === "ledger"
+            ? t("payments.record.toast.selectLedger" as TranslationKey)
+            : t("payments.record.toast.selectParty" as TranslationKey),
+          "error"
+        );
         return;
       }
     } else {
       if (!accountId || !destinationAccountId) {
-        showToast("Select both Source and Destination accounts", "error");
+        showToast(t("payments.record.toast.selectSourceDest" as TranslationKey), "error");
         return;
       }
       if (accountId === destinationAccountId) {
-        showToast("Source and Destination accounts cannot be the same", "error");
+        showToast(t("payments.record.toast.sameAccounts" as TranslationKey), "error");
         return;
       }
     }
 
     if (!amount || parseFloat(amount) <= 0) {
-      showToast("Enter a valid amount", "error");
+      showToast(t("payments.record.toast.invalidAmount" as TranslationKey), "error");
       return;
     }
     if (!accountId) {
-      showToast("Select a Bank or Cash account", "error");
+      showToast(t("payments.record.toast.selectBankCash" as TranslationKey), "error");
       return;
     }
 
@@ -170,10 +186,15 @@ export default function RecordPaymentPage() {
 
       if (!response.ok) throw new Error(await readError(response));
 
-      showToast(paymentStatus === "COMPLETED" ? "Payment recorded" : "Expected payment saved", "success");
+      showToast(
+        paymentStatus === "COMPLETED"
+          ? t("payments.record.toast.recorded" as TranslationKey)
+          : t("payments.record.toast.expectedSaved" as TranslationKey),
+        "success"
+      );
       window.setTimeout(() => router.push("/payments"), 800);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Failed to save", "error");
+      showToast(error instanceof Error ? error.message : t("parties.saveFailed" as TranslationKey), "error");
     } finally {
       savingRef.current = false;
       setSaving(false);
@@ -203,17 +224,21 @@ export default function RecordPaymentPage() {
           </button>
           <div>
             <h1 style={{ fontFamily: DISPLAY, fontSize: isMobile ? 24 : 30, fontWeight: 600, color: "var(--sb-text)", margin: 0, letterSpacing: "-0.01em", lineHeight: 1.2 }}>
-              Record Payment
+              {t("payments.record.title" as TranslationKey)}
             </h1>
             <p style={{ fontSize: 14, fontWeight: 500, color: "var(--sb-sub)", marginTop: 4 }}>
-              Payment ledger mein save karo
+              {t("payments.record.subtitle" as TranslationKey)}
             </p>
           </div>
         </div>
         {/* Payment type tabs */}
         <div style={{ marginBottom: 20, display: "flex", gap: 4, background: "var(--sb-badge)", borderRadius: 14, padding: 4 }}>
           {(["party", "ledger", "contra"] as const).map((key) => {
-            const labels = { party: "Party Payment", ledger: "Expense / Income", contra: "Bank Transfer (Contra)" };
+            const labels = {
+              party: t("payments.record.partyPayment" as TranslationKey),
+              ledger: t("payments.record.expenseIncome" as TranslationKey),
+              contra: t("payments.record.contra" as TranslationKey)
+            };
             return (
               <button
                 key={key}
@@ -242,15 +267,15 @@ export default function RecordPaymentPage() {
             {
               value: "COMPLETED",
               color: GR,
-              label: "Already Received / Paid",
-              sub: "Money has already changed hands",
+              label: t("payments.record.completedLabel" as TranslationKey),
+              sub: t("payments.record.completedSub" as TranslationKey),
               icon: <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} />,
             },
             {
               value: "EXPECTED",
               color: AM,
-              label: "Expected / Planned",
-              sub: "Payment confirmed for a later date",
+              label: t("payments.record.expectedLabel" as TranslationKey),
+              sub: t("payments.record.expectedSub" as TranslationKey),
               icon: <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} />,
             },
           ].map(({ value, color, label, sub, icon }) => {
@@ -284,7 +309,7 @@ export default function RecordPaymentPage() {
         {/* Payment details */}
         <HKCard style={{ marginBottom: 20 }}>
           <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, marginBottom: 20 }}>
-            {paymentFlowType === "contra" ? "Transfer Details" : "Payment Details"}
+            {paymentFlowType === "contra" ? t("payments.record.transferDetails" as TranslationKey) : t("payments.record.paymentDetails" as TranslationKey)}
           </p>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -299,7 +324,7 @@ export default function RecordPaymentPage() {
                     setSelectedBill(null);
                     if (party) setDirection(getSettlementDirectionForParty(party.type as SupportedPartyType));
                   }}
-                  placeholder="Select customer or vendor"
+                  placeholder={t("payments.record.selectParty" as TranslationKey)}
                 />
 
                 {selectedParty && (
@@ -310,8 +335,12 @@ export default function RecordPaymentPage() {
                       ...getBalanceBannerStyle(selectedParty.type as SupportedPartyType, selectedParty.currentBalance),
                     }}
                   >
-                    Current balance: <strong>{formatSignedBalance(selectedParty.currentBalance)}</strong>{" "}
-                    {getBalanceStatusLabel(selectedParty.type as SupportedPartyType, Math.round(selectedParty.currentBalance * 100) / 100)}
+                    {t("payments.record.currentBalance" as TranslationKey)}{" "}
+                    <strong>{formatSignedBalance(selectedParty.currentBalance)}</strong>{" "}
+                    {getTranslatedBalanceStatusLabel(
+                      getBalanceStatusLabel(selectedParty.type as SupportedPartyType, Math.round(selectedParty.currentBalance * 100) / 100),
+                      t
+                    )}
                   </div>
                 )}
 
@@ -329,13 +358,18 @@ export default function RecordPaymentPage() {
                   }}
                   partyId={partyId}
                   isDisabled={!selectedParty}
-                  description="When linked, the server validates that the payment settles the selected bill."
+                  description={t("payments.record.billSearchDesc" as TranslationKey)}
                 />
 
                 {selectedBill && (
                   <div style={{ background: PU + "12", padding: "10px 14px", borderRadius: 10, fontSize: TYPE.bodySmall, color: PU, fontFamily: SG, fontWeight: 600 }}>
-                    Linked to bill <strong>{selectedBill.billNumber}</strong>. Settlement direction is{" "}
-                    <strong>{selectedParty?.type === "CUSTOMER" ? "Received" : "Paid"}</strong>.
+                    {t("payments.record.linkedToBill" as TranslationKey)} <strong>{selectedBill.billNumber}</strong>.{" "}
+                    {t("payments.record.settlementDirection" as TranslationKey)}{" "}
+                    <strong>
+                      {selectedParty?.type === "CUSTOMER"
+                        ? t("payments.filter.received" as TranslationKey)
+                        : t("payments.filter.paid" as TranslationKey)}
+                    </strong>.
                   </div>
                 )}
               </>
@@ -351,7 +385,7 @@ export default function RecordPaymentPage() {
                     setSelectedBill(null);
                     if (party) setDirection(getSettlementDirectionForParty(party.type as SupportedPartyType));
                   }}
-                  placeholder="Select expense, income, or other ledger"
+                  placeholder={t("payments.record.selectLedgerPlaceholder" as TranslationKey)}
                   filterTypes={["EXPENSE", "INCOME", "ASSET", "LIABILITY", "EQUITY"]}
                 />
 
@@ -363,9 +397,10 @@ export default function RecordPaymentPage() {
                       ...getBalanceBannerStyle(selectedParty.type as SupportedPartyType, selectedParty.currentBalance),
                     }}
                   >
-                    Ledger balance: <strong>{formatSignedBalance(selectedParty.currentBalance)}</strong>
+                    {t("payments.record.ledgerBalance" as TranslationKey)}{" "}
+                    <strong>{formatSignedBalance(selectedParty.currentBalance)}</strong>
                     <span style={{ marginLeft: 8, opacity: 0.7 }}>
-                      ({selectedParty.type} ledger · Direction: {direction === "OUTGOING" ? "Payment" : "Receipt"})
+                      ({selectedParty.type} ledger · Direction: {direction === "OUTGOING" ? t("payments.filter.paid" as TranslationKey) : t("payments.filter.received" as TranslationKey)})
                     </span>
                   </div>
                 )}
@@ -373,8 +408,8 @@ export default function RecordPaymentPage() {
             )}
 
             <HKInput
-              label="Amount (INR)"
-              placeholder="Enter amount"
+              label={t("payments.record.amountLabel" as TranslationKey)}
+              placeholder={t("payments.record.amountPlaceholder" as TranslationKey)}
               type="text"
               value={amount}
               onValueChange={(value) => setAmount(sanitizeAmountInput(value))}
@@ -382,27 +417,27 @@ export default function RecordPaymentPage() {
               isRequired
               inputMode="decimal"
               pattern="[0-9]*[.]?[0-9]{0,2}"
-              description="Plain text amount entry avoids accidental mouse-wheel step changes."
+              description={t("payments.record.amountDesc" as TranslationKey)}
               startContent={<span className="text-lg text-default-400">INR</span>}
             />
 
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
               {(paymentFlowType === "party" || paymentFlowType === "ledger") && (
                 <HKSelect
-                  label="Type"
-                  placeholder="Select direction"
+                  label={t("payments.record.type" as TranslationKey)}
+                  placeholder={t("payments.record.selectDirection" as TranslationKey)}
                   value={direction}
                   onValueChange={(v) => { if (v) setDirection(v); }}
                   isDisabled={paymentFlowType === "ledger"}
                 >
-                  <HKSelectItem value="INCOMING">Received</HKSelectItem>
-                  <HKSelectItem value="OUTGOING">Paid</HKSelectItem>
+                  <HKSelectItem value="INCOMING">{t("payments.filter.received" as TranslationKey)}</HKSelectItem>
+                  <HKSelectItem value="OUTGOING">{t("payments.filter.paid" as TranslationKey)}</HKSelectItem>
                 </HKSelect>
               )}
 
               <HKSelect
-                label={paymentFlowType === "contra" ? "Source Account" : "Account"}
-                placeholder="Select account"
+                label={paymentFlowType === "contra" ? t("payments.record.sourceAccount" as TranslationKey) : t("payments.record.account" as TranslationKey)}
+                placeholder={t("payments.record.selectAccount" as TranslationKey)}
                 value={accountId}
                 onValueChange={(v) => {
                   if (!v) return;
@@ -420,8 +455,8 @@ export default function RecordPaymentPage() {
 
               {paymentFlowType === "contra" && (
                 <HKSelect
-                  label="Destination Account"
-                  placeholder="Select destination"
+                  label={t("payments.record.destinationAccount" as TranslationKey)}
+                  placeholder={t("payments.record.selectDestination" as TranslationKey)}
                   value={destinationAccountId}
                   onValueChange={(v) => { if (v) setDestinationAccountId(v); }}
                 >
@@ -435,8 +470,8 @@ export default function RecordPaymentPage() {
 
               {paymentFlowType === "party" && (
                 <HKSelect
-                  label="Payment Mode"
-                  placeholder="Select mode"
+                  label={t("payments.record.paymentMode" as TranslationKey)}
+                  placeholder={t("payments.record.selectMode" as TranslationKey)}
                   value={mode}
                   onValueChange={(v) => {
                     if (!v) return;
@@ -457,25 +492,27 @@ export default function RecordPaymentPage() {
                     }
                   }}
                 >
-                  <HKSelectItem value="BANK_TRANSFER">Bank Transfer</HKSelectItem>
-                  <HKSelectItem value="CASH">Cash</HKSelectItem>
-                  <HKSelectItem value="UPI">UPI</HKSelectItem>
-                  <HKSelectItem value="CHEQUE">Cheque</HKSelectItem>
+                  <HKSelectItem value="BANK_TRANSFER">{t("payments.record.mode.bank" as TranslationKey)}</HKSelectItem>
+                  <HKSelectItem value="CASH">{t("payments.record.mode.cash" as TranslationKey)}</HKSelectItem>
+                  <HKSelectItem value="UPI">{t("payments.record.mode.upi" as TranslationKey)}</HKSelectItem>
+                  <HKSelectItem value="CHEQUE">{t("payments.record.mode.cheque" as TranslationKey)}</HKSelectItem>
                 </HKSelect>
               )}
             </div>
 
-            <HKInput label="Date" type="date" value={date} onValueChange={setDate} />
-            <HKInput label="Notes" placeholder="Optional notes..." value={notes} onValueChange={setNotes} />
+            <HKInput label={t("payments.record.date" as TranslationKey)} type="date" value={date} onValueChange={setDate} />
+            <HKInput label={t("payments.record.notes" as TranslationKey)} placeholder={t("payments.record.notesPlaceholder" as TranslationKey)} value={notes} onValueChange={setNotes} />
           </div>
         </HKCard>
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
           <HKButton variant="secondary" onClick={() => router.push("/payments")}>
-            Cancel
+            {t("common.cancel" as TranslationKey)}
           </HKButton>
           <HKButton onClick={handleSave} isLoading={saving}>
-            {paymentStatus === "COMPLETED" ? "Record Payment" : "Save Expected Payment"}
+            {paymentStatus === "COMPLETED"
+              ? t("nav.recordpayment" as TranslationKey)
+              : t("payments.record.saveExpected" as TranslationKey)}
           </HKButton>
         </div>
       </div>

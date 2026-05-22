@@ -1,8 +1,10 @@
 "use client";
 
+import { useLanguage } from "@/contexts/LanguageContext";
 import { HKButton } from "@/components/ui/HKButton";
 
 export default function AppError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+  const { t } = useLanguage();
 
   return (
     <div className="flex justify-center mt-20 p-4">
@@ -16,13 +18,13 @@ export default function AppError({ error, reset }: { error: Error & { digest?: s
             </svg>
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-danger">Something went wrong</h2>
+            <h2 className="text-lg font-semibold text-danger">{t("error.title")}</h2>
             <p className="mt-2 text-sm text-default-500">
-              An unexpected error occurred. Please try again.
-              {error.digest && <span className="mt-1 block text-xs text-default-400">Ref: {error.digest}</span>}
+              {t("error.message")}
+              {error.digest && <span className="mt-1 block text-xs text-default-400">{t("error.ref")}: {error.digest}</span>}
             </p>
           </div>
-          <HKButton fullWidth onClick={reset}>Try again</HKButton>
+          <HKButton fullWidth onClick={reset}>{t("error.retry")}</HKButton>
         </div>
       </div>
     </div>

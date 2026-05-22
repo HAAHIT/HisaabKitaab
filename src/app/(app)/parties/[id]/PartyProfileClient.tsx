@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { type TranslationKey } from "@/lib/i18n/translations";
 import {
   GR, AM, OR, PU, SG, IN, TYPE,
   fmtFull, useIsMobile, HKCard, HKToast,
@@ -71,7 +72,12 @@ export default function PartyProfileClient({
   const accentBg = isCustomer ? PU + "18" : OR + "18";
 
   const balanceColor = calculatedCurrent === 0 ? "var(--sb-sub)" : calculatedCurrent > 0 ? GR : OR;
-  const balanceLabel = getBalanceStatusLabel(party.type, calculatedCurrent);
+  const rawBalanceLabel = getBalanceStatusLabel(party.type, calculatedCurrent);
+  const balanceLabel =
+    rawBalanceLabel === "settled" ? t("khata.settled" as TranslationKey) :
+    rawBalanceLabel === "advance balance" ? t("khata.advance" as TranslationKey) :
+    rawBalanceLabel === "to receive" ? t("khata.toReceive" as TranslationKey) :
+    rawBalanceLabel === "to pay" ? t("khata.toPay" as TranslationKey) : rawBalanceLabel;
   const balanceIndicator = getBalanceIndicator(party.type, calculatedCurrent);
 
   async function handleCheckBalances() {
@@ -133,7 +139,7 @@ export default function PartyProfileClient({
             {party.name}
           </p>
           <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)" }}>
-            {party.phone ? `+91 ${party.phone}` : party.email || "No contact"}
+            {party.phone ? `+91 ${party.phone}` : party.email || t("parties.noContact" as TranslationKey)}
           </p>
         </div>
         <span style={{
@@ -141,7 +147,7 @@ export default function PartyProfileClient({
           background: accentBg, padding: "4px 10px", borderRadius: 7,
           whiteSpace: "nowrap", flexShrink: 0,
         }}>
-          {isCustomer ? "Customer" : "Vendor"}
+          {isCustomer ? t("parties.customerType" as TranslationKey) : t("parties.vendorType" as TranslationKey)}
         </span>
       </div>
 
@@ -152,7 +158,7 @@ export default function PartyProfileClient({
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
             <div>
               <p style={{ fontSize: TYPE.caption, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", color: "var(--sb-sub)", marginBottom: 4 }}>
-                Current Balance
+                {t("khata.currentBalance" as TranslationKey)}
               </p>
               <p style={{ fontSize: isMobile ? 28 : TYPE.numLarge, fontWeight: 800, color: balanceColor, fontFamily: IN }}>
                 {fmtAbs(calculatedCurrent)}
@@ -256,24 +262,24 @@ export default function PartyProfileClient({
 
             {/* Party details */}
             <HKCard>
-              <p style={{ fontSize: TYPE.label, fontWeight: 700, color: "var(--sb-text)", marginBottom: 14 }}>Party Details</p>
+              <p style={{ fontSize: TYPE.label, fontWeight: 700, color: "var(--sb-text)", marginBottom: 14 }}>{t("parties.detailsTitle" as TranslationKey)}</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {[
-                  { label: "Address", value: party.address },
-                  { label: "GSTIN", value: party.gstin, mono: true },
-                  { label: "Email", value: party.email },
+                  { label: t("parties.addressLabel" as TranslationKey), value: party.address },
+                  { label: t("parties.gstinLabel" as TranslationKey), value: party.gstin, mono: true },
+                  { label: t("parties.emailLabel" as TranslationKey), value: party.email },
                   {
-                    label: "Opening Balance",
+                    label: t("parties.openingBalance" as TranslationKey),
                     value: party.openingBalance !== 0
                       ? `${party.openingBalance > 0 ? "+" : ""}${fmtAbs(party.openingBalance)}`
                       : "₹0",
                   },
-                  { label: "Registered", value: new Date(party.createdAt).toLocaleDateString("en-IN") },
+                  { label: t("parties.registered" as TranslationKey), value: new Date(party.createdAt).toLocaleDateString("en-IN") },
                 ].map(({ label, value, mono }) => (
                   <div key={label}>
                     <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", marginBottom: 2 }}>{label}</p>
                     <p style={{ fontSize: TYPE.bodySmall, fontWeight: 600, color: "var(--sb-text)", fontFamily: mono ? IN : SG }}>
-                      {value || "Not provided"}
+                      {value || t("parties.notProvided" as TranslationKey)}
                     </p>
                   </div>
                 ))}
@@ -283,7 +289,7 @@ export default function PartyProfileClient({
             {/* Measurements (customers only) */}
             {isCustomer && measurements.length > 0 && (
               <HKCard>
-                <p style={{ fontSize: TYPE.label, fontWeight: 700, color: "var(--sb-text)", marginBottom: 14 }}>Measurements</p>
+                <p style={{ fontSize: TYPE.label, fontWeight: 700, color: "var(--sb-text)", marginBottom: 14 }}>{t("parties.measurements" as TranslationKey)}</p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {measurements.map((m) => (
                     <div key={m.id} style={{
@@ -294,7 +300,7 @@ export default function PartyProfileClient({
                       <div>
                         <p style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--sb-text)" }}>{m.label}</p>
                         <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)" }}>
-                          {m.roomName || "Unspecified"} · {new Date(m.createdAt).toLocaleDateString("en-IN")}
+                          {m.roomName || t("parties.unspecified" as TranslationKey)} · {new Date(m.createdAt).toLocaleDateString("en-IN")}
                         </p>
                       </div>
                       <span style={{
@@ -312,9 +318,9 @@ export default function PartyProfileClient({
             {/* Balance health (admin only) */}
             {role === "ADMIN" && (
               <HKCard>
-                <p style={{ fontSize: TYPE.label, fontWeight: 700, color: "var(--sb-text)", marginBottom: 6 }}>Balance Health</p>
+                <p style={{ fontSize: TYPE.label, fontWeight: 700, color: "var(--sb-text)", marginBottom: 6 }}>{t("parties.balanceHealth" as TranslationKey)}</p>
                 <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", marginBottom: 12 }}>
-                  Verify all party balances match journal history.
+                  {t("parties.reconcileHelp" as TranslationKey)}
                 </p>
 
                 {reconcileError && (
@@ -327,12 +333,12 @@ export default function PartyProfileClient({
                   <div style={{ marginBottom: 12 }}>
                     {reconcileResult.drifted.length === 0 ? (
                       <div style={{ padding: "8px 12px", borderRadius: 8, background: GR + "18", fontSize: TYPE.caption, fontWeight: 700, color: GR }}>
-                        All {reconcileResult.total} balances are correct ✓
+                        {t("parties.allCorrect" as TranslationKey)} ({reconcileResult.total}) ✓
                       </div>
                     ) : (
                       <>
                         <div style={{ padding: "8px 12px", borderRadius: 8, background: AM + "18", fontSize: TYPE.caption, fontWeight: 700, color: AM, marginBottom: 8 }}>
-                          {reconcileResult.drifted.length} of {reconcileResult.total} parties have drift
+                          {reconcileResult.drifted.length} / {reconcileResult.total} {t("parties.hasDrift" as TranslationKey)}
                         </div>
                         <div style={{ maxHeight: 140, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
                           {reconcileResult.drifted.map((d) => (
@@ -360,7 +366,7 @@ export default function PartyProfileClient({
                       opacity: reconcileLoading ? 0.6 : 1,
                     }}
                   >
-                    {reconcileLoading === "check" ? "Checking..." : "Check"}
+                    {reconcileLoading === "check" ? t("parties.checking" as TranslationKey) : t("parties.check" as TranslationKey)}
                   </button>
                   {reconcileResult && reconcileResult.drifted.length > 0 && (
                     <button
@@ -373,7 +379,7 @@ export default function PartyProfileClient({
                         opacity: reconcileLoading ? 0.6 : 1,
                       }}
                     >
-                      {reconcileLoading === "fix" ? "Fixing..." : "Fix All"}
+                      {reconcileLoading === "fix" ? t("parties.fixing" as TranslationKey) : t("parties.fixAll" as TranslationKey)}
                     </button>
                   )}
                 </div>

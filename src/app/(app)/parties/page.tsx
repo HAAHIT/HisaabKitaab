@@ -11,6 +11,7 @@ import { HKPagination } from "@/components/ui/HKPagination";
 import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { type TranslationKey } from "@/lib/i18n/translations";
 import {
   C, OR, PU, GR, SG, IN, TYPE,
   fmt, fmtFull, useIsMobile,
@@ -230,9 +231,9 @@ export default function PartiesPage() {
   const denaCount = parties.filter((p) => p.type === "VENDOR" && p.currentBalance < 0).length;
 
   const filterOptions = [
-    { key: "ALL" as const, label: "Sab" },
-    { key: "CUSTOMER" as const, label: "Grahak" },
-    { key: "VENDOR" as const, label: "Supplier" },
+    { key: "ALL" as const, label: t("parties.filter.all" as TranslationKey) },
+    { key: "CUSTOMER" as const, label: t("parties.filter.customers" as TranslationKey) },
+    { key: "VENDOR" as const, label: t("parties.filter.vendors" as TranslationKey) },
   ];
 
   return (
@@ -249,10 +250,10 @@ export default function PartiesPage() {
 
         <div style={{ padding: isMobile ? "18px 14px 100px" : "24px 28px", maxWidth: 1440, margin: "0 auto" }}>
           <PageHeader
-            title="Udhar Khata"
-            subtitle="Party-wise hisaab"
+            title={t("parties.title" as TranslationKey)}
+            subtitle={t("parties.subtitle" as TranslationKey)}
             isMobile={isMobile}
-            action={<HKButton onClick={openCreate}>+ Party Jodo</HKButton>}
+            action={<HKButton onClick={openCreate}>{t("parties.addBtn" as TranslationKey)}</HKButton>}
           />
           {/* Overdue banner */}
           <OverdueBanner
@@ -264,24 +265,24 @@ export default function PartiesPage() {
           {/* Lena/Dena summary */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
             <HKCard style={{ padding: isMobile ? 14 : 18 }}>
-              <p style={{ fontSize: TYPE.caption, fontWeight: 600, color: "var(--sb-muted)", marginBottom: 4, fontFamily: SG }}>Lena Baki</p>
+              <p style={{ fontSize: TYPE.caption, fontWeight: 600, color: "var(--sb-muted)", marginBottom: 4, fontFamily: SG }}>{t("khata.toReceive" as TranslationKey)}</p>
               <p style={{ fontFamily: IN, fontWeight: 700, color: GR, fontSize: isMobile ? 18 : 24, letterSpacing: "-0.4px", fontVariantNumeric: "tabular-nums", margin: 0 }}>
                 {fmtFull(lenaTotal)}
               </p>
-              <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", marginTop: 2, fontFamily: SG }}>customers se</p>
+              <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", marginTop: 2, fontFamily: SG }}>{t("parties.fromCustomers" as TranslationKey)}</p>
             </HKCard>
             <HKCard style={{ padding: isMobile ? 14 : 18 }}>
-              <p style={{ fontSize: TYPE.caption, fontWeight: 600, color: "var(--sb-muted)", marginBottom: 4, fontFamily: SG }}>Dena Baki</p>
+              <p style={{ fontSize: TYPE.caption, fontWeight: 600, color: "var(--sb-muted)", marginBottom: 4, fontFamily: SG }}>{t("khata.toPay" as TranslationKey)}</p>
               <p style={{ fontFamily: IN, fontWeight: 700, color: C.negative, fontSize: isMobile ? 18 : 24, letterSpacing: "-0.4px", fontVariantNumeric: "tabular-nums", margin: 0 }}>
                 {fmtFull(denaTotal)}
               </p>
-              <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", marginTop: 2, fontFamily: SG }}>suppliers ko</p>
+              <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", marginTop: 2, fontFamily: SG }}>{t("parties.toSuppliers" as TranslationKey)}</p>
             </HKCard>
           </div>
 
           {/* Search + filter */}
           <div style={{ display: "flex", gap: 10, marginBottom: overdueFilter ? 8 : 16, flexWrap: "wrap" }}>
-            <SearchBox value={search} onChange={setSearch} placeholder="Party dhundho..." />
+            <SearchBox value={search} onChange={setSearch} placeholder={t("parties.searchLabel" as TranslationKey)} />
             <PillFilter options={filterOptions} value={typeFilter} onChange={setTypeFilter} />
           </div>
 
@@ -294,7 +295,7 @@ export default function PartiesPage() {
                 background: C.primarySoft, border: `1px solid ${C.primary}33`,
                 fontSize: TYPE.bodySmall, fontWeight: 700, color: C.primary, fontFamily: SG,
               }}>
-                ⏰ Overdue parties sirf
+                ⏰ {t("parties.overdueOnly" as TranslationKey)}
                 <button
                   onClick={() => router.replace("/parties")}
                   aria-label="Clear overdue filter"
@@ -326,15 +327,15 @@ export default function PartiesPage() {
                   fontFamily: SG,
                 }}
               >
-                {search || typeFilter !== "ALL" ? "Koi party nahi mili" : "Abhi tak koi party nahi"}
+                {search || typeFilter !== "ALL" ? t("parties.noneFound" as TranslationKey) : t("parties.empty" as TranslationKey)}
               </p>
               <p style={{ fontSize: TYPE.body, fontWeight: 500, fontFamily: SG, marginBottom: 20 }}>
                 {search || typeFilter !== "ALL"
-                  ? "Search badlo ya nayi party jodo"
-                  : "Pehli party jodke hisaab shuru karo"}
+                  ? t("parties.searchChangeOrAdd" as TranslationKey)
+                  : t("parties.firstPartyStart" as TranslationKey)}
               </p>
               {!search && typeFilter === "ALL" && (
-                <HKButton onClick={openCreate}>+ Pehli Party Jodo</HKButton>
+                <HKButton onClick={openCreate}>{t("parties.addFirstBtn" as TranslationKey)}</HKButton>
               )}
             </div>
           ) : (
@@ -374,21 +375,21 @@ export default function PartiesPage() {
                               display: "inline-flex", alignItems: "center", height: 22, padding: "0 8px",
                               borderRadius: 8, background: C.primarySoft, color: C.primary,
                               fontSize: 11, fontWeight: 600, fontFamily: SG, letterSpacing: "0.1px",
-                            }}>Overdue</span>
+                            }}>{t("dash.overdueLabel" as TranslationKey)}</span>
                           )}
                         </div>
                         <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", margin: "2px 0 0", fontFamily: SG }}>
-                          {party.type === "CUSTOMER" ? "Customer" : "Supplier"}
+                          {party.type === "CUSTOMER" ? t("parties.customerType" as TranslationKey) : t("parties.vendorType" as TranslationKey)}
                           {party.phone ? ` · ${party.phone}` : ""}
                         </p>
                       </div>
                       <div style={{ textAlign: "right", marginRight: 8 }}>
                         <p style={{ fontFamily: IN, fontWeight: 700, fontSize: 16, color: balColor, margin: 0, fontVariantNumeric: "tabular-nums" }}>
-                          {owesUs ? fmtFull(Math.abs(party.currentBalance)) : weOwe ? fmtFull(party.currentBalance) : "Settled"}
+                          {owesUs ? fmtFull(Math.abs(party.currentBalance)) : weOwe ? fmtFull(party.currentBalance) : t("khata.settled" as TranslationKey)}
                         </p>
                         {party.currentBalance !== 0 && (
                           <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", margin: "2px 0 0", fontFamily: SG }}>
-                            {owesUs ? "lena baki" : "dena baki"}
+                            {owesUs ? t("khata.toReceive" as TranslationKey) : t("khata.toPay" as TranslationKey)}
                           </p>
                         )}
                       </div>
@@ -468,99 +469,99 @@ export default function PartiesPage() {
                             }}
                             onKeyDown={(e) => {
                               if (e.key === "Enter" || e.key === " ") {
-                                e.stopPropagation();
-                                setOverflowPartyId(overflowPartyId === party.id ? null : party.id);
-                              }
-                            }}
-                            aria-label={`More actions for ${party.name}`}
-                            aria-haspopup="true"
-                            aria-expanded={overflowPartyId === party.id}
-                            style={{
-                              width: 36,
-                              height: 36,
-                              borderRadius: 10,
-                              border: "1px solid var(--sb-border)",
-                              background: "var(--sb-surface-alt)",
-                              color: "var(--sb-sub)",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              cursor: "pointer",
-                              position: "relative",
-                            }}
-                          >
-                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round">
-                              <circle cx="12" cy="5" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="12" cy="19" r="1" />
-                            </svg>
-                            {overflowPartyId === party.id && (
-                              <div
-                                style={{
-                                  position: "absolute",
-                                  top: "100%",
-                                  right: 0,
-                                  marginTop: 4,
-                                  background: "var(--sb-card)",
-                                  border: "1px solid var(--sb-border)",
-                                  borderRadius: 12,
-                                  boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
-                                  zIndex: 10,
-                                  minWidth: 140,
-                                  overflow: "hidden",
-                                }}
-                              >
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); setOverflowPartyId(null); router.push(`/bills/new?partyId=${party.id}`); }}
+                                  e.stopPropagation();
+                                  setOverflowPartyId(overflowPartyId === party.id ? null : party.id);
+                                }
+                              }}
+                              aria-label={`More actions for ${party.name}`}
+                              aria-haspopup="true"
+                              aria-expanded={overflowPartyId === party.id}
+                              style={{
+                                width: 36,
+                                height: 36,
+                                borderRadius: 10,
+                                border: "1px solid var(--sb-border)",
+                                background: "var(--sb-surface-alt)",
+                                color: "var(--sb-sub)",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                cursor: "pointer",
+                                position: "relative",
+                              }}
+                            >
+                              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round">
+                                <circle cx="12" cy="5" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="12" cy="19" r="1" />
+                              </svg>
+                              {overflowPartyId === party.id && (
+                                <div
                                   style={{
-                                    width: "100%", padding: "10px 14px",
-                                    display: "flex", alignItems: "center", gap: 8,
-                                    background: "transparent", border: "none", cursor: "pointer",
-                                    fontSize: 14, fontWeight: 600, color: "var(--sb-text)", fontFamily: SG,
+                                    position: "absolute",
+                                    top: "100%",
+                                    right: 0,
+                                    marginTop: 4,
+                                    background: "var(--sb-card)",
+                                    border: "1px solid var(--sb-border)",
+                                    borderRadius: 12,
+                                    boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
+                                    zIndex: 10,
+                                    minWidth: 140,
+                                    overflow: "hidden",
                                   }}
                                 >
-                                  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-                                  Naya Bill
-                                </button>
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); setOverflowPartyId(null); router.push(`/payments/new?partyId=${party.id}`); }}
-                                  style={{
-                                    width: "100%", padding: "10px 14px",
-                                    display: "flex", alignItems: "center", gap: 8,
-                                    background: "transparent", border: "none", cursor: "pointer",
-                                    fontSize: 14, fontWeight: 600, color: "var(--sb-text)", fontFamily: SG,
-                                  }}
-                                >
-                                  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-                                  Payment Record
-                                </button>
-                                <div style={{ height: 1, background: "var(--sb-border)", margin: "4px 0" }} />
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); setOverflowPartyId(null); openEdit(party); }}
-                                  style={{
-                                    width: "100%", padding: "10px 14px",
-                                    display: "flex", alignItems: "center", gap: 8,
-                                    background: "transparent", border: "none", cursor: "pointer",
-                                    fontSize: 14, fontWeight: 600, color: "var(--sb-text)", fontFamily: SG,
-                                  }}
-                                >
-                                  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                                  Edit
-                                </button>
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); setOverflowPartyId(null); handleDelete(party); }}
-                                  style={{
-                                    width: "100%", padding: "10px 14px",
-                                    display: "flex", alignItems: "center", gap: 8,
-                                    background: "transparent", border: "none", cursor: "pointer",
-                                    fontSize: 14, fontWeight: 600, color: C.negative, fontFamily: SG,
-                                  }}
-                                >
-                                  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-                                  Delete
-                                </button>
-                              </div>
-                            )}
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setOverflowPartyId(null); router.push(`/bills/new?partyId=${party.id}`); }}
+                                    style={{
+                                      width: "100%", padding: "10px 14px",
+                                      display: "flex", alignItems: "center", gap: 8,
+                                      background: "transparent", border: "none", cursor: "pointer",
+                                      fontSize: 14, fontWeight: 600, color: "var(--sb-text)", fontFamily: SG,
+                                    }}
+                                  >
+                                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                                    {t("parties.newBill" as TranslationKey)}
+                                  </button>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setOverflowPartyId(null); router.push(`/payments/new?partyId=${party.id}`); }}
+                                    style={{
+                                      width: "100%", padding: "10px 14px",
+                                      display: "flex", alignItems: "center", gap: 8,
+                                      background: "transparent", border: "none", cursor: "pointer",
+                                      fontSize: 14, fontWeight: 600, color: "var(--sb-text)", fontFamily: SG,
+                                    }}
+                                  >
+                                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                                    {t("parties.paymentRecord" as TranslationKey)}
+                                  </button>
+                                  <div style={{ height: 1, background: "var(--sb-border)", margin: "4px 0" }} />
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setOverflowPartyId(null); openEdit(party); }}
+                                    style={{
+                                      width: "100%", padding: "10px 14px",
+                                      display: "flex", alignItems: "center", gap: 8,
+                                      background: "transparent", border: "none", cursor: "pointer",
+                                      fontSize: 14, fontWeight: 600, color: "var(--sb-text)", fontFamily: SG,
+                                    }}
+                                  >
+                                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                    {t("templates.edit" as TranslationKey)}
+                                  </button>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setOverflowPartyId(null); handleDelete(party); }}
+                                    style={{
+                                      width: "100%", padding: "10px 14px",
+                                      display: "flex", alignItems: "center", gap: 8,
+                                      background: "transparent", border: "none", cursor: "pointer",
+                                      fontSize: 14, fontWeight: 600, color: C.negative, fontFamily: SG,
+                                    }}
+                                  >
+                                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                                    {t("common.delete" as TranslationKey)}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        </div>
                   </div>
                 );
               })}
@@ -656,10 +657,10 @@ export default function PartiesPage() {
                     fontFamily: SG,
                   }}
                 >
-                  {editingParty ? "Party Edit Karo" : "Nayi Party Jodo"}
+                  {editingParty ? t("parties.editTitle" as TranslationKey) : t("parties.createTitle" as TranslationKey)}
                 </h2>
                 <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--sb-sub)", marginTop: 3, fontFamily: SG }}>
-                  {editingParty ? "Details update karo" : "Grahak ya supplier add karo"}
+                  {editingParty ? t("parties.editSubtitle" as TranslationKey) : t("parties.createSubtitle" as TranslationKey)}
                 </p>
               </div>
             </div>
@@ -676,50 +677,50 @@ export default function PartiesPage() {
               }}
             >
               <HKInput
-                label="Naam"
+                label={t("parties.nameLabel" as TranslationKey)}
                 placeholder={t("parties.namePlaceholder")}
                 value={formName}
                 onValueChange={setFormName}
                 isRequired
               />
               <HKInput
-                label="Phone"
+                label={t("parties.phoneLabel" as TranslationKey)}
                 placeholder={t("bills.phonePlaceholder")}
                 value={formPhone}
                 onValueChange={setFormPhone}
                 type="tel"
               />
               <HKInput
-                label="Email"
+                label={t("parties.emailLabel" as TranslationKey)}
                 placeholder={t("parties.emailPlaceholder")}
                 value={formEmail}
                 onValueChange={setFormEmail}
                 type="email"
               />
               <HKInput
-                label="Pata"
+                label={t("parties.addressLabel" as TranslationKey)}
                 placeholder={t("bills.addressPlaceholder")}
                 value={formAddress}
                 onValueChange={setFormAddress}
               />
               <HKInput
-                label="GSTIN"
+                label={t("parties.gstinLabel" as TranslationKey)}
                 placeholder={t("bills.gstinPlaceholder")}
                 value={formGstin}
                 onValueChange={setFormGstin}
               />
               <HKSelect
-                label="Type"
-                placeholder="Grahak ya Supplier"
+                label={t("parties.typeLabel" as TranslationKey)}
+                placeholder={t("parties.typeLabel" as TranslationKey)}
                 value={formType}
                 onValueChange={(v) => { if (v) setFormType(v); }}
               >
-                <HKSelectItem value="CUSTOMER">Grahak (Customer)</HKSelectItem>
-                <HKSelectItem value="VENDOR">Supplier (Vendor)</HKSelectItem>
+                <HKSelectItem value="CUSTOMER">{t("parties.customerType" as TranslationKey)}</HKSelectItem>
+                <HKSelectItem value="VENDOR">{t("parties.vendorType" as TranslationKey)}</HKSelectItem>
               </HKSelect>
               {!editingParty && (
                 <HKInput
-                  label="Opening Balance"
+                  label={t("parties.openingBalance" as TranslationKey)}
                   placeholder="0"
                   type="number"
                   value={formBalance}
@@ -749,14 +750,14 @@ export default function PartiesPage() {
                 onClick={() => setShowPanel(false)}
                 isDisabled={saving}
               >
-                Cancel
+                {t("common.cancel" as TranslationKey)}
               </HKButton>
               <HKButton
                 onClick={handleSave}
                 isLoading={saving}
                 style={{ flex: 2 }}
               >
-                {editingParty ? "Update Karo ✓" : "Party Jodo ✓"}
+                {editingParty ? t("parties.updateParty" as TranslationKey) : t("parties.createParty" as TranslationKey)}
               </HKButton>
             </div>
           </div>

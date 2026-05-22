@@ -6,6 +6,8 @@ import { HKChip } from "@/components/ui/HKChip";
 import { HKPagination } from "@/components/ui/HKPagination";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Activity } from "@/components/ui/icons";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { TranslationKey } from "@/lib/i18n/translations";
 
 interface TransactionsClientProps {
   initialTransactions: any[];
@@ -18,6 +20,7 @@ export default function TransactionsClient({ initialTransactions, page, totalPag
   const searchParams = useSearchParams();
   const router = useRouter();
   const type = searchParams.get("type");
+  const { t } = useLanguage();
 
   const handlePageChange = (newPage: number) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -58,11 +61,18 @@ export default function TransactionsClient({ initialTransactions, page, totalPag
   };
 
   const exportCSV = () => {
-    const headers = ["Date", "Voucher Type", "Reference", "Particulars", "Debit", "Credit"];
+    const headers = [
+      t("transactions.header.date"),
+      t("transactions.header.voucher"),
+      "Reference",
+      t("transactions.header.particulars"),
+      t("transactions.header.debit"),
+      t("transactions.header.credit")
+    ];
     const rows = initialTransactions.flatMap(tx =>
       tx.lines.map((line: any) => [
         formatDate(tx.entryDate),
-        tx.voucherType,
+        t(`voucher.type.${tx.voucherType}` as TranslationKey),
         tx.id,
         line.partyName || line.accountName || "Unknown",
         line.debit,
@@ -91,30 +101,30 @@ export default function TransactionsClient({ initialTransactions, page, totalPag
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">
-            Transaction Register
+            {t("transactions.title")}
           </h1>
-          <p className="text-default-500 text-sm">Review all accounting entries across the system</p>
+          <p className="text-default-500 text-sm">{t("transactions.subtitle")}</p>
         </div>
 
         <div className="flex gap-2">
           <HKButton size="sm" variant="secondary" onClick={exportCSV}>
-            Export CSV
+            {t("transactions.exportCSV")}
           </HKButton>
           <HKButton size="sm" onClick={() => router.push("/reports")}>
-            Go to Reports
+            {t("transactions.goToReports")}
           </HKButton>
         </div>
       </div>
 
       <div className="flex flex-wrap gap-2 items-center">
-        <span className="text-xs font-semibold text-default-400 uppercase tracking-wider mr-2">Filter By:</span>
+        <span className="text-xs font-semibold text-default-400 uppercase tracking-wider mr-2">{t("transactions.filterBy")}</span>
         <button
           onClick={() => handleTypeFilter(null)}
           className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
             !type ? "bg-[var(--sb-orange)] text-white" : "bg-default-100 text-default-600 hover:bg-default-200"
           }`}
         >
-          All
+          {t("transactions.all")}
         </button>
         {voucherTypes.map((vt) => (
           <button
@@ -124,7 +134,7 @@ export default function TransactionsClient({ initialTransactions, page, totalPag
               type === vt ? "bg-[var(--sb-orange)] text-white" : "bg-default-100 text-default-600 hover:bg-default-200"
             }`}
           >
-            {vt === "SALES" ? "BILL" : vt.replace("_", " ")}
+            {t(`voucher.type.${vt}` as TranslationKey)}
           </button>
         ))}
       </div>
@@ -134,11 +144,11 @@ export default function TransactionsClient({ initialTransactions, page, totalPag
           <table className="min-w-full">
             <thead>
               <tr className="border-b border-[var(--sb-border)] bg-[var(--sb-badge)]">
-                <th className="py-3 px-4 text-left text-xs font-bold text-default-500 uppercase tracking-wider w-24">DATE</th>
-                <th className="py-3 px-4 text-left text-xs font-bold text-default-500 uppercase tracking-wider w-40">VOUCHER</th>
-                <th className="py-3 px-4 text-left text-xs font-bold text-default-500 uppercase tracking-wider">PARTICULARS</th>
-                <th className="py-3 px-4 text-right text-xs font-bold text-default-500 uppercase tracking-wider">DEBIT</th>
-                <th className="py-3 px-4 text-right text-xs font-bold text-default-500 uppercase tracking-wider">CREDIT</th>
+                <th className="py-3 px-4 text-left text-xs font-bold text-default-500 uppercase tracking-wider w-24">{t("transactions.header.date")}</th>
+                <th className="py-3 px-4 text-left text-xs font-bold text-default-500 uppercase tracking-wider w-40">{t("transactions.header.voucher")}</th>
+                <th className="py-3 px-4 text-left text-xs font-bold text-default-500 uppercase tracking-wider">{t("transactions.header.particulars")}</th>
+                <th className="py-3 px-4 text-right text-xs font-bold text-default-500 uppercase tracking-wider">{t("transactions.header.debit")}</th>
+                <th className="py-3 px-4 text-right text-xs font-bold text-default-500 uppercase tracking-wider">{t("transactions.header.credit")}</th>
               </tr>
             </thead>
             <tbody>
@@ -147,8 +157,8 @@ export default function TransactionsClient({ initialTransactions, page, totalPag
                   <td colSpan={5}>
                     <EmptyState
                       icon={Activity}
-                      title="No transactions found"
-                      description="Your transaction records will appear here. Adjust filters if needed."
+                      title={t("transactions.noTransactions")}
+                      description={t("transactions.noTransactionsDesc")}
                       className="py-10 flex items-center justify-center mx-auto"
                     />
                   </td>
@@ -164,7 +174,7 @@ export default function TransactionsClient({ initialTransactions, page, totalPag
                         {idx === 0 ? (
                           <div className="flex flex-col gap-1">
                             <HKChip size="sm" variant="flat" color={getVoucherColor(tx.voucherType)}>
-                              {tx.voucherType.replace("_", " ")}
+                              {t(`voucher.type.${tx.voucherType}` as TranslationKey)}
                             </HKChip>
                             <span className="text-[10px] font-mono text-default-400 bg-default-100 px-1.5 py-0.5 rounded w-fit">
                               #{tx.id.substring(tx.id.length - 6).toUpperCase()}
@@ -213,7 +223,10 @@ export default function TransactionsClient({ initialTransactions, page, totalPag
       )}
 
       <p className="text-center text-[10px] text-default-400">
-        Page {page} of {totalPages} · {total.toLocaleString("en-IN")} total entries. Use Reports for full exports.
+        {t("transactions.footer")
+          .replace("{page}", String(page))
+          .replace("{totalPages}", String(totalPages))
+          .replace("{total}", total.toLocaleString("en-IN"))}
       </p>
     </div>
   );

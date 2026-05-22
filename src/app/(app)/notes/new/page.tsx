@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/hk-design";
 import { HKButton } from "@/components/ui/HKButton";
 import { HKInput } from "@/components/ui/HKInput";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 type NoteType = "CREDIT_NOTE" | "DEBIT_NOTE";
 
@@ -32,6 +33,20 @@ const REASONS_DEBIT = [
   "Other",
 ];
 
+const getReasonTranslationKey = (r: string) => {
+  switch (r) {
+    case "Sales Return": return "notes.reason.salesReturn";
+    case "Post Sale Discount": return "notes.reason.postSaleDiscount";
+    case "Deficiency in Services": return "notes.reason.deficiencyInServices";
+    case "Correction in Invoice": return "notes.reason.correctionInInvoice";
+    case "Change in POS": return "notes.reason.changeInPOS";
+    case "Purchase Return": return "notes.reason.purchaseReturn";
+    case "Post Purchase Discount": return "notes.reason.postPurchaseDiscount";
+    case "Correction in Purchase Invoice": return "notes.reason.correctionInPurchaseInvoice";
+    default: return "notes.reason.other";
+  }
+};
+
 async function readError(response: Response) {
   const data = await response.json().catch(() => null);
   return data?.error || "Request failed";
@@ -41,6 +56,7 @@ export default function NewNotePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isMobile = useIsMobile();
+  const { t } = useLanguage();
 
   const rawType = searchParams.get("type");
   const noteType: NoteType = rawType === "DEBIT_NOTE" ? "DEBIT_NOTE" : "CREDIT_NOTE";
@@ -81,7 +97,7 @@ export default function NewNotePage() {
 
     if (Object.keys(formErrors).length > 0) {
       setErrors(formErrors);
-      showToast("Please fill in all required fields", "error");
+      showToast(t("notes.new.errorFillRequired"), "error");
       window.setTimeout(() => setErrors({}), 3000);
       return;
     }
@@ -106,10 +122,10 @@ export default function NewNotePage() {
 
       if (!response.ok) throw new Error(await readError(response));
 
-      showToast(isCredit ? "Credit note created" : "Debit note created", "success");
+      showToast(isCredit ? t("notes.new.creditCreated") : t("notes.new.debitCreated"), "success");
       window.setTimeout(() => router.push("/notes"), 700);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Failed to create note", "error");
+      showToast(err instanceof Error ? err.message : t("notes.new.createFailed"), "error");
     } finally {
       setIsSaving(false);
     }
@@ -138,22 +154,22 @@ export default function NewNotePage() {
           </button>
           <div>
             <h1 style={{ fontFamily: DISPLAY, fontSize: isMobile ? 24 : 30, fontWeight: 600, color: "var(--sb-text)", margin: 0, letterSpacing: "-0.01em", lineHeight: 1.2 }}>
-              {isCredit ? "Naya Credit Note" : "Naya Debit Note"}
+              {isCredit ? t("notes.new.creditTitle") : t("notes.new.debitTitle")}
             </h1>
             <p style={{ fontSize: 14, fontWeight: 500, color: "var(--sb-sub)", marginTop: 4 }}>
-              {isCredit ? "Sales return ya discount jo diya" : "Purchase return ya discount jo mila"}
+              {isCredit ? t("notes.new.creditSubtitle") : t("notes.new.debitSubtitle")}
             </p>
           </div>
         </div>
         {/* Party Section */}
         <HKCard style={{ marginBottom: 16 }}>
           <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, marginBottom: 16 }}>
-            {isCredit ? "Bill To (Customer)" : "Bill From (Vendor)"}
+            {isCredit ? t("notes.new.billToCustomer") : t("notes.new.billFromVendor")}
           </p>
           <PartySearch
             value={selectedParty?.id || null}
             partyType={isCredit ? "CUSTOMER" : "VENDOR"}
-            placeholder={isCredit ? "Search customer…" : "Search vendor…"}
+            placeholder={isCredit ? t("notes.new.searchCustomer") : t("notes.new.searchVendor")}
             autoFocus={!selectedParty}
             isInvalid={Boolean(errors.party)}
             onChange={(party) => {
@@ -183,7 +199,7 @@ export default function NewNotePage() {
                   onClick={() => setSelectedParty(null)}
                   style={{ fontSize: TYPE.bodySmall, color: PU, background: "none", border: "none", cursor: "pointer", fontFamily: SG, fontWeight: 600 }}
                 >
-                  Change
+                  {t("common.change")}
                 </button>
               </div>
               {selectedParty.phone && (
@@ -202,8 +218,8 @@ export default function NewNotePage() {
                   }}
                 >
                   {selectedParty.currentBalance < 0
-                    ? `To Get: ₹${Math.abs(selectedParty.currentBalance).toLocaleString("en-IN")}`
-                    : `To Pay: ₹${selectedParty.currentBalance.toLocaleString("en-IN")}`}
+                    ? `${t("notes.new.toGet")}: ₹${Math.abs(selectedParty.currentBalance).toLocaleString("en-IN")}`
+                    : `${t("notes.new.toPay")}: ₹${selectedParty.currentBalance.toLocaleString("en-IN")}`}
                 </p>
               )}
             </div>
@@ -212,10 +228,10 @@ export default function NewNotePage() {
 
         {/* Note Details */}
         <HKCard style={{ marginBottom: 16 }}>
-          <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, marginBottom: 16 }}>Note Details</p>
+          <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, marginBottom: 16 }}>{t("notes.new.noteDetails")}</p>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16 }}>
             <HKInput
-              label="Original Invoice / Bill Reference *"
+              label={t("notes.new.originalInvoice")}
               placeholder="e.g. INV-2024-001"
               value={originalInvoiceNo}
               onValueChange={(v) => {
@@ -223,15 +239,15 @@ export default function NewNotePage() {
                 setErrors((prev) => ({ ...prev, invoiceNo: false }));
               }}
               isInvalid={Boolean(errors.invoiceNo)}
-              errorMessage={errors.invoiceNo ? "Required" : undefined}
+              errorMessage={errors.invoiceNo ? t("notes.new.required") : undefined}
             />
             <HKSelect
-              label="Reason for Issuance *"
+              label={t("notes.new.reasonForIssuance")}
               value={reason}
               onValueChange={(v) => { if (v) setReason(v); }}
             >
               {reasons.map((r) => (
-                <HKSelectItem key={r} value={r}>{r}</HKSelectItem>
+                <HKSelectItem key={r} value={r}>{t(getReasonTranslationKey(r))}</HKSelectItem>
               ))}
             </HKSelect>
           </div>
@@ -241,8 +257,8 @@ export default function NewNotePage() {
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16, marginBottom: 16 }}>
           <HKCard>
             <HKTextarea
-              label="Additional Notes"
-              placeholder="Any additional information about this note…"
+              label={t("notes.new.additionalNotes")}
+              placeholder={t("notes.new.additionalNotesPlaceholder")}
               value={additionalNotes}
               onValueChange={setAdditionalNotes}
               minRows={4}
@@ -250,10 +266,10 @@ export default function NewNotePage() {
           </HKCard>
 
           <HKCard style={{ background: accentColor + "08", borderColor: accentColor + "33" }}>
-            <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, marginBottom: 16 }}>Summary</p>
+            <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, marginBottom: 16 }}>{t("notes.new.summary")}</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: TYPE.body, color: "var(--sb-sub)", fontFamily: SG }}>Subtotal (Taxable)</span>
+                <span style={{ fontSize: TYPE.body, color: "var(--sb-sub)", fontFamily: SG }}>{t("notes.new.subtotal")}</span>
                 <HKInput
                   type="number"
                   aria-label="Subtotal"
@@ -267,7 +283,7 @@ export default function NewNotePage() {
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: TYPE.body, color: "var(--sb-sub)", fontFamily: SG }}>Tax</span>
+                  <span style={{ fontSize: TYPE.body, color: "var(--sb-sub)", fontFamily: SG }}>{t("notes.new.tax")}</span>
                   <HKInput
                     type="number"
                     aria-label="Tax percentage"
@@ -291,15 +307,15 @@ export default function NewNotePage() {
                     onChange={(e) => setIsInterState(e.target.checked)}
                     style={{ accentColor: PU, width: 16, height: 16 }}
                   />
-                  <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG }}>Inter-state (IGST)</span>
+                  <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG }}>{t("notes.new.interState")}</span>
                 </label>
               </div>
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-                <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG, flexShrink: 0 }}>Place of Supply</span>
+                <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG, flexShrink: 0 }}>{t("notes.new.placeOfSupply")}</span>
                 <HKSelect
                   aria-label="Place of supply"
-                  placeholder="Select state"
+                  placeholder={t("notes.new.selectState")}
                   size="sm"
                   isInvalid={Boolean(errors.placeOfSupply)}
                   value={placeOfSupply}
@@ -317,14 +333,14 @@ export default function NewNotePage() {
               <div style={{ height: 1, background: "var(--sb-border)", margin: "4px 0" }} />
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: TYPE.bodyLarge, fontWeight: 800, color: "var(--sb-text)", fontFamily: SG }}>Grand Total</span>
+                <span style={{ fontSize: TYPE.bodyLarge, fontWeight: 800, color: "var(--sb-text)", fontFamily: SG }}>{t("notes.new.grandTotal")}</span>
                 <span style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: accentColor, fontFamily: IN }}>
                   {fmtFull(grandTotal)}
                 </span>
               </div>
 
               {errors.grandTotal && (
-                <p style={{ fontSize: TYPE.bodySmall, color: "#e53e3e", fontFamily: SG }}>Total must be greater than zero</p>
+                <p style={{ fontSize: TYPE.bodySmall, color: "#e53e3e", fontFamily: SG }}>{t("notes.new.errorTotalZero")}</p>
               )}
             </div>
           </HKCard>
@@ -333,10 +349,10 @@ export default function NewNotePage() {
         {/* Footer */}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
           <HKButton variant="secondary" onClick={() => router.push("/notes")}>
-            Cancel
+            {t("common.cancel")}
           </HKButton>
           <HKButton onClick={handleCreate} isLoading={isSaving}>
-            {isCredit ? "Create Credit Note" : "Create Debit Note"}
+            {isCredit ? t("notes.new.createCreditBtn") : t("notes.new.createDebitBtn")}
           </HKButton>
         </div>
       </div>

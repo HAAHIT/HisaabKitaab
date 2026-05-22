@@ -605,7 +605,7 @@ export default function AppShell({
               onMouseEnter={e => (e.currentTarget.style.background = "#1d4ed8")}
               onMouseLeave={e => (e.currentTarget.style.background = "var(--sb-primary)")}
             >
-              <Icons.plus /> Naya Bill
+              <Icons.plus /> {t("nav.billAction")}
             </button>
           )}
           <ThemeToggleBtn />
@@ -771,8 +771,8 @@ export default function AppShell({
               <Icons.plus />
             </div>
             <div style={{ textAlign: "left" }}>
-              <p style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>Kya banana hai?</p>
-              <p style={{ fontSize: 12, opacity: 0.8, margin: "2px 0 0" }}>Bill, payment ya party</p>
+              <p style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>{t("nav.quickActionTitle")}</p>
+              <p style={{ fontSize: 12, opacity: 0.8, margin: "2px 0 0" }}>{t("nav.quickActionSub")}</p>
             </div>
           </button>
         )}
@@ -876,14 +876,14 @@ export default function AppShell({
 
       {/* ── Smart FAB Sheet ─────────────────────────────────── */}
       {canQuickBill && (
-        <SidePanel open={smartFabOpen} onClose={() => setSmartFabOpen(false)} title="Kya banana hai?">
+        <SidePanel open={smartFabOpen} onClose={() => setSmartFabOpen(false)} title={t("nav.quickActionTitle")}>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {[
-              { label: "Payment Mila / Diya", sub: "Paisa aaya ya gaya record karo", emoji: "💸",
+              { label: t("nav.paymentAction"), sub: t("nav.paymentActionSub"), emoji: "💸",
                 action: () => { setSmartFabOpen(false); router.push("/payments/new"); } },
-              { label: "Naya Bill", sub: "Customer ke liye bill banao", emoji: "🧾",
+              { label: t("nav.billAction"), sub: t("nav.billActionSub"), emoji: "🧾",
                 action: () => { setSmartFabOpen(false); openQuickBill(); } },
-              { label: "Nayi Party", sub: "Customer ya supplier add karo", emoji: "👤",
+              { label: t("nav.partyAction"), sub: t("nav.partyActionSub"), emoji: "👤",
                 action: () => { setSmartFabOpen(false); router.push("/parties?addNew=true"); } },
             ].map(item => (
               <button key={item.label} onClick={item.action}

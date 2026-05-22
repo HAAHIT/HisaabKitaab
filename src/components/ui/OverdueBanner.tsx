@@ -6,6 +6,7 @@
 
 import { useRouter } from "next/navigation";
 import { C, SG, TYPE, fmtFull } from "@/components/ui/hk-design";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface OverdueBannerProps {
   overdueCount: number;
@@ -20,12 +21,13 @@ export function OverdueBanner({
   overdueParty,
 }: OverdueBannerProps) {
   const router = useRouter();
+  const { t } = useLanguage();
 
   if (overdueCount === 0) return null;
 
   const sub = overdueCount === 1 && overdueParty
-    ? `from ${overdueParty} — chase karo`
-    : `from ${overdueCount} parties — ek chakkar laga lo`;
+    ? t("dash.overdueSingle").replace("{party}", overdueParty)
+    : t("dash.overdueMultiple").replace("{count}", overdueCount.toString());
 
   return (
     <button
@@ -73,7 +75,7 @@ export function OverdueBanner({
       {/* Text */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <p style={{ fontSize: TYPE.h3, fontWeight: 700, color: C.primaryDark, fontFamily: SG, margin: 0, lineHeight: 1.3 }}>
-          {fmtFull(overdueAmount)} overdue
+          {t("dash.overdueAmount").replace("{amount}", fmtFull(overdueAmount))}
         </p>
         <p style={{ fontSize: TYPE.caption, fontWeight: 500, color: C.primaryDark, fontFamily: SG, margin: "2px 0 0", opacity: 0.7 }}>
           {sub}
@@ -82,7 +84,7 @@ export function OverdueBanner({
 
       {/* CTA */}
       <span style={{ fontSize: TYPE.label, fontWeight: 700, color: C.primary, display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-        Dekho
+        {t("dash.dekho")}
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="m9 18 6-6-6-6"/>
         </svg>

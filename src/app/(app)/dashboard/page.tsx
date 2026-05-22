@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { type TranslationKey } from "@/lib/i18n/translations";
 import { useInstallPrompt } from "@/hooks/useInstallPrompt";
 import { SetupWizard } from "@/components/onboarding/SetupWizard";
 import { HKSkeleton } from "@/components/ui/HKSkeleton";
@@ -147,6 +148,7 @@ function MetricCard({
 // ── Cash Flow Chart ───────────────────────────────────────────────────────────
 
 function CashFlowCard({ data, isMobile }: { data: DashboardData; isMobile: boolean }) {
+  const { t } = useLanguage();
   const cashFlow = data.cashFlow ?? [];
 
   const W = 560, H = isMobile ? 120 : 140;
@@ -164,20 +166,20 @@ function CashFlowCard({ data, isMobile }: { data: DashboardData; isMobile: boole
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
         <div>
           <h2 style={{ fontFamily: DISPLAY, fontSize: 17, fontWeight: 600, color: "var(--sb-text)", margin: "0 0 2px" }}>
-            Cash Flow
+            {t("dash.cashFlowTitle" as TranslationKey)}
           </h2>
           <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", margin: 0, fontFamily: SG }}>
-            Last {cashFlow.length} months
+            {t("dash.lastMonths" as TranslationKey).replace("{count}", String(cashFlow.length))}
           </p>
         </div>
         <div style={{ display: "flex", gap: 14 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
             <span style={{ width: 8, height: 8, borderRadius: 2, background: GR, display: "inline-block" }}/>
-            <span style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", fontFamily: SG }}>Mila</span>
+            <span style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", fontFamily: SG }}>{t("dash.milaLabel" as TranslationKey)}</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
             <span style={{ width: 8, height: 8, borderRadius: 2, background: "var(--sb-border-strong)", display: "inline-block" }}/>
-            <span style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", fontFamily: SG }}>Billed</span>
+            <span style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", fontFamily: SG }}>{t("dash.billedLabel" as TranslationKey)}</span>
           </div>
         </div>
       </div>
@@ -223,7 +225,7 @@ function CashFlowCard({ data, isMobile }: { data: DashboardData; isMobile: boole
         </>
       ) : (
         <div style={{ height: H, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--sb-muted)", fontSize: 13, fontFamily: SG }}>
-          Abhi koi data nahi
+          {t("dash.noChartData" as TranslationKey)}
         </div>
       )}
     </div>
@@ -233,6 +235,7 @@ function CashFlowCard({ data, isMobile }: { data: DashboardData; isMobile: boole
 // ── Recent Activity Card ──────────────────────────────────────────────────────
 
 function RecentActivityCard({ data, onNavigate }: { data: DashboardData; onNavigate: () => void }) {
+  const { t } = useLanguage();
   const payments = (data.recentPayments ?? []).filter(p => p.party);
 
   return (
@@ -244,13 +247,13 @@ function RecentActivityCard({ data, onNavigate }: { data: DashboardData; onNavig
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <h2 style={{ fontFamily: DISPLAY, fontSize: 17, fontWeight: 600, color: "var(--sb-text)", margin: 0 }}>
-          Recent Activity
+          {t("dash.recentActivity" as TranslationKey)}
         </h2>
         <button onClick={onNavigate} style={{
           fontSize: 13, color: "var(--sb-primary)", fontWeight: 700,
           fontFamily: SG, cursor: "pointer", background: "none", border: "none", padding: "4px 0",
         }}>
-          Sab dekho →
+          {t("dash.viewAllArrow" as TranslationKey)}
         </button>
       </div>
 
@@ -283,7 +286,7 @@ function RecentActivityCard({ data, onNavigate }: { data: DashboardData; onNavig
                     {p.party.name}
                   </p>
                   <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", margin: "2px 0 0", fontFamily: SG }}>
-                    {new Date(p.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })} · {p.mode.toLowerCase().replace("_", " ")}
+                    {new Date(p.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })} · {t(`payments.record.mode.${p.mode.toLowerCase()}` as TranslationKey)}
                   </p>
                 </div>
                 <span style={{ fontSize: 14, fontWeight: 700, color, fontFamily: IN, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
@@ -295,7 +298,7 @@ function RecentActivityCard({ data, onNavigate }: { data: DashboardData; onNavig
         </div>
       ) : (
         <div style={{ textAlign: "center", padding: "36px 0", color: "var(--sb-muted)", fontSize: TYPE.body, fontFamily: SG }}>
-          Koi payment nahi abhi
+          {t("dash.noPayments" as TranslationKey)}
         </div>
       )}
     </div>
@@ -305,14 +308,15 @@ function RecentActivityCard({ data, onNavigate }: { data: DashboardData; onNavig
 // ── Quick Links ───────────────────────────────────────────────────────────────
 
 function QuickLinks({ isMobile, onNavigate }: { isMobile: boolean; onNavigate: (href: string) => void }) {
+  const { t } = useLanguage();
   const links = [
-    { label: "Tally Bhejo",    sub: "CA ko file",       href: "/settings/tally-export",
+    { label: t("dash.quick.tally.title" as TranslationKey),    sub: t("dash.quick.tally.desc" as TranslationKey),       href: "/settings/tally-export",
       icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> },
-    { label: "Bank Reconcile", sub: "Statement upload",  href: "/settings/reconcile",
+    { label: t("dash.quick.reconcile.title" as TranslationKey), sub: t("dash.quick.reconcile.desc" as TranslationKey),  href: "/settings/reconcile",
       icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="22" x2="21" y2="22"/><line x1="6" y1="18" x2="6" y2="11"/><line x1="10" y1="18" x2="10" y2="11"/><line x1="14" y1="18" x2="14" y2="11"/><line x1="18" y1="18" x2="18" y2="11"/><polygon points="12 2 20 7 4 7"/></svg> },
-    { label: "Reports",        sub: "GST, P&L",          href: "/reports",
+    { label: t("dash.quick.reports.title" as TranslationKey),        sub: t("dash.quick.reports.desc" as TranslationKey),          href: "/reports",
       icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="m7 14 4-4 4 4 5-5"/></svg> },
-    { label: "Settings",       sub: "Business profile",  href: "/settings/company",
+    { label: t("dash.quick.settings.title" as TranslationKey),       sub: t("dash.quick.settings.desc" as TranslationKey),  href: "/settings/company",
       icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33 1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> },
   ];
   return (
@@ -425,7 +429,7 @@ export default function DashboardPage() {
       setOnboardingReady(true);
     } catch (err: unknown) {
       if (err instanceof Error && err.name === "AbortError") return;
-      setError("Network connection interrupted");
+      setError(t("dash.errorNetwork" as TranslationKey));
       setOnboardingReady(true);
     } finally {
       if (!controller.signal.aborted) setLoading(false);
@@ -471,7 +475,7 @@ export default function DashboardPage() {
           <h2 style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", marginBottom: 8, fontFamily: SG }}>{error}</h2>
           <p style={{ fontSize: TYPE.body, fontWeight: 500, color: "var(--sb-sub)", fontFamily: SG }}>{t("dash.errorRetry")}</p>
         </div>
-        <HKButton onClick={() => { setLoading(true); fetchDashboard(); }}>Try Again</HKButton>
+        <HKButton onClick={() => { setLoading(true); fetchDashboard(); }}>{t("dash.tryAgain" as TranslationKey)}</HKButton>
       </div>
     );
   }
@@ -490,10 +494,10 @@ export default function DashboardPage() {
   const s = data.summary;
 
   const metrics = [
-    { label: "Lena Baki",        value: Math.abs(s.receivable),           color: C.positive, onClick: () => router.push("/parties?filter=overdue") },
-    { label: "Dena Baki",        value: Math.abs(s.payable),              color: C.negative, onClick: () => router.push("/parties") },
-    { label: "Is Mahine Mila",   value: s.collectedThisMonth,             color: C.positive, onClick: () => router.push("/payments") },
-    { label: "Is Mahine Billed", value: s.thisMonthBilledTotal ?? 0,      color: "var(--sb-text)", onClick: () => router.push("/bills") },
+    { label: t("dash.receivableLabel" as TranslationKey),        value: Math.abs(s.receivable),           color: C.positive, onClick: () => router.push("/parties?filter=overdue") },
+    { label: t("dash.payableLabel" as TranslationKey),           value: Math.abs(s.payable),              color: C.negative, onClick: () => router.push("/parties") },
+    { label: t("dash.collected" as TranslationKey),              value: s.collectedThisMonth,             color: C.positive, onClick: () => router.push("/payments") },
+    { label: t("dash.billedThisMonth" as TranslationKey),        value: s.thisMonthBilledTotal ?? 0,      color: "var(--sb-text)", onClick: () => router.push("/bills") },
   ];
 
   return (
@@ -517,7 +521,7 @@ export default function DashboardPage() {
           </div>
           <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
             <HKButton size="sm" variant="ghost" onClick={() => setBannerDismissed(true)}>✕</HKButton>
-            <HKButton size="sm" onClick={promptInstall}>Install</HKButton>
+            <HKButton size="sm" onClick={promptInstall}>{t("install.button" as TranslationKey)}</HKButton>
           </div>
         </div>
       )}
@@ -551,7 +555,7 @@ export default function DashboardPage() {
       <div style={{ marginBottom: 18, position: "relative", paddingLeft: 16 }}>
         <span style={{ position: "absolute", left: 0, top: 6, bottom: 6, width: 3, borderRadius: 2, background: "var(--sb-primary)", opacity: 0.55 }}/>
         <p style={{ fontFamily: BRAND, fontSize: 14, fontWeight: 500, color: "var(--sb-muted)", marginBottom: 2, fontStyle: "italic", margin: "0 0 2px" }}>
-          Namaste,
+          {t("dash.namaste" as TranslationKey)}
         </p>
         <h1 style={{ fontFamily: DISPLAY, fontSize: isMobile ? TYPE.h1Mobile : 32, fontWeight: 600, color: "var(--sb-text)", letterSpacing: "-0.01em", lineHeight: 1.15, margin: 0 }}>
           {userName ? `${userName} 👋` : t("dash.pageTitle")}
@@ -583,8 +587,8 @@ export default function DashboardPage() {
             >
               <span style={{ fontSize: 22 }}>🧾</span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontSize: TYPE.bodySm, fontWeight: 700, color: "var(--sb-text)", margin: 0 }}>GSTIN add karo</p>
-                <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", margin: "2px 0 0" }}>GST bills ke liye zaroori</p>
+                <p style={{ fontSize: TYPE.bodySm, fontWeight: 700, color: "var(--sb-text)", margin: 0 }}>{t("dash.nudge.gstin.title" as TranslationKey)}</p>
+                <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", margin: "2px 0 0" }}>{t("dash.nudge.gstin.desc" as TranslationKey)}</p>
               </div>
               <span style={{ color: "var(--sb-muted)", fontSize: 13 }}>→</span>
             </button>
@@ -603,8 +607,8 @@ export default function DashboardPage() {
             >
               <span style={{ fontSize: 22 }}>🏦</span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontSize: TYPE.bodySm, fontWeight: 700, color: "var(--sb-text)", margin: 0 }}>Bank account jodo</p>
-                <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", margin: "2px 0 0" }}>Reconciliation ke liye</p>
+                <p style={{ fontSize: TYPE.bodySm, fontWeight: 700, color: "var(--sb-text)", margin: 0 }}>{t("dash.nudge.bank.title" as TranslationKey)}</p>
+                <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", margin: "2px 0 0" }}>{t("dash.nudge.bank.desc" as TranslationKey)}</p>
               </div>
               <span style={{ color: "var(--sb-muted)", fontSize: 13 }}>→</span>
             </button>

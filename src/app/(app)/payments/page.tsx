@@ -5,6 +5,7 @@ import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { HKPagination } from "@/components/ui/HKPagination";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { type TranslationKey } from "@/lib/i18n/translations";
 import { EditPaymentModal, type EditablePayment } from "./EditPaymentModal";
 import {
   C, OR, PU, GR, AM, SG, IN, TYPE, DISPLAY,
@@ -59,7 +60,13 @@ function modeColor(mode: string): string {
   return MODE_COLOR[mode.toUpperCase()] || PU;
 }
 
-function modeLabel(mode: string): string {
+function modeLabel(mode: string, t: any): string {
+  const m = mode.toUpperCase();
+  if (m === "UPI") return "UPI";
+  if (m === "NEFT") return "NEFT";
+  if (m === "CASH") return t("payments.record.mode.cash" as TranslationKey);
+  if (m === "CHEQUE") return t("payments.record.mode.cheque" as TranslationKey);
+  if (m === "BANK_TRANSFER") return t("payments.record.mode.bank" as TranslationKey);
   return mode
     .split("_")
     .map((w) => w.charAt(0) + w.slice(1).toLowerCase())
@@ -187,12 +194,12 @@ export default function PaymentsListPage() {
     try {
       const res = await fetch(`/api/payments/${paymentToDelete.id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await readError(res));
-      showToast("Payment delete ho gaya", "success");
+      showToast(t("payments.deleteSuccess" as TranslationKey), "success");
       setIsDeleteModalOpen(false);
       setPaymentToDelete(null);
       await fetchPayments();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Delete failed", "error");
+      showToast(error instanceof Error ? error.message : t("payments.deleteFailed" as TranslationKey), "error");
     } finally {
       setIsDeleting(false);
     }
@@ -212,15 +219,15 @@ export default function PaymentsListPage() {
   const completedPayments = payments.filter((p) => p.status !== "EXPECTED");
 
   const typeFilterOptions = [
-    { key: "ALL" as const, label: "Sab" },
-    { key: "INCOMING" as const, label: "Mila" },
-    { key: "OUTGOING" as const, label: "Diya" },
+    { key: "ALL" as const, label: t("payments.filter.allTypes" as TranslationKey) },
+    { key: "INCOMING" as const, label: t("payments.filter.received" as TranslationKey) },
+    { key: "OUTGOING" as const, label: t("payments.filter.paid" as TranslationKey) },
   ];
 
   const statusFilterOptions = [
-    { key: "ALL" as const, label: "Sab" },
-    { key: "COMPLETED" as const, label: "Done" },
-    { key: "EXPECTED" as const, label: "Pending" },
+    { key: "ALL" as const, label: t("payments.filter.allStatus" as TranslationKey) },
+    { key: "COMPLETED" as const, label: t("payments.filter.completed" as TranslationKey) },
+    { key: "EXPECTED" as const, label: t("payments.filter.expected" as TranslationKey) },
   ];
 
   return (
@@ -236,12 +243,12 @@ export default function PaymentsListPage() {
 
       <div style={{ padding: isMobile ? "18px 14px 100px" : "24px 28px", maxWidth: 1440, margin: "0 auto" }}>
         <PageHeader
-          title="Payments"
-          subtitle="Aana-jaana sab yahaan"
+          title={t("payments.title" as TranslationKey)}
+          subtitle={t("payments.subtitle" as TranslationKey)}
           isMobile={isMobile}
           action={
             <HKButton variant="success" onClick={() => router.push("/payments/new")}>
-              + Payment Likho
+              + {t("payments.record" as TranslationKey)}
             </HKButton>
           }
         />
@@ -256,9 +263,9 @@ export default function PaymentsListPage() {
           }}
         >
           {[
-            { l: "Is Mahine Mila",  v: totalIn,  c: GR,         bg: C.positiveSoft, sub: "received" },
-            { l: "Is Mahine Diya", v: totalOut, c: C.negative, bg: C.negativeSoft, sub: "paid out" },
-            { l: "Net Cash Flow",  v: net,      c: net >= 0 ? GR : C.negative, bg: net >= 0 ? C.positiveSoft : C.negativeSoft, sub: "this period" },
+            { l: t("payments.receivedMonth" as TranslationKey),  v: totalIn,  c: GR,         bg: C.positiveSoft, sub: t("payments.receivedSub" as TranslationKey) },
+            { l: t("payments.paidMonth" as TranslationKey), v: totalOut, c: C.negative, bg: C.negativeSoft, sub: t("payments.paidSub" as TranslationKey) },
+            { l: t("payments.netCashFlow" as TranslationKey),  v: net,      c: net >= 0 ? GR : C.negative, bg: net >= 0 ? C.positiveSoft : C.negativeSoft, sub: t("payments.netSub" as TranslationKey) },
           ].map((item, i) => (
             <div
               key={i}
@@ -311,7 +318,7 @@ export default function PaymentsListPage() {
             alignItems: "center",
           }}
         >
-          <SearchBox value={search} onChange={setSearch} placeholder="Payment dhundho..." />
+          <SearchBox value={search} onChange={setSearch} placeholder={t("payments.searchPlaceholder" as TranslationKey)} />
           <PillFilter
             options={typeFilterOptions}
             value={typeFilter}
@@ -343,16 +350,16 @@ export default function PaymentsListPage() {
               }}
             >
               {search || typeFilter !== "ALL" || statusFilter !== "ALL"
-                ? "Koi payment nahi mili"
-                : "Abhi tak koi payment nahi"}
+                ? t("payments.emptyFiltered" as TranslationKey)
+                : t("payments.noPayments" as TranslationKey)}
             </p>
             <p style={{ fontSize: TYPE.body, fontWeight: 500, fontFamily: SG, marginBottom: 20 }}>
               {search || typeFilter !== "ALL" || statusFilter !== "ALL"
-                ? "Filters badlo ya nayi payment likho"
-                : "Pehli payment record karo"}
+                ? t("payments.filtersChangeOrAdd" as TranslationKey)
+                : t("payments.firstPaymentStart" as TranslationKey)}
             </p>
             <HKButton variant="success" onClick={() => router.push("/payments/new")}>
-              + Payment Likho
+              + {t("payments.record" as TranslationKey)}
             </HKButton>
           </div>
         ) : (
@@ -365,14 +372,14 @@ export default function PaymentsListPage() {
                 }}>
                   <div style={{ width: 3, height: 18, borderRadius: 2, background: AM, flexShrink: 0 }} />
                   <h2 style={{ fontSize: TYPE.bodyLarge, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>
-                    Action Chahiye
+                    {t("payments.actionRequired" as TranslationKey)}
                   </h2>
                   <span style={{
                     padding: "3px 10px", borderRadius: 8,
                     background: C.warningSoft, color: AM,
                     fontSize: TYPE.caption, fontWeight: 700, fontFamily: IN,
                   }}>
-                    {pendingPayments.length} pending
+                    {pendingPayments.length} {t("payments.pendingLabel" as TranslationKey)}
                   </span>
                 </div>
                 <div style={{ borderRadius: 16, border: "1px solid var(--sb-border)", overflow: "hidden", background: "var(--sb-card)" }}>
@@ -397,7 +404,7 @@ export default function PaymentsListPage() {
                             {counterLedgerLabel(p)}
                           </p>
                           <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--sb-sub)", fontFamily: SG, marginTop: 2 }}>
-                            {isIn ? "Milega" : "Dena hai"} • {modeLabel(p.mode)}
+                            {isIn ? t("payments.incomingAction" as TranslationKey) : t("payments.outgoingAction" as TranslationKey)} • {modeLabel(p.mode, t)}
                           </p>
                         </div>
                         <span style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: AM, fontFamily: IN, whiteSpace: "nowrap" }}>
@@ -421,19 +428,19 @@ export default function PaymentsListPage() {
                             flexShrink: 0,
                           }}
                         >
-                          {markingId === p.id ? "..." : "✓ Done"}
+                          {markingId === p.id ? "..." : `✓ ${t("payments.doneStatus" as TranslationKey)}`}
                         </button>
                         <button
                           onClick={() => { setPaymentToEdit(p); setIsEditModalOpen(true); }}
                           style={{ width: 34, height: 34, borderRadius: 9, border: "1px solid var(--sb-border)", background: "var(--sb-surface-alt)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
-                          title="Edit"
+                          title={t("common.edit" as TranslationKey)}
                         >
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--sb-text)" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
                         </button>
                         <button
                           onClick={() => { setPaymentToDelete(p); setIsDeleteModalOpen(true); }}
                           style={{ width: 34, height: 34, borderRadius: 9, border: `1px solid ${C.negative}33`, background: C.negativeSoft, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
-                          title="Delete"
+                          title={t("common.delete" as TranslationKey)}
                         >
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.negative} strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
                         </button>
@@ -452,7 +459,7 @@ export default function PaymentsListPage() {
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <div style={{ width: 3, height: 18, borderRadius: 2, background: "var(--sb-border-strong)", flexShrink: 0 }} />
                   <h2 style={{ fontSize: TYPE.bodyLarge, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>
-                    Hua Hai
+                    {t("payments.completedSection" as TranslationKey)}
                   </h2>
                 </div>
                 <div style={{ display: "flex", gap: 6 }}>
@@ -637,7 +644,7 @@ export default function PaymentsListPage() {
                                         fontFamily: SG,
                                       }}
                                     >
-                                      {modeLabel(p.mode)}
+                                      {modeLabel(p.mode, t)}
                                     </span>
                                     {isExpected && (
                                       <span
@@ -651,7 +658,7 @@ export default function PaymentsListPage() {
                                           fontFamily: SG,
                                         }}
                                       >
-                                        {isIncoming ? "Aana Hai" : "Dena Hai"}
+                                        {isIncoming ? t("payments.incomingAction" as TranslationKey) : t("payments.outgoingAction" as TranslationKey)}
                                       </span>
                                     )}
                                     <span
@@ -736,20 +743,20 @@ export default function PaymentsListPage() {
                                         whiteSpace: "nowrap",
                                       }}
                                     >
-                                      {markingId === p.id ? "..." : "✓ Done"}
+                                      {markingId === p.id ? "..." : `✓ ${t("payments.doneStatus" as TranslationKey)}`}
                                     </button>
                                   )}
                                   <button
                                     onClick={() => { setPaymentToEdit(p); setIsEditModalOpen(true); }}
                                     style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid var(--sb-border)", background: "var(--sb-surface-alt)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
-                                    title="Edit"
+                                    title={t("common.edit" as TranslationKey)}
                                   >
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--sb-text)" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
                                   </button>
                                   <button
                                     onClick={() => { setPaymentToDelete(p); setIsDeleteModalOpen(true); }}
                                     style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${C.negative}33`, background: C.negativeSoft, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
-                                    title="Delete"
+                                    title={t("common.delete" as TranslationKey)}
                                   >
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.negative} strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
                                   </button>
@@ -784,16 +791,28 @@ export default function PaymentsListPage() {
       <HKModal
         isOpen={isDeleteModalOpen}
         onClose={() => { setIsDeleteModalOpen(false); setPaymentToDelete(null); }}
-        title="Transaction Delete Karo?"
+        title={t("payments.deleteTitle" as TranslationKey)}
         footer={
           <>
-            <HKButton variant="secondary" onClick={() => { setIsDeleteModalOpen(false); setPaymentToDelete(null); }} isDisabled={isDeleting}>Wapas Jao</HKButton>
-            <HKButton variant="danger" onClick={handleDeletePayment} isLoading={isDeleting}>Haan, Delete Karo</HKButton>
+            <HKButton variant="secondary" onClick={() => { setIsDeleteModalOpen(false); setPaymentToDelete(null); }} isDisabled={isDeleting}>{t("common.cancel" as TranslationKey)}</HKButton>
+            <HKButton variant="danger" onClick={handleDeletePayment} isLoading={isDeleting}>{t("payments.deleteConfirm" as TranslationKey)}</HKButton>
           </>
         }
       >
         <p style={{ fontFamily: SG, fontSize: TYPE.body, color: "var(--sb-sub)", lineHeight: 1.6 }}>
-          Kya aap sure hain? <span style={{ fontWeight: 700, color: "var(--sb-text)" }}>{fmtFull(paymentToDelete?.amount || 0)}</span> ka payment permanently delete ho jayega aur balance reverse ho jayega.
+          {useLanguage().language === "en" ? (
+            <>
+              Are you sure? The payment of <span style={{ fontWeight: 700, color: "var(--sb-text)" }}>{fmtFull(paymentToDelete?.amount || 0)}</span> will be permanently deleted and the balance impact will be reversed.
+            </>
+          ) : useLanguage().language === "hi" ? (
+            <>
+              क्या आप निश्चित हैं? <span style={{ fontWeight: 700, color: "var(--sb-text)" }}>{fmtFull(paymentToDelete?.amount || 0)}</span> का भुगतान स्थायी रूप से हटा दिया जाएगा और बैलेंस का प्रभाव उलट दिया जाएगा।
+            </>
+          ) : (
+            <>
+              Kya aap sure hain? <span style={{ fontWeight: 700, color: "var(--sb-text)" }}>{fmtFull(paymentToDelete?.amount || 0)}</span> ka payment permanently delete ho jayega aur balance reverse ho jayega.
+            </>
+          )}
         </p>
       </HKModal>
     </div>

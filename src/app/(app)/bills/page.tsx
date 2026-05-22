@@ -5,6 +5,7 @@ import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { HKPagination } from "@/components/ui/HKPagination";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { type TranslationKey } from "@/lib/i18n/translations";
 import {
   C, OR, GR, AM, SG, IN, TYPE,
   fmtFull, useIsMobile,
@@ -152,10 +153,10 @@ export default function BillsListPage() {
   const totalCancel = bills.filter((b) => b.status === "CANCELLED").length;
 
   const filterOptions = [
-    { key: "ALL" as const, label: `Sab (${bills.length})` },
-    { key: "FINAL" as const, label: `Final (${totalFinal})` },
-    { key: "DRAFT" as const, label: `Draft (${totalDraft})` },
-    { key: "CANCELLED" as const, label: `Cancel (${totalCancel})` },
+    { key: "ALL" as const, label: `${t("bills.filter.all" as TranslationKey)} (${bills.length})` },
+    { key: "FINAL" as const, label: `${t("bills.filter.final" as TranslationKey)} (${totalFinal})` },
+    { key: "DRAFT" as const, label: `${t("bills.filter.draft" as TranslationKey)} (${totalDraft})` },
+    { key: "CANCELLED" as const, label: `${t("bills.filter.cancelled" as TranslationKey)} (${totalCancel})` },
   ];
 
   return (
@@ -171,13 +172,13 @@ export default function BillsListPage() {
 
       <div style={{ padding: isMobile ? "18px 14px 100px" : "24px 28px", maxWidth: 1440, margin: "0 auto" }}>
         <PageHeader
-          title="Mere Bills"
-          subtitle="Apne sab bills yahaan"
+          title={t("bills.pageTitle" as TranslationKey)}
+          subtitle={t("bills.pageSubtitle" as TranslationKey)}
           isMobile={isMobile}
           action={
             !isMobile && (
               <HKButton onClick={() => router.push("/bills/new")}>
-                + Naya Bill Banao
+                + {t("bills.create" as TranslationKey)}
               </HKButton>
             )
           }
@@ -199,9 +200,9 @@ export default function BillsListPage() {
           }}
         >
           {[
-            { l: "Kul Billed", v: fmtFull(billSummary.kulBilled), sub: "is mahine", c: "var(--sb-text)", bg: "var(--sb-card)" },
-            { l: "Mila", v: fmtFull(billSummary.mila), sub: "wapas mila", c: GR, bg: C.positiveSoft },
-            { l: "Baaki", v: fmtFull(billSummary.baaki), sub: "abhi tak", c: C.primary, bg: C.primarySoft },
+            { l: t("bills.summary.billed" as TranslationKey), v: fmtFull(billSummary.kulBilled), sub: t("bills.summary.billedSub" as TranslationKey), c: "var(--sb-text)", bg: "var(--sb-card)" },
+            { l: t("bills.summary.received" as TranslationKey), v: fmtFull(billSummary.mila), sub: t("bills.summary.receivedSub" as TranslationKey), c: GR, bg: C.positiveSoft },
+            { l: t("bills.summary.pending" as TranslationKey), v: fmtFull(billSummary.baaki), sub: t("bills.summary.pendingSub" as TranslationKey), c: C.primary, bg: C.primarySoft },
           ].map((item, i) => (
             <div
               key={i}
@@ -239,11 +240,11 @@ export default function BillsListPage() {
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: datePreset === "CUSTOM" ? 8 : 0 }}>
             {(
               [
-                { key: "ALL" as DatePreset, label: "Sab Time" },
-                { key: "THIS_MONTH" as DatePreset, label: "Is Mahine" },
-                { key: "LAST_MONTH" as DatePreset, label: "Pichle Mahine" },
-                { key: "LAST_3M" as DatePreset, label: "Teen Mahine" },
-                { key: "CUSTOM" as DatePreset, label: "Custom" },
+                { key: "ALL" as DatePreset, label: t("bills.date.all" as TranslationKey) },
+                { key: "THIS_MONTH" as DatePreset, label: t("bills.date.thisMonth" as TranslationKey) },
+                { key: "LAST_MONTH" as DatePreset, label: t("bills.date.lastMonth" as TranslationKey) },
+                { key: "LAST_3M" as DatePreset, label: t("bills.date.last3M" as TranslationKey) },
+                { key: "CUSTOM" as DatePreset, label: t("bills.date.custom" as TranslationKey) },
               ] as { key: DatePreset; label: string }[]
             ).map((opt) => (
               <button
@@ -286,7 +287,7 @@ export default function BillsListPage() {
                   outline: "none",
                 }}
               />
-              <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG }}>se</span>
+              <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG }}>{t("bills.date.to" as TranslationKey)}</span>
               <input
                 type="date"
                 value={customTo}
@@ -317,7 +318,7 @@ export default function BillsListPage() {
                     cursor: "pointer",
                   }}
                 >
-                  Clear
+                  {t("bills.date.clear" as TranslationKey)}
                 </button>
               )}
             </div>
@@ -326,7 +327,7 @@ export default function BillsListPage() {
 
         {/* Search + filter */}
         <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
-          <SearchBox value={search} onChange={setSearch} placeholder="Bill number, party ya customer dhundho..." />
+          <SearchBox value={search} onChange={setSearch} placeholder={t("bills.searchPlaceholder" as TranslationKey)} />
           <PillFilter
             options={filterOptions}
             value={statusFilter}
@@ -358,14 +359,14 @@ export default function BillsListPage() {
                 fontFamily: SG,
               }}
             >
-              {search || statusFilter !== "ALL" ? "Koi bill nahi mila" : "Abhi tak koi bill nahi"}
+              {search || statusFilter !== "ALL" ? t("bills.emptyFiltered" as TranslationKey) : t("bills.empty" as TranslationKey)}
             </p>
             <p style={{ fontSize: TYPE.body, fontWeight: 500, fontFamily: SG, marginBottom: 20 }}>
-              {search || statusFilter !== "ALL" ? "Search badlo ya naya bill banao" : "Pehla bill banakar shuru karo"}
+              {search || statusFilter !== "ALL" ? t("bills.emptyFilteredHint" as TranslationKey) : t("bills.emptyHint" as TranslationKey)}
             </p>
             {!search && statusFilter === "ALL" && (
               <HKButton onClick={() => router.push("/bills/new")}>
-                + Naya Bill Banao
+                + {t("bills.create" as TranslationKey)}
               </HKButton>
             )}
           </div>
@@ -409,8 +410,8 @@ export default function BillsListPage() {
                       >
                         {fmtFull(group.total)}
                       </span>
-                      <span style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--sb-sub)" }}>
-                        · {group.bills.length} bills
+                       <span style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--sb-sub)" }}>
+                        · {group.bills.length} {t("dash.billsCount" as TranslationKey)}
                       </span>
                       <svg
                         width="16"

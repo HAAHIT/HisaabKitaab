@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/hk-design";
 import { HKButton } from "@/components/ui/HKButton";
 import { HKInput } from "@/components/ui/HKInput";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 type BankAccount = {
   id: string;
@@ -46,11 +47,11 @@ async function readError(res: Response) {
 
 type PaymentType = "party" | "ledger" | "contra";
 
-const TABS: { key: PaymentType; label: string }[] = [
-  { key: "party", label: "Party" },
-  { key: "ledger", label: "Expense / Income" },
-  { key: "contra", label: "Bank Transfer" },
-];
+const TABS = [
+  { key: "party", labelKey: "payments.edit.tab.party" as const },
+  { key: "ledger", labelKey: "payments.edit.tab.ledger" as const },
+  { key: "contra", labelKey: "payments.edit.tab.contra" as const },
+] as const;
 
 export function EditPaymentModal({
   payment,
@@ -63,6 +64,7 @@ export function EditPaymentModal({
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const { t } = useLanguage();
   const isContraPayment = !payment?.partyId && !!payment?.destinationAccountId;
   const isLedgerPayment = payment?.party
     ? ["EXPENSE", "INCOME", "ASSET", "LIABILITY", "EQUITY"].includes(payment.party.type)
@@ -100,7 +102,7 @@ export function EditPaymentModal({
     fetch("/api/bank-accounts")
       .then(async (r) => {
         if (!r.ok) {
-          setError(`Bank accounts load nahi hua (${r.status})`);
+          setError(t("payments.edit.error.loadAccounts").replace("{status}", String(r.status)));
           return null;
         }
         return r.json();
@@ -109,32 +111,32 @@ export function EditPaymentModal({
         if (d && Array.isArray(d.accounts)) setBankAccounts(d.accounts);
       })
       .catch(() => {
-        setError("Bank accounts load nahi hua. Network check karo.");
+        setError(t("payments.edit.error.network"));
       });
-  }, [isOpen, bankAccounts.length]);
+  }, [isOpen, bankAccounts.length, t]);
 
   async function handleSave() {
     if (!payment) return;
     setError(null);
 
     if ((paymentType === "party" || paymentType === "ledger") && !selectedParty && !payment.partyId) {
-      setError(paymentType === "ledger" ? "Ledger select karo" : "Party select karo");
+      setError(paymentType === "ledger" ? t("payments.edit.error.selectLedger") : t("payments.edit.error.selectParty"));
       return;
     }
     if (!amount || parseFloat(amount) <= 0) {
-      setError("Valid amount daalo");
+      setError(t("payments.edit.error.invalidAmount"));
       return;
     }
     if (!accountId) {
-      setError("Account select karo");
+      setError(t("payments.edit.error.selectAccount"));
       return;
     }
     if (paymentType === "contra" && !destAccountId) {
-      setError("Destination account select karo");
+      setError(t("payments.edit.error.selectDestination"));
       return;
     }
     if (paymentType === "contra" && accountId === destAccountId) {
-      setError("Source aur destination same nahi ho sakta");
+      setError(t("payments.edit.error.sameAccounts"));
       return;
     }
 
@@ -159,7 +161,7 @@ export function EditPaymentModal({
       onSuccess();
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Save nahi hua");
+      setError(e instanceof Error ? e.message : t("payments.edit.error.saveFailed"));
     } finally {
       setIsSaving(false);
     }
@@ -172,11 +174,11 @@ export function EditPaymentModal({
     <HKSheet
       isOpen={isOpen}
       onClose={onClose}
-      title="Payment Edit Karo"
+      title={t("payments.edit.title")}
       footer={
         <>
-          <HKButton variant="secondary" onClick={onClose} isDisabled={isSaving}>Cancel</HKButton>
-          <HKButton onClick={handleSave} isLoading={isSaving}>Save Karo</HKButton>
+          <HKButton variant="secondary" onClick={onClose} isDisabled={isSaving}>{t("common.cancel")}</HKButton>
+          <HKButton onClick={handleSave} isLoading={isSaving}>{t("payments.edit.save")}</HKButton>
         </>
       }
     >
@@ -199,7 +201,7 @@ export function EditPaymentModal({
                   cursor: "pointer", transition: "all 0.15s",
                 }}
               >
-                {tab.label}
+                {t(tab.labelKey)}
               </button>
             );
           })}
@@ -228,8 +230,8 @@ export function EditPaymentModal({
             }}
             placeholder={
               paymentType === "ledger"
-                ? "Expense, income ya ledger chunno"
-                : "Customer ya vendor chunno"
+                ? t("payments.edit.error.selectLedger")
+                : t("payments.edit.error.selectParty")
             }
             filterTypes={
               paymentType === "ledger"
@@ -241,7 +243,7 @@ export function EditPaymentModal({
 
         {/* Amount */}
         <HKInput
-          label="Amount (₹)"
+          label={t("payments.record.amountLabel")}
           type="text"
           value={amount}
           onValueChange={(v) => setAmount(sanitizeAmount(v))}
@@ -254,21 +256,21 @@ export function EditPaymentModal({
           {/* Direction */}
           {(paymentType === "party" || paymentType === "ledger") && (
             <HKSelect
-              label="Type"
+              label={t("payments.record.type")}
               value={direction}
               onValueChange={(v) => { if (v) setDirection(v); }}
               isDisabled={paymentType === "ledger"}
             >
-              <HKSelectItem value="INCOMING">Mila (Received)</HKSelectItem>
-              <HKSelectItem value="OUTGOING">Diya (Paid)</HKSelectItem>
+              <HKSelectItem value="INCOMING">{t("payments.edit.direction.incoming")}</HKSelectItem>
+              <HKSelectItem value="OUTGOING">{t("payments.edit.direction.outgoing")}</HKSelectItem>
             </HKSelect>
           )}
 
           {/* Source account */}
           <HKSelect
-            label={paymentType === "contra" ? "Source Account" : "Account"}
+            label={paymentType === "contra" ? t("payments.record.sourceAccount") : t("payments.record.account")}
             value={accountId}
-            placeholder={bankAccounts.length === 0 ? "Koi bank account nahi" : "Account chuno"}
+            placeholder={bankAccounts.length === 0 ? t("payments.edit.noAccounts") : t("payments.edit.selectAccount")}
             onValueChange={(v) => {
               if (!v) return;
               setAccountId(v);
@@ -286,9 +288,9 @@ export function EditPaymentModal({
           {/* Destination (contra only) */}
           {paymentType === "contra" && (
             <HKSelect
-              label="Destination Account"
+              label={t("payments.record.destinationAccount")}
               value={destAccountId}
-              placeholder={bankAccounts.length === 0 ? "Koi bank account nahi" : "Destination chuno"}
+              placeholder={bankAccounts.length === 0 ? t("payments.edit.noAccounts") : t("payments.edit.selectDestination")}
               onValueChange={(v) => { if (v) setDestAccountId(v); }}
             >
               {bankAccounts.map((acc) => (
@@ -302,7 +304,7 @@ export function EditPaymentModal({
           {/* Mode */}
           {(paymentType === "party" || paymentType === "ledger") && (
             <HKSelect
-              label="Payment Mode"
+              label={t("payments.record.paymentMode")}
               value={mode}
               onValueChange={(v) => {
                 if (!v) return;
@@ -322,24 +324,24 @@ export function EditPaymentModal({
                 }
               }}
             >
-              <HKSelectItem value="BANK_TRANSFER">Bank Transfer</HKSelectItem>
-              <HKSelectItem value="CASH">Cash</HKSelectItem>
-              <HKSelectItem value="UPI">UPI</HKSelectItem>
-              <HKSelectItem value="CHEQUE">Cheque</HKSelectItem>
+              <HKSelectItem value="BANK_TRANSFER">{t("payments.record.mode.bank")}</HKSelectItem>
+              <HKSelectItem value="CASH">{t("payments.record.mode.cash")}</HKSelectItem>
+              <HKSelectItem value="UPI">{t("payments.record.mode.upi")}</HKSelectItem>
+              <HKSelectItem value="CHEQUE">{t("payments.record.mode.cheque")}</HKSelectItem>
             </HKSelect>
           )}
         </div>
 
         <HKInput
-          label="Date"
+          label={t("payments.record.date")}
           type="date"
           value={date}
           onValueChange={setDate}
         />
 
         <HKInput
-          label="Notes"
-          placeholder="Optional..."
+          label={t("payments.record.notes")}
+          placeholder={t("payments.edit.notesPlaceholder")}
           value={notes}
           onValueChange={setNotes}
         />

@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/hk-design";
 import { HKButton } from "@/components/ui/HKButton";
 import { AddBankAccountModal } from "@/components/banking/AddBankAccountModal";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface BankAccount {
   id: string;
@@ -70,6 +71,7 @@ function StarIcon() {
 }
 
 export default function BankingPage() {
+  const { t } = useLanguage();
   const isMobile = useIsMobile();
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [loading, setLoading] = useState(true);
@@ -89,11 +91,11 @@ export default function BankingPage() {
       const data = await res.json();
       setAccounts(data.accounts || []);
     } catch {
-      showToast("Accounts load nahi hue", "error");
+      showToast(t("banking.error.loadAccounts"), "error");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => { fetchAccounts(); }, [fetchAccounts]);
 
@@ -114,10 +116,10 @@ export default function BankingPage() {
         const data = await res.json();
         throw new Error(data.error || "Update failed");
       }
-      showToast(`${account.name} default ho gaya`, "success");
+      showToast(`${account.name} ${t("banking.success.defaultSet")}`, "success");
       await fetchAccounts();
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Default set nahi hua", "error");
+      showToast(err instanceof Error ? err.message : t("banking.error.defaultSet"), "error");
     } finally {
       setSettingDefaultId(null);
     }
@@ -132,12 +134,12 @@ export default function BankingPage() {
         const data = await res.json();
         throw new Error(data.error || "Delete failed");
       }
-      showToast("Account delete ho gaya", "success");
+      showToast(t("banking.success.deleted"), "success");
       setIsDeleteOpen(false);
       setAccountToDelete(null);
       await fetchAccounts();
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Delete nahi hua", "error");
+      showToast(err instanceof Error ? err.message : t("banking.error.deleted"), "error");
     } finally {
       setIsDeleting(false);
     }
@@ -154,8 +156,8 @@ export default function BankingPage() {
 
       <div style={{ padding: isMobile ? "18px 14px 80px" : "24px 28px 40px", maxWidth: 1200, margin: "0 auto" }}>
         <PageHeader
-          title="Banking"
-          subtitle="Bank aur cash accounts"
+          title={t("banking.title")}
+          subtitle={t("banking.subtitle")}
           isMobile={isMobile}
           action={
             <div style={{ display: "flex", gap: 10 }}>
@@ -177,10 +179,10 @@ export default function BankingPage() {
                     gap: 7,
                   }}
                 >
-                  <ArrowsIcon /> Contra
+                  <ArrowsIcon /> {t("banking.contra")}
                 </button>
               </Link>
-              <HKButton onClick={() => setIsAddOpen(true)}>+ Account Jodo</HKButton>
+              <HKButton onClick={() => setIsAddOpen(true)}>{t("banking.addAccount")}</HKButton>
             </div>
           }
         />
@@ -188,8 +190,8 @@ export default function BankingPage() {
         {/* Summary cards */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
           {[
-            { label: "Bank Balance", value: totalBank, color: PU, icon: <BankIcon /> },
-            { label: "Cash in Hand", value: totalCash, color: GR, icon: <CashIcon /> },
+            { label: t("banking.bankBalance"), value: totalBank, color: PU, icon: <BankIcon /> },
+            { label: t("banking.cashInHand"), value: totalCash, color: GR, icon: <CashIcon /> },
           ].map((item) => (
             <div
               key={item.label}
@@ -220,12 +222,12 @@ export default function BankingPage() {
           <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--sb-sub)" }}>
             <div style={{ fontSize: 52, marginBottom: 16 }}>🏦</div>
             <p style={{ fontWeight: 700, fontSize: TYPE.h2, color: "var(--sb-text)", marginBottom: 8, fontFamily: SG }}>
-              Koi account nahi
+              {t("banking.noAccounts")}
             </p>
             <p style={{ fontSize: TYPE.body, fontWeight: 500, fontFamily: SG, marginBottom: 20 }}>
-              Bank ya cash account add karo
+              {t("banking.addAccountSubtitle")}
             </p>
-            <HKButton onClick={() => setIsAddOpen(true)}>+ Account Jodo</HKButton>
+            <HKButton onClick={() => setIsAddOpen(true)}>{t("banking.addAccount")}</HKButton>
           </div>
         ) : (
           <HKCard style={{ padding: 0, overflow: "hidden" }}>
@@ -280,12 +282,12 @@ export default function BankingPage() {
                           border: `1px solid ${AM}30`,
                           letterSpacing: "0.02em",
                         }}>
-                          DEFAULT
+                          {t("banking.default")}
                         </span>
                       )}
                     </div>
                     <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--sb-sub)", fontFamily: SG, marginTop: 2 }}>
-                      {account.type === "BANK" ? "Bank Account" : "Cash Register"}
+                      {account.type === "BANK" ? t("banking.bankAccount") : t("banking.cashRegister")}
                       {account.accountNumber && ` • ${account.accountNumber}`}
                     </p>
                   </Link>
@@ -300,7 +302,7 @@ export default function BankingPage() {
                     }}>
                       {fmtFull(bal)}
                     </p>
-                    <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontWeight: 500, marginTop: 2, fontFamily: SG }}>Balance</p>
+                    <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontWeight: 500, marginTop: 2, fontFamily: SG }}>{t("banking.balance")}</p>
                   </div>
 
                   {/* Set as default (bank accounts only, not already default) */}
@@ -308,7 +310,7 @@ export default function BankingPage() {
                     <button
                       onClick={() => handleSetDefault(account)}
                       disabled={isSettingDefault}
-                      title="Default account set karo"
+                      title={t("banking.setDefaultTooltip")}
                       style={{
                         width: TOUCH.secondary, height: TOUCH.secondary,
                         borderRadius: 10, border: "none",
@@ -356,18 +358,17 @@ export default function BankingPage() {
       <HKModal
         isOpen={isDeleteOpen}
         onClose={() => setIsDeleteOpen(false)}
-        title="Account Delete Karo?"
+        title={t("banking.deleteModal.title")}
         width={440}
         footer={
           <>
-            <HKButton variant="secondary" onClick={() => setIsDeleteOpen(false)} isDisabled={isDeleting}>Cancel</HKButton>
-            <HKButton variant="danger" onClick={handleDelete} isLoading={isDeleting}>Delete Karo</HKButton>
+            <HKButton variant="secondary" onClick={() => setIsDeleteOpen(false)} isDisabled={isDeleting}>{t("common.cancel")}</HKButton>
+            <HKButton variant="danger" onClick={handleDelete} isLoading={isDeleting}>{t("banking.deleteModal.confirm")}</HKButton>
           </>
         }
       >
         <p style={{ fontFamily: SG, fontSize: TYPE.body, color: "var(--sb-sub)", lineHeight: 1.6 }}>
-          <span style={{ fontWeight: 700, color: "var(--sb-text)" }}>{accountToDelete?.name}</span> delete ho jayega.
-          Purana history safe rahega, sirf future payments mein nahi dikhega.
+          <span style={{ fontWeight: 700, color: "var(--sb-text)" }}>{accountToDelete?.name}</span> {t("banking.deleteModal.body")}
         </p>
       </HKModal>
     </div>

@@ -11,6 +11,7 @@ import {
   PageHeader,
 } from "@/components/ui/hk-design";
 import { HKButton } from "@/components/ui/HKButton";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface Note {
   id: string;
@@ -30,6 +31,7 @@ async function readError(response: Response) {
 export default function NotesListPage() {
   const router = useRouter();
   const isMobile = useIsMobile();
+  const { t, language } = useLanguage();
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -40,7 +42,7 @@ export default function NotesListPage() {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const monthlyGroups = useMemo(() => {
-    const monthFormatter = new Intl.DateTimeFormat("en-IN", { month: "long", year: "numeric" });
+    const monthFormatter = new Intl.DateTimeFormat(language === "hi" ? "hi-IN" : "en-IN", { month: "long", year: "numeric" });
     const groups = new Map<string, { label: string; notes: Note[]; total: number }>();
     for (const note of notes) {
       const d = new Date(note.entryDate);
@@ -96,9 +98,9 @@ export default function NotesListPage() {
   const totalDebit = notes.filter((n) => n.voucherType === "DEBIT_NOTE").length;
 
   const filterOptions = [
-    { key: "ALL" as const, label: `Sab (${notes.length})` },
-    { key: "CREDIT_NOTE" as const, label: `Credit (${totalCredit})` },
-    { key: "DEBIT_NOTE" as const, label: `Debit (${totalDebit})` },
+    { key: "ALL" as const, label: `${t("notes.filter.all")} (${notes.length})` },
+    { key: "CREDIT_NOTE" as const, label: `${t("notes.filter.credit")} (${totalCredit})` },
+    { key: "DEBIT_NOTE" as const, label: `${t("notes.filter.debit")} (${totalDebit})` },
   ];
 
   return (
@@ -107,14 +109,14 @@ export default function NotesListPage() {
 
       <div style={{ padding: isMobile ? "18px 14px 100px" : "24px 28px", maxWidth: 1440, margin: "0 auto" }}>
         <PageHeader
-          title="Credit & Debit Notes"
-          subtitle="Sales returns aur purchase returns"
+          title={t("notes.title")}
+          subtitle={t("notes.subtitle")}
           isMobile={isMobile}
           action={
             !isMobile && (
               <div style={{ display: "flex", gap: 8 }}>
                 <HKButton onClick={() => router.push("/notes/new?type=CREDIT_NOTE")}>
-                  + Credit Note
+                  {t("notes.addCreditNote")}
                 </HKButton>
                 <button
                   onClick={() => router.push("/notes/new?type=DEBIT_NOTE")}
@@ -126,14 +128,14 @@ export default function NotesListPage() {
                     cursor: "pointer",
                   }}
                 >
-                  + Debit Note
+                  {t("notes.addDebitNote")}
                 </button>
               </div>
             )
           }
         />
         <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
-          <SearchBox value={search} onChange={setSearch} placeholder="Note dhundho..." />
+          <SearchBox value={search} onChange={setSearch} placeholder={t("notes.searchPlaceholder")} />
           <PillFilter
             options={filterOptions}
             value={typeFilter}
@@ -149,14 +151,14 @@ export default function NotesListPage() {
           <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--sb-sub)" }}>
             <div style={{ fontSize: 52, marginBottom: 16 }}>📝</div>
             <p style={{ fontWeight: 700, fontSize: TYPE.h2, color: "var(--sb-text)", marginBottom: 8, fontFamily: SG }}>
-              {search || typeFilter !== "ALL" ? "Koi note nahi mila" : "Abhi tak koi note nahi"}
+              {search || typeFilter !== "ALL" ? t("notes.emptyFilteredTitle") : t("notes.emptyTitle")}
             </p>
             <p style={{ fontSize: TYPE.body, fontWeight: 500, fontFamily: SG, marginBottom: 20 }}>
-              {search || typeFilter !== "ALL" ? "Search badlo ya naya note banao" : "Pehla credit ya debit note banao"}
+              {search || typeFilter !== "ALL" ? t("notes.emptyFilteredHint") : t("notes.emptyHint")}
             </p>
             {!search && typeFilter === "ALL" && (
               <HKButton onClick={() => router.push("/notes/new?type=CREDIT_NOTE")}>
-                + Credit Note Banao
+                {t("notes.createCreditNote")}
               </HKButton>
             )}
           </div>
@@ -185,7 +187,7 @@ export default function NotesListPage() {
                         {fmtFull(group.total)}
                       </span>
                       <span style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--sb-sub)" }}>
-                        · {group.notes.length} notes
+                        · {group.notes.length} {t("notes.countSuffix")}
                       </span>
                       <svg
                         width="16" height="16" viewBox="0 0 24 24" fill="none"
@@ -236,7 +238,7 @@ export default function NotesListPage() {
                                       padding: "3px 8px", borderRadius: 6, fontFamily: SG,
                                     }}
                                   >
-                                    {isCredit ? "Credit" : "Debit"}
+                                    {isCredit ? t("notes.filter.credit") : t("notes.filter.debit")}
                                   </span>
                                   {note.partyName && (
                                     <span style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--sb-sub)", fontFamily: SG, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

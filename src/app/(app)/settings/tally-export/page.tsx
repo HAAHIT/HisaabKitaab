@@ -6,6 +6,8 @@ import { HKRadio, HKRadioGroup } from "@/components/ui/HKRadioGroup";
 import { HKButton } from "@/components/ui/HKButton";
 import { HKInput } from "@/components/ui/HKInput";
 import { useRouter } from "next/navigation";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { type TranslationKey } from "@/lib/i18n/translations";
 import {
   GR, AM, OR, PU, SG, IN, TYPE,
   fmtFull,
@@ -14,6 +16,7 @@ import {
 
 export default function TallyExportPage() {
   const router = useRouter();
+  const { t } = useLanguage();
   const isMobile = useIsMobile();
 
   const [step, setStep] = useState(1);
@@ -51,7 +54,7 @@ export default function TallyExportPage() {
       .then((res) => res.json())
       .then((data) => { if (data?.settings?.caEmail) setCaEmail(data.settings.caEmail); })
       .catch(() => {});
-  }, []);
+  }, [customFrom, customTo]);
 
   function showToast(message: string, type: "success" | "error") {
     setToast({ message, type });
@@ -88,15 +91,15 @@ export default function TallyExportPage() {
         body: JSON.stringify({ from, to }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Preview fetch failed");
+      if (!res.ok) throw new Error(data.error || t("tally.export.fail" as TranslationKey));
       setPreview(data);
       if (data.unbalancedCount > 0) {
-        showToast(`Kuch entries mein gadbad hai (${data.unbalancedCount}). Support se baat karo.`, "error");
+        showToast(t("tally.export.unbalancedError" as TranslationKey).replace("{count}", String(data.unbalancedCount)), "error");
         return;
       }
       setStep(2);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Failed to load preview", "error");
+      showToast(err instanceof Error ? err.message : t("tally.export.fail" as TranslationKey), "error");
     } finally {
       setLoading(false);
     }
@@ -113,7 +116,7 @@ export default function TallyExportPage() {
       });
       if (!res.ok) {
         const errorData = await res.json().catch(() => null);
-        throw new Error(errorData?.error || "Export failed");
+        throw new Error(errorData?.error || t("tally.export.fail" as TranslationKey));
       }
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
@@ -122,23 +125,23 @@ export default function TallyExportPage() {
         a.href = url; a.download = `SoloBooks-${from}-to-${to}.xml`;
         document.body.appendChild(a); a.click();
         window.URL.revokeObjectURL(url); document.body.removeChild(a);
-        showToast("Ho gaya ✓ — File CA ko bhej do", "success");
+        showToast(t("tally.export.successDownload" as TranslationKey), "success");
       } else if (method === "whatsapp") {
         const a = document.createElement("a");
         a.href = url; a.download = `SoloBooks-${from}-to-${to}.xml`; a.click();
         const msg = encodeURIComponent(`Namaste — yeh SoloBooks ka Tally file hai for ${from} to ${to}.`);
         window.open(`https://wa.me/?text=${msg}`, "_blank");
-        showToast("Downloaded for WhatsApp", "success");
+        showToast(t("tally.export.successWhatsapp" as TranslationKey), "success");
       } else if (method === "email") {
         const a = document.createElement("a");
         a.href = url; a.download = `SoloBooks-${from}-to-${to}.xml`; a.click();
         const subject = encodeURIComponent(`SoloBooks Tally file for ${from} to ${to}`);
         const body = encodeURIComponent(`Namaste,\nSoloBooks ka ${from} se ${to} ka Tally file ready hai.\nDownload karke Tally mein import kar lo.\n\n— SoloBooks`);
         window.open(`mailto:${caEmail}?subject=${subject}&body=${body}`);
-        showToast("Downloaded for Email", "success");
+        showToast(t("tally.export.successEmail" as TranslationKey), "success");
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Export failed", "error");
+      showToast(err instanceof Error ? err.message : t("tally.export.fail" as TranslationKey), "error");
     } finally {
       setExporting(false);
     }
@@ -164,7 +167,7 @@ export default function TallyExportPage() {
       {toast && <HKToast message={toast.message} type={toast.type} />}
 
       <div style={{ fontFamily: SG }}>
-        <PageHeader title="Tally ko Bhejo" subtitle="Send your books directly to your CA in Tally format." isMobile={isMobile} />
+        <PageHeader title={t("tally.export.title" as TranslationKey)} subtitle={t("tally.export.subtitle" as TranslationKey)} isMobile={isMobile} />
         <div>
           {/* Step progress */}
           <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
@@ -177,14 +180,14 @@ export default function TallyExportPage() {
             {step === 1 && (
               <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
                 <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>
-                  Kaunsa period?
+                  {t("tally.export.period" as TranslationKey)}
                 </p>
 
                 <HKRadioGroup value={periodType} onValueChange={setPeriodType}>
-                  <HKRadio value="month">Is mahine</HKRadio>
-                  <HKRadio value="quarter">Is quarter</HKRadio>
-                  <HKRadio value="year">Is saal (Financial Year)</HKRadio>
-                  <HKRadio value="custom">Custom dates</HKRadio>
+                  <HKRadio value="month">{t("tally.export.thisMonth" as TranslationKey)}</HKRadio>
+                  <HKRadio value="quarter">{t("tally.export.thisQuarter" as TranslationKey)}</HKRadio>
+                  <HKRadio value="year">{t("tally.export.thisYear" as TranslationKey)}</HKRadio>
+                  <HKRadio value="custom">{t("tally.export.customDates" as TranslationKey)}</HKRadio>
                 </HKRadioGroup>
 
                 {periodType === "custom" && (
@@ -195,7 +198,7 @@ export default function TallyExportPage() {
                 )}
 
                 <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                  <HKButton onClick={handleFetchPreview} isLoading={loading}>Aage Badho →</HKButton>
+                  <HKButton onClick={handleFetchPreview} isLoading={loading}>{t("tally.export.next" as TranslationKey)} →</HKButton>
                 </div>
               </div>
             )}
@@ -203,42 +206,42 @@ export default function TallyExportPage() {
             {step === 2 && preview && (
               <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
                 <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>
-                  Kya kya include karna hai?
+                  {t("tally.export.whatToInclude" as TranslationKey)}
                 </p>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                   <HKCheckbox isSelected={include.sales} onValueChange={(v) => setInclude({ ...include, sales: v })}>
-                    Sales bills{" "}
+                    {t("tally.export.sales" as TranslationKey)}{" "}
                     <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}>
                       ({preview.salesCount} bills, {fmtFull(preview.salesAmount)})
                     </span>
                   </HKCheckbox>
                   <HKCheckbox isSelected={include.purchases} onValueChange={(v) => setInclude({ ...include, purchases: v })}>
-                    Purchase bills{" "}
+                    {t("tally.export.purchases" as TranslationKey)}{" "}
                     <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}>
                       ({preview.purchasesCount} bills, {fmtFull(preview.purchasesAmount)})
                     </span>
                   </HKCheckbox>
                   <HKCheckbox isSelected={include.receipts} onValueChange={(v) => setInclude({ ...include, receipts: v })}>
-                    Receipts (Mila){" "}
+                    {t("tally.export.receipts" as TranslationKey)}{" "}
                     <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}>
                       ({preview.receiptsCount} payments, {fmtFull(preview.receiptsAmount)})
                     </span>
                   </HKCheckbox>
                   <HKCheckbox isSelected={include.payments} onValueChange={(v) => setInclude({ ...include, payments: v })}>
-                    Payments out (Diya){" "}
+                    {t("tally.export.payments" as TranslationKey)}{" "}
                     <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}>
                       ({preview.paymentsCount} payments, {fmtFull(preview.paymentsAmount)})
                     </span>
                   </HKCheckbox>
                   <HKCheckbox isSelected={include.ledgers} onValueChange={(v) => setInclude({ ...include, ledgers: v })}>
-                    Party balances{" "}
+                    {t("tally.export.partyBalances" as TranslationKey)}{" "}
                     <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}>
                       ({preview.partiesCount} parties)
                     </span>
                   </HKCheckbox>
                   <HKCheckbox isSelected={include.journals} onValueChange={(v) => setInclude({ ...include, journals: v })}>
-                    Manual journal entries{" "}
+                    {t("tally.export.journals" as TranslationKey)}{" "}
                     <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}>
                       ({preview.journalsCount} entries)
                     </span>
@@ -246,8 +249,8 @@ export default function TallyExportPage() {
                 </div>
 
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <button onClick={() => setStep(1)} style={navBtnStyle}>← Wapas</button>
-                  <HKButton onClick={() => setStep(3)}>Aage Badho →</HKButton>
+                  <button onClick={() => setStep(1)} style={navBtnStyle}>← {t("tally.export.back" as TranslationKey)}</button>
+                  <HKButton onClick={() => setStep(3)}>{t("tally.export.next" as TranslationKey)} →</HKButton>
                 </div>
               </div>
             )}
@@ -255,27 +258,27 @@ export default function TallyExportPage() {
             {step === 3 && (
               <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
                 <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>
-                  Kaise bhejna hai?
+                  {t("tally.export.howToSend" as TranslationKey)}
                 </p>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <button onClick={() => handleExport("download")} disabled={exporting} style={exportBtnStyle(PU)}>
-                    📥 Download .xml
+                    📥 {t("tally.export.downloadXml" as TranslationKey)}
                   </button>
                   <button onClick={() => handleExport("email")} disabled={exporting} style={exportBtnStyle(PU)}>
-                    📧 Email to CA{caEmail && (
+                    📧 {t("tally.export.emailToCa" as TranslationKey)}{caEmail && (
                       <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG, fontWeight: 400 }}>
-                        ({caEmail})
+                        {" "}({caEmail})
                       </span>
                     )}
                   </button>
                   <button onClick={() => handleExport("whatsapp")} disabled={exporting} style={exportBtnStyle("#25D366")}>
-                    💬 WhatsApp share
+                    💬 {t("tally.export.whatsappShare" as TranslationKey)}
                   </button>
                 </div>
 
                 <div>
-                  <button onClick={() => setStep(2)} style={navBtnStyle}>← Wapas</button>
+                  <button onClick={() => setStep(2)} style={navBtnStyle}>← {t("tally.export.back" as TranslationKey)}</button>
                 </div>
               </div>
             )}

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { type TranslationKey } from "@/lib/i18n/translations";
 import { HKButton } from "@/components/ui/HKButton";
 import { OR, PU, GR, AM, SG, IN, TYPE, PageHeader, useIsMobile } from "@/components/ui/hk-design";
 import { SUPPORTED_BANKS } from "@/lib/bank-reconciliation/parsers/index";
@@ -58,6 +60,7 @@ function fmtDate(iso: string): string {
 
 export default function ReconcilePage() {
   const isMobile = useIsMobile();
+  const { t } = useLanguage();
   const [step, setStep] = useState<Step>("history");
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
@@ -124,8 +127,8 @@ export default function ReconcilePage() {
   // ── Upload handler ───────────────────────────────────────────────────────
 
   async function handleUpload() {
-    if (!bankAccountId) { showToast("Bank account select karo", false); return; }
-    if (!fileRef.current?.files?.[0]) { showToast("CSV file choose karo", false); return; }
+    if (!bankAccountId) { showToast(t("reconcile.selectAccountError" as TranslationKey), false); return; }
+    if (!fileRef.current?.files?.[0]) { showToast(t("reconcile.selectFileError" as TranslationKey), false); return; }
 
     setLoading(true);
     try {
@@ -208,8 +211,8 @@ export default function ReconcilePage() {
         </div>
       )}
       <PageHeader
-        title="Bank Reconciliation"
-        subtitle="Bank statement upload karo — payments se match karega"
+        title={t("reconcile.title" as TranslationKey)}
+        subtitle={t("reconcile.subtitle" as TranslationKey)}
         isMobile={isMobile}
       />
 
@@ -218,12 +221,12 @@ export default function ReconcilePage() {
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
             <p style={{ fontSize: TYPE.bodyLarge, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG }}>
-              Uploaded Statements
+              {t("reconcile.uploadedStatements" as TranslationKey)}
             </p>
             <HKButton
               onClick={() => setStep("upload")}
             >
-              + Naya Statement
+              {t("reconcile.newStatement" as TranslationKey)}
             </HKButton>
           </div>
 
@@ -237,10 +240,10 @@ export default function ReconcilePage() {
               textAlign: "center",
             }}>
               <p style={{ fontSize: TYPE.bodyLarge, fontWeight: 700, color: "var(--sb-sub)", fontFamily: SG }}>
-                Koi statement nahi mila
+                {t("reconcile.noStatements" as TranslationKey)}
               </p>
               <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", marginTop: 8, fontFamily: SG }}>
-                Pehla statement upload karo
+                {t("reconcile.firstStatementPrompt" as TranslationKey)}
               </p>
             </div>
           )}
@@ -297,18 +300,18 @@ export default function ReconcilePage() {
             onClick={() => setStep("history")}
             style={{ background: "none", border: "none", color: PU, fontSize: TYPE.body, fontFamily: SG, fontWeight: 600, cursor: "pointer", marginBottom: 20, padding: 0 }}
           >
-            ← Wapas
+            ← {t("tally.export.back" as TranslationKey)}
           </button>
 
           <h2 style={{ fontSize: TYPE.h2, fontWeight: 800, color: "var(--sb-text)", fontFamily: SG, marginBottom: 24 }}>
-            Statement Upload Karo
+            {t("reconcile.uploadTitle" as TranslationKey)}
           </h2>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
             {/* Bank Account */}
             <div>
               <label style={{ display: "block", fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--sb-sub)", fontFamily: SG, marginBottom: 8 }}>
-                Bank Account *
+                {t("reconcile.selectAccount" as TranslationKey)} *
               </label>
               <select
                 value={bankAccountId}
@@ -319,7 +322,7 @@ export default function ReconcilePage() {
                   outline: "none",
                 }}
               >
-                <option value="">Select karo...</option>
+                <option value="">{t("reconcile.selectPlaceholder" as TranslationKey)}</option>
                 {accounts.map((a) => (
                   <option key={a.id} value={a.id}>{a.name}{a.accountNumber ? ` (${a.accountNumber})` : ""}</option>
                 ))}
@@ -329,7 +332,7 @@ export default function ReconcilePage() {
             {/* Bank Format */}
             <div>
               <label style={{ display: "block", fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--sb-sub)", fontFamily: SG, marginBottom: 8 }}>
-                Bank Format *
+                {t("reconcile.bankFormat" as TranslationKey)} *
               </label>
               <select
                 value={bankSlug}
@@ -350,7 +353,7 @@ export default function ReconcilePage() {
             <div style={{ display: "flex", gap: 12 }}>
               <div style={{ flex: 1 }}>
                 <label style={{ display: "block", fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--sb-sub)", fontFamily: SG, marginBottom: 8 }}>
-                  Period Se *
+                  {t("reconcile.periodFrom" as TranslationKey)}
                 </label>
                 <input
                   type="date"
@@ -365,7 +368,7 @@ export default function ReconcilePage() {
               </div>
               <div style={{ flex: 1 }}>
                 <label style={{ display: "block", fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--sb-sub)", fontFamily: SG, marginBottom: 8 }}>
-                  Period Tak *
+                  {t("reconcile.periodTo" as TranslationKey)}
                 </label>
                 <input
                   type="date"
@@ -383,7 +386,7 @@ export default function ReconcilePage() {
             {/* File Upload */}
             <div>
               <label style={{ display: "block", fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--sb-sub)", fontFamily: SG, marginBottom: 8 }}>
-                CSV File *
+                {t("reconcile.csvFile" as TranslationKey)}
               </label>
               <div
                 onClick={() => fileRef.current?.click()}
@@ -394,10 +397,10 @@ export default function ReconcilePage() {
                 }}
               >
                 <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", fontFamily: SG, margin: 0 }}>
-                  📂 CSV file tap karke choose karo
+                  {t("reconcile.csvPrompt" as TranslationKey)}
                 </p>
                 <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG, marginTop: 4 }}>
-                  Only .csv files supported
+                  {t("reconcile.csvHelp" as TranslationKey)}
                 </p>
               </div>
               <input
@@ -417,7 +420,7 @@ export default function ReconcilePage() {
               onClick={handleUpload}
               isLoading={loading}
             >
-              Upload & Parse Karo
+              {t("reconcile.uploadBtn" as TranslationKey)}
             </HKButton>
           </div>
         </div>
@@ -430,19 +433,19 @@ export default function ReconcilePage() {
             onClick={() => setStep("upload")}
             style={{ background: "none", border: "none", color: PU, fontSize: TYPE.body, fontFamily: SG, fontWeight: 600, cursor: "pointer", marginBottom: 20, padding: 0 }}
           >
-            ← Wapas
+            ← {t("tally.export.back" as TranslationKey)}
           </button>
 
           <h2 style={{ fontSize: TYPE.h2, fontWeight: 800, color: "var(--sb-text)", fontFamily: SG, marginBottom: 8 }}>
-            Parse Preview
+            {t("reconcile.previewTitle" as TranslationKey)}
           </h2>
 
           {/* Summary chips */}
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
             {[
-              { l: "Total", v: uploadResult.rowCount, c: PU },
-              { l: "Auto Matched", v: uploadResult.matchedCount, c: GR },
-              { l: "Unmatched", v: uploadResult.rowCount - uploadResult.matchedCount, c: AM },
+              { l: t("tally.import.successTotal" as TranslationKey) || "Total", v: uploadResult.rowCount, c: PU },
+              { l: t("reconcile.autoMatched" as TranslationKey), v: uploadResult.matchedCount, c: GR },
+              { l: t("reconcile.unmatched" as TranslationKey), v: uploadResult.rowCount - uploadResult.matchedCount, c: AM },
             ].map((s) => (
               <div key={s.l} style={{
                 padding: "8px 16px", borderRadius: 20, background: s.c + "18",
@@ -461,7 +464,7 @@ export default function ReconcilePage() {
               padding: "12px 16px", marginBottom: 16,
             }}>
               <p style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: AM, fontFamily: SG, margin: "0 0 6px" }}>
-                ⚠️ {uploadResult.parseErrors.length} parse warning{uploadResult.parseErrors.length > 1 ? "s" : ""}
+                ⚠️ {t("reconcile.warningsCount" as TranslationKey).replace("{count}", String(uploadResult.parseErrors.length))}
               </p>
               {uploadResult.parseErrors.slice(0, 5).map((e, i) => (
                 <p key={i} style={{ fontSize: TYPE.caption, color: AM, fontFamily: SG, margin: "2px 0" }}>{e}</p>
@@ -485,7 +488,7 @@ export default function ReconcilePage() {
                       {row.description || "—"}
                     </p>
                     <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG, marginTop: 2 }}>
-                      {fmtDate(row.date)} · {row.direction === "INCOMING" ? "↓ Aaya" : "↑ Gaya"}
+                      {fmtDate(row.date)} · {row.direction === "INCOMING" ? t("reconcile.incoming" as TranslationKey) : t("reconcile.outgoing" as TranslationKey)}
                     </p>
                     {matched && (
                       <p style={{ fontSize: TYPE.caption, color: GR, fontFamily: SG, marginTop: 2 }}>
@@ -502,7 +505,7 @@ export default function ReconcilePage() {
                         onClick={() => setIgnored((prev) => new Set([...prev, row.matchedPaymentId!]))}
                         style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", background: "none", border: "none", cursor: "pointer", fontFamily: SG, marginTop: 4 }}
                       >
-                        Ignore
+                        {t("reconcile.ignore" as TranslationKey)}
                       </button>
                     )}
                     {!matched && row.matchedPaymentId && ignored.has(row.matchedPaymentId) && (
@@ -510,7 +513,7 @@ export default function ReconcilePage() {
                         onClick={() => setIgnored((prev) => { const s = new Set(prev); s.delete(row.matchedPaymentId!); return s; })}
                         style={{ fontSize: TYPE.caption, color: PU, background: "none", border: "none", cursor: "pointer", fontFamily: SG, marginTop: 4 }}
                       >
-                        Undo
+                        {t("reconcile.undo" as TranslationKey)}
                       </button>
                     )}
                   </div>
@@ -523,7 +526,7 @@ export default function ReconcilePage() {
             fullWidth
             onClick={() => setStep("review")}
           >
-            Review & Confirm Karo →
+            {t("reconcile.reviewConfirm" as TranslationKey)}
           </HKButton>
         </div>
       )}
@@ -535,21 +538,21 @@ export default function ReconcilePage() {
             onClick={() => setStep("preview")}
             style={{ background: "none", border: "none", color: PU, fontSize: TYPE.body, fontFamily: SG, fontWeight: 600, cursor: "pointer", marginBottom: 20, padding: 0 }}
           >
-            ← Wapas
+            ← {t("tally.export.back" as TranslationKey)}
           </button>
 
           <h2 style={{ fontSize: TYPE.h2, fontWeight: 800, color: "var(--sb-text)", fontFamily: SG, marginBottom: 8 }}>
-            Confirm Reconciliation
+            {t("reconcile.confirmTitle" as TranslationKey)}
           </h2>
           <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", fontFamily: SG, marginBottom: 24 }}>
-            Ek baar commit ho gaya toh statement lock ho jaayega.
+            {t("reconcile.lockWarning" as TranslationKey)}
           </p>
 
           <div style={{ border: "1.5px solid var(--sb-border)", borderRadius: 16, padding: 20, marginBottom: 24 }}>
             {[
-              { l: "Total Rows", v: uploadResult.rowCount },
-              { l: "Auto Matched", v: uploadResult.matchedCount - ignored.size, c: GR },
-              { l: "Ignored / Unmatched", v: uploadResult.rowCount - uploadResult.matchedCount + ignored.size, c: AM },
+              { l: t("tally.import.successTotal" as TranslationKey) || "Total Rows", v: uploadResult.rowCount },
+              { l: t("reconcile.autoMatched" as TranslationKey), v: uploadResult.matchedCount - ignored.size, c: GR },
+              { l: `${t("reconcile.ignore" as TranslationKey)} / ${t("reconcile.unmatched" as TranslationKey)}`, v: uploadResult.rowCount - uploadResult.matchedCount + ignored.size, c: AM },
             ].map((s) => (
               <div key={s.l} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid var(--sb-border)" }}>
                 <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", fontFamily: SG, margin: 0 }}>{s.l}</p>
@@ -564,7 +567,7 @@ export default function ReconcilePage() {
             onClick={handleCommit}
             isLoading={loading}
           >
-            Reconcile Commit Karo ✓
+            {t("reconcile.commitBtn" as TranslationKey)}
           </HKButton>
         </div>
       )}
@@ -574,15 +577,17 @@ export default function ReconcilePage() {
         <div style={{ textAlign: "center", padding: "40px 0" }}>
           <div style={{ fontSize: 64, marginBottom: 16 }}>✅</div>
           <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, color: GR, fontFamily: SG, marginBottom: 8 }}>
-            Reconciliation Ho Gayi!
+            {t("reconcile.doneTitle" as TranslationKey)}
           </h2>
           <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", fontFamily: SG, marginBottom: 24 }}>
-            {commitResult.matchedCount} rows matched · {commitResult.ambiguousCount} ambiguous
+            {t("reconcile.rowsMatchedMsg" as TranslationKey)
+              .replace("{matchedCount}", String(commitResult.matchedCount))
+              .replace("{ambiguousCount}", String(commitResult.ambiguousCount))}
           </p>
           <HKButton
             onClick={() => { setStep("history"); setUploadResult(null); setCommitResult(null); }}
           >
-            History Dekho
+            {t("reconcile.viewHistory" as TranslationKey)}
           </HKButton>
         </div>
       )}

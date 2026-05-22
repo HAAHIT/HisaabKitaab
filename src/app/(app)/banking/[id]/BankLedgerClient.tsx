@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { HKModal } from "@/components/ui/hk-design";
 import { HKButton } from "@/components/ui/HKButton";
+import { useLanguage } from "@/contexts/LanguageContext";
 import {
   C, OR, PU, GR, AM, SG, IN, TYPE, TOUCH, DISPLAY,
   fmtFull, useIsMobile, HKCard, HKToast,
@@ -79,6 +80,7 @@ export default function BankLedgerClient({
   ledger: LedgerEntry[];
   role: string | null;
 }) {
+  const { t } = useLanguage();
   const router = useRouter();
   const isMobile = useIsMobile();
   const [paymentToDelete, setPaymentToDelete] = useState<LedgerEntry | null>(null);
@@ -132,13 +134,13 @@ export default function BankLedgerClient({
         router.refresh();
         onClose();
         setPaymentToDelete(null);
-        showToast("Transaction delete ho gaya", "success");
+        showToast(t("banking.ledger.success.deleted"), "success");
       } else {
         const data = await res.json();
         throw new Error(data.error || "Delete failed");
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Delete nahi hua", "error");
+      showToast(err instanceof Error ? err.message : t("banking.ledger.error.deleted"), "error");
     } finally {
       setIsDeleting(false);
     }
@@ -179,7 +181,7 @@ export default function BankLedgerClient({
                 color: accountColor, background: accountColor === AM ? C.warningSoft : accountColor === GR ? C.positiveSoft : C.primarySoft,
                 padding: "4px 10px", borderRadius: 7, fontFamily: SG,
               }}>
-                {account.type === "BANK" ? "Bank" : "Cash"}
+                {account.type === "BANK" ? t("banking.bank") : t("banking.cash")}
               </span>
             </div>
             {account.accountNumber && (
@@ -193,9 +195,9 @@ export default function BankLedgerClient({
         {/* Balance cards */}
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
           {((): { label: string; value: number; color: string; bg: string; isCount?: boolean }[] => [
-            { label: "Opening Balance", value: account.openingBalance, color: AM, bg: C.warningSoft },
-            { label: "Current Balance", value: account.currentBalance, color: account.currentBalance >= 0 ? GR : C.negative, bg: account.currentBalance >= 0 ? C.positiveSoft : C.negativeSoft },
-            ...(!isMobile ? [{ label: "Transactions", value: ledger.length, color: PU, bg: C.infoSoft, isCount: true }] : []),
+            { label: t("banking.ledger.openingBalance"), value: account.openingBalance, color: AM, bg: C.warningSoft },
+            { label: t("banking.ledger.currentBalance"), value: account.currentBalance, color: account.currentBalance >= 0 ? GR : C.negative, bg: account.currentBalance >= 0 ? C.positiveSoft : C.negativeSoft },
+            ...(!isMobile ? [{ label: t("banking.ledger.transactions"), value: ledger.length, color: PU, bg: C.infoSoft, isCount: true }] : []),
           ])().map((item) => (
             <div
               key={item.label}
@@ -228,8 +230,15 @@ export default function BankLedgerClient({
               borderBottom: "1px solid var(--sb-border)",
               background: "var(--sb-badge)",
             }}>
-              {["Date", "Particulars", "In (+)", "Out (−)", "Balance", ""].map((h) => (
-                <p key={h} style={{ fontSize: TYPE.caption, fontWeight: 700, color: "var(--sb-sub)", textAlign: h === "In (+)" || h === "Out (−)" || h === "Balance" ? "right" : "left", fontFamily: SG, textTransform: "uppercase", letterSpacing: "0.5px" }}>{h}</p>
+              {[
+                t("banking.ledger.header.date"),
+                t("banking.ledger.header.particulars"),
+                t("banking.ledger.header.in"),
+                t("banking.ledger.header.out"),
+                t("banking.ledger.header.balance"),
+                "",
+              ].map((h) => (
+                <p key={h} style={{ fontSize: TYPE.caption, fontWeight: 700, color: "var(--sb-sub)", textAlign: h === t("banking.ledger.header.in") || h === t("banking.ledger.header.out") || h === t("banking.ledger.header.balance") ? "right" : "left", fontFamily: SG, textTransform: "uppercase", letterSpacing: "0.5px" }}>{h}</p>
               ))}
             </div>
           )}
@@ -244,7 +253,7 @@ export default function BankLedgerClient({
               background: AM + "08",
             }}>
               <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: IN }}>—</p>
-              <p style={{ fontSize: TYPE.bodySmall, fontStyle: "italic", color: "var(--sb-sub)", fontFamily: SG }}>Opening Balance</p>
+              <p style={{ fontSize: TYPE.bodySmall, fontStyle: "italic", color: "var(--sb-sub)", fontFamily: SG }}>{t("banking.ledger.openingBalance")}</p>
               <p style={{ fontSize: TYPE.bodySmall, fontWeight: 600, color: GR, textAlign: "right", fontFamily: IN }}>
                 {account.openingBalance > 0 ? fmtFull(account.openingBalance) : "—"}
               </p>
@@ -262,7 +271,7 @@ export default function BankLedgerClient({
             <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--sb-sub)" }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>📒</div>
               <p style={{ fontSize: TYPE.body, fontWeight: 600, color: "var(--sb-sub)", fontFamily: SG }}>
-                Koi transaction nahi
+                {t("banking.ledger.noTransactions")}
               </p>
             </div>
           )}
@@ -298,10 +307,10 @@ export default function BankLedgerClient({
                       <span style={{
                         fontSize: TYPE.chip, fontWeight: 700, color: PU,
                         background: PU + "18", padding: "3px 8px", borderRadius: 6, fontFamily: SG,
-                      }}>Current</span>
+                      }}>{t("banking.ledger.current")}</span>
                     )}
                     <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}>
-                      {entries.length} txn{entries.length !== 1 ? "s" : ""}
+                      {entries.length} {entries.length === 1 ? t("banking.ledger.txn") : t("banking.ledger.txns")}
                     </span>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 10 : 20 }}>
@@ -434,12 +443,12 @@ export default function BankLedgerClient({
       <HKModal
         isOpen={isOpen}
         onClose={onClose}
-        title="Transaction Delete Karo?"
+        title={t("banking.ledger.deleteModal.title")}
         footer={
           <>
-            <HKButton variant="secondary" isDisabled={isDeleting} onClick={onClose}>Cancel</HKButton>
+            <HKButton variant="secondary" isDisabled={isDeleting} onClick={onClose}>{t("common.cancel")}</HKButton>
             <HKButton variant="danger" isLoading={isDeleting} onClick={handleDeletePayment}>
-              Delete Karo
+              {t("banking.ledger.deleteModal.confirm")}
             </HKButton>
           </>
         }
@@ -450,7 +459,7 @@ export default function BankLedgerClient({
               <span style={{ fontWeight: 700, color: OR }}>
                 {paymentToDelete.direction === "INCOMING" ? "+" : "−"}{fmtFull(paymentToDelete.amount)}
               </span>
-              {" "}— {paymentToDelete.partyName} ka transaction permanently delete ho jayega. Balance reverse ho jayega.
+              {" "}— {paymentToDelete.partyName} {t("banking.ledger.deleteModal.body")}
             </>
           )}
         </p>

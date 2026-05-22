@@ -6,6 +6,7 @@ import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { HKInput } from "@/components/ui/HKInput";
 import { HKButton } from "@/components/ui/HKButton";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { type TranslationKey } from "@/lib/i18n/translations";
 import {
   getCurrentFinancialYearRange,
   getCurrentQuarterRange,
@@ -397,18 +398,18 @@ export default function ReportsClient({
         <div className="p-6 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
-              <h2 className="text-lg font-semibold">GST Sales Summary</h2>
+              <h2 className="text-lg font-semibold">{t("reports.gst.title" as TranslationKey)}</h2>
               <p className="text-sm text-default-500 mt-0.5">
-                FINAL bills only · GSTR-1 reference data
+                {t("reports.gst.subtitle" as TranslationKey)}
               </p>
             </div>
             {gstReport && (
               <div className="flex flex-wrap gap-4 text-sm">
                 <span className="text-default-500">
-                  <span className="font-bold text-foreground">{gstReport.totalBills}</span> invoices
+                  <span className="font-bold text-foreground">{gstReport.totalBills}</span> {t("reports.gst.invoices" as TranslationKey)}
                 </span>
                 <span className="text-default-500">
-                  Taxable: <span className="font-bold text-foreground">{inr(gstReport.totals.taxableValue)}</span>
+                  {t("reports.gst.taxable" as TranslationKey)}: <span className="font-bold text-foreground">{inr(gstReport.totals.taxableValue)}</span>
                 </span>
                 <span className="text-default-500">
                   CGST: <span className="font-semibold">{inr(gstReport.totals.cgst)}</span>
@@ -422,7 +423,7 @@ export default function ReportsClient({
                   </span>
                 )}
                 <span className="text-default-500">
-                  Grand Total: <span className="font-bold text-foreground">{inr(gstReport.totals.grandTotal)}</span>
+                  {t("reports.gst.grandTotal" as TranslationKey)}: <span className="font-bold text-foreground">{inr(gstReport.totals.grandTotal)}</span>
                 </span>
               </div>
             )}
@@ -440,7 +441,11 @@ export default function ReportsClient({
                     : "text-default-500 hover:text-foreground"
                 }`}
               >
-                {tab === "month" ? "Month-wise" : tab === "hsn" ? "HSN Summary" : "B2B Parties"}
+                {tab === "month"
+                  ? t("reports.gst.tab.month" as TranslationKey)
+                  : tab === "hsn"
+                  ? t("reports.gst.tab.hsn" as TranslationKey)
+                  : t("reports.gst.tab.b2b" as TranslationKey)}
               </button>
             ))}
           </div>
@@ -453,7 +458,7 @@ export default function ReportsClient({
             <p className="text-sm text-danger">{gstError}</p>
           ) : !gstReport || gstReport.totalBills === 0 ? (
             <p className="text-sm text-default-500 py-4 text-center">
-              No final bills found in this period
+              {t("reports.gst.noBills" as TranslationKey)}
             </p>
           ) : (
             <div className="overflow-x-auto">
@@ -461,14 +466,14 @@ export default function ReportsClient({
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-divider text-xs text-default-500 uppercase tracking-wide">
-                      <th className="py-2 pr-4 text-left font-semibold">Month</th>
-                      <th className="py-2 pr-4 text-right font-semibold">B2B</th>
-                      <th className="py-2 pr-4 text-right font-semibold">B2C</th>
-                      <th className="py-2 pr-4 text-right font-semibold">Taxable Value</th>
+                      <th className="py-2 pr-4 text-left font-semibold">{t("reports.gst.header.month" as TranslationKey)}</th>
+                      <th className="py-2 pr-4 text-right font-semibold">{t("reports.gst.header.b2b" as TranslationKey)}</th>
+                      <th className="py-2 pr-4 text-right font-semibold">{t("reports.gst.header.b2c" as TranslationKey)}</th>
+                      <th className="py-2 pr-4 text-right font-semibold">{t("reports.gst.header.taxableValue" as TranslationKey)}</th>
                       <th className="py-2 pr-4 text-right font-semibold">CGST</th>
                       <th className="py-2 pr-4 text-right font-semibold">SGST</th>
                       <th className="py-2 pr-4 text-right font-semibold">IGST</th>
-                      <th className="py-2 text-right font-semibold">Grand Total</th>
+                      <th className="py-2 text-right font-semibold">{t("reports.gst.grandTotal" as TranslationKey)}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -485,7 +490,7 @@ export default function ReportsClient({
                       </tr>
                     ))}
                     <tr className="border-t-2 border-divider bg-default-50 font-bold">
-                      <td className="py-2.5 pr-4">Total</td>
+                      <td className="py-2.5 pr-4">{t("reports.gst.header.total" as TranslationKey)}</td>
                       <td className="py-2.5 pr-4 text-right">{gstReport.monthWise.reduce((s, r) => s + r.b2bCount, 0)}</td>
                       <td className="py-2.5 pr-4 text-right">{gstReport.monthWise.reduce((s, r) => s + r.b2cCount, 0)}</td>
                       <td className="py-2.5 pr-4 text-right">{inr(gstReport.totals.taxableValue)}</td>
@@ -502,13 +507,13 @@ export default function ReportsClient({
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-divider text-xs text-default-500 uppercase tracking-wide">
-                      <th className="py-2 pr-4 text-left font-semibold">HSN/SAC Code</th>
-                      <th className="py-2 pr-4 text-right font-semibold">Invoices</th>
-                      <th className="py-2 pr-4 text-right font-semibold">Taxable Value</th>
+                      <th className="py-2 pr-4 text-left font-semibold">{t("reports.gst.header.hsn" as TranslationKey)}</th>
+                      <th className="py-2 pr-4 text-right font-semibold">{t("reports.gst.header.invoices" as TranslationKey)}</th>
+                      <th className="py-2 pr-4 text-right font-semibold">{t("reports.gst.header.taxableValue" as TranslationKey)}</th>
                       <th className="py-2 pr-4 text-right font-semibold">CGST</th>
                       <th className="py-2 pr-4 text-right font-semibold">SGST</th>
                       <th className="py-2 pr-4 text-right font-semibold">IGST</th>
-                      <th className="py-2 text-right font-semibold">Grand Total</th>
+                      <th className="py-2 text-right font-semibold">{t("reports.gst.grandTotal" as TranslationKey)}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -530,20 +535,20 @@ export default function ReportsClient({
               {gstTab === "b2b" && (
                 gstReport.b2bParties.length === 0 ? (
                   <p className="text-sm text-default-500 py-4 text-center">
-                    No B2B parties (GSTIN-registered buyers) found in this period
+                    {t("reports.gst.noB2b" as TranslationKey)}
                   </p>
                 ) : (
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-divider text-xs text-default-500 uppercase tracking-wide">
-                        <th className="py-2 pr-4 text-left font-semibold">Party</th>
-                        <th className="py-2 pr-4 text-left font-semibold">GSTIN</th>
-                        <th className="py-2 pr-4 text-right font-semibold">Invoices</th>
-                        <th className="py-2 pr-4 text-right font-semibold">Taxable Value</th>
+                        <th className="py-2 pr-4 text-left font-semibold">{t("reports.gst.header.party" as TranslationKey)}</th>
+                        <th className="py-2 pr-4 text-left font-semibold">{t("reports.gst.header.gstin" as TranslationKey)}</th>
+                        <th className="py-2 pr-4 text-right font-semibold">{t("reports.gst.header.invoices" as TranslationKey)}</th>
+                        <th className="py-2 pr-4 text-right font-semibold">{t("reports.gst.header.taxableValue" as TranslationKey)}</th>
                         <th className="py-2 pr-4 text-right font-semibold">CGST</th>
                         <th className="py-2 pr-4 text-right font-semibold">SGST</th>
                         <th className="py-2 pr-4 text-right font-semibold">IGST</th>
-                        <th className="py-2 text-right font-semibold">Grand Total</th>
+                        <th className="py-2 text-right font-semibold">{t("reports.gst.grandTotal" as TranslationKey)}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -642,7 +647,7 @@ export default function ReportsClient({
               className="w-full sm:w-auto"
               onClick={() => window.location.href = "/settings/tally-export"}
             >
-              Send to CA →
+              {t("reports.button.sendToCA" as TranslationKey)}
             </HKButton>
           </div>
         </div>
@@ -663,7 +668,7 @@ export default function ReportsClient({
               className="w-full sm:w-auto"
               onClick={() => window.location.href = "/settings/tally-import"}
             >
-              Start Import →
+              {t("reports.button.startImport" as TranslationKey)}
             </HKButton>
           </div>
         </div>
