@@ -7,29 +7,31 @@ datasource db {
 }
 
 model Tenant {
-  id             String              @id @default(cuid())
-  name           String
-  slug           String              @unique
-  phone          String?
-  email          String?
-  address        String?
-  gstin          String?
-  logoUrl        String?
-  plan           TenantPlan          @default(FREE)
-  settings       Json                @default("{}")
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
-  auditLogs      AuditLog[]
-  bills          Bill[]
-  templates      BillTemplate[]
-  items          ItemCatalog[]
-  journalEntries JournalEntry[]
-  measurements   MeasurementUpload[]
-  parties        Party[]
-  payments       Payment[]
-  users          User[]
-  importJobs     ImportJob[]
-  bankAccounts   BankAccount[]
+  id                   String              @id @default(cuid())
+  name                 String
+  slug                 String              @unique
+  phone                String?
+  email                String?
+  address              String?
+  gstin                String?
+  logoUrl              String?
+  plan                 TenantPlan          @default(FREE)
+  settings             Json                @default("{}")
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  isOnboardingComplete Boolean?            @default(false)
+  auditLogs            AuditLog[]
+  BankAccount          BankAccount[]
+  bills                Bill[]
+  templates            BillTemplate[]
+  importJobs           ImportJob[]
+  items                ItemCatalog[]
+  journalEntries       JournalEntry[]
+  measurements         MeasurementUpload[]
+  parties              Party[]
+  payments             Payment[]
+  users                User[]
+  bankStatements       BankStatement[]
 }
 
 model User {
@@ -82,24 +84,23 @@ model AuthThrottle {
   @@index([userId])
 }
 
-/**
- * AuditLog — MCA-mandated Edit Log (GSR 247(E), effective April 1 2023)
- * Append-only: rows are NEVER updated or deleted.
- * Captures every CREATE / UPDATE / DELETE on accounting-relevant entities.
- * Indexed for tenant-scoped audit queries and date-range exports.
- */
+/// *
+///  * AuditLog — MCA-mandated Edit Log (GSR 247(E), effective April 1 2023)
+///  * Append-only: rows are NEVER updated or deleted.
+///  * Captures every CREATE / UPDATE / DELETE on accounting-relevant entities.
+///  * Indexed for tenant-scoped audit queries and date-range exports.
 model AuditLog {
   id         String    @id @default(cuid())
   tenantId   String
-  entityType String // "Bill" | "Payment" | "Party" | "JournalEntry"
-  entityId   String // PK of the changed record
-  userId     String? // actor who triggered the change — null for system/cron actors
-  actorType  ActorType @default(USER) // distinguishes human vs automated actions
-  action     String // "CREATE" | "UPDATE" | "DELETE"
-  fieldName  String? // null for whole-record events (CREATE / DELETE)
-  oldValue   String? // JSON-serialised previous value
-  newValue   String? // JSON-serialised next value
+  entityType String
+  entityId   String
+  userId     String?
+  action     String
+  fieldName  String?
+  oldValue   String?
+  newValue   String?
   createdAt  DateTime  @default(now())
+  actorType  ActorType @default(USER)
   tenant     Tenant    @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, entityType, entityId])
@@ -127,12 +128,12 @@ model ItemCatalog {
   name      String
   hsnCode   String?
   unit      String   @default("pcs")
-  rate      Decimal  @default(0) @db.Decimal(19, 4) // [B3] Float → Decimal
-  taxRate   Decimal? @db.Decimal(5, 2) // [B3] Float → Decimal
-  cessRate  Decimal? @db.Decimal(5, 2) // GST Cess % (tobacco, aerated drinks, luxury goods)
+  rate      Decimal  @default(0) @db.Decimal(19, 4)
+  taxRate   Decimal? @db.Decimal(5, 2)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  cessRate  Decimal? @db.Decimal(5, 2)
   tenant    Tenant   @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
@@ -150,24 +151,24 @@ model Bill {
   rows            Json
   notes           String?
   terms           String?
-  subtotal        Decimal        @db.Decimal(19, 4) // [B3] Float → Decimal
-  taxPercent      Decimal        @default(0) @db.Decimal(5, 2) // [B3] Float → Decimal
-  taxAmount       Decimal        @default(0) @db.Decimal(19, 4) // [B3] Float → Decimal
-  cessAmount      Decimal        @default(0) @db.Decimal(19, 4) // GST Cess amount charged on this bill
-  grandTotal      Decimal        @db.Decimal(19, 4) // [B3] Float → Decimal
-  roundOff        Decimal        @default(0) @db.Decimal(19, 4) // Round-off adjustment (±₹0.99 max)
-  placeOfSupply   String? // [B1] GSTR-1 mandatory field
-  hsnCode         String? // [ADDED] Fallback HSN wrapper for older bills
-  shippingAddress String? // Ship To address (when different from billing address)
+  subtotal        Decimal        @db.Decimal(19, 4)
+  taxPercent      Decimal        @default(0) @db.Decimal(5, 2)
+  taxAmount       Decimal        @default(0) @db.Decimal(19, 4)
+  grandTotal      Decimal        @db.Decimal(19, 4)
   status          BillStatus     @default(DRAFT)
   createdBy       String
   createdAt       DateTime       @default(now())
-  date            DateTime       @default(now()) // Custom issue date/voucher date
   updatedAt       DateTime       @updatedAt
   isDeleted       Boolean        @default(false)
   partyId         String?
   tenantId        String
   isInterState    Boolean        @default(false)
+  placeOfSupply   String?
+  cessAmount      Decimal        @default(0) @db.Decimal(19, 4)
+  hsnCode         String?
+  date            DateTime       @default(now())
+  roundOff        Decimal        @default(0) @db.Decimal(19, 4)
+  shippingAddress String?
   creator         User           @relation(fields: [createdBy], references: [id])
   party           Party?         @relation(fields: [partyId], references: [id])
   template        BillTemplate   @relation(fields: [templateId], references: [id])
@@ -189,8 +190,8 @@ model Party {
   email          String?
   address        String?
   gstin          String?
-  openingBalance Decimal             @default(0) @db.Decimal(19, 4) // [B3] Float → Decimal
-  currentBalance Decimal             @default(0) @db.Decimal(19, 4) // [B3] Float → Decimal
+  openingBalance Decimal             @default(0) @db.Decimal(19, 4)
+  currentBalance Decimal             @default(0) @db.Decimal(19, 4)
   isActive       Boolean             @default(true)
   isDeleted      Boolean             @default(false)
   createdBy      String?
@@ -202,65 +203,43 @@ model Party {
   tenant         Tenant              @relation(fields: [tenantId], references: [id])
   payments       Payment[]
 
-  @@unique([tenantId, name]) // [B2] prevents TOCTOU duplicate party on Tally import
+  @@unique([tenantId, name])
   @@index([tenantId])
   @@index([tenantId, type])
 }
 
 model Payment {
-  id                   String        @id @default(cuid())
-  partyId              String?
-  accountId            String?
-  destinationAccountId String?
-  direction            PayDirection
-  amount               Decimal       @db.Decimal(19, 4) // [B3] Float → Decimal
-  date                 DateTime
-  mode                 PaymentMode
-  status               PaymentStatus @default(COMPLETED)
-  referenceNo          String?
-  linkedBillId         String?
-  notes                String?
-  receiptUrl           String?
-  createdBy            String
-  createdAt            DateTime      @default(now())
-  isDeleted            Boolean       @default(false)
-  updatedAt            DateTime      @updatedAt
-  tenantId             String
-  creator              User          @relation(fields: [createdBy], references: [id])
-  linkedBill           Bill?         @relation(fields: [linkedBillId], references: [id])
-  party                Party?        @relation(fields: [partyId], references: [id])
-  account              BankAccount?  @relation("SourceAccount", fields: [accountId], references: [id])
-  destinationAccount   BankAccount?  @relation("DestinationAccount", fields: [destinationAccountId], references: [id])
-  tenant               Tenant        @relation(fields: [tenantId], references: [id])
+  id                                                    String        @id @default(cuid())
+  partyId                                               String?
+  direction                                             PayDirection
+  amount                                                Decimal       @db.Decimal(19, 4)
+  date                                                  DateTime
+  mode                                                  PaymentMode
+  status                                                PaymentStatus @default(COMPLETED)
+  referenceNo                                           String?
+  linkedBillId                                          String?
+  notes                                                 String?
+  receiptUrl                                            String?
+  createdBy                                             String
+  createdAt                                             DateTime      @default(now())
+  isDeleted                                             Boolean       @default(false)
+  updatedAt                                             DateTime      @updatedAt
+  tenantId                                              String
+  accountId                                             String?
+  destinationAccountId                                  String?
+  BankAccount_Payment_accountIdToBankAccount            BankAccount?  @relation("Payment_accountIdToBankAccount", fields: [accountId], references: [id])
+  creator                                               User          @relation(fields: [createdBy], references: [id])
+  BankAccount_Payment_destinationAccountIdToBankAccount BankAccount?  @relation("Payment_destinationAccountIdToBankAccount", fields: [destinationAccountId], references: [id])
+  linkedBill                                            Bill?         @relation(fields: [linkedBillId], references: [id])
+  party                                                 Party?        @relation(fields: [partyId], references: [id])
+  tenant                                                Tenant        @relation(fields: [tenantId], references: [id])
+  bankStatementRows                                     BankStatementRow[]
 
   @@index([tenantId])
   @@index([tenantId, partyId])
+  @@index([tenantId, direction])
   @@index([tenantId, accountId])
   @@index([tenantId, destinationAccountId])
-  @@index([tenantId, direction])
-}
-
-model BankAccount {
-  id             String      @id @default(cuid())
-  tenantId       String
-  name           String
-  type           AccountType
-  accountNumber  String?
-  openingBalance Decimal     @default(0) @db.Decimal(19, 4)
-  currentBalance Decimal     @default(0) @db.Decimal(19, 4)
-  isActive       Boolean     @default(true)
-  isDeleted      Boolean     @default(false)
-  createdBy      String?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-  
-  tenant              Tenant    @relation(fields: [tenantId], references: [id])
-  sourcePayments      Payment[] @relation("SourceAccount")
-  destinationPayments Payment[] @relation("DestinationAccount")
-
-  @@unique([tenantId, name])
-  @@index([tenantId])
-  @@index([tenantId, type])
 }
 
 model JournalEntry {
@@ -272,36 +251,35 @@ model JournalEntry {
   billId          String?
   purchaseId      String?
   paymentId       String?
-  // [CRITICAL-1] Tracks whether this entry was modified in the cloud post-import
-  syncState       SyncState     @default(SYNCED)
   isBalanced      Boolean       @default(false)
-  totalDebit      Decimal       @default(0) @db.Decimal(19, 4) // [B4] Float → Decimal for precision
-  totalCredit     Decimal       @default(0) @db.Decimal(19, 4) // [B4] Float → Decimal for precision
-  /**
-   * remoteId — Tally <REMOTEID> / <GUID> value (stripped of "HisaabKitaab-" prefix).
-   * Used as the primary idempotency key for Tally XML re-imports.
-   * Null for entries created natively in HisaabKitaab (not via Tally import).
-   */
-  remoteId        String? // [B5] Tally import idempotency
-  /**
-   * isReverseCharge — true when this entry is an RCM purchase under
-   * IGST Act Section 9(3) / 9(4). Emitted as <ISREVERSECHARGE>Yes</ISREVERSECHARGE>
-   * in Tally XML so GSTR-3B ITC columns are correctly populated.
-   */
-  isReverseCharge Boolean       @default(false) // [P1] RCM flag for GSTR-3B
+  totalDebit      Decimal       @default(0) @db.Decimal(19, 4)
+  totalCredit     Decimal       @default(0) @db.Decimal(19, 4)
   createdBy       String
   createdAt       DateTime      @default(now())
-  tenant          Tenant        @relation(fields: [tenantId], references: [id])
+  /// *
+  ///    * remoteId — Tally <REMOTEID> / <GUID> value (stripped of "SoloBooks-" prefix).
+  ///    * Used as the primary idempotency key for Tally XML re-imports.
+  ///    * Null for entries created natively in SoloBooks (not via Tally import).
+  remoteId        String?
+  /// *
+  ///    * isReverseCharge — true when this entry is an RCM purchase under
+  ///    * IGST Act Section 9(3) / 9(4). Emitted as <ISREVERSECHARGE>Yes</ISREVERSECHARGE>
+  ///    * in Tally XML so GSTR-3B ITC columns are correctly populated.
+  isReverseCharge Boolean       @default(false)
+  syncState       SyncState     @default(SYNCED)
+  isDeleted       Boolean       @default(false)
   bill            Bill?         @relation(fields: [billId], references: [id])
+  tenant          Tenant        @relation(fields: [tenantId], references: [id])
   lines           JournalLine[]
 
-  @@unique([tenantId, remoteId]) // [B5] partial unique — DB enforces no duplicate Tally imports per tenant
+  @@unique([tenantId, remoteId])
   @@index([tenantId])
   @@index([tenantId, entryDate])
   @@index([tenantId, voucherType])
   @@index([billId])
   @@index([purchaseId])
   @@index([paymentId])
+  @@index([tenantId, isDeleted])
 }
 
 model JournalLine {
@@ -312,8 +290,8 @@ model JournalLine {
   tallyGroup  String
   partyId     String?
   partyName   String?
-  debit       Decimal      @default(0) @db.Decimal(19, 4) // [B4] Float → Decimal for precision
-  credit      Decimal      @default(0) @db.Decimal(19, 4) // [B4] Float → Decimal for precision
+  debit       Decimal      @default(0) @db.Decimal(19, 4)
+  credit      Decimal      @default(0) @db.Decimal(19, 4)
   journal     JournalEntry @relation(fields: [journalId], references: [id], onDelete: Cascade)
 
   @@index([journalId])
@@ -368,6 +346,60 @@ model MeasurementUpload {
   tenant       Tenant             @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
+}
+
+model ImportJob {
+  id             String    @id @default(cuid())
+  tenantId       String
+  status         JobStatus @default(PENDING)
+  totalItems     Int       @default(0)
+  processed      Int       @default(0)
+  failed         Int       @default(0)
+  skipped        Int       @default(0)
+  xmlData        String
+  error          String?
+  /// Array of { voucherType, narration, entryDate, reason } objects for per-voucher
+  /// failure inspection. Populated by process-import worker.
+  failures       Json?
+  /// Array of { voucherType, narration, entryDate, imbalance } objects captured
+  /// every time the import absorbed a Tally rounding imbalance into ROUND_OFF.
+  /// Lets CAs audit exactly what was patched, since the journal stores only the
+  /// balanced result. Capped at 100 entries to bound row size.
+  roundOffAdjustments Json?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  createdBy      String?
+  stage          String    @default("queued")
+  partiesCreated Int       @default(0)
+  tenant         Tenant    @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model BankAccount {
+  id                                                String      @id @default(cuid())
+  tenantId                                          String
+  name                                              String
+  type                                              AccountType
+  accountNumber                                     String?
+  ifscCode                                          String?
+  openingBalance                                    Decimal     @default(0) @db.Decimal(19, 4)
+  currentBalance                                    Decimal     @default(0) @db.Decimal(19, 4)
+  isActive                                          Boolean     @default(true)
+  isDefault                                         Boolean     @default(false)
+  isDeleted                                         Boolean     @default(false)
+  createdBy                                         String?
+  createdAt                                         DateTime    @default(now())
+  updatedAt                                         DateTime
+  Tenant                                            Tenant      @relation(fields: [tenantId], references: [id])
+  Payment_Payment_accountIdToBankAccount            Payment[]   @relation("Payment_accountIdToBankAccount")
+  Payment_Payment_destinationAccountIdToBankAccount Payment[]   @relation("Payment_destinationAccountIdToBankAccount")
+  bankStatements                                    BankStatement[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([tenantId, type])
 }
 
 enum TenantPlan {
@@ -432,9 +464,9 @@ enum VoucherType {
   RECEIPT
   PAYMENT
   JOURNAL
-  CREDIT_NOTE // GST Credit Note — reversal of a FINAL sales bill (GSTR-1 Table 9B)
-  DEBIT_NOTE // GST Debit Note — Purchase Return under IGST Act (GSTR-3B Table 4)
-  CONTRA // Bank-to-cash transfers (native Tally type) [X4]
+  CREDIT_NOTE
+  DEBIT_NOTE
+  CONTRA
 }
 
 enum MediaAssetKind {
@@ -443,8 +475,8 @@ enum MediaAssetKind {
 }
 
 enum ActorType {
-  USER // Human user via UI or API
-  SYSTEM // Automated: cron jobs, Tally imports, background tasks
+  USER
+  SYSTEM
 }
 
 enum MeasurementStatus {
@@ -453,25 +485,6 @@ enum MeasurementStatus {
   REVIEWED
   IN_PRODUCTION
   COMPLETED
-}
-
-model ImportJob {
-  id         String    @id @default(cuid())
-  tenantId   String
-  createdBy  String?   // User ID of the admin who initiated the import (used for Bill FK)
-  status     JobStatus @default(PENDING) // PENDING, PROCESSING, COMPLETED, FAILED
-  stage          String    @default("queued") // queued, parsing, parties, importing, balances, done
-  totalItems     Int       @default(0)
-  processed      Int       @default(0)
-  failed         Int       @default(0)
-  partiesCreated Int       @default(0)
-  xmlData    String    @db.Text
-  error      String?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  tenant     Tenant    @relation(fields: [tenantId], references: [id])
-
-  @@index([tenantId])
 }
 
 enum JobStatus {
@@ -484,4 +497,53 @@ enum JobStatus {
 enum AccountType {
   BANK
   CASH
+}
+
+// ── §5.10 Bank Reconciliation ─────────────────────────────────────────────────
+
+enum BankRowStatus {
+  PENDING
+  AUTO_MATCHED
+  MANUALLY_CATEGORIZED
+  IGNORED
+  AMBIGUOUS
+}
+
+model BankStatement {
+  id             String             @id @default(cuid())
+  tenantId       String
+  bankAccountId  String
+  periodFrom     DateTime
+  periodTo       DateTime
+  uploadedAt     DateTime           @default(now())
+  rowCount       Int
+  matchedCount   Int                @default(0)
+  unmatchedCount Int                @default(0)
+  isReconciled   Boolean            @default(false)
+  tenant         Tenant             @relation(fields: [tenantId], references: [id])
+  bankAccount    BankAccount        @relation(fields: [bankAccountId], references: [id])
+  rows           BankStatementRow[]
+
+  @@index([tenantId])
+  @@index([tenantId, bankAccountId])
+}
+
+model BankStatementRow {
+  id               String         @id @default(cuid())
+  tenantId         String
+  statementId      String
+  date             DateTime
+  description      String
+  amount           Decimal        @db.Decimal(19, 4)
+  direction        PayDirection
+  rawLine          String
+  matchedPaymentId String?
+  status           BankRowStatus  @default(PENDING)
+  category         String?
+  statement        BankStatement  @relation(fields: [statementId], references: [id])
+  matchedPayment   Payment?       @relation(fields: [matchedPaymentId], references: [id])
+
+  @@index([tenantId])
+  @@index([statementId])
+  @@unique([statementId, date, amount, description])
 }

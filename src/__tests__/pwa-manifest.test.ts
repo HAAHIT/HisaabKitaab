@@ -10,11 +10,11 @@ import manifest from "../../public/manifest.json";
 describe("PWA Web App Manifest", () => {
   describe("required identity fields", () => {
     it("has the correct application name", () => {
-      expect(manifest.name).toBe("HisaabKitaab — Digital Khata");
+      expect(manifest.name).toBe("SoloBooks — Digital Khata");
     });
 
     it("has a short_name for home screen display", () => {
-      expect(manifest.short_name).toBe("HisaabKitaab");
+      expect(manifest.short_name).toBe("SoloBooks");
     });
 
     it("has a description", () => {

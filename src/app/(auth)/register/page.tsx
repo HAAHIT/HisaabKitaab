@@ -17,8 +17,7 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
-    // Basic language extraction from cookies on client-side
-    const match = document.cookie.match(/(?:^|;)\s*hisaabkitaab-lang=([^;]*)/);
+    const match = document.cookie.match(/(?:^|;)\s*solobooks-lang=([^;]*)/);
     setLanguage(normalizeLanguage(match ? match[1] : undefined));
   }, []);
 
@@ -37,12 +36,12 @@ export default function RegisterPage() {
     const companyName = formData.get("companyName") as string;
 
     if (!name || !credential || !password || !companyName) {
-      setErrorMessage(t("login.emailPasswordRequired")); // "Email or phone and password are required"
+      setErrorMessage(t("login.emailPasswordRequired"));
       return;
     }
 
     if (password.length < 12) {
-      setErrorMessage(t("users.passwordMin")); 
+      setErrorMessage(t("users.passwordMin"));
       return;
     }
 
@@ -69,7 +68,8 @@ export default function RegisterPage() {
           throw new Error(data.error || t("register.error"));
         }
 
-        router.push("/login?registered=1");
+        router.push("/");
+        router.refresh();
       } catch (err) {
         setErrorMessage(
           err instanceof Error ? err.message : t("login.serverError")
@@ -78,172 +78,482 @@ export default function RegisterPage() {
     });
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 px-4 py-10 text-foreground dark:from-zinc-950 dark:via-zinc-900 dark:to-blue-950">
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 h-80 w-80 rounded-full bg-blue-400/20 blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-indigo-400/20 blur-3xl" />
-      </div>
+  const inputGroupStyle: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    padding: "0 14px",
+    height: 48,
+    borderRadius: 10,
+    border: "1.5px solid var(--sb-border)",
+    background: "var(--sb-input)",
+    transition: "border-color 0.15s, box-shadow 0.15s",
+  };
 
-      <div className="relative mx-auto w-full max-w-md rounded-3xl border border-white/60 bg-white/95 shadow-2xl shadow-blue-950/10 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95">
-        <div className="flex flex-col items-center gap-3 px-6 pb-4 pt-8 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 shadow-lg shadow-blue-500/25">
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    background: "transparent",
+    border: "none",
+    outline: "none",
+    fontSize: 15,
+    fontWeight: 500,
+    color: "var(--sb-text)",
+  };
+
+  const labelTextStyle: React.CSSProperties = {
+    display: "block",
+    fontSize: 13,
+    fontWeight: 600,
+    color: "var(--sb-text)",
+    marginBottom: 8,
+  };
+
+  const iconProps = {
+    width: 18,
+    height: 18,
+    fill: "none",
+    stroke: "var(--sb-sub)",
+    viewBox: "0 0 24 24",
+    strokeWidth: 1.8,
+    strokeLinecap: "round" as const,
+    style: { flexShrink: 0 },
+  };
+
+  return (
+    <div
+      className="sb-auth-shell"
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        background: "var(--sb-bg)",
+        fontFamily: "var(--font-space-grotesk), sans-serif",
+      }}
+    >
+      {/* Marketing side — 60% */}
+      <aside
+        className="sb-auth-marketing"
+        style={{
+          flex: "0 0 60%",
+          position: "relative",
+          overflow: "hidden",
+          background: "#0b0a1a",
+          color: "#fff",
+          padding: "56px 64px",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+        }}
+      >
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            bottom: -200,
+            right: -180,
+            width: 620,
+            height: 620,
+            borderRadius: "50%",
+            background:
+              "radial-gradient(circle at center, rgba(37, 99, 235, 0.35) 0%, rgba(37, 99, 235, 0.18) 45%, transparent 70%)",
+            filter: "blur(40px)",
+            pointerEvents: "none",
+          }}
+        />
+
+        {/* Brand mark */}
+        <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 12 }}>
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 12,
+              background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 6px 20px rgba(37, 99, 235, 0.35)",
+            }}
+          >
             <svg
-              className="h-9 w-9 text-white"
-              fill="none"
-              stroke="currentColor"
+              width="20"
+              height="20"
               viewBox="0 0 24 24"
+              fill="none"
+              stroke="white"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M12 4v16m8-8H4"
-              />
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+              <line x1="9" y1="8" x2="15" y2="8" />
+              <line x1="9" y1="12" x2="12" y2="12" />
             </svg>
           </div>
-          <div className="space-y-1">
-            <h1 className="text-3xl font-bold tracking-tight text-blue-600">
-              {t("register.title")}
-            </h1>
-            <p className="text-sm text-gray-400 dark:text-zinc-400">
-              {t("register.subtitle")}
-            </p>
+          <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.2px" }}>
+            SoloBooks
           </div>
         </div>
 
-        <div className="border-t border-gray-100 px-6 pb-8 pt-5 dark:border-zinc-800">
-          <div className="mb-5 flex justify-end">
+        {/* Headline block */}
+        <div style={{ position: "relative", maxWidth: 640 }}>
+          <h2
+            style={{
+              fontSize: "clamp(36px, 4.4vw, 56px)",
+              fontWeight: 700,
+              letterSpacing: "-1.2px",
+              lineHeight: 1.05,
+              margin: 0,
+            }}
+          >
+            {t("auth.brand.headline")}
+          </h2>
+          <p
+            style={{
+              fontSize: 18,
+              fontWeight: 400,
+              color: "rgba(255, 255, 255, 0.72)",
+              lineHeight: 1.55,
+              marginTop: 20,
+              maxWidth: 540,
+            }}
+          >
+            {t("auth.brand.subheadline")}
+          </p>
+
+          {/* Single trust line */}
+          <div
+            style={{
+              marginTop: 32,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "10px 16px",
+              borderRadius: 999,
+              background: "rgba(255, 255, 255, 0.06)",
+              border: "1px solid rgba(255, 255, 255, 0.12)",
+              fontSize: 13,
+              fontWeight: 500,
+              color: "rgba(255, 255, 255, 0.86)",
+            }}
+          >
+            <svg
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{ color: "#2563eb" }}
+            >
+              <path d="M9 12l2 2 4-4" />
+              <circle cx="12" cy="12" r="9" />
+            </svg>
+            {t("auth.brand.trust")}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div
+          style={{
+            position: "relative",
+            fontSize: 12,
+            fontWeight: 500,
+            color: "rgba(255, 255, 255, 0.48)",
+          }}
+        >
+          © {new Date().getFullYear()} SoloBooks
+        </div>
+      </aside>
+
+      {/* Form side — 40% */}
+      <main
+        className="sb-auth-form-panel"
+        style={{
+          flex: "0 0 40%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "48px 32px",
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            position: "relative",
+            width: "100%",
+            maxWidth: 400,
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          {/* Heading */}
+          <div style={{ marginBottom: 32 }}>
+            <h1
+              style={{
+                fontSize: 28,
+                fontWeight: 700,
+                letterSpacing: "-0.5px",
+                color: "var(--sb-text)",
+                lineHeight: 1.2,
+                margin: 0,
+              }}
+            >
+              {t("register.title")}
+            </h1>
+            <p
+              style={{
+                fontSize: 14,
+                fontWeight: 400,
+                color: "var(--sb-sub)",
+                marginTop: 8,
+              }}
+            >
+              {t("register.subtitle")}
+            </p>
+          </div>
+
+          {/* Language switch */}
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
             <a
               href={languageSwitchUrl}
-              className="inline-flex min-h-10 min-w-16 items-center justify-center rounded-xl bg-primary/10 px-4 text-sm font-semibold text-primary shadow-sm transition hover:bg-primary/15"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                minHeight: 30,
+                minWidth: 48,
+                padding: "0 10px",
+                borderRadius: 8,
+                background: "rgba(37, 99, 235, 0.10)",
+                color: "#2563eb",
+                fontSize: 12,
+                fontWeight: 700,
+                textDecoration: "none",
+                transition: "background 0.15s",
+              }}
             >
               {nextLanguage.toUpperCase()}
             </a>
           </div>
 
-          <form onSubmit={onSubmit} className="auth-form flex flex-col gap-4">
-            
-            <label htmlFor="company-input" className="space-y-1.5">
-              <span className="text-sm font-medium text-gray-600 dark:text-zinc-300">
-                {t("register.companyName")}
-              </span>
-              <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white dark:border-zinc-700 dark:bg-zinc-800 px-4 py-3 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20">
+          <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {/* Company Name */}
+            <label htmlFor="company-input" style={{ display: "block" }}>
+              <span style={labelTextStyle}>{t("register.companyName")}</span>
+              <div className="sb-login-input-group" style={inputGroupStyle}>
+                <svg {...iconProps}>
+                  <path d="M3 21V7l9-4 9 4v14" />
+                  <path d="M9 21V12h6v9" />
+                  <path d="M3 21h18" />
+                </svg>
                 <input
                   id="company-input"
                   name="companyName"
                   type="text"
                   required
-                  className="w-full bg-transparent text-base text-gray-900 outline-none placeholder:text-gray-400 dark:placeholder:text-zinc-500"
+                  autoComplete="organization"
                   placeholder={t("register.companyNamePlaceholder")}
+                  style={inputStyle}
                 />
               </div>
             </label>
 
-            <label htmlFor="name-input" className="space-y-1.5">
-              <span className="text-sm font-medium text-gray-600 dark:text-zinc-300">
-                {t("register.name")}
-              </span>
-              <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white dark:border-zinc-700 dark:bg-zinc-800 px-4 py-3 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20">
+            {/* Full Name */}
+            <label htmlFor="name-input" style={{ display: "block" }}>
+              <span style={labelTextStyle}>{t("register.name")}</span>
+              <div className="sb-login-input-group" style={inputGroupStyle}>
+                <svg {...iconProps}>
+                  <path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zm-4 7a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
                 <input
                   id="name-input"
                   name="name"
                   type="text"
                   required
                   autoComplete="name"
-                  className="w-full bg-transparent text-base text-gray-900 outline-none placeholder:text-gray-400 dark:placeholder:text-zinc-500"
                   placeholder={t("register.namePlaceholder")}
+                  style={inputStyle}
                 />
               </div>
             </label>
 
-            <label htmlFor="credential-input" className="space-y-1.5">
-              <span className="text-sm font-medium text-gray-600 dark:text-zinc-300">
-                {t("login.credentialLabel")}
-              </span>
-              <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white dark:border-zinc-700 dark:bg-zinc-800 px-4 py-3 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20">
+            {/* Credential */}
+            <label htmlFor="credential-input" style={{ display: "block" }}>
+              <span style={labelTextStyle}>{t("login.credentialLabel")}</span>
+              <div className="sb-login-input-group" style={inputGroupStyle}>
+                <svg {...iconProps}>
+                  <path d="M4 6h16v12H4z" />
+                  <path d="M4 6l8 7 8-7" />
+                </svg>
                 <input
                   id="credential-input"
                   name="credential"
                   type="text"
                   required
-                  className="w-full bg-transparent text-base text-gray-900 outline-none placeholder:text-gray-400 dark:placeholder:text-zinc-500"
+                  autoComplete="username"
                   placeholder={t("login.credentialPlaceholder")}
+                  style={inputStyle}
                 />
               </div>
             </label>
 
-            <label htmlFor="password-input" className="space-y-1.5">
-              <span className="text-sm font-medium text-gray-600 dark:text-zinc-300">
-                {t("login.passwordLabel")}
-              </span>
-              <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white dark:border-zinc-700 dark:bg-zinc-800 px-4 py-3 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20">
+            {/* Password */}
+            <label htmlFor="password-input" style={{ display: "block" }}>
+              <span style={labelTextStyle}>{t("login.passwordLabel")}</span>
+              <div className="sb-login-input-group" style={inputGroupStyle}>
+                <svg {...iconProps}>
+                  <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
                 <input
                   id="password-input"
                   name="password"
                   type={showPassword ? "text" : "password"}
                   required
                   minLength={12}
-                  className="w-full bg-transparent text-base text-gray-900 outline-none placeholder:text-gray-400 dark:placeholder:text-zinc-500"
+                  autoComplete="new-password"
                   placeholder={t("login.passwordPlaceholder")}
+                  style={inputStyle}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
+                  aria-pressed={showPassword}
                   aria-label={showPassword ? t("common.hide") : t("common.show")}
-                  className="shrink-0 rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
+                  style={{
+                    flexShrink: 0,
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    border: "none",
+                    background: "transparent",
+                    color: "var(--sb-sub)",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    transition: "background 0.15s",
+                  }}
                 >
                   <span className="sr-only">{showPassword ? t("common.hide") : t("common.show")}</span>
                   {showPassword ? (
-                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                    <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round">
+                      <path d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
                     </svg>
                   ) : (
-                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round">
+                      <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                     </svg>
                   )}
                 </button>
               </div>
             </label>
 
+            {/* Error */}
             {errorMessage && (
               <p
-                className="rounded-xl border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger"
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 10,
+                  border: "1px solid rgba(196, 62, 28, 0.25)",
+                  background: "rgba(196, 62, 28, 0.08)",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "#c43e1c",
+                }}
                 aria-live="polite"
               >
                 {errorMessage}
               </p>
             )}
 
+            {/* Submit */}
             <button
               type="submit"
               disabled={isPending}
-              className="mt-2 inline-flex h-12 cursor-pointer items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 text-base font-semibold text-white shadow-lg shadow-blue-500/25 transition hover:opacity-95 disabled:opacity-70 disabled:cursor-not-allowed"
+              style={{
+                marginTop: 8,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 10,
+                height: 50,
+                borderRadius: 12,
+                background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
+                color: "#fff",
+                fontSize: 15,
+                fontWeight: 700,
+                border: "none",
+                cursor: isPending ? "not-allowed" : "pointer",
+                boxShadow: "0 6px 20px rgba(37, 99, 235, 0.3)",
+                opacity: isPending ? 0.7 : 1,
+                transition: "opacity 0.15s, transform 0.15s",
+              }}
             >
               {isPending && (
-                <div className="relative h-5 w-5 flex-shrink-0" aria-hidden="true">
-                  <i className="absolute h-full w-full rounded-full border-2 border-b-current border-l-transparent border-r-transparent border-t-transparent border-solid animate-spinner-ease-spin" />
-                  <i className="absolute h-full w-full rounded-full border-2 border-b-current border-l-transparent border-r-transparent border-t-transparent border-dotted opacity-75 animate-spinner-linear-spin" />
-                </div>
+                <span
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: "50%",
+                    border: "2.5px solid rgba(255,255,255,0.3)",
+                    borderTopColor: "white",
+                    display: "inline-block",
+                    animation: "sb-spin 0.7s linear infinite",
+                  }}
+                />
               )}
               <span>{isPending ? t("register.signingUp") : t("register.signUp")}</span>
             </button>
           </form>
 
-          <div className="mt-6 text-center text-sm text-gray-500 dark:text-zinc-400">
-             {t("register.hasAccount")}{" "}
+          {/* Login link */}
+          <div
+            style={{
+              marginTop: 28,
+              textAlign: "center",
+              fontSize: 13,
+              fontWeight: 500,
+              color: "var(--sb-sub)",
+            }}
+          >
+            {t("register.hasAccount")}{" "}
             <a
               href="/login"
-              className="font-semibold text-primary transition hover:underline"
+              style={{
+                fontWeight: 700,
+                color: "#2563eb",
+                textDecoration: "none",
+              }}
             >
               {t("register.login")}
             </a>
           </div>
-
         </div>
-      </div>
+      </main>
+
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+            @keyframes sb-spin {
+              from { transform: rotate(0deg); }
+              to { transform: rotate(360deg); }
+            }
+            .sb-login-input-group:focus-within {
+              border-color: #2563eb !important;
+              box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+            }
+            @media (max-width: 1023px) {
+              .sb-auth-marketing { display: none !important; }
+              .sb-auth-form-panel { flex: 1 1 100% !important; }
+            }
+          `,
+        }}
+      />
     </div>
   );
 }

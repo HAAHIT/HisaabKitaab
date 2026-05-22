@@ -1,327 +1,376 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { formatCurrency } from "@/lib/utils";
-import { Button, Card, CardBody, useDisclosure, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/react";
+import { HKSkeleton } from "@/components/ui/HKSkeleton";
+import {
+  OR, PU, GR, AM, SG, IN, TYPE, TOUCH,
+  fmtFull, useIsMobile, HKCard, HKToast, HKModal,
+  PageHeader,
+} from "@/components/ui/hk-design";
+import { HKButton } from "@/components/ui/HKButton";
 import { AddBankAccountModal } from "@/components/banking/AddBankAccountModal";
+import { useLanguage } from "@/contexts/LanguageContext";
 
-const BuildingLibraryIcon = ({ className }: { className?: string }) => (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0012 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75z" />
+interface BankAccount {
+  id: string;
+  name: string;
+  type: "BANK" | "CASH";
+  accountNumber: string | null;
+  currentBalance: number;
+  isDefault: boolean;
+}
+
+function BankIcon() {
+  return (
+    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11M8 14v3M12 14v3M16 14v3" />
     </svg>
-);
+  );
+}
 
-const BanknotesIcon = ({ className }: { className?: string }) => (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 011.694-1.122M2.25 18l5.228-5.23m-5.23 5.23h19.5M16.5 13.5l3.75-3.75M16.5 13.5v-3.75m0 3.75h-3.75M10.125 19.5h3.75m-3.75 0V15.75M10.125 19.5a1.5 1.5 0 01-1.5-1.5" />
+function CashIcon() {
+  return (
+    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="1" y="4" width="22" height="16" rx="2" />
+      <line x1="1" y1="10" x2="23" y2="10" />
     </svg>
-);
+  );
+}
 
-const PlusIcon = ({ className }: { className?: string }) => (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.5v15m7.5-7.5h-15" />
+function TrashIcon() {
+  return (
+    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
     </svg>
-);
+  );
+}
 
-const ArrowsRightLeftIcon = ({ className }: { className?: string }) => (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+function ArrowsIcon() {
+  return (
+    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
     </svg>
-);
+  );
+}
 
-const ChevronRightIcon = ({ className }: { className?: string }) => (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+function ChevronRight() {
+  return (
+    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 18l6-6-6-6" />
     </svg>
-);
+  );
+}
 
-const TrashIcon = ({ className }: { className?: string }) => (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+function StarIcon() {
+  return (
+    <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24">
+      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
     </svg>
-);
+  );
+}
 
-export default function BankingDashboard() {
-    const [accounts, setAccounts] = useState<any[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState(false);
-    const [accountToDelete, setAccountToDelete] = useState<any | null>(null);
-    const [isDeleting, setIsDeleting] = useState(false);
+export default function BankingPage() {
+  const { t } = useLanguage();
+  const isMobile = useIsMobile();
+  const [accounts, setAccounts] = useState<BankAccount[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [accountToDelete, setAccountToDelete] = useState<BankAccount | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [settingDefaultId, setSettingDefaultId] = useState<string | null>(null);
 
-    const { isOpen: isAddAccountOpen, onOpen: onAddAccountOpen, onOpenChange: onAddAccountChange } = useDisclosure();
-    const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onOpenChange: onDeleteChange, onClose: onDeleteClose } = useDisclosure();
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
-    const fetchAccounts = useCallback(async () => {
-        setIsLoading(true);
-        setError(false);
-        try {
-            const res = await fetch("/api/bank-accounts");
-            if (!res.ok) throw new Error("Failed to fetch bank accounts");
-            const data = await res.json();
-            setAccounts(data.accounts || []);
-        } catch (err) {
-            console.error(err);
-            setError(true);
-        } finally {
-            setIsLoading(false);
-        }
-    }, []);
+  const fetchAccounts = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/bank-accounts");
+      if (!res.ok) throw new Error("Failed to fetch");
+      const data = await res.json();
+      setAccounts(data.accounts || []);
+    } catch {
+      showToast(t("banking.error.loadAccounts"), "error");
+    } finally {
+      setLoading(false);
+    }
+  }, [t]);
 
-    useEffect(() => {
-        fetchAccounts();
-    }, [fetchAccounts]);
-    const bankAccounts = accounts.filter((a: any) => a.type === "BANK");
-    const cashAccounts = accounts.filter((a: any) => a.type === "CASH");
+  useEffect(() => { fetchAccounts(); }, [fetchAccounts]);
 
-    const totalBankBalance = bankAccounts.reduce((acc: number, val: any) => acc + Number(val.currentBalance), 0);
-    const totalCashBalance = cashAccounts.reduce((acc: number, val: any) => acc + Number(val.currentBalance), 0);
+  function showToast(message: string, type: "success" | "error") {
+    setToast({ message, type });
+    window.setTimeout(() => setToast(null), 3000);
+  }
 
-    const handleDeleteAccount = async () => {
-        if (!accountToDelete) return;
-        setIsDeleting(true);
-        try {
-            const res = await fetch(`/api/bank-accounts/${accountToDelete.id}`, {
-                method: "DELETE",
-            });
-            if (res.ok) {
-                await fetchAccounts();
-                onDeleteClose();
-                setAccountToDelete(null);
-            } else {
-                const data = await res.json();
-                alert(data.error || "Failed to delete account");
-            }
-        } catch (e: any) {
-            console.error(e);
-            alert("Error deleting account");
-        } finally {
-            setIsDeleting(false);
-        }
-    };
+  async function handleSetDefault(account: BankAccount) {
+    setSettingDefaultId(account.id);
+    try {
+      const res = await fetch(`/api/bank-accounts/${account.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isDefault: true }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Update failed");
+      }
+      showToast(`${account.name} ${t("banking.success.defaultSet")}`, "success");
+      await fetchAccounts();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : t("banking.error.defaultSet"), "error");
+    } finally {
+      setSettingDefaultId(null);
+    }
+  }
 
-    return (
-        <div className="mx-auto max-w-[1200px] animate-fade-in p-4 lg:p-8">
-            <div className="mb-6 space-y-8">
-                {/* Header section */}
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-2xl font-semibold tracking-tight text-default-900">
-                            Banking
-                        </h1>
-                        <p className="text-sm text-default-500">
-                            Manage your bank accounts, cash registers, and view balances
-                        </p>
-                    </div>
-                    <div className="flex gap-3">
-                        <Button
-                            variant="bordered"
-                            startContent={<ArrowsRightLeftIcon className="h-4 w-4" />}
-                            as={Link}
-                            href="/payments/new"
-                        >
-                            Contra Entry
-                        </Button>
-                        <Button
-                            color="primary"
-                            className="bg-gradient-to-r from-blue-600 to-indigo-600 font-semibold shadow-lg shadow-blue-500/25"
-                            startContent={<PlusIcon className="h-5 w-5" />}
-                            onPress={onAddAccountOpen}
-                        >
-                            Add Account
-                        </Button>
-                    </div>
-                </div>
+  async function handleDelete() {
+    if (!accountToDelete) return;
+    setIsDeleting(true);
+    try {
+      const res = await fetch(`/api/bank-accounts/${accountToDelete.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Delete failed");
+      }
+      showToast(t("banking.success.deleted"), "success");
+      setIsDeleteOpen(false);
+      setAccountToDelete(null);
+      await fetchAccounts();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : t("banking.error.deleted"), "error");
+    } finally {
+      setIsDeleting(false);
+    }
+  }
 
-                <div className="grid gap-6 md:grid-cols-2">
-                    {/* Bank Balance Card */}
-                    <Card shadow="sm" className="bg-content1">
-                        <CardBody className="p-6">
-                            <div className="flex items-center gap-3 text-default-500">
-                                <BuildingLibraryIcon className="h-6 w-6 text-primary" />
-                                <h3 className="text-sm font-medium">Total Bank Balance</h3>
-                            </div>
-                            <div className="mt-4 flex items-baseline gap-2">
-                                <span className="text-3xl font-bold tracking-tight text-default-900">
-                                    {isLoading ? "..." : formatCurrency(totalBankBalance)}
-                                </span>
-                            </div>
-                        </CardBody>
-                    </Card>
+  const bankAccounts = accounts.filter((a) => a.type === "BANK");
+  const cashAccounts = accounts.filter((a) => a.type === "CASH");
+  const totalBank = bankAccounts.reduce((s, a) => s + Number(a.currentBalance), 0);
+  const totalCash = cashAccounts.reduce((s, a) => s + Number(a.currentBalance), 0);
 
-                    {/* Cash Balance Card */}
-                    <Card shadow="sm" className="bg-content1">
-                        <CardBody className="p-6">
-                            <div className="flex items-center gap-3 text-default-500">
-                                <BanknotesIcon className="h-6 w-6 text-success" />
-                                <h3 className="text-sm font-medium">Total Cash in Hand</h3>
-                            </div>
-                            <div className="mt-4 flex items-baseline gap-2">
-                                <span className="text-3xl font-bold tracking-tight text-default-900">
-                                    {isLoading ? "..." : formatCurrency(totalCashBalance)}
-                                </span>
-                            </div>
-                        </CardBody>
-                    </Card>
-                </div>
+  return (
+    <div style={{ background: "var(--sb-bg)", minHeight: "100%", fontFamily: SG }}>
+      {toast && <HKToast message={toast.message} type={toast.type} />}
 
-                {isLoading && (
-                    <div className="animate-pulse space-y-4 pt-4">
-                        <div className="h-10 w-full rounded bg-gray-200" />
-                        <div className="h-10 w-full rounded bg-gray-200" />
-                    </div>
-                )}
-
-                {error && (
-                    <div className="rounded-md bg-red-50 p-4 border border-red-200">
-                        <div className="text-sm text-red-800">
-                            Failed to load bank accounts.
-                        </div>
-                    </div>
-                )}
-
-                {!isLoading && !error && accounts.length === 0 && (
-                    <Card shadow="sm" className="mt-8 border border-default-200 bg-content1">
-                        <CardBody className="flex flex-col items-center justify-center py-16">
-                            <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
-                                <BuildingLibraryIcon className="h-10 w-10 text-primary" />
-                            </div>
-                            <h3 className="text-lg font-medium text-default-900">No bank accounts</h3>
-                            <p className="mt-1 text-sm text-default-500">
-                                Get started by creating a new bank or cash account.
-                            </p>
-                            <Button
-                                color="primary"
-                                variant="flat"
-                                size="sm"
-                                className="mt-4"
-                                startContent={<PlusIcon className="h-4 w-4" />}
-                            >
-                                Add Account
-                            </Button>
-                        </CardBody>
-                    </Card>
-                )}
-
-                {!isLoading && accounts.length > 0 && (
-                    <Card shadow="sm" className="mt-8 border border-default-200 bg-content1">
-                        <CardBody className="p-0">
-                            <ul role="list" className="divide-y divide-default-200">
-                                {accounts.map((account: any) => (
-                                    <li
-                                        key={account.id}
-                                        className="relative flex items-center justify-between px-6 py-5 transition hover:bg-content2"
-                                    >
-                                        <div className="flex items-center gap-x-4">
-                                            <div className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-default-50 border border-default-200">
-                                                {account.type === "CASH" ? (
-                                                    <BanknotesIcon className="h-5 w-5 text-success" />
-                                                ) : (
-                                                    <BuildingLibraryIcon className="h-5 w-5 text-primary" />
-                                                )}
-                                            </div>
-                                            <div className="min-w-0">
-                                                <div className="flex items-start gap-x-3">
-                                                    <p className="text-sm font-semibold leading-6 text-default-900">
-                                                        <Link href={`/banking/${account.id}`}>
-                                                            <span className="absolute inset-x-0 -top-px bottom-0" />
-                                                            {account.name}
-                                                        </Link>
-                                                    </p>
-                                                    <p
-                                                        className={`mt-0.5 whitespace-nowrap rounded-md px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset ${account.type === "BANK"
-                                                            ? "bg-primary/10 text-primary ring-primary/20"
-                                                            : "bg-success/10 text-success ring-success/20"
-                                                            }`}
-                                                    >
-                                                        {account.type}
-                                                    </p>
-                                                </div>
-                                                {account.accountNumber && (
-                                                    <div className="mt-1 flex items-center gap-x-2 text-xs leading-5 text-default-500">
-                                                        <p className="truncate">A/c: {account.accountNumber}</p>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-x-6 relative z-10">
-                                            <div className="hidden sm:flex sm:flex-col sm:items-end mr-4">
-                                                <p className="text-sm leading-6 text-default-900 font-medium">
-                                                    {formatCurrency(Number(account.currentBalance))}
-                                                </p>
-                                                <p className="mt-1 text-xs leading-5 text-default-500">Current Balance</p>
-                                            </div>
-                                            <Button
-                                                isIconOnly
-                                                variant="light"
-                                                color="danger"
-                                                size="sm"
-                                                onPress={() => {
-                                                    setAccountToDelete(account);
-                                                    onDeleteOpen();
-                                                }}
-                                            >
-                                                <TrashIcon className="h-4 w-4" />
-                                            </Button>
-                                            <ChevronRightIcon className="h-5 w-5 flex-none text-default-400" aria-hidden="true" />
-                                        </div>
-                                    </li>
-                                ))}
-                            </ul>
-                        </CardBody>
-                    </Card>
-                )}
+      <div style={{ padding: isMobile ? "18px 14px 80px" : "24px 28px 40px", maxWidth: 1200, margin: "0 auto" }}>
+        <PageHeader
+          title={t("banking.title")}
+          subtitle={t("banking.subtitle")}
+          isMobile={isMobile}
+          action={
+            <div style={{ display: "flex", gap: 10 }}>
+              <Link href="/payments/new?tab=contra">
+                <button
+                  style={{
+                    height: TOUCH.secondary,
+                    padding: "0 18px",
+                    borderRadius: 12,
+                    border: "1.5px solid var(--sb-border)",
+                    background: "var(--sb-card)",
+                    color: "var(--sb-text)",
+                    fontSize: TYPE.bodySmall,
+                    fontWeight: 600,
+                    fontFamily: SG,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 7,
+                  }}
+                >
+                  <ArrowsIcon /> {t("banking.contra")}
+                </button>
+              </Link>
+              <HKButton onClick={() => setIsAddOpen(true)}>{t("banking.addAccount")}</HKButton>
             </div>
-            <AddBankAccountModal
-                isOpen={isAddAccountOpen}
-                onOpenChange={onAddAccountChange}
-                onSuccess={() => fetchAccounts()}
-            />
+          }
+        />
 
-            {/* Delete Confirmation Modal */}
-            <Modal
-                isOpen={isDeleteOpen}
-                onOpenChange={onDeleteChange}
-                backdrop="blur"
-                placement="center"
-                classNames={{
-                    backdrop: "bg-black/60",
-                }}
+        {/* Summary cards */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
+          {[
+            { label: t("banking.bankBalance"), value: totalBank, color: PU, icon: <BankIcon /> },
+            { label: t("banking.cashInHand"), value: totalCash, color: GR, icon: <CashIcon /> },
+          ].map((item) => (
+            <div
+              key={item.label}
+              style={{
+                padding: "18px 20px",
+                borderRadius: 16,
+                background: item.color + "12",
+                border: `1px solid ${item.color}28`,
+              }}
             >
-                <ModalContent>
-                    {(onClose) => (
-                        <>
-                            <ModalHeader className="flex flex-col gap-1">
-                                <div className="flex items-center gap-2">
-                                    <div className="p-2 rounded-full bg-danger/10">
-                                        <TrashIcon className="w-5 h-5 text-danger" />
-                                    </div>
-                                    <span className="text-xl font-bold">Delete Account</span>
-                                </div>
-                            </ModalHeader>
-                            <ModalBody>
-                                <p className="text-default-500">
-                                    Are you sure you want to delete <span className="font-semibold text-foreground">{accountToDelete?.name}</span>?
-                                    This will hide the account from being used in future payments. Existing history will remain intact.
-                                </p>
-                            </ModalBody>
-                            <ModalFooter>
-                                <Button variant="flat" onPress={onDeleteClose} disabled={isDeleting}>
-                                    Cancel
-                                </Button>
-                                <Button
-                                    color="danger"
-                                    onPress={handleDeleteAccount}
-                                    isLoading={isDeleting}
-                                    className="font-semibold shadow-lg shadow-danger/20"
-                                >
-                                    Delete Account
-                                </Button>
-                            </ModalFooter>
-                        </>
-                    )}
-                </ModalContent>
-            </Modal>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, color: item.color }}>
+                {item.icon}
+                <span style={{ fontSize: TYPE.label, fontWeight: 600, color: item.color }}>{item.label}</span>
+              </div>
+              <p style={{ fontSize: isMobile ? TYPE.numMedium : TYPE.numLarge - 2, fontWeight: 800, color: "var(--sb-text)", fontFamily: IN, lineHeight: 1.1 }}>
+                {loading ? "..." : fmtFull(item.value)}
+              </p>
+            </div>
+          ))}
         </div>
-    );
+
+        {/* Accounts list */}
+        {loading ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {[1, 2, 3].map((i) => <HKSkeleton key={i} className="h-20 rounded-2xl" />)}
+          </div>
+        ) : accounts.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--sb-sub)" }}>
+            <div style={{ fontSize: 52, marginBottom: 16 }}>🏦</div>
+            <p style={{ fontWeight: 700, fontSize: TYPE.h2, color: "var(--sb-text)", marginBottom: 8, fontFamily: SG }}>
+              {t("banking.noAccounts")}
+            </p>
+            <p style={{ fontSize: TYPE.body, fontWeight: 500, fontFamily: SG, marginBottom: 20 }}>
+              {t("banking.addAccountSubtitle")}
+            </p>
+            <HKButton onClick={() => setIsAddOpen(true)}>{t("banking.addAccount")}</HKButton>
+          </div>
+        ) : (
+          <HKCard style={{ padding: 0, overflow: "hidden" }}>
+            {accounts.map((account, i) => {
+              const isBank = account.type === "BANK";
+              const color = isBank ? PU : GR;
+              const bal = Number(account.currentBalance);
+              const isSettingDefault = settingDefaultId === account.id;
+              return (
+                <div
+                  key={account.id}
+                  style={{
+                    padding: isMobile ? "14px 16px" : "16px 20px",
+                    borderBottom: i < accounts.length - 1 ? "1px solid var(--sb-border)" : undefined,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                  }}
+                >
+                  {/* Icon */}
+                  <div style={{
+                    width: 44, height: 44, borderRadius: 12,
+                    background: color + "18",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    flexShrink: 0, color,
+                    position: "relative",
+                  }}>
+                    {isBank ? <BankIcon /> : <CashIcon />}
+                    {account.isDefault && (
+                      <div style={{
+                        position: "absolute", top: -4, right: -4,
+                        width: 16, height: 16, borderRadius: "50%",
+                        background: AM, color: "#fff",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>
+                        <StarIcon />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Name + account number */}
+                  <Link href={`/banking/${account.id}`} style={{ flex: 1, minWidth: 0, textDecoration: "none" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, lineHeight: 1.3 }}>
+                        {account.name}
+                      </p>
+                      {account.isDefault && (
+                        <span style={{
+                          fontSize: 10, fontWeight: 700, fontFamily: SG,
+                          color: AM, background: AM + "18",
+                          padding: "2px 7px", borderRadius: 6,
+                          border: `1px solid ${AM}30`,
+                          letterSpacing: "0.02em",
+                        }}>
+                          {t("banking.default")}
+                        </span>
+                      )}
+                    </div>
+                    <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--sb-sub)", fontFamily: SG, marginTop: 2 }}>
+                      {account.type === "BANK" ? t("banking.bankAccount") : t("banking.cashRegister")}
+                      {account.accountNumber && ` • ${account.accountNumber}`}
+                    </p>
+                  </Link>
+
+                  {/* Balance */}
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <p style={{
+                      fontSize: TYPE.numSmall,
+                      fontWeight: 800,
+                      color: bal >= 0 ? "var(--sb-text)" : OR,
+                      fontFamily: IN,
+                    }}>
+                      {fmtFull(bal)}
+                    </p>
+                    <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontWeight: 500, marginTop: 2, fontFamily: SG }}>{t("banking.balance")}</p>
+                  </div>
+
+                  {/* Set as default (bank accounts only, not already default) */}
+                  {isBank && !account.isDefault && (
+                    <button
+                      onClick={() => handleSetDefault(account)}
+                      disabled={isSettingDefault}
+                      title={t("banking.setDefaultTooltip")}
+                      style={{
+                        width: TOUCH.secondary, height: TOUCH.secondary,
+                        borderRadius: 10, border: "none",
+                        background: "transparent", color: "var(--sb-sub)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        cursor: isSettingDefault ? "default" : "pointer",
+                        flexShrink: 0, opacity: isSettingDefault ? 0.5 : 1,
+                      }}
+                      onMouseEnter={(e) => { if (!isSettingDefault) { (e.currentTarget as HTMLButtonElement).style.background = AM + "15"; (e.currentTarget as HTMLButtonElement).style.color = AM; } }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "var(--sb-sub)"; }}
+                    >
+                      <StarIcon />
+                    </button>
+                  )}
+
+                  {/* Delete */}
+                  <button
+                    onClick={() => { setAccountToDelete(account); setIsDeleteOpen(true); }}
+                    style={{
+                      width: TOUCH.secondary, height: TOUCH.secondary,
+                      borderRadius: 10, border: "none",
+                      background: "transparent", color: "var(--sb-sub)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      cursor: "pointer", flexShrink: 0,
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = OR + "15"; (e.currentTarget as HTMLButtonElement).style.color = OR; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "var(--sb-sub)"; }}
+                  >
+                    <TrashIcon />
+                  </button>
+
+                  {/* Chevron */}
+                  <Link href={`/banking/${account.id}`} style={{ color: "var(--sb-sub)", flexShrink: 0, display: "flex" }}>
+                    <ChevronRight />
+                  </Link>
+                </div>
+              );
+            })}
+          </HKCard>
+        )}
+      </div>
+
+      <AddBankAccountModal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} onSuccess={fetchAccounts} />
+
+      <HKModal
+        isOpen={isDeleteOpen}
+        onClose={() => setIsDeleteOpen(false)}
+        title={t("banking.deleteModal.title")}
+        width={440}
+        footer={
+          <>
+            <HKButton variant="secondary" onClick={() => setIsDeleteOpen(false)} isDisabled={isDeleting}>{t("common.cancel")}</HKButton>
+            <HKButton variant="danger" onClick={handleDelete} isLoading={isDeleting}>{t("banking.deleteModal.confirm")}</HKButton>
+          </>
+        }
+      >
+        <p style={{ fontFamily: SG, fontSize: TYPE.body, color: "var(--sb-sub)", lineHeight: 1.6 }}>
+          <span style={{ fontWeight: 700, color: "var(--sb-text)" }}>{accountToDelete?.name}</span> {t("banking.deleteModal.body")}
+        </p>
+      </HKModal>
+    </div>
+  );
 }

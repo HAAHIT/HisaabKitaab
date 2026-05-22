@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Eczar, Tiro_Devanagari_Hindi } from "next/font/google";
 import { cookies } from "next/headers";
 import { Providers } from "./providers";
 import {
@@ -13,10 +13,26 @@ const inter = Inter({
   variable: "--font-inter",
 });
 
+const eczar = Eczar({
+  subsets: ["latin", "devanagari"],
+  variable: "--font-eczar",
+  weight: ["500", "600", "700"],
+});
+
+const tiroDevanagari = Tiro_Devanagari_Hindi({
+  subsets: ["devanagari", "latin"],
+  variable: "--font-tiro-devanagari",
+  weight: "400",
+  style: ["normal", "italic"],
+});
+
+// Space Grotesk aliased to Inter for backward compat with existing SG refs
+const spaceGrotesk = inter;
+
 export const metadata: Metadata = {
-  title: "HisaabKitaab — Manufacturing Management",
+  title: "SoloBooks — Business Accounting & Billing",
   description:
-    "Manage bills, payments, and measurements for your manufacturing business.",
+    "Cloud billing, payments, and Tally-compatible accounting for Indian businesses. GST-ready invoicing with double-entry bookkeeping.",
   icons: { icon: "/favicon.ico" },
 };
 
@@ -33,7 +49,7 @@ export default async function RootLayout({
   return (
     <html
       lang={language}
-      className={`${inter.variable} h-full`}
+      className={`${inter.variable} ${eczar.variable} ${tiroDevanagari.variable} h-full`}
       data-scroll-behavior="smooth"
       suppressHydrationWarning
     >

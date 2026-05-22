@@ -23,10 +23,10 @@ export default async function ReportsPage() {
 
   const [totalEntries, unbalancedCount, parties] = await Promise.all([
     prisma.journalEntry.count({
-      where: { tenantId },
+      where: { tenantId, isDeleted: false },
     }),
     prisma.journalEntry.count({
-      where: { tenantId, isBalanced: false },
+      where: { tenantId, isBalanced: false, isDeleted: false },
     }),
     prisma.party.findMany({
       where: {

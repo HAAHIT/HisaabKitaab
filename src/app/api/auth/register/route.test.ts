@@ -87,9 +87,14 @@ describe("POST /api/auth/register", () => {
     expect(response.status).toBe(409);
 
     const data = await response.json();
-    expect(data.error).toBe("Email is already registered");
+    // Generic message to avoid account enumeration — must not distinguish
+    // "email taken" from "phone taken" or any other 409 path.
+    expect(data.error).toBe(
+      "Could not create account with the provided credentials"
+    );
     expect(findFirstUserMock).toHaveBeenCalledWith({
-      where: { email: { equals: "test@example.com", mode: "insensitive" } }
+      where: { email: { equals: "test@example.com", mode: "insensitive" } },
+      select: { id: true },
     });
   });
 
@@ -111,9 +116,12 @@ describe("POST /api/auth/register", () => {
     expect(response.status).toBe(409);
 
     const data = await response.json();
-    expect(data.error).toBe("Phone number is already registered");
+    expect(data.error).toBe(
+      "Could not create account with the provided credentials"
+    );
     expect(findFirstUserMock).toHaveBeenCalledWith({
-      where: { phone: "9876543210" }
+      where: { phone: "9876543210" },
+      select: { id: true },
     });
   });
 
@@ -153,6 +161,7 @@ describe("POST /api/auth/register", () => {
     // Verify slug checking
     expect(findUniqueTenantMock).toHaveBeenCalledWith({
       where: { slug: "acme-corp" },
+      select: { id: true },
     });
 
     // Verify password hashing

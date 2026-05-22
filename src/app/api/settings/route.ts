@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
-import { resolveReadTenant, resolveWriteSession } from "@/lib/api-tenant";
+import { resolveReadTenant, resolveSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 import {
   mergeTenantSettings,
@@ -48,15 +48,13 @@ export async function GET(request: NextRequest) {
 
 // PATCH /api/settings - Update company settings in Tenant.settings JSON
 export async function PATCH(request: NextRequest) {
-  // [FIX] Use JWT-verified session instead of trusting proxy headers
-  const sessionResolution = await resolveWriteSession(request);
+  const sessionResolution = await resolveSession(request);
   if (!sessionResolution.ok) return sessionResolution.response;
   const { tenantId, role } = sessionResolution.session;
 
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-
 
   try {
     const body = await request.json();
@@ -80,7 +78,7 @@ export async function PATCH(request: NextRequest) {
     const companyEmail = normalizeOptionalString(body.companyEmail);
     const companyGstin = normalizeOptionalString(body.companyGstin);
 
-    const mergeInput: Parameters<typeof mergeTenantSettings>[1] = {
+    const nextSettings: Parameters<typeof mergeTenantSettings>[1] = {
       companyName,
       companyAddress: normalizeString(body.companyAddress),
       companyPhone: normalizeString(body.companyPhone),
@@ -92,13 +90,16 @@ export async function PATCH(request: NextRequest) {
       upiId: normalizeString(body.upiId),
       businessType: normalizeBusinessType(body.businessType),
       taxRegistrationType: normalizeTaxRegistrationType(body.taxRegistrationType),
+      bankName: normalizeString(body.bankName),
+      bankAccountNumber: normalizeString(body.bankAccountNumber),
+      bankBranch: normalizeString(body.bankBranch),
+      bankIfscCode: normalizeString(body.bankIfscCode),
     };
-
-    if (typeof body.onboardingComplete === "boolean") {
-      mergeInput.onboardingComplete = body.onboardingComplete;
+    // Only update defaultTemplateId when explicitly provided in body
+    if ("defaultTemplateId" in body) {
+      nextSettings.defaultTemplateId = normalizeOptionalString(body.defaultTemplateId);
     }
-
-    const newSettings = mergeTenantSettings(existingTenant.settings as Record<string, unknown> | null, mergeInput);
+    const newSettings = mergeTenantSettings(existingTenant.settings as Record<string, unknown> | null, nextSettings);
 
     const tenant = await prisma.tenant.update({
       where: { id: tenantId },
@@ -122,6 +123,13 @@ export async function PATCH(request: NextRequest) {
         settings: true,
       },
     });
+
+    if (typeof body.isOnboardingComplete === "boolean") {
+      await prisma.tenant.update({
+        where: { id: tenantId },
+        data: { isOnboardingComplete: body.isOnboardingComplete },
+      });
+    }
 
     return NextResponse.json({ settings: serializeTenantSettings(tenant) });
   } catch (error) {

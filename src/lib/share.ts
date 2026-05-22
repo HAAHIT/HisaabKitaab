@@ -45,7 +45,8 @@ export async function shareBill(options: ShareBillOptions): Promise<boolean> {
   const formattedAmount = new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(grandTotal);
 
   let message = `Bill from ${companyName}\n\n`;

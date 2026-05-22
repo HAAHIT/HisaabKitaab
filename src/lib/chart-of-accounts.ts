@@ -214,25 +214,10 @@ export function paymentModeToAccount(mode: string): AccountCode {
     case "CHEQUE":
       return "BANK";
     default:
-      // [FIX #20] Throw on unknown mode instead of silently defaulting to CASH
       throw new Error(`Unknown payment mode: "${mode}". Expected CASH, UPI, BANK_TRANSFER, or CHEQUE.`);
   }
 }
 
-/**
- * Maps a PartyType to the corresponding chart-of-accounts code for
- * journal entries. Used by the generic `journalForLedgerPayment` helper
- * to resolve the correct ledger account for non-customer/vendor parties.
- *
- * Tally equivalent mapping:
- *   CUSTOMER  → Sundry Debtors
- *   VENDOR    → Sundry Creditors
- *   EXPENSE   → Indirect Expenses (Rent, Office Exp, Travelling, etc.)
- *   INCOME    → Indirect Incomes (Interest, Commission, etc.)
- *   ASSET     → Fixed Assets (Machinery, Furniture, etc.)
- *   LIABILITY → Current Liabilities (EMI, Loans payable, etc.)
- *   EQUITY    → Capital Account
- */
 export function partyTypeToAccountCode(partyType: string): AccountCode {
   switch (partyType) {
     case "CUSTOMER":
@@ -250,7 +235,6 @@ export function partyTypeToAccountCode(partyType: string): AccountCode {
     case "EQUITY":
       return "OWNER_EQUITY";
     default:
-      // [FIX #19] Throw on unknown type instead of silently defaulting to SUNDRY_DEBTORS
       throw new Error(`Unknown party type: "${partyType}". Expected CUSTOMER, VENDOR, EXPENSE, INCOME, ASSET, LIABILITY, or EQUITY.`);
   }
 }

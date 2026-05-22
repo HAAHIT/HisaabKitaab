@@ -1,29 +1,18 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { TENANT_CONTEXT_MISSING_MESSAGE, resolveTenantIdFromRequest } from "@/lib/tenant";
-import { resolveVerifiedTenantId, resolveVerifiedSession } from "@/lib/session-server";
-import type { VerifiedSession } from "@/lib/session-server";
+import { resolveVerifiedTenantId } from "@/lib/session-server";
+import { verifyToken, type SessionPayload } from "@/lib/auth";
 
 type TenantResolution =
   | {
-    ok: true;
-    tenantId: string;
-  }
+      ok: true;
+      tenantId: string;
+    }
   | {
-    ok: false;
-    response: NextResponse<{ error: string }>;
-  };
-
-// [FIX #5] Full session resolution — returns tenantId, userId, role from JWT
-type SessionResolution =
-  | {
-    ok: true;
-    session: VerifiedSession;
-  }
-  | {
-    ok: false;
-    response: NextResponse<{ error: string }>;
-  };
+      ok: false;
+      response: NextResponse<{ error: string }>;
+    };
 
 function tenantMissingResponse() {
   return NextResponse.json(
@@ -73,41 +62,46 @@ export async function resolveWriteTenant(
   };
 }
 
+type SessionResolution =
+  | { ok: true; session: SessionPayload }
+  | { ok: false; response: NextResponse<{ error: string }> };
+
+import { SESSION_COOKIE_NAME } from "@/lib/cookie";
+
 /**
- * [FIX #5] Resolves the full JWT-verified session for write operations.
- *
- * Replaces the pattern of reading x-user-role/x-user-id from headers,
- * which can be spoofed if the proxy is bypassed.
+ * Verifies the JWT cookie and returns the full session (tenantId, userId, role).
+ * Use this for any route that needs role or userId alongside tenantId.
+ * Never trust x-user-role / x-user-id proxy headers for auth decisions.
  */
-export async function resolveWriteSession(
+export async function resolveSession(
   request: NextRequest
 ): Promise<SessionResolution> {
-  const session = await resolveVerifiedSession(request);
+  const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+  if (!token) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+    };
+  }
+  const session = await verifyToken(token);
   if (!session) {
     return {
       ok: false,
-      response: NextResponse.json(
-        { error: "Authentication required" },
-        { status: 401 }
-      ),
+      response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
     };
   }
-
-  return {
-    ok: true,
-    session,
-  };
+  return { ok: true, session };
 }
 
 /**
- * [FIX #18] Resolves tenant for public/unauthenticated operations where a JWT is not available.
- * Uses ESM import instead of require() for tree-shaking compatibility.
+ * Resolves tenant for public/unauthenticated operations where a JWT is not available.
+ * Relies on the x-tenant-id header (set by proxy) or default environment variables.
  */
 export function resolvePublicTenant(
   request: NextRequest
 ): TenantResolution {
   const tenantId = resolveTenantIdFromRequest(request);
-
+  
   if (!tenantId) {
     return {
       ok: false,

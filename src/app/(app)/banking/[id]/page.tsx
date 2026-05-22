@@ -31,37 +31,32 @@ export default async function BankLedgerPage({
         return notFound();
     }
 
-    // Fetch all payments mapped to this bank account (source or destination)
     const payments = await prisma.payment.findMany({
         where: {
             tenantId,
             OR: [
                 { accountId: id },
-                { destinationAccountId: id }
+                { destinationAccountId: id },
             ],
             isDeleted: false,
             status: "COMPLETED",
         },
         include: {
             party: { select: { name: true, type: true } },
-            account: { select: { name: true } },
-            destinationAccount: { select: { name: true } },
+            BankAccount_Payment_accountIdToBankAccount: { select: { name: true } },
+            BankAccount_Payment_destinationAccountIdToBankAccount: { select: { name: true } },
         },
         orderBy: [{ date: "asc" }, { createdAt: "asc" }],
     });
 
-    // Calculate generic ledger running balances
     const initialBalance = account.openingBalance.toNumber();
     let currentRunning = initialBalance;
 
-    const ledger = payments.map(p => {
+    const ledger = payments.map((p) => {
         const amt = p.amount.toNumber();
         let increase = 0;
         let decrease = 0;
 
-        // If this account is the destination account for a Contra transfer, it received money.
-        // If this account is the source account, it follows the native p.direction (which is OUTGOING for Contras).
-        // Wait, standard payments have direction OUTGOING (money paid) or INCOMING (money received) at the source account.
         const isDestination = p.destinationAccountId === id;
         const actualDirection = isDestination ? "INCOMING" : p.direction;
 
@@ -73,15 +68,13 @@ export default async function BankLedgerPage({
             currentRunning -= amt;
         }
 
-        // Determine who the counterparty is
         let displayPartyName = p.party?.name || "Party";
         if (!p.party) {
-            // It's a Contra Entry
-            if (isDestination) {
-                displayPartyName = `Transfer from ${p.account?.name || "Bank/Cash"}`;
-            } else {
-                displayPartyName = `Transfer to ${p.destinationAccount?.name || "Bank/Cash"}`;
-            }
+            const srcName = p.BankAccount_Payment_accountIdToBankAccount?.name;
+            const dstName = p.BankAccount_Payment_destinationAccountIdToBankAccount?.name;
+            displayPartyName = isDestination
+                ? `Transfer from ${srcName || "Bank/Cash"}`
+                : `Transfer to ${dstName || "Bank/Cash"}`;
         }
 
         return {
@@ -95,10 +88,6 @@ export default async function BankLedgerPage({
             increase,
             decrease,
             runningBalance: currentRunning,
-            partyId: p.partyId,
-            paymentAccountId: p.accountId,
-            destinationAccountId: p.destinationAccountId,
-            partyType: p.party?.type ?? null,
         };
     });
 

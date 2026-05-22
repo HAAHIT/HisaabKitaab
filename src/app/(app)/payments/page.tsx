@@ -1,26 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Button,
-  Card,
-  CardBody,
-  Chip,
-  Input,
-  Pagination,
-  Select,
-  SelectItem,
-  Skeleton,
-  Modal,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  useDisclosure,
-} from "@heroui/react";
+import { HKSkeleton } from "@/components/ui/HKSkeleton";
+import { HKPagination } from "@/components/ui/HKPagination";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { type TranslationKey } from "@/lib/i18n/translations";
 import { EditPaymentModal, type EditablePayment } from "./EditPaymentModal";
+import {
+  C, OR, PU, GR, AM, SG, IN, TYPE, DISPLAY,
+  fmtFull, useIsMobile,
+  HKCard, HKToast, HKAvatar, SearchBox, PillFilter,
+  PageHeader, HKModal,
+} from "@/components/ui/hk-design";
+import { HKButton } from "@/components/ui/HKButton";
 
 interface Payment {
   id: string;
@@ -35,27 +28,49 @@ interface Payment {
   notes: string | null;
   party: { name: string; type: string } | null;
   linkedBill: { id: string; billNumber: string } | null;
+  BankAccount_Payment_accountIdToBankAccount?: { name: string; type: string } | null;
+  BankAccount_Payment_destinationAccountIdToBankAccount?: { name: string; type: string } | null;
 }
 
-const PencilIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
-  </svg>
-);
+/**
+ * The counter-ledger for a payment — what shows up in the "to/from" cell.
+ *   1. Party (customer/vendor/expense/income) — most payments
+ *   2. Destination bank — for contra (bank-to-bank) transfers
+ *   3. Source bank — last-resort fallback (untyped/legacy data)
+ */
+function counterLedgerLabel(p: Payment): string {
+  if (p.party?.name) return p.party.name;
+  const dest = p.BankAccount_Payment_destinationAccountIdToBankAccount?.name;
+  if (dest) return `→ ${dest}`;
+  const src = p.BankAccount_Payment_accountIdToBankAccount?.name;
+  if (src) return src;
+  return "—";
+}
 
-const TrashIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-  </svg>
-);
+const MODE_COLOR: Record<string, string> = {
+  UPI: PU,
+  NEFT: GR,
+  CASH: AM,
+  CHEQUE: OR,
+  BANK_TRANSFER: GR,
+  CARD: PU,
+};
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
+function modeColor(mode: string): string {
+  return MODE_COLOR[mode.toUpperCase()] || PU;
+}
+
+function modeLabel(mode: string, t: any): string {
+  const m = mode.toUpperCase();
+  if (m === "UPI") return "UPI";
+  if (m === "NEFT") return "NEFT";
+  if (m === "CASH") return t("payments.record.mode.cash" as TranslationKey);
+  if (m === "CHEQUE") return t("payments.record.mode.cheque" as TranslationKey);
+  if (m === "BANK_TRANSFER") return t("payments.record.mode.bank" as TranslationKey);
+  return mode
+    .split("_")
+    .map((w) => w.charAt(0) + w.slice(1).toLowerCase())
+    .join(" ");
 }
 
 async function readError(response: Response) {
@@ -66,26 +81,23 @@ async function readError(response: Response) {
 export default function PaymentsListPage() {
   const router = useRouter();
   const { t } = useLanguage();
+  const isMobile = useIsMobile();
+
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState("ALL");
-  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [typeFilter, setTypeFilter] = useState<"ALL" | "INCOMING" | "OUTGOING">("ALL");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "COMPLETED" | "EXPECTED">("ALL");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [collapsedMonths, setCollapsedMonths] = useState<
-    Record<string, boolean>
-  >({});
+  const [collapsedMonths, setCollapsedMonths] = useState<Record<string, boolean>>({});
   const [markingId, setMarkingId] = useState<string | null>(null);
-  const [toast, setToast] = useState<{
-    message: string;
-    type: "success" | "error";
-  } | null>(null);
-  const [paymentToDelete, setPaymentToDelete] = useState<Payment | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [paymentToEdit, setPaymentToEdit] = useState<Payment | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [paymentToDelete, setPaymentToDelete] = useState<Payment | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const monthlyPaymentGroups = useMemo(() => {
     const monthFormatter = new Intl.DateTimeFormat("en-IN", {
@@ -94,63 +106,41 @@ export default function PaymentsListPage() {
     });
     const groups = new Map<
       string,
-      {
-        label: string;
-        payments: Payment[];
-        incomingTotal: number;
-        outgoingTotal: number;
-      }
+      { label: string; payments: Payment[]; incomingTotal: number; outgoingTotal: number }
     >();
-
-    for (const payment of payments) {
-      const paymentDate = new Date(payment.date);
-      const groupKey = `${paymentDate.getFullYear()}-${paymentDate.getMonth()}`;
-      const existing = groups.get(groupKey);
-      const isIncoming = payment.direction === "INCOMING";
-
+    // Only completed payments in month groups — pending are pinned separately
+    for (const payment of payments.filter((p) => p.status !== "EXPECTED")) {
+      const d = new Date(payment.date);
+      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      const existing = groups.get(key);
+      const isIn = payment.direction === "INCOMING";
       if (existing) {
         existing.payments.push(payment);
-        if (isIncoming) {
-          existing.incomingTotal += Number(payment.amount);
-        } else {
-          existing.outgoingTotal += Number(payment.amount);
-        }
-        continue;
+        if (isIn) existing.incomingTotal += Number(payment.amount);
+        else existing.outgoingTotal += Number(payment.amount);
+      } else {
+        groups.set(key, {
+          label: monthFormatter.format(d),
+          payments: [payment],
+          incomingTotal: isIn ? Number(payment.amount) : 0,
+          outgoingTotal: isIn ? 0 : Number(payment.amount),
+        });
       }
-
-      groups.set(groupKey, {
-        label: monthFormatter.format(paymentDate),
-        payments: [payment],
-        incomingTotal: isIncoming ? Number(payment.amount) : 0,
-        outgoingTotal: isIncoming ? 0 : Number(payment.amount),
-      });
     }
-
-    return Array.from(groups.entries()).map(([key, group]) => ({
-      key,
-      ...group,
-    }));
+    return Array.from(groups.entries()).map(([key, g]) => ({ key, ...g }));
   }, [payments]);
 
   const fetchPayments = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (search) {
-        params.set("search", search);
-      }
-      if (typeFilter !== "ALL") {
-        params.set("type", typeFilter);
-      }
-      if (statusFilter !== "ALL") {
-        params.set("status", statusFilter);
-      }
+      if (search) params.set("search", search);
+      if (typeFilter !== "ALL") params.set("type", typeFilter);
+      if (statusFilter !== "ALL") params.set("status", statusFilter);
       params.set("page", String(page));
 
       const response = await fetch(`/api/payments?${params.toString()}`);
-      if (!response.ok) {
-        throw new Error(await readError(response));
-      }
+      if (!response.ok) throw new Error(await readError(response));
 
       const data = await response.json();
       setPayments((data.payments || []) as Payment[]);
@@ -158,26 +148,11 @@ export default function PaymentsListPage() {
     } catch (error) {
       setPayments([]);
       setTotalPages(1);
-      showToast(
-        error instanceof Error ? error.message : t("payments.loadFailed"),
-        "error"
-      );
+      showToast(error instanceof Error ? error.message : t("payments.loadFailed"), "error");
     } finally {
       setLoading(false);
     }
   }, [page, search, statusFilter, t, typeFilter]);
-
-  const typeOptions = [
-    { key: "ALL", label: t("payments.filter.allTypes") },
-    { key: "INCOMING", label: t("payments.filter.received") },
-    { key: "OUTGOING", label: t("payments.filter.paid") },
-  ];
-
-  const statusOptions = [
-    { key: "ALL", label: t("payments.filter.allStatus") },
-    { key: "COMPLETED", label: t("payments.filter.completed") },
-    { key: "EXPECTED", label: t("payments.filter.expected") },
-  ];
 
   useEffect(() => {
     fetchPayments();
@@ -189,10 +164,7 @@ export default function PaymentsListPage() {
   }
 
   function toggleMonth(key: string) {
-    setCollapsedMonths((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }));
+    setCollapsedMonths((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
   async function markAsCompleted(paymentId: string) {
@@ -203,11 +175,7 @@ export default function PaymentsListPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ paymentId }),
       });
-
-      if (!response.ok) {
-        throw new Error(await readError(response));
-      }
-
+      if (!response.ok) throw new Error(await readError(response));
       showToast(t("payments.markCompletedSuccess"), "success");
       await fetchPayments();
     } catch (error) {
@@ -224,367 +192,617 @@ export default function PaymentsListPage() {
     if (!paymentToDelete) return;
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/payments/${paymentToDelete.id}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) throw res;
-      showToast(t("payments.deletedSuccess") || "Payment deleted", "success");
-      await fetchPayments();
+      const res = await fetch(`/api/payments/${paymentToDelete.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(await readError(res));
+      showToast(t("payments.deleteSuccess" as TranslationKey), "success");
       setIsDeleteModalOpen(false);
       setPaymentToDelete(null);
+      await fetchPayments();
     } catch (error) {
-      showToast(
-        error instanceof Error ? (error as any).message || "Delete failed" : t("payments.deleteFailed"),
-        "error"
-      );
+      showToast(error instanceof Error ? error.message : t("payments.deleteFailed" as TranslationKey), "error");
     } finally {
       setIsDeleting(false);
     }
   }
 
+  // Summary totals
+  const totalIn = payments
+    .filter((p) => p.direction === "INCOMING" && p.status === "COMPLETED")
+    .reduce((s, p) => s + Number(p.amount), 0);
+  const totalOut = payments
+    .filter((p) => p.direction === "OUTGOING" && p.status === "COMPLETED")
+    .reduce((s, p) => s + Number(p.amount), 0);
+  const net = totalIn - totalOut;
+
+  // §5.4: Pending payments pinned to top
+  const pendingPayments = payments.filter((p) => p.status === "EXPECTED");
+  const completedPayments = payments.filter((p) => p.status !== "EXPECTED");
+
+  const typeFilterOptions = [
+    { key: "ALL" as const, label: t("payments.filter.allTypes" as TranslationKey) },
+    { key: "INCOMING" as const, label: t("payments.filter.received" as TranslationKey) },
+    { key: "OUTGOING" as const, label: t("payments.filter.paid" as TranslationKey) },
+  ];
+
+  const statusFilterOptions = [
+    { key: "ALL" as const, label: t("payments.filter.allStatus" as TranslationKey) },
+    { key: "COMPLETED" as const, label: t("payments.filter.completed" as TranslationKey) },
+    { key: "EXPECTED" as const, label: t("payments.filter.expected" as TranslationKey) },
+  ];
+
   return (
-    <div className="animate-fade-in p-4 lg:p-8">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">{t("payments.title")}</h1>
-          <p className="mt-1 text-sm text-default-500">
-            {t("payments.subtitle")}
-          </p>
-        </div>
-        <Button
-          color="primary"
-          className="bg-gradient-to-r from-blue-600 to-indigo-600 font-semibold shadow-lg shadow-blue-500/25"
-          onPress={() => router.push("/payments/new")}
-          startContent={
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                d="M12 4v16m8-8H4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-              />
-            </svg>
-          }
-        >
-          {t("payments.record")}
-        </Button>
-      </div>
+    <div
+      style={{
+        background: "var(--sb-bg)",
+        minHeight: "100%",
+        paddingBottom: 0,
+        fontFamily: SG,
+      }}
+    >
+      {toast && <HKToast message={toast.message} type={toast.type} />}
 
-      {toast && (
-        <div
-          className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
-            }`}
-        >
-          {toast.message}
-        </div>
-      )}
-
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row">
-        <Input
-          aria-label={t("payments.searchPlaceholder")}
-          placeholder={t("payments.searchPlaceholder")}
-          value={search}
-          onValueChange={setSearch}
-          variant="bordered"
-          className="flex-1"
-          startContent={
-            <svg className="h-4 w-4 text-default-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-              />
-            </svg>
+      <div style={{ padding: isMobile ? "18px 14px 100px" : "24px 28px", maxWidth: 1440, margin: "0 auto" }}>
+        <PageHeader
+          title={t("payments.title" as TranslationKey)}
+          subtitle={t("payments.subtitle" as TranslationKey)}
+          isMobile={isMobile}
+          action={
+            <HKButton variant="success" onClick={() => router.push("/payments/new")}>
+              + {t("payments.record" as TranslationKey)}
+            </HKButton>
           }
         />
-        <Select
-          aria-label={t("payments.filter.allTypes")}
-          placeholder={t("payments.filter.allTypes")}
-          selectedKeys={new Set([typeFilter])}
-          onSelectionChange={(keys) => {
-            const value = Array.from(keys)[0] as string;
-            if (value) {
-              setTypeFilter(value);
-              setPage(1);
-            }
-          }}
-          variant="bordered"
-          className="w-40"
-        >
-          {typeOptions.map((option) => (
-            <SelectItem key={option.key}>{option.label}</SelectItem>
-          ))}
-        </Select>
-        <Select
-          aria-label={t("payments.filter.allStatus")}
-          placeholder={t("payments.filter.allStatus")}
-          selectedKeys={new Set([statusFilter])}
-          onSelectionChange={(keys) => {
-            const value = Array.from(keys)[0] as string;
-            if (value) {
-              setStatusFilter(value);
-              setPage(1);
-            }
-          }}
-          variant="bordered"
-          className="w-44"
-        >
-          {statusOptions.map((option) => (
-            <SelectItem key={option.key}>{option.label}</SelectItem>
-          ))}
-        </Select>
-      </div>
 
-      {loading ? (
-        <div className="space-y-3">
-          {[1, 2, 3, 4].map((item) => (
-            <Skeleton key={item} className="h-16 rounded-xl" />
+        {/* Summary stats */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr 1fr",
+            gap: 10,
+            marginBottom: 16,
+          }}
+        >
+          {[
+            { l: t("payments.receivedMonth" as TranslationKey),  v: totalIn,  c: GR,         bg: C.positiveSoft, sub: t("payments.receivedSub" as TranslationKey) },
+            { l: t("payments.paidMonth" as TranslationKey), v: totalOut, c: C.negative, bg: C.negativeSoft, sub: t("payments.paidSub" as TranslationKey) },
+            { l: t("payments.netCashFlow" as TranslationKey),  v: net,      c: net >= 0 ? GR : C.negative, bg: net >= 0 ? C.positiveSoft : C.negativeSoft, sub: t("payments.netSub" as TranslationKey) },
+          ].map((item, i) => (
+            <div
+              key={i}
+              style={{
+                padding: "16px 18px",
+                borderRadius: 14,
+                background: item.bg,
+                border: "1px solid var(--sb-border)",
+                boxShadow: "var(--sb-shadow-card)",
+              }}
+            >
+              <p
+                style={{
+                  fontSize: TYPE.caption,
+                  fontWeight: 700,
+                  color: item.c,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.5px",
+                  marginBottom: 6,
+                  fontFamily: SG,
+                }}
+              >
+                {item.l}
+              </p>
+              <p
+                style={{
+                  fontSize: isMobile ? TYPE.numMedium + 2 : TYPE.numLarge - 4,
+                  fontWeight: 800,
+                  color: "var(--sb-text)",
+                  fontFamily: IN,
+                  lineHeight: 1.1,
+                }}
+              >
+                {fmtFull(item.v)}
+              </p>
+              <p style={{ fontSize: TYPE.caption, fontWeight: 600, color: "var(--sb-sub)", marginTop: 6, fontFamily: SG }}>
+                {item.sub}
+              </p>
+            </div>
           ))}
         </div>
-      ) : payments.length === 0 ? (
-        <Card shadow="sm">
-          <CardBody className="flex flex-col items-center justify-center py-16">
-            <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-success/10">
-              <svg className="h-10 w-10 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                />
-              </svg>
-            </div>
-            <p className="text-lg font-medium text-default-600">
-              {search || typeFilter !== "ALL" || statusFilter !== "ALL"
-                ? t("payments.emptyFiltered")
-                : t("payments.empty")}
-            </p>
-            <Button
-              color="primary"
-              variant="flat"
-              size="sm"
-              className="mt-3"
-              onPress={() => router.push("/payments/new")}
+
+        {/* Filters */}
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            marginBottom: 16,
+            flexWrap: "wrap",
+            alignItems: "center",
+          }}
+        >
+          <SearchBox value={search} onChange={setSearch} placeholder={t("payments.searchPlaceholder" as TranslationKey)} />
+          <PillFilter
+            options={typeFilterOptions}
+            value={typeFilter}
+            onChange={(v) => { setTypeFilter(v); setPage(1); }}
+          />
+          <PillFilter
+            options={statusFilterOptions}
+            value={statusFilter}
+            onChange={(v) => { setStatusFilter(v); setPage(1); }}
+          />
+        </div>
+
+        {loading ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {[1, 2, 3, 4].map((i) => (
+              <HKSkeleton key={i} className="h-20 rounded-2xl" />
+            ))}
+          </div>
+        ) : payments.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--sb-sub)" }}>
+            <div style={{ fontSize: 52, marginBottom: 16 }}>💸</div>
+            <p
+              style={{
+                fontWeight: 700,
+                fontSize: TYPE.h2,
+                color: "var(--sb-text)",
+                marginBottom: 8,
+                fontFamily: SG,
+              }}
             >
-              {t("payments.record")}
-            </Button>
-          </CardBody>
-        </Card>
-      ) : (
-        <>
-          <div className="space-y-6">
+              {search || typeFilter !== "ALL" || statusFilter !== "ALL"
+                ? t("payments.emptyFiltered" as TranslationKey)
+                : t("payments.noPayments" as TranslationKey)}
+            </p>
+            <p style={{ fontSize: TYPE.body, fontWeight: 500, fontFamily: SG, marginBottom: 20 }}>
+              {search || typeFilter !== "ALL" || statusFilter !== "ALL"
+                ? t("payments.filtersChangeOrAdd" as TranslationKey)
+                : t("payments.firstPaymentStart" as TranslationKey)}
+            </p>
+            <HKButton variant="success" onClick={() => router.push("/payments/new")}>
+              + {t("payments.record" as TranslationKey)}
+            </HKButton>
+          </div>
+        ) : (
+          <>
+            {/* §5.4: Pinned pending payments section */}
+            {pendingPayments.length > 0 && (
+              <div style={{ marginBottom: 24 }}>
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 10, marginBottom: 12,
+                }}>
+                  <div style={{ width: 3, height: 18, borderRadius: 2, background: AM, flexShrink: 0 }} />
+                  <h2 style={{ fontSize: TYPE.bodyLarge, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>
+                    {t("payments.actionRequired" as TranslationKey)}
+                  </h2>
+                  <span style={{
+                    padding: "3px 10px", borderRadius: 8,
+                    background: C.warningSoft, color: AM,
+                    fontSize: TYPE.caption, fontWeight: 700, fontFamily: IN,
+                  }}>
+                    {pendingPayments.length} {t("payments.pendingLabel" as TranslationKey)}
+                  </span>
+                </div>
+                <div style={{ borderRadius: 16, border: "1px solid var(--sb-border)", overflow: "hidden", background: "var(--sb-card)" }}>
+                  {pendingPayments.map((p, i) => {
+                    const isIn = p.direction === "INCOMING";
+                    return (
+                      <div
+                        key={p.id}
+                        style={{
+                          padding: "14px 18px",
+                          borderBottom: i < pendingPayments.length - 1 ? "1px solid var(--sb-border)" : undefined,
+                          borderLeft: `3px solid ${AM}`,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 12,
+                          background: "transparent",
+                        }}
+                      >
+                        <HKAvatar name={counterLedgerLabel(p)} size={40} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, lineHeight: 1.3 }}>
+                            {counterLedgerLabel(p)}
+                          </p>
+                          <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--sb-sub)", fontFamily: SG, marginTop: 2 }}>
+                            {isIn ? t("payments.incomingAction" as TranslationKey) : t("payments.outgoingAction" as TranslationKey)} • {modeLabel(p.mode, t)}
+                          </p>
+                        </div>
+                        <span style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: AM, fontFamily: IN, whiteSpace: "nowrap" }}>
+                          {fmtFull(Number(p.amount))}
+                        </span>
+                        <button
+                          onClick={() => markAsCompleted(p.id)}
+                          disabled={markingId === p.id}
+                          style={{
+                            padding: "8px 16px",
+                            borderRadius: 10,
+                            background: C.positiveSoft,
+                            border: `1px solid ${GR}33`,
+                            color: GR,
+                            fontSize: TYPE.bodySmall,
+                            fontWeight: 700,
+                            fontFamily: SG,
+                            cursor: markingId === p.id ? "wait" : "pointer",
+                            opacity: markingId === p.id ? 0.6 : 1,
+                            whiteSpace: "nowrap",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {markingId === p.id ? "..." : `✓ ${t("payments.doneStatus" as TranslationKey)}`}
+                        </button>
+                        <button
+                          onClick={() => { setPaymentToEdit(p); setIsEditModalOpen(true); }}
+                          style={{ width: 34, height: 34, borderRadius: 9, border: "1px solid var(--sb-border)", background: "var(--sb-surface-alt)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+                          title={t("common.edit" as TranslationKey)}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--sb-text)" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                        </button>
+                        <button
+                          onClick={() => { setPaymentToDelete(p); setIsDeleteModalOpen(true); }}
+                          style={{ width: 34, height: 34, borderRadius: 9, border: `1px solid ${C.negative}33`, background: C.negativeSoft, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+                          title={t("common.delete" as TranslationKey)}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.negative} strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* §5.4: "Hua Hai" section label — only when pending also visible */}
+            {pendingPayments.length > 0 && monthlyPaymentGroups.length > 0 && (
+              <div style={{
+                display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ width: 3, height: 18, borderRadius: 2, background: "var(--sb-border-strong)", flexShrink: 0 }} />
+                  <h2 style={{ fontSize: TYPE.bodyLarge, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>
+                    {t("payments.completedSection" as TranslationKey)}
+                  </h2>
+                </div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {typeFilterOptions.map((opt) => (
+                    <button
+                      key={opt.key}
+                      onClick={() => { setTypeFilter(opt.key); setPage(1); }}
+                      style={{
+                        padding: "5px 13px",
+                        borderRadius: 20,
+                        border: typeFilter === opt.key ? `1px solid ${C.primary}` : "1px solid var(--sb-border)",
+                        background: typeFilter === opt.key ? C.primarySoft : "var(--sb-surface-alt)",
+                        color: typeFilter === opt.key ? C.primary : "var(--sb-sub)",
+                        fontSize: TYPE.bodySmall,
+                        fontWeight: 700,
+                        fontFamily: SG,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Completed payments — month grouped */}
             {monthlyPaymentGroups.map((group) => {
               const isCollapsed = collapsedMonths[group.key] === true;
               return (
-                <section key={group.key} className="space-y-3">
+                <div key={group.key} style={{ marginBottom: 20 }}>
+                  {/* Month header */}
                   <button
-                    type="button"
-                    aria-expanded={!isCollapsed}
-                    aria-controls={`payment-month-${group.key}`}
-                    className="w-full rounded-xl border border-default-200 bg-content2/40 px-4 py-2 text-left transition hover:bg-content2/60"
                     onClick={() => toggleMonth(group.key)}
+                    aria-expanded={!isCollapsed}
+                    style={{
+                      width: "100%",
+                      minHeight: 48,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      padding: "10px 16px",
+                      borderRadius: 12,
+                      background: "var(--sb-surface-alt)",
+                      border: "1px solid var(--sb-border)",
+                      marginBottom: 10,
+                      cursor: "pointer",
+                      fontFamily: SG,
+                      flexWrap: "wrap",
+                      gap: 10,
+                    }}
                   >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-semibold text-default-700">{group.label}</p>
-                        <Chip size="sm" variant="flat" color="default">
-                          {group.payments.length} payments
-                        </Chip>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-3 text-sm font-semibold">
-                          <span className="text-success">+{formatCurrency(group.incomingTotal)}</span>
-                          <span className="text-warning">-{formatCurrency(group.outgoingTotal)}</span>
-                        </div>
-                        <svg
-                          className={`h-4 w-4 text-default-500 transition-transform ${isCollapsed ? "" : "rotate-180"
-                            }`}
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            d="m19 9-7 7-7-7"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={1.8}
-                          />
-                        </svg>
-                      </div>
+                    <span style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)" }}>
+                      {group.label}
+                    </span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <span style={{ fontSize: TYPE.numSmall, fontWeight: 800, color: GR, fontFamily: IN }}>
+                        +{fmtFull(group.incomingTotal)}
+                      </span>
+                      <span style={{ fontSize: TYPE.numSmall, fontWeight: 800, color: C.negative, fontFamily: IN }}>
+                        -{fmtFull(group.outgoingTotal)}
+                      </span>
+                      <span style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--sb-sub)" }}>
+                        · {group.payments.length}
+                      </span>
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--sb-sub)"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        style={{
+                          transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
+                          transition: "transform 0.2s",
+                        }}
+                      >
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
                     </div>
                   </button>
-                  {!isCollapsed && (
-                    <div id={`payment-month-${group.key}`} className="space-y-3">
-                      {group.payments.map((payment) => (
-                        <Card
-                          key={payment.id}
-                          shadow="sm"
-                          className={`transition hover:shadow-md ${payment.status === "EXPECTED" ? "border-l-4 border-l-warning" : ""
-                            }`}
-                        >
-                          <CardBody className="p-4">
-                            <div className="flex items-center justify-between">
-                              <div className="flex flex-col gap-1">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span className="font-semibold">
-                                    {payment.party ? payment.party.name : "Bank/Cash Transfer"}
-                                  </span>
-                                  <Chip
-                                    size="sm"
-                                    variant="flat"
-                                    color={
-                                      payment.status === "EXPECTED"
-                                        ? "warning"
-                                        : payment.direction === "INCOMING"
-                                          ? "success"
-                                          : "warning"
-                                    }
-                                  >
-                                    {payment.status === "EXPECTED"
-                                      ? payment.direction === "INCOMING"
-                                        ? t("payments.toReceive")
-                                        : t("payments.toPay")
-                                      : payment.direction === "INCOMING"
-                                        ? t("payments.filter.received")
-                                        : t("payments.filter.paid")}
-                                  </Chip>
-                                  <Chip size="sm" variant="flat" color="default" className="capitalize">
-                                    {payment.mode.toLowerCase().replace("_", " ")}
-                                  </Chip>
-                                </div>
-                                <div className="flex gap-3 text-xs text-default-400">
-                                  <span>
-                                    {new Date(payment.date).toLocaleDateString("en-IN", {
-                                      day: "numeric",
-                                      month: "short",
-                                      year: "numeric",
-                                    })}
-                                  </span>
-                                  {payment.notes && (
-                                    <span className="max-w-[200px] truncate">{payment.notes}</span>
-                                  )}
-                                  {payment.linkedBill && (
-                                    <span className="max-w-[200px] truncate">
-                                      {t("payments.billPrefix")}: {payment.linkedBill.billNumber}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
 
-                              <div className="flex items-center gap-3">
-                                <p
-                                  className={`text-lg font-bold ${payment.direction === "INCOMING" ? "text-success" : "text-warning"
-                                    }`}
-                                >
-                                  {payment.direction === "INCOMING" ? "+" : "-"}
-                                  {formatCurrency(payment.amount)}
-                                </p>
-                                {payment.status === "EXPECTED" && (
-                                  <Button
-                                    size="sm"
-                                    color="success"
-                                    variant="flat"
-                                    isLoading={markingId === payment.id}
-                                    onPress={() => markAsCompleted(payment.id)}
-                                  >
-                                    {t("payments.markCompleted")}
-                                  </Button>
+                  {!isCollapsed && (
+                    <HKCard style={{ padding: "0 16px" }}>
+                      {group.payments.map((p, i) => {
+                        const isIncoming = p.direction === "INCOMING";
+                        const isExpected = p.status === "EXPECTED";
+                        const dirColor = isIncoming ? GR : C.negative;
+                        return (
+                          <div
+                            key={p.id}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 14,
+                              padding: "16px 0",
+                              borderBottom:
+                                i < group.payments.length - 1
+                                  ? "1px solid var(--sb-border)"
+                                  : "none",
+                              borderLeft: isExpected ? `4px solid ${AM}` : "none",
+                              paddingLeft: isExpected ? 12 : 0,
+                              marginLeft: isExpected ? -12 : 0,
+                              minHeight: 64,
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: 44,
+                                height: 44,
+                                borderRadius: 12,
+                                background: isIncoming ? C.positiveSoft : C.negativeSoft,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                flexShrink: 0,
+                              }}
+                            >
+                              <svg
+                                width="20"
+                                height="20"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke={dirColor}
+                                strokeWidth="2.5"
+                                strokeLinecap="round"
+                              >
+                                {isIncoming ? (
+                                  <>
+                                    <line x1="12" y1="19" x2="12" y2="5" />
+                                    <polyline points="5 12 12 5 19 12" />
+                                  </>
+                                ) : (
+                                  <>
+                                    <line x1="12" y1="5" x2="12" y2="19" />
+                                    <polyline points="19 12 12 19 5 12" />
+                                  </>
                                 )}
-                                <Button
-                                  isIconOnly
-                                  variant="light"
-                                  size="sm"
-                                  onPress={() => {
-                                    setPaymentToEdit(payment);
-                                    setIsEditModalOpen(true);
+                              </svg>
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  alignItems: "flex-start",
+                                  gap: 12,
+                                }}
+                              >
+                                <div style={{ minWidth: 0, flex: 1 }}>
+                                  <p
+                                    style={{
+                                      fontSize: TYPE.bodyLarge,
+                                      fontWeight: 700,
+                                      color: "var(--sb-text)",
+                                      marginBottom: 5,
+                                      fontFamily: SG,
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                      whiteSpace: "nowrap",
+                                    }}
+                                  >
+                                    {counterLedgerLabel(p)}
+                                  </p>
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      gap: 8,
+                                      alignItems: "center",
+                                      flexWrap: "wrap",
+                                    }}
+                                  >
+                                    <span
+                                      style={{
+                                        fontSize: TYPE.chip,
+                                        fontWeight: 700,
+                                        color: modeColor(p.mode),
+                                        background: modeColor(p.mode) + "18",
+                                        padding: "3px 9px",
+                                        borderRadius: 6,
+                                        fontFamily: SG,
+                                      }}
+                                    >
+                                      {modeLabel(p.mode, t)}
+                                    </span>
+                                    {isExpected && (
+                                      <span
+                                        style={{
+                                          fontSize: TYPE.chip,
+                                          fontWeight: 700,
+                                          color: AM,
+                                          background: C.warningSoft,
+                                          padding: "3px 9px",
+                                          borderRadius: 6,
+                                          fontFamily: SG,
+                                        }}
+                                      >
+                                        {isIncoming ? t("payments.incomingAction" as TranslationKey) : t("payments.outgoingAction" as TranslationKey)}
+                                      </span>
+                                    )}
+                                    <span
+                                      style={{
+                                        fontSize: TYPE.bodySmall,
+                                        fontWeight: 500,
+                                        color: "var(--sb-sub)",
+                                        fontFamily: SG,
+                                      }}
+                                    >
+                                      {new Date(p.date).toLocaleDateString("en-IN", {
+                                        day: "numeric",
+                                        month: "short",
+                                      })}
+                                    </span>
+                                    {p.linkedBill && (
+                                      <span
+                                        style={{
+                                          fontSize: TYPE.bodySmall,
+                                          fontWeight: 500,
+                                          color: "var(--sb-sub)",
+                                          fontFamily: IN,
+                                        }}
+                                      >
+                                        · {p.linkedBill.billNumber}
+                                      </span>
+                                    )}
+                                    {p.notes && (
+                                      <span
+                                        style={{
+                                          fontSize: TYPE.bodySmall,
+                                          fontWeight: 500,
+                                          color: "var(--sb-sub)",
+                                          fontFamily: SG,
+                                          maxWidth: 200,
+                                          overflow: "hidden",
+                                          textOverflow: "ellipsis",
+                                          whiteSpace: "nowrap",
+                                        }}
+                                      >
+                                        · {p.notes}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 10,
+                                    flexShrink: 0,
                                   }}
                                 >
-                                  <PencilIcon className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  isIconOnly
-                                  variant="light"
-                                  color="danger"
-                                  size="sm"
-                                  onPress={() => {
-                                    setPaymentToDelete(payment);
-                                    setIsDeleteModalOpen(true);
-                                  }}
-                                >
-                                  <TrashIcon className="h-4 w-4" />
-                                </Button>
+                                  <p
+                                    style={{
+                                      fontSize: TYPE.numMedium,
+                                      fontWeight: 800,
+                                      color: dirColor,
+                                      fontFamily: IN,
+                                      whiteSpace: "nowrap",
+                                    }}
+                                  >
+                                    {isIncoming ? "+" : "-"}
+                                    {fmtFull(p.amount)}
+                                  </p>
+                                  {isExpected && (
+                                    <button
+                                      onClick={() => markAsCompleted(p.id)}
+                                      disabled={markingId === p.id}
+                                      style={{
+                                        minHeight: 40,
+                                        padding: "0 14px",
+                                        borderRadius: 10,
+                                        border: "none",
+                                        background: C.positiveSoft,
+                                        color: GR,
+                                        fontSize: TYPE.bodySmall,
+                                        fontWeight: 700,
+                                        fontFamily: SG,
+                                        cursor: markingId === p.id ? "wait" : "pointer",
+                                        opacity: markingId === p.id ? 0.6 : 1,
+                                        whiteSpace: "nowrap",
+                                      }}
+                                    >
+                                      {markingId === p.id ? "..." : `✓ ${t("payments.doneStatus" as TranslationKey)}`}
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => { setPaymentToEdit(p); setIsEditModalOpen(true); }}
+                                    style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid var(--sb-border)", background: "var(--sb-surface-alt)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+                                    title={t("common.edit" as TranslationKey)}
+                                  >
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--sb-text)" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                                  </button>
+                                  <button
+                                    onClick={() => { setPaymentToDelete(p); setIsDeleteModalOpen(true); }}
+                                    style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${C.negative}33`, background: C.negativeSoft, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+                                    title={t("common.delete" as TranslationKey)}
+                                  >
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.negative} strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
+                                  </button>
+                                </div>
                               </div>
                             </div>
-                          </CardBody>
-                        </Card>
-                      ))}
-                    </div>
+                          </div>
+                        );
+                      })}
+                    </HKCard>
                   )}
-                </section>
+                </div>
               );
             })}
-          </div>
 
-          {totalPages > 1 && (
-            <div className="mt-6 flex justify-center">
-              <Pagination total={totalPages} page={page} onChange={setPage} showControls />
-            </div>
-          )}
-        </>
-      )}
+            {totalPages > 1 && (
+              <div style={{ marginTop: 24, display: "flex", justifyContent: "center" }}>
+                <HKPagination total={totalPages} page={page} onChange={setPage} showControls />
+              </div>
+            )}
+          </>
+        )}
+      </div>
 
       <EditPaymentModal
         payment={paymentToEdit as EditablePayment | null}
         isOpen={isEditModalOpen}
         onClose={() => { setIsEditModalOpen(false); setPaymentToEdit(null); }}
-        onSuccess={() => { showToast("Payment updated", "success"); fetchPayments(); }}
+        onSuccess={() => { fetchPayments(); }}
       />
 
-      {/* Delete Confirmation Modal */}
-      <Modal
+      <HKModal
         isOpen={isDeleteModalOpen}
-        onOpenChange={(open) => setIsDeleteModalOpen(open)}
-        backdrop="blur"
-        placement="center"
-        classNames={{
-          backdrop: "bg-black/60",
-        }}
+        onClose={() => { setIsDeleteModalOpen(false); setPaymentToDelete(null); }}
+        title={t("payments.deleteTitle" as TranslationKey)}
+        footer={
+          <>
+            <HKButton variant="secondary" onClick={() => { setIsDeleteModalOpen(false); setPaymentToDelete(null); }} isDisabled={isDeleting}>{t("common.cancel" as TranslationKey)}</HKButton>
+            <HKButton variant="danger" onClick={handleDeletePayment} isLoading={isDeleting}>{t("payments.deleteConfirm" as TranslationKey)}</HKButton>
+          </>
+        }
       >
-        <ModalContent>
-          {(onClose) => (
-            <>
-              <ModalHeader className="flex flex-col gap-1">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-full bg-danger/10">
-                    <TrashIcon className="w-5 h-5 text-danger" />
-                  </div>
-                  <span className="text-xl font-bold">Delete Transaction</span>
-                </div>
-              </ModalHeader>
-              <ModalBody>
-                <p className="text-default-500">
-                  Are you sure you want to delete this transaction for <span className="font-semibold text-foreground">{formatCurrency(paymentToDelete?.amount || 0)}</span>?
-                  This will reverse the balances and this action cannot be undone.
-                </p>
-              </ModalBody>
-              <ModalFooter>
-                <Button variant="flat" onPress={onClose} disabled={isDeleting}>
-                  Cancel
-                </Button>
-                <Button
-                  color="danger"
-                  onPress={handleDeletePayment}
-                  isLoading={isDeleting}
-                  className="font-semibold shadow-lg shadow-danger/20"
-                >
-                  Delete Transaction
-                </Button>
-              </ModalFooter>
-            </>
-          )}
-        </ModalContent>
-      </Modal>
+        <p style={{ fontFamily: SG, fontSize: TYPE.body, color: "var(--sb-sub)", lineHeight: 1.6 }}>
+          {t("payments.deleteBody" as TranslationKey)}
+        </p>
+      </HKModal>
     </div>
   );
 }

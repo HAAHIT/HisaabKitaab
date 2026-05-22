@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { readStoredObject } from "@/lib/object-storage";
-import { resolveWriteSession } from "@/lib/api-tenant";
+import { resolveSession } from "@/lib/api-tenant";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,8 +16,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // [FIX] Use JWT-verified session instead of trusting proxy headers
-  const sessionResolution = await resolveWriteSession(request);
+  const sessionResolution = await resolveSession(request);
   if (!sessionResolution.ok) return sessionResolution.response;
   const { tenantId, userId, role } = sessionResolution.session;
 
@@ -87,22 +86,34 @@ export async function GET(
         return NextResponse.json({ error: "Invalid proxy URL" }, { status: 400 });
       }
 
-      // Check for local/private IP ranges to prevent SSRF
+      // `URL.hostname` strips the surrounding brackets from `[::1]`, so we
+      // compare the bare textual host. We intentionally only block hosts that
+      // *parse* as a private literal — DNS rebinding (a public hostname that
+      // resolves to a private address) is mitigated separately by running
+      // the proxy in a network namespace without metadata access. A safer
+      // alternative is dns.lookup + re-check after the fetch handshake, but
+      // that requires a custom http.Agent and is out of scope here.
       const hostname = url.hostname.toLowerCase();
-      const isPrivateIP = (host: string) => {
-        if (host === "localhost" || host === "127.0.0.1" || host === "::1") return true;
-        if (host.startsWith("10.")) return true; // 10.0.0.0/8
-        if (host.startsWith("192.168.")) return true; // 192.168.0.0/16
-        if (host.startsWith("169.254.")) return true; // 169.254.0.0/16
-
-        // 172.16.0.0/12
-        const match = host.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./);
-        if (match) return true;
-
+      const isPrivateIPv4 = (host: string) => {
+        if (host === "localhost" || host === "127.0.0.1") return true;
+        if (host.startsWith("10.")) return true;             // 10.0.0.0/8
+        if (host.startsWith("192.168.")) return true;        // 192.168.0.0/16
+        if (host.startsWith("169.254.")) return true;        // 169.254.0.0/16 (incl. cloud metadata)
+        if (host.startsWith("0.") || host === "0.0.0.0") return true; // 0.0.0.0/8
+        if (/^127\./.test(host)) return true;                // entire 127.0.0.0/8 loopback
+        if (/^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host)) return true; // 172.16.0.0/12
         return false;
       };
-
-      if (isPrivateIP(hostname)) {
+      const isPrivateIPv6 = (host: string) => {
+        if (host === "::1" || host === "::") return true;
+        if (host.startsWith("fe80:") || host.startsWith("fe80::")) return true; // link-local
+        if (/^f[cd][0-9a-f]{2}:/.test(host)) return true;    // fc00::/7 unique-local
+        // IPv4-mapped (::ffff:127.0.0.1) and IPv4-compatible (::127.0.0.1) — check the embedded v4
+        const v4Mapped = host.match(/^(?:::ffff:|::)([0-9.]+)$/);
+        if (v4Mapped && isPrivateIPv4(v4Mapped[1])) return true;
+        return false;
+      };
+      if (isPrivateIPv4(hostname) || isPrivateIPv6(hostname)) {
         return NextResponse.json({ error: "Forbidden proxy target" }, { status: 403 });
       }
 
@@ -110,7 +121,7 @@ export async function GET(
       for (let attempt = 0; attempt < 2; attempt++) {
         proxyResponse = await fetch(asset.storageKey, {
           method: "GET",
-          headers: { "User-Agent": "HisaabKitaab/1.0 AssetProxy" },
+          headers: { "User-Agent": "SoloBooks/1.0 AssetProxy" },
           signal: AbortSignal.timeout(5000),
         });
         // Only retry on server-side errors — 4xx means the resource is

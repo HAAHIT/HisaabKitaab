@@ -11,19 +11,14 @@ import {
   journalForPurchaseBill,
 } from "@/lib/journal";
 import { NextRequest, NextResponse } from "next/server";
-import { resolveWriteSession } from "@/lib/api-tenant";
+import { resolveSession } from "@/lib/api-tenant";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { logError, getRequestId } from "@/lib/observability";
-import crypto from "crypto";
+import { generateLockKey } from "@/lib/locks";
 import { z } from "zod";
 
 type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 type BillRowsJson = NonNullable<Parameters<typeof prisma.bill.create>[0]["data"]>["rows"];
-
-function generateLockKey(tenantId: string): bigint {
-  const hash = crypto.createHash("sha256").update(tenantId).digest("hex");
-  return BigInt("0x" + hash.substring(0, 15));
-}
 
 const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
 
@@ -35,8 +30,8 @@ const CreatePurchaseSchema = z.object({
   billDate: z.string().datetime().optional(),
   gstin: z.string().regex(GSTIN_REGEX, { message: "Invalid GSTIN format." }).nullish(),
   placeOfSupply: z.string().refine((val) => GST_STATE_CODE_SET.has(val), {
-    message: "Invalid place of supply. Must be a 2-digit GST state code.",
-  }).nullish(),
+      message: "Invalid place of supply. Must be a 2-digit GST state code.",
+    }).nullish(),
   rows: z.array(z.record(z.string(), z.unknown())).min(1),
   notes: z.string().nullish(),
   terms: z.string().nullish(),
@@ -70,8 +65,7 @@ export async function POST(request: NextRequest) {
   const rateLimitResponse = await checkRateLimit(request, "purchases.create", 30);
   if (rateLimitResponse) return rateLimitResponse;
 
-  // [FIX] Use JWT-verified session instead of trusting proxy headers
-  const sessionResolution = await resolveWriteSession(request);
+  const sessionResolution = await resolveSession(request);
   if (!sessionResolution.ok) return sessionResolution.response;
   const { tenantId, userId, role } = sessionResolution.session;
 
@@ -136,7 +130,7 @@ export async function POST(request: NextRequest) {
     const effectiveGstin = gstin || party.gstin;
     const isInterState = deriveIsInterState(effectiveGstin, tenant?.gstin, body.isInterState);
     const now = new Date();
-
+    
     // Use provided templateId or fallback to __PURCHASE_BILL__
     let template;
     if (templateId) {
@@ -149,7 +143,7 @@ export async function POST(request: NextRequest) {
       template = await prisma.billTemplate.findFirst({
         where: { name: "__PURCHASE_BILL__", tenantId },
       });
-
+      
       if (!template) {
         template = await prisma.billTemplate.create({
           data: {
@@ -196,7 +190,6 @@ export async function POST(request: NextRequest) {
           status: billStatus,
           isInterState,
           placeOfSupply: body.placeOfSupply ?? null,
-          date: billDate ? new Date(billDate) : now, // [ADDED] Persist explicitly
           createdBy: userId!,
           isDeleted: false,
         },
@@ -230,7 +223,7 @@ export async function POST(request: NextRequest) {
 
         await journalForPurchaseBill(tx, tenantId, {
           id: createdBill.id,
-          partyName: party.name,
+          vendorName: party.name,
           partyId: party.id,
           subtotal: createdBill.subtotal.toNumber(),
           cgst,
@@ -239,7 +232,7 @@ export async function POST(request: NextRequest) {
           grandTotal: createdBill.grandTotal.toNumber(),
           isReverseCharge: isReverseCharge || false,
           createdBy: userId!,
-          entryDate: billDate ? new Date(billDate) : createdBill.createdAt,
+          billDate: billDate ? new Date(billDate) : createdBill.createdAt,
         });
       }
 

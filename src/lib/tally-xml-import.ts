@@ -4,7 +4,7 @@
  * Parses Tally ERP 9 / Tally Prime XML export format into
  * structured vouchers and party masters that can be committed to the DB.
  *
- * Handles both HisaabKitaab-exported XML (re-import) and native Tally exports.
+ * Handles both SoloBooks-exported XML (re-import) and native Tally exports.
  */
 
 import { XMLParser } from "fast-xml-parser";
@@ -12,7 +12,7 @@ import type { AccountCode } from "./chart-of-accounts";
 import { stateNameToGstCode } from "./gst-states";
 
 // ── Ledger name → AccountCode mapping ────────────────────────────────────────
-// Covers HisaabKitaab account names and common Tally short names.
+// Covers SoloBooks account names and common Tally short names.
 
 const LEDGER_TO_CODE: Record<string, AccountCode> = {
   // Income / Expense
@@ -20,7 +20,7 @@ const LEDGER_TO_CODE: Record<string, AccountCode> = {
   Sales: "SALES",
   "Purchase Account": "PURCHASE",
   Purchase: "PURCHASE",
-  // Party groups (used in HisaabKitaab exports)
+  // Party groups (used in SoloBooks exports)
   "Sundry Debtors": "SUNDRY_DEBTORS",
   "Sundry Creditors": "SUNDRY_CREDITORS",
   // Payment instruments
@@ -57,11 +57,11 @@ const FALLBACK_BY_VOUCHER: Record<string, AccountCode> = {
 
 // ── Tally group → AccountCode mapping ───────────────────────────────────────
 // Maps Tally's standard account group names (as they appear in <PARENT>) to
-// our internal AccountCode. Used when LEDGER records are present in the XML
-// (e.g. Master.xml combined with DayBook, or an "All Masters" export).
-// "Duties & Taxes" is handled specially — see resolveGstAccountCode.
+// our internal AccountCode. "Duties & Taxes" is handled by resolveGstAccountCode.
+// Groups whose AccountCode was removed from this branch are omitted (they fall
+// through to the pattern-based resolver or voucher-type fallback).
 
-const TALLY_GROUP_TO_ACCOUNT_CODE: Record<string, AccountCode> = {
+const TALLY_GROUP_TO_ACCOUNT_CODE: Partial<Record<string, AccountCode>> = {
   "Sales Accounts": "SALES",
   "Purchase Accounts": "PURCHASE",
   "Sundry Debtors": "SUNDRY_DEBTORS",
@@ -96,7 +96,7 @@ const TALLY_GROUP_TO_ACCOUNT_CODE: Record<string, AccountCode> = {
  * Handles Tally naming quirks: "C Gst Payable @ 6%", "C-GST Receivable",
  * "S Gst Receiceivable @ 6%" (typos), etc.
  */
-function resolveGstAccountCode(ledgerName: string): AccountCode {
+function resolveGstAccountCode(ledgerName: string): AccountCode | null {
   const upper = ledgerName.toUpperCase();
   const isCgst = /\bC[\s-]?GST\b/i.test(ledgerName) || upper.includes("CGST");
   const isSgst = /\bS[\s-]?GST\b/i.test(ledgerName) || upper.includes("SGST");
@@ -108,7 +108,6 @@ function resolveGstAccountCode(ledgerName: string): AccountCode {
   if (isSgst) return isReceivable ? "SGST_INPUT" : "SGST_OUTPUT";
   if (isIgst) return isReceivable ? "IGST_INPUT" : "IGST_OUTPUT";
 
-  // GST Liability / TDS under Duties & Taxes
   if (upper.includes("TDS") || upper.includes("TAX DEDUCTED")) return "CURRENT_LIABILITIES";
   return "CURRENT_LIABILITIES"; // generic duties & taxes fallback
 }
@@ -153,36 +152,30 @@ function resolveAccountCodeByPattern(ledgerName: string): AccountCode | null {
   if (/\bI?GST\s+PURCHASE/i.test(ledgerName)) return "PURCHASE";
 
   // ── Sales A/c pattern ─────────────────────────────────────────────────────
-  // "Online Payment Sales A/c", "Cash Sales A/c"
   if (/SALES\s*A\/?C/i.test(ledgerName)) return "SALES";
 
   // ── Purchases A/c pattern ─────────────────────────────────────────────────
-  // "Computer Purchases A/c.", "Furniture Purchases A/c."
   if (/PURCHASES?\s*A\/?C/i.test(ledgerName)) return "PURCHASE";
 
   // ── Debit Note / Credit Note accounts ─────────────────────────────────────
   if (/\bDEBIT\s*NOTE\b/i.test(ledgerName)) return "PURCHASE";
   if (/\bCREDIT\s*NOTE\b/i.test(ledgerName)) return "SALES";
 
-  // ��─ Round off ─────────────────────────��───────────────────────────────────
-  // "Rounded Off A/.C", "Round Off"
+  // ── Round off ─────────────────────────────────────────────────────────────
   if (/\bROUND/i.test(ledgerName)) return "ROUND_OFF";
 
   // ── Bank accounts ─────────────────────────────────────────────────────────
-  // "HDFC Bank Ltd, Current A/c", "State Bank of India Current Account"
-  // Requires "Bank" + qualifying suffix to avoid matching party names like "Bank Road Traders"
   if (/\bBANK\b/i.test(ledgerName) && /\b(A\/?C|LTD|ACCOUNT|CURRENT)\b/i.test(ledgerName)) return "BANK";
 
   // ── Expense accounts ──────────────────────────────────────────────────────
-  // "Telephone Expenses A/c.", "Bank Commission Exp.A/c.", "Purchases Expenses A/c."
+  // "Telephone Expenses A/c.", "Bank Commission Exp.A/c."
   if (/EXP(?:ENSES?)?\.?\s*A\/?C/i.test(ledgerName)) return "INDIRECT_EXPENSE";
   if (/\bDEPRECIATION\b/i.test(ledgerName)) return "INDIRECT_EXPENSE";
 
   // ── Capital / Partner accounts ────────────────────────────────────────────
-  // "Atul S Doshi Current A/c", "Dhaval Nishit Doshi Fixed Capital A/c."
   if (/CAPITAL\s*A\/?C/i.test(ledgerName)) return "OWNER_EQUITY";
 
-  // ── TDS / Tax liability ────���──────────────────────────────────────────────
+  // ── TDS / Tax liability ────────────────────────────────────────────────────
   // "Income Tax Tax Deducted At Source A/C", "GST (TDS) A/C"
   if (/\bTDS\b/i.test(ledgerName) || /TAX\s*DEDUCTED/i.test(ledgerName)) return "CURRENT_LIABILITIES";
   if (/\bGST\s*LIABILITY\b/i.test(ledgerName)) return "CURRENT_LIABILITIES";
@@ -191,24 +184,14 @@ function resolveAccountCodeByPattern(ledgerName: string): AccountCode | null {
 }
 
 /**
- * Maps Tally's voucher type name strings (both HisaabKitaab exports and
+ * Maps Tally's voucher type name strings (both SoloBooks exports and
  * native TallyPrime exports) to our internal VoucherType enum values.
- *
- * [FIX-P0] Added GST return types so native Tally exports with
- * "Sales Return" / "Credit Note" / "Purchase Return" / "Debit Note" are
- * no longer dropped with parse errors.
- *
- * Mapping rationale:
- *   "Sales Return" / "Credit Note" → SALES  (reversal detected by narration
- *       / voucherType at journal-write time, consistent with existing
- *       legacy-narration path for CREDIT_NOTE promotion)
- *   "Purchase Return" / "Debit Note" → PURCHASE  (symmetric)
  */
 const VOUCHER_TYPE_MAP: Record<
   string,
   "SALES" | "PURCHASE" | "RECEIPT" | "PAYMENT" | "JOURNAL"
 > = {
-  // Standard types (HisaabKitaab exports + native Tally)
+  // Standard types (SoloBooks exports + native Tally)
   Sales: "SALES",
   Purchase: "PURCHASE",
   Receipt: "RECEIPT",
@@ -216,10 +199,10 @@ const VOUCHER_TYPE_MAP: Record<
   Journal: "JOURNAL",
   Contra: "JOURNAL",
   // GST return types — native TallyPrime export strings
-  "Sales Return": "SALES",    // Credit Note (GSTR-1 Table 9B)
-  "Credit Note": "SALES",    // alt wording used by some Tally versions
-  "Purchase Return": "PURCHASE", // Debit Note (GSTR-3B)
-  "Debit Note": "PURCHASE",   // alt wording
+  "Sales Return": "SALES",
+  "Credit Note": "SALES",
+  "Purchase Return": "PURCHASE",
+  "Debit Note": "PURCHASE",
 };
 
 /**
@@ -234,7 +217,7 @@ const VCH_HEURISTIC: Record<string, "SALES" | "PURCHASE" | "RECEIPT" | "PAYMENT"
   JOURNAL: "JOURNAL",
   CONTRA: "JOURNAL",
   INVOICE: "SALES",
-}
+};
 
 // ── Output types ─────────────────────────────────────────────────────────────
 
@@ -261,12 +244,11 @@ export type ParsedVoucher = {
   lines: ParsedLedgerLine[];
   totalDebit: number;
   /**
-   * Tally's <REMOTEID> or <GUID> tag value with "HisaabKitaab-" prefix stripped.
+   * Tally's <REMOTEID> or <GUID> tag value with "SoloBooks-" prefix stripped.
    * Used as the primary idempotency key on import (stored in JournalEntry.remoteId).
    * Null for native Tally XML that does not carry a REMOTEID.
    */
   remoteId: string | null;
-  // ── GST metadata (G1 fix) ───────────────────────────────────────────────────
   /** 2-digit GST state code reverse-looked up from Tally's state name. Null when absent. */
   placeOfSupply: string | null;
   /** First tax rate found in GSTDETAILS.LIST (e.g. 18). Null when absent. */
@@ -274,30 +256,22 @@ export type ParsedVoucher = {
   /** HSN/SAC codes extracted from GSTDETAILS.LIST HSNCODE tags. */
   hsnCodes: string[];
   /**
-   * [G2] True if ledger entries contain IGST-related accounts (indicating inter-state supply).
+   * True if ledger entries contain IGST-related accounts (indicating inter-state supply).
    * Determined by scanning ledger names for "IGST" vs "CGST"/"SGST" keywords.
    * Null when no GST ledger entries are present (e.g. exempt supplies).
    */
   isInterState: boolean | null;
-  /**
-   * For Sales/Purchase vouchers, the raw stock-wise rows.
-   * Key names match standard HisaabKitaab template columns (Item, Qty, Rate, Amount).
-   */
+  /** For Sales/Purchase vouchers, the raw stock-wise rows parsed from ALLINVENTORYENTRIES.LIST. */
   inventoryRows?: Record<string, any>[];
-  /**
-   * [FIX #12] Hash-based fingerprint for idempotency when no REMOTEID is present.
-   * Generated from (date + reference + totalDebit + narration + lineCount).
-   */
-  fingerprint: string;
 };
 
 export type ParsedPartyMaster = {
   name: string;
   group: "Sundry Debtors" | "Sundry Creditors";
   openingBalance: number;
-  /** [W-X3] GSTIN extracted from Tally's <PARTYGSTIN> tag. Null when absent. */
+  /** GSTIN extracted from Tally's <PARTYGSTIN> tag. Null when absent. */
   gstin: string | null;
-  /** [W-X3] Address extracted from Tally's <ADDRESS.LIST> tag. Null when absent. */
+  /** Address extracted from Tally's <ADDRESS.LIST> tag. Null when absent. */
   address: string | null;
 };
 
@@ -333,14 +307,12 @@ export function parseTallyDate(raw: unknown): Date | null {
   const monthRaw = parseInt(s.slice(4, 6), 10);
   const day = parseInt(s.slice(6, 8), 10);
 
-  // [FIX #15] Explicitly validate month and day bounds to catch malformed Tally dates
   if (monthRaw < 1 || monthRaw > 12 || day < 1 || day > 31) return null;
 
   const month = monthRaw - 1;
-  // 06:30 UTC = 12:00 noon IST — date string is unambiguous in every timezone
   const d = new Date(Date.UTC(year, month, day, 6, 30, 0));
   if (isNaN(d.getTime())) return null;
-  // [FIX #37] Validate day didn't roll over (e.g. Feb 31 → Mar 3)
+  // Validate day didn't roll over (e.g. Feb 31 → Mar 3)
   if (d.getUTCMonth() !== month || d.getUTCDate() !== day) return null;
   return d;
 }
@@ -348,7 +320,10 @@ export function parseTallyDate(raw: unknown): Date | null {
 function parseAmount(raw: unknown): number {
   if (raw === undefined || raw === null || raw === "") return 0;
   const n = typeof raw === "number" ? raw : parseFloat(String(raw));
-  return isNaN(n) ? 0 : n;
+  if (isNaN(n)) return 0;
+  // Tally exports to 4 decimals; clamp to paise (2 decimals) immediately so
+  // downstream sums, fingerprints, and balance checks operate on stable values.
+  return Math.round(n * 100) / 100;
 }
 
 function extractBillAllocationName(entry: Record<string, unknown>): string | null {
@@ -393,6 +368,7 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
         ].includes(name),
       parseTagValue: true,
       parseAttributeValue: false,
+      maxNestedTags: 10000,
     });
     parsed = parser.parse(xmlText) as Record<string, unknown>;
   } catch (err) {
@@ -407,9 +383,9 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
   }
 
   // Navigate to TALLYMESSAGE array.
-  // Importable HisaabKitaab XML uses BODY > IMPORTDATA > REQUESTDATA.
-  // Native Tally exports commonly use BODY > DATA > TALLYMESSAGE, and some
-  // exports wrap LEDGER/VOUCHER nodes directly in BODY > DATA > COLLECTION.
+  // SoloBooks XML uses BODY > IMPORTDATA > REQUESTDATA.
+  // Native Tally exports use BODY > DATA > TALLYMESSAGE, and some exports
+  // wrap LEDGER/VOUCHER nodes directly in BODY > DATA > COLLECTION.
   const messageCollections: unknown[][] = [];
   try {
     const collectMessages = (container: Record<string, unknown> | undefined) => {
@@ -432,7 +408,6 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       }
     };
 
-    // fast-xml-parser may produce an array of ENVELOPEs for concatenated XML declarations
     const envelopes = asArray(parsed["ENVELOPE"]);
     for (const env of envelopes) {
       const envelope = env as Record<string, unknown>;
@@ -496,7 +471,7 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       const parent = String(ledger["PARENT"] ?? "").trim();
       if (!name) continue;
 
-      // ── Bank / Cash account ─────────────────────────────────────────────
+      // ── Bank / Cash account master ─────────────────────────────────────
       const upperParent = parent.toUpperCase();
       if (upperParent === "BANK ACCOUNTS" || upperParent === "BANK OD ACCOUNTS" || upperParent === "CASH-IN-HAND") {
         const openingBalance = parseAmount(ledger["OPENINGBALANCE"]);
@@ -504,7 +479,6 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
         const accountNumber = typeof rawAccNo === "string" && rawAccNo.trim().length > 0
           ? rawAccNo.trim()
           : null;
-
         bankMasters.push({
           name,
           type: upperParent === "CASH-IN-HAND" ? "CASH" : "BANK",
@@ -514,17 +488,15 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
         continue;
       }
 
-      // ── Party master (Sundry Debtors / Creditors) ───────────────────────
+      // Only extract Sundry Debtors / Creditors as party masters
       if (parent !== "Sundry Debtors" && parent !== "Sundry Creditors") continue;
       const openingBalance = parseAmount(ledger["OPENINGBALANCE"]);
 
-      // [W-X3] Extract GSTIN from <PARTYGSTIN> tag (native Tally exports)
       const rawGstin = ledger["PARTYGSTIN"];
       const gstin = typeof rawGstin === "string" && rawGstin.trim().length >= 15
         ? rawGstin.trim()
         : null;
 
-      // [W-X3] Extract address from <ADDRESS.LIST> → <ADDRESS> (may be string or array)
       let address: string | null = null;
       const addrList = ledger["ADDRESS.LIST"] as Record<string, unknown> | undefined;
       if (addrList) {
@@ -551,7 +523,7 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
     const v = msg["VOUCHER"] as Record<string, unknown>;
 
     const typeName = String(v["VOUCHERTYPENAME"] ?? v["@_VCHTYPE"] ?? "").trim();
-    // Case-insensitive lookup (native Tally vs HisaabKitaab exports)
+    // Case-insensitive lookup (native Tally vs SoloBooks exports)
     const upperTypeName = typeName.toUpperCase();
     let voucherType: "SALES" | "PURCHASE" | "RECEIPT" | "PAYMENT" | "JOURNAL" | undefined = undefined;
 
@@ -562,7 +534,7 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       }
     }
 
-    // Heuristic fallback for custom voucher type names
+    // Heuristic fallback for custom voucher type names (e.g. "GST Sales Voucher")
     if (!voucherType) {
       for (const [match, val] of Object.entries(VCH_HEURISTIC)) {
         if (upperTypeName.includes(match)) {
@@ -573,7 +545,6 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
     }
 
     if (!voucherType) {
-      // Final fallback: check for any Sales/Purchase substrings
       if (upperTypeName.includes("SALE")) voucherType = "SALES";
       else if (upperTypeName.includes("PURCHASE")) voucherType = "PURCHASE";
     }
@@ -602,15 +573,17 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       null;
 
     // Extract Tally's REMOTEID / GUID for idempotent re-import.
-    // HisaabKitaab exports prefix the journal entry ID with "HisaabKitaab-";
+    // SoloBooks exports prefix the journal entry ID with "SoloBooks-";
     // strip the prefix so we store only the raw UUID for DB lookup.
     // Native Tally exports may have a GUID without our prefix — store as-is.
     const rawRemoteId =
       String(v["REMOTEID"] ?? v["GUID"] ?? "").trim() || null;
     const remoteId = rawRemoteId
-      ? rawRemoteId.replace(/^HisaabKitaab-/i, "")
+      ? rawRemoteId.replace(/^SoloBooks-/i, "")
       : null;
 
+    // Support both ALLLEDGERENTRIES.LIST (SoloBooks exports) and
+    // LEDGERENTRIES.LIST (native Tally DayBook / daybook exports)
     const rawEntries = v["ALLLEDGERENTRIES.LIST"] ?? v["LEDGERENTRIES.LIST"];
     const entryList = asArray(rawEntries as Record<string, unknown> | Record<string, unknown>[] | undefined);
 
@@ -624,27 +597,34 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       const isDeemedPositive =
         String(e["ISDEEMEDPOSITIVE"] ?? "").trim().toLowerCase() === "yes";
 
-      // Reconstruct debit/credit from ISDEEMEDPOSITIVE and signed AMOUNT.
-      //
-      // ISDEEMEDPOSITIVE is the authoritative side indicator in TallyPrime XML.
-      // We must NOT use the sign of AMOUNT to infer the side — on reversal
-      // vouchers, Tally can emit ISDEEMEDPOSITIVE=Yes with a negative AMOUNT,
-      // which the old `isDeemedPositive || amountRaw > 0` incorrectly treated
-      // as two independent indicators.  The correct rule:
-      //   ISDEEMEDPOSITIVE=Yes → debit side  (amount is always positive abs value)
-      //   ISDEEMEDPOSITIVE=No  → credit side (amount may be negative — take abs)
+      // Tally XML convention: AMOUNT sign is canonical.
+      //   AMOUNT < 0 → debit side
+      //   AMOUNT > 0 → credit side
+      // ISDEEMEDPOSITIVE mirrors this for HK-generated exports but native Tally
+      // exports (especially Round Off lines) sometimes disagree. Trust the sign.
+      // Fall back to ISDEEMEDPOSITIVE only when AMOUNT is exactly zero.
       const absAmount = Math.abs(amountRaw);
-      const isDebit = isDeemedPositive; // sole authority: ISDEEMEDPOSITIVE
+      const isDebit = amountRaw !== 0 ? amountRaw < 0 : isDeemedPositive;
       const debit = isDebit ? absAmount : 0;
       const credit = isDebit ? 0 : absAmount;
 
       if (absAmount === 0) continue;
 
-      // ── AccountCode resolution chain ──────────────────────────────────
-      // 1. Exact match in LEDGER_TO_CODE (HisaabKitaab exports + common Tally names)
+      // ── AccountCode resolution chain ──────────────────────────────────────
+      // 0. PARTYLEDGERNAME override: when this line's ledger matches the
+      //    voucher's PARTYLEDGERNAME, Tally has *declared* it a party.
+      //    The line's own pattern can be misleading (e.g. "Online Payment
+      //    Sales A/c" looks like a sales income account but Tally treats it
+      //    as a party ledger). PARTYLEDGERNAME is authoritative — honor it
+      //    over any pattern heuristic.
+      // 1. Exact match in LEDGER_TO_CODE (SoloBooks exports + common Tally names)
       // 2. Group-based: use PARENT from LEDGER records in the same XML
       // 3. Pattern-based: heuristic on the ledger name itself
       // 4. Fallback: infer from voucher type (assumes unknown name is a party)
+      const isVoucherDeclaredParty =
+        !!partyLedgerName && ledgerName === partyLedgerName;
+      const partyFallback = FALLBACK_BY_VOUCHER[voucherType] ?? "SUNDRY_DEBTORS";
+
       const exactCode = LEDGER_TO_CODE[ledgerName];
       const groupCode = !exactCode && ledgerGroupMap.has(ledgerName)
         ? resolveFromTallyGroup(ledgerGroupMap.get(ledgerName)!, ledgerName)
@@ -652,28 +632,28 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       const patternCode = !exactCode && !groupCode
         ? resolveAccountCodeByPattern(ledgerName)
         : null;
-      const accountCode: AccountCode =
-        exactCode ?? groupCode ?? patternCode ?? FALLBACK_BY_VOUCHER[voucherType] ?? "SUNDRY_DEBTORS";
+      const accountCode: AccountCode = isVoucherDeclaredParty
+        ? (isPartyAccountCode(exactCode ?? groupCode ?? "SUNDRY_DEBTORS")
+            ? (exactCode ?? groupCode ?? partyFallback)
+            : partyFallback)
+        : (exactCode ?? groupCode ?? patternCode ?? partyFallback);
 
-      // Track whether resolution identified this as a known account (vs party name).
-      // exactCode: known by static map. groupCode/patternCode: known by group/pattern.
-      // If none matched, the ledger name is an unknown party name.
-      const isResolvedAsKnownAccount = !!(exactCode || groupCode || patternCode);
+      const isResolvedAsKnownAccount =
+        !isVoucherDeclaredParty && !!(exactCode || groupCode || patternCode);
 
-      // BILLALLOCATIONS.LIST > NAME is the bill/outstanding reference in Tally,
-      // not reliably the party name. Prefer PARTYLEDGERNAME for generic party
-      // ledgers, and use the ledger name itself for native exports where the
-      // party ledger is named directly.
       const billAllocName = extractBillAllocationName(e);
 
       // Party name resolution:
+      // - Voucher declared this ledger as the party (Tally PARTYLEDGERNAME match)
+      //   → the ledger name itself IS the party
       // - Unknown ledger (fell through to fallback) AND resolved to party account
       //   → the ledger name itself IS the party (native Tally naming convention)
-      // - Exact-match to a party account code (e.g. HisaabKitaab "Sundry Debtors")
+      // - Exact-match to a party account code (e.g. SoloBooks "Sundry Debtors")
       //   → use voucher-level PARTYLEDGERNAME or BILLALLOCATIONS
       // - Non-party account → null
-      const partyName =
-        (!isResolvedAsKnownAccount && isPartyAccountCode(accountCode))
+      const partyName = isVoucherDeclaredParty
+        ? ledgerName
+        : (!isResolvedAsKnownAccount && isPartyAccountCode(accountCode))
           ? ledgerName
           : isPartyAccountCode(accountCode)
             ? partyLedgerName ?? (billAllocName && billAllocName !== reference ? billAllocName : null)
@@ -691,15 +671,13 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
 
     const totalDebit = lines.reduce((s, l) => s + l.debit, 0);
 
-    // ── Extract GST metadata from voucher (G1 fix) ──────────────────────────
     // PLACEOFSUPPLY: Tally writes the English state name; reverse-lookup to 2-digit code.
     const rawPlaceOfSupply = String(v["PLACEOFSUPPLY"] ?? "").trim() || null;
     const placeOfSupply = rawPlaceOfSupply
-      ? stateNameToGstCode(rawPlaceOfSupply) ?? rawPlaceOfSupply // keep raw if unknown
+      ? stateNameToGstCode(rawPlaceOfSupply) ?? rawPlaceOfSupply
       : null;
 
-    // GSTDETAILS.LIST: nested inside ALLLEDGERENTRIES.LIST entries.
-    // Extract first TAXRATE and all HSNCODE values.
+    // GSTDETAILS.LIST: nested inside ledger entries.
     let parsedTaxPercent: number | null = null;
     const parsedHsnCodes: string[] = [];
     const seenHsn = new Set<string>();
@@ -722,60 +700,11 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       }
     }
 
-    // [G2] Determine isInterState from ledger names.
-    // IGST ledger entries indicate inter-state; CGST/SGST indicate intra-state.
+    // Determine isInterState from ledger names.
     const ledgerNames = lines.map((l) => l.ledgerName.toUpperCase());
     const hasIgst = ledgerNames.some((n) => n.includes("IGST"));
     const hasCgstSgst = ledgerNames.some((n) => n.includes("CGST") || n.includes("SGST"));
     const isInterState = hasIgst ? true : hasCgstSgst ? false : null;
-
-    // ── Extract Inventory entries (new!) ──────────────────────────────────────
-    const rawInv = v["ALLINVENTORYENTRIES.LIST"] ?? v["INVENTORYENTRIES.LIST"];
-    const invList = asArray(rawInv as Record<string, unknown> | Record<string, unknown>[] | undefined);
-    const inventoryRows: Record<string, any>[] = [];
-
-    for (const inv of invList) {
-      const i = inv as Record<string, unknown>;
-      const stockItemName = String(i["STOCKITEMNAME"] ?? "").trim();
-      if (!stockItemName) continue;
-
-      const qtyStr = String(i["BILLEDQTY"] ?? i["ACTUALQTY"] ?? "0").trim();
-      // Split "5 Nos" -> qty: 5, unit: "Nos"
-      const qtyMatch = qtyStr.match(/^([\d.-]+)\s*(.*)$/);
-      const qty = qtyMatch ? parseFloat(qtyMatch[1]) : 0;
-      const unit = qtyMatch ? qtyMatch[2].trim() : "";
-
-      const rateStr = String(i["RATE"] ?? "").trim();
-      const rateMatch = rateStr.match(/^([\d.-]+)/);
-      const rate = rateMatch ? parseFloat(rateMatch[1]) : 0;
-
-      const amount = Math.abs(parseAmount(i["AMOUNT"]));
-
-      // Store in standard column keys
-      inventoryRows.push({
-        Item: stockItemName,
-        Qty: qty,
-        Unit: unit,
-        Rate: rate || (qty !== 0 ? amount / qty : amount),
-        Amount: amount,
-      });
-    }
-
-    // [FIX #12] Generate a stable fingerprint for this voucher.
-    // This allows the importer to detect duplicates even for native Tally exports 
-    // that don't have a stable GUID/REMOTEID, preventing duplicate journal entries.
-    const fingerprintSource = [
-      entryDate.toISOString().slice(0, 10),
-      reference,
-      totalDebit.toFixed(2),
-      narration,
-      lines.length,
-    ].join("|");
-    // Simple non-cryptographic hash for fingerprinting
-    const fingerprint = Array.from(fingerprintSource).reduce(
-      (hash, char) => (hash << 5) - hash + char.charCodeAt(0),
-      0
-    ).toString(36);
 
     vouchers.push({
       voucherType,
@@ -786,12 +715,10 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       lines,
       totalDebit,
       remoteId,
-      fingerprint,
       placeOfSupply,
       taxPercent: parsedTaxPercent,
       hsnCodes: parsedHsnCodes,
       isInterState,
-      inventoryRows: inventoryRows.length > 0 ? inventoryRows : undefined,
     });
   }
 

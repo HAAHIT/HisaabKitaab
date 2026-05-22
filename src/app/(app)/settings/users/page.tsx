@@ -1,23 +1,15 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import {
-  Card,
-  CardBody,
-  Table,
-  TableHeader,
-  TableColumn,
-  TableBody,
-  TableRow,
-  TableCell,
-  Button,
-  Input,
-  Select,
-  SelectItem,
-  Chip,
-  Skeleton,
-} from "@heroui/react";
+import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
+import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { useLanguage } from "@/contexts/LanguageContext";
+import {
+  GR, AM, OR, PU, SG, IN, TYPE,
+  HKCard, HKToast, PageHeader, useIsMobile,
+} from "@/components/ui/hk-design";
+import { HKButton } from "@/components/ui/HKButton";
+import { HKInput } from "@/components/ui/HKInput";
 
 interface User {
   id: string;
@@ -29,8 +21,11 @@ interface User {
   createdAt: string;
 }
 
+const ROLE_COLOR: Record<string, string> = { ADMIN: PU, STAFF: GR, ACCOUNTANT: AM, CUSTOMER: OR };
+
 export default function UserManagementPage() {
   const { t } = useLanguage();
+  const isMobile = useIsMobile();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [showPanel, setShowPanel] = useState(false);
@@ -38,7 +33,6 @@ export default function UserManagementPage() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
-  // Form state
   const [formName, setFormName] = useState("");
   const [formEmail, setFormEmail] = useState("");
   const [formPhone, setFormPhone] = useState("");
@@ -58,9 +52,7 @@ export default function UserManagementPage() {
     }
   }, [t]);
 
-  useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
+  useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
   function showToast(message: string, type: "success" | "error") {
     setToast({ message, type });
@@ -70,70 +62,38 @@ export default function UserManagementPage() {
   function generatePassword() {
     const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$";
     let pw = "";
-    for (let i = 0; i < 16; i++) {
-      pw += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
+    for (let i = 0; i < 16; i++) pw += chars.charAt(Math.floor(Math.random() * chars.length));
     setFormPassword(pw);
   }
 
   function openCreatePanel() {
     setEditingUser(null);
-    setFormName("");
-    setFormEmail("");
-    setFormPhone("");
-    setFormPassword("");
-    setFormRole("STAFF");
-    setShowPassword(false);
+    setFormName(""); setFormEmail(""); setFormPhone(""); setFormPassword(""); setFormRole("STAFF"); setShowPassword(false);
     setShowPanel(true);
   }
 
   function openEditPanel(user: User) {
     setEditingUser(user);
-    setFormName(user.name);
-    setFormEmail(user.email || "");
-    setFormPhone(user.phone || "");
-    setFormPassword("");
-    setFormRole(user.role);
-    setShowPassword(false);
+    setFormName(user.name); setFormEmail(user.email || ""); setFormPhone(user.phone || ""); setFormPassword(""); setFormRole(user.role); setShowPassword(false);
     setShowPanel(true);
   }
 
   async function handleSave() {
-    if (!formName || !formPhone) {
-      showToast(t("users.nameRequiredPhone"), "error");
-      return;
-    }
-    if (!editingUser && (!formPassword || formPassword.length < 12)) {
-      showToast(t("users.passwordMin"), "error");
-      return;
-    }
+    if (!formName || !formPhone) { showToast(t("users.nameRequiredPhone"), "error"); return; }
+    if (!editingUser && (!formPassword || formPassword.length < 12)) { showToast(t("users.passwordMin"), "error"); return; }
 
     setSaving(true);
     try {
       const url = editingUser ? `/api/users/${editingUser.id}` : "/api/users";
       const method = editingUser ? "PATCH" : "POST";
-
-      const bodyData: Record<string, unknown> = {
-        name: formName,
-        email: formEmail || undefined,
-        phone: formPhone,
-        userRole: formRole,
-      };
+      const bodyData: Record<string, unknown> = { name: formName, email: formEmail || undefined, phone: formPhone, userRole: formRole };
       if (formPassword) bodyData.password = formPassword;
 
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(bodyData),
-      });
-
+      const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(bodyData) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to save user");
 
-      showToast(
-        editingUser ? t("users.updated") : t("users.createdSuccess"),
-        "success"
-      );
+      showToast(editingUser ? t("users.updated") : t("users.createdSuccess"), "success");
       setShowPanel(false);
       fetchUsers();
     } catch (err) {
@@ -145,7 +105,6 @@ export default function UserManagementPage() {
 
   async function handleDelete(userId: string) {
     if (!confirm(t("users.deactivateConfirm"))) return;
-
     try {
       const res = await fetch(`/api/users/${userId}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete user");
@@ -156,281 +115,199 @@ export default function UserManagementPage() {
     }
   }
 
-  const roleColorMap: Record<string, "primary" | "secondary" | "warning" | "success"> = {
-    ADMIN: "primary",
-    STAFF: "secondary",
-    ACCOUNTANT: "warning",
-    CUSTOMER: "success",
-  };
-
   return (
     <>
-      <div className="p-4 lg:p-8 animate-fade-in relative">
-        {/* Toast Notification */}
-        {toast && (
-        <div
-          className={`fixed top-4 right-4 z-[100] px-4 py-3 rounded-xl shadow-lg animate-slide-up ${
-            toast.type === "success"
-              ? "bg-success text-white"
-              : "bg-danger text-white"
-          }`}
-        >
-          {toast.message}
-        </div>
-      )}
+      <div style={{ fontFamily: SG }}>
+        {toast && <HKToast message={toast.message} type={toast.type} />}
+        <PageHeader
+          title={t("users.title")}
+          subtitle={t("users.subtitle")}
+          isMobile={isMobile}
+          action={<HKButton onClick={openCreatePanel}>+ {t("users.add")}</HKButton>}
+        />
+        <HKCard style={{ padding: 0, overflow: "hidden" }}>
+            {loading ? (
+              <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 12 }}>
+                {[1, 2, 3, 4].map((i) => <HKSkeleton key={i} className="h-16 w-full rounded-2xl" />)}
+              </div>
+            ) : users.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "60px 20px" }}>
+                <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", fontFamily: SG, marginBottom: 16 }}>No users found</p>
+                <HKButton onClick={openCreatePanel}>{t("users.createFirst")}</HKButton>
+              </div>
+            ) : (
+              <div>
+                {/* Table header */}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: isMobile ? "1fr auto" : "2fr 2fr 1fr 1fr 1fr auto",
+                    gap: 12, padding: "12px 20px",
+                    borderBottom: "1px solid var(--sb-border)",
+                    background: "var(--sb-badge)",
+                  }}
+                >
+                  {[t("users.name"), ...(isMobile ? [] : [t("users.contact"), t("users.role"), t("users.status"), t("users.created")]), t("users.actions")].map((h) => (
+                    <p key={h} style={{ fontSize: TYPE.caption, fontWeight: 700, color: "var(--sb-sub)", textTransform: "uppercase", letterSpacing: "0.5px", fontFamily: SG, margin: 0 }}>
+                      {h}
+                    </p>
+                  ))}
+                </div>
 
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">{t("users.title")}</h1>
-          <p className="text-default-500 text-sm mt-1">
-            {t("users.subtitle")}
-          </p>
-        </div>
-        <Button
-          id="add-user-btn"
-          color="primary"
-          className="font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 shadow-lg shadow-blue-500/25"
-          onPress={openCreatePanel}
-          startContent={
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-          }
-        >
-          {t("users.add")}
-        </Button>
-      </div>
-
-      {/* Users Table */}
-      <Card shadow="sm">
-        <CardBody className="p-0">
-          {loading ? (
-            <div className="p-6 space-y-4">
-              {[1, 2, 3, 4].map((i) => (
-                <Skeleton key={i} className="h-12 w-full rounded-lg" />
-              ))}
-            </div>
-          ) : users.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16">
-              <p className="text-default-500">No users found</p>
-              <Button
-                size="sm"
-                color="primary"
-                variant="flat"
-                className="mt-3"
-                onPress={openCreatePanel}
-              >
-                {t("users.createFirst")}
-              </Button>
-            </div>
-          ) : (
-            <Table
-              aria-label="Users table"
-              removeWrapper
-              className="min-w-full"
-            >
-              <TableHeader>
-                <TableColumn>{t("users.name").toUpperCase()}</TableColumn>
-                <TableColumn>{t("users.contact").toUpperCase()}</TableColumn>
-                <TableColumn>{t("users.role").toUpperCase()}</TableColumn>
-                <TableColumn>{t("users.status").toUpperCase()}</TableColumn>
-                <TableColumn>{t("users.created").toUpperCase()}</TableColumn>
-                <TableColumn>{t("users.actions").toUpperCase()}</TableColumn>
-              </TableHeader>
-              <TableBody>
-                {users.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell className="font-medium">{user.name}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        {user.email && (
-                          <span className="text-sm">{user.email}</span>
-                        )}
-                        {user.phone && (
-                          <span className="text-sm text-default-400">
-                            {user.phone}
-                          </span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        size="sm"
-                        color={roleColorMap[user.role] || "primary"}
-                        variant="flat"
-                        className="capitalize"
-                      >
-                        {user.role.toLowerCase()}
-                      </Chip>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        size="sm"
-                        color={user.isActive ? "success" : "default"}
-                        variant="dot"
-                      >
-                        {user.isActive ? t("users.active") : t("users.inactive")}
-                      </Chip>
-                    </TableCell>
-                    <TableCell className="text-sm text-default-500">
-                      {new Date(user.createdAt).toLocaleDateString("en-IN", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="flat"
-                          isIconOnly
+                {users.map((user) => {
+                  const roleColor = ROLE_COLOR[user.role] || PU;
+                  return (
+                    <div
+                      key={user.id}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: isMobile ? "1fr auto" : "2fr 2fr 1fr 1fr 1fr auto",
+                        gap: 12, padding: "14px 20px", alignItems: "center",
+                        borderBottom: "1px solid var(--sb-border)",
+                      }}
+                    >
+                      <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>
+                        {user.name}
+                      </p>
+                      {!isMobile && (
+                        <div>
+                          {user.email && <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>{user.email}</p>}
+                          {user.phone && <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG, margin: 0 }}>{user.phone}</p>}
+                        </div>
+                      )}
+                      {!isMobile && (
+                        <span style={{ fontSize: TYPE.chip, fontWeight: 700, color: roleColor, background: roleColor + "18", padding: "4px 10px", borderRadius: 8, fontFamily: SG }}>
+                          {user.role.toLowerCase()}
+                        </span>
+                      )}
+                      {!isMobile && (
+                        <span style={{
+                          fontSize: TYPE.chip, fontWeight: 700,
+                          color: user.isActive ? GR : "var(--sb-sub)",
+                          background: user.isActive ? GR + "18" : "var(--sb-badge)",
+                          padding: "4px 10px", borderRadius: 8, fontFamily: SG,
+                        }}>
+                          {user.isActive ? t("users.active") : t("users.inactive")}
+                        </span>
+                      )}
+                      {!isMobile && (
+                        <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: IN, margin: 0 }}>
+                          {new Date(user.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                        </p>
+                      )}
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button
+                          onClick={() => openEditPanel(user)}
                           aria-label={`Edit ${user.name}`}
-                          onPress={() => openEditPanel(user)}
+                          style={{
+                            width: 36, height: 36, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center",
+                            background: "var(--sb-badge)", border: "1px solid var(--sb-border)", cursor: "pointer",
+                            color: "var(--sb-text)",
+                          }}
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="flat"
-                          color="danger"
-                          isIconOnly
+                        </button>
+                        <button
+                          onClick={() => handleDelete(user.id)}
                           aria-label={`Delete ${user.name}`}
-                          onPress={() => handleDelete(user.id)}
+                          style={{
+                            width: 36, height: 36, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center",
+                            background: OR + "12", border: `1px solid ${OR}33`, cursor: "pointer",
+                            color: OR,
+                          }}
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>
-                        </Button>
+                        </button>
                       </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardBody>
-      </Card>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </HKCard>
       </div>
 
-      {/* ── Slide-Over Panel ───────────────────────── */}
+      {/* Slide-over panel */}
       {showPanel && (
         <>
           <div
-            className="fixed inset-0 bg-black/40 z-50"
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 50 }}
             onClick={() => setShowPanel(false)}
           />
-          <div className="fixed right-0 top-0 bottom-0 w-full max-w-md bg-background shadow-2xl z-50 animate-slide-in-right overflow-y-auto">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold">
+          <div
+            style={{
+              position: "fixed", right: 0, top: 0, bottom: 0, width: "100%", maxWidth: 440,
+              background: "var(--sb-card)", boxShadow: "0 0 60px rgba(0,0,0,0.25)",
+              zIndex: 51, overflowY: "auto", animation: "slide-in-right 0.28s ease-out",
+              fontFamily: SG,
+            }}
+          >
+            <div style={{ padding: "24px 24px 40px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+                <p style={{ fontSize: TYPE.h2, fontWeight: 800, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>
                   {editingUser ? t("users.edit") : t("users.createTitle")}
-                </h2>
-                <Button
-                  isIconOnly
-                  variant="light"
-                  size="sm"
-                  aria-label="Close panel"
-                  onPress={() => setShowPanel(false)}
+                </p>
+                <button
+                  onClick={() => setShowPanel(false)}
+                  style={{
+                    width: 36, height: 36, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center",
+                    background: "var(--sb-badge)", border: "1px solid var(--sb-border)", cursor: "pointer", color: "var(--sb-text)",
+                  }}
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
-                </Button>
+                </button>
               </div>
 
-              <div className="flex flex-col gap-4">
-                <Input
-                  label={t("users.name")}
-                  placeholder="Enter full name"
-                  value={formName}
-                  onValueChange={setFormName}
-                  variant="bordered"
-                  isRequired
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <HKInput label={t("users.name")} placeholder="Enter full name" value={formName} onValueChange={setFormName} isRequired />
+                <HKInput label={t("users.email")} placeholder="Enter email (optional)" type="email" value={formEmail} onValueChange={setFormEmail} />
+                <HKInput label={t("users.phone")} placeholder="Enter phone number" type="tel" value={formPhone} onValueChange={setFormPhone} isRequired />
+                <HKInput
+                  label={t("users.password")}
+                  placeholder={editingUser ? t("users.leaveBlank") : t("users.minChars")}
+                  type={showPassword ? "text" : "password"}
+                  value={formPassword}
+                  onValueChange={setFormPassword}
+                  isRequired={!editingUser}
+                  endContent={
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((v) => !v)}
+                        style={{ padding: "4px 8px", borderRadius: 8, background: "var(--sb-badge)", border: "none", cursor: "pointer", fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}
+                      >
+                        {showPassword ? t("common.hide") : t("common.show")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={generatePassword}
+                        style={{ padding: "4px 8px", borderRadius: 8, background: "var(--sb-badge)", border: "none", cursor: "pointer", fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}
+                      >
+                        {t("common.generate")}
+                      </button>
+                    </div>
+                  }
                 />
-                <Input
-                  label={t("users.email")}
-                  placeholder="Enter email (optional)"
-                  type="email"
-                  value={formEmail}
-                  onValueChange={setFormEmail}
-                  variant="bordered"
-                />
-                <Input
-                  label={t("users.phone")}
-                  placeholder="Enter phone number"
-                  type="tel"
-                  value={formPhone}
-                  onValueChange={setFormPhone}
-                  variant="bordered"
-                  isRequired
-                />
-                <div>
-                  <Input
-                    label={t("users.password")}
-                    placeholder={editingUser ? t("users.leaveBlank") : t("users.minChars")}
-                    type={showPassword ? "text" : "password"}
-                    value={formPassword}
-                    onValueChange={setFormPassword}
-                    variant="bordered"
-                    isRequired={!editingUser}
-                    endContent={
-                      <div className="flex items-center gap-1">
-                        <Button
-                          size="sm"
-                          variant="flat"
-                          onPress={() => setShowPassword((current) => !current)}
-                          className="text-xs"
-                        >
-                          {showPassword ? t("common.hide") : t("common.show")}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="flat"
-                          onPress={generatePassword}
-                          className="text-xs"
-                        >
-                          {t("common.generate")}
-                        </Button>
-                      </div>
-                    }
-                  />
-                </div>
-                <Select
+                <HKSelect
                   label={t("users.role")}
                   placeholder={t("users.role")}
-                  selectedKeys={new Set([formRole])}
-                  onSelectionChange={(keys) => {
-                    const selected = Array.from(keys)[0] as string;
-                    if (selected) setFormRole(selected);
-                  }}
-                  variant="bordered"
+                  value={formRole}
+                  onValueChange={(v) => { if (v) setFormRole(v); }}
                 >
-                  <SelectItem key="STAFF" textValue={t("users.staff")}>{t("users.staff")}</SelectItem>
-                  <SelectItem key="ACCOUNTANT" textValue={t("users.accountant")}>{t("users.accountant")}</SelectItem>
-                  <SelectItem key="CUSTOMER" textValue={t("users.customer")}>{t("users.customer")}</SelectItem>
+                  <HKSelectItem value="STAFF">{t("users.staff")}</HKSelectItem>
+                  <HKSelectItem value="ACCOUNTANT">{t("users.accountant")}</HKSelectItem>
+                  <HKSelectItem value="CUSTOMER">{t("users.customer")}</HKSelectItem>
+                </HKSelect>
 
-                </Select>
-
-                <div className="flex gap-3 pt-4">
-                  <Button
-                    variant="flat"
-                    className="flex-1"
-                    onPress={() => setShowPanel(false)}
-                  >
-                    {t("common.cancel")}
-                  </Button>
-                  <Button
-                    color="primary"
-                    className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600"
-                    onPress={handleSave}
-                    isLoading={saving}
-                  >
-                    {editingUser ? t("common.update") : t("users.createUser")}
-                  </Button>
+                <div style={{ display: "flex", gap: 12, paddingTop: 8 }}>
+                  <HKButton variant="secondary" onClick={() => setShowPanel(false)} isDisabled={saving} style={{ flex: 1 }}>{t("common.cancel")}</HKButton>
+                  <HKButton onClick={handleSave} isLoading={saving} style={{ flex: 1 }}>{editingUser ? t("common.update") : t("users.createUser")}</HKButton>
                 </div>
               </div>
             </div>
@@ -442,9 +319,6 @@ export default function UserManagementPage() {
         @keyframes slide-in-right {
           from { transform: translateX(100%); }
           to { transform: translateX(0); }
-        }
-        .animate-slide-in-right {
-          animation: slide-in-right 0.3s ease-out;
         }
       `}</style>
     </>

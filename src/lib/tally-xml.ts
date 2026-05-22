@@ -62,7 +62,7 @@ export interface TallyVoucher {
   /**
    * Stable unique ID for this voucher — used as <GUID> and <REMOTEID>.
    * Prevents duplicate entries on Tally re-import.  Pass journal entry ID.
-   * Format emitted: "HisaabKitaab-{guid}"
+   * Format emitted: "SoloBooks-{guid}"
    */
   guid?: string;
   /**
@@ -192,9 +192,15 @@ function formatTallyDate(date: Date): string {
   const day = parts.find((p) => p.type === "day")?.value;
 
   if (!year || !month || !day) {
-    // Fallback if Intl fails unusually
-    const isoStr = date.toISOString();
-    return isoStr.slice(0, 10).replace(/-/g, "");
+    // Fallback if Intl fails unusually. Shift the UTC instant by +5:30 so the
+    // resulting calendar date is the IST date, not the UTC date — Tally's
+    // contract is IST always.
+    const istMs = date.getTime() + 5.5 * 60 * 60 * 1000;
+    const shifted = new Date(istMs);
+    const y = shifted.getUTCFullYear();
+    const m = String(shifted.getUTCMonth() + 1).padStart(2, "0");
+    const d = String(shifted.getUTCDate()).padStart(2, "0");
+    return `${y}${m}${d}`;
   }
 
   return `${year}${month}${day}`;
@@ -411,8 +417,8 @@ function buildVoucherXml(voucher: TallyVoucher): string {
   // GUID prevents duplicate imports on re-import (TallyPrime idempotency).
   const guidTag = voucher.guid
     ? `
-        <GUID>HisaabKitaab-${escapeXml(voucher.guid)}</GUID>
-        <REMOTEID>HisaabKitaab-${escapeXml(voucher.guid)}</REMOTEID>`
+        <GUID>SoloBooks-${escapeXml(voucher.guid)}</GUID>
+        <REMOTEID>SoloBooks-${escapeXml(voucher.guid)}</REMOTEID>`
     : "";
 
   // PLACEOFSUPPLY: convert 2-digit GST code to English state name for Tally.

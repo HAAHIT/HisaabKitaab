@@ -1,46 +1,45 @@
 import { prisma } from "@/lib/prisma";
 import { GST_STATE_CODE_SET } from "@/lib/gst-states";
 import { NextRequest, NextResponse } from "next/server";
-import { resolveReadTenant, resolveWriteSession } from "@/lib/api-tenant";
+import { resolveSession } from "@/lib/api-tenant";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { logError, getRequestId } from "@/lib/observability";
-import {
-  createJournalEntry,
-  buildSalesTaxLines,
-  buildPurchaseTaxLines,
-} from "@/lib/journal";
-import crypto from "crypto";
+import { generateLockKey } from "@/lib/locks";
 import { z } from "zod";
 
 type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
-
-function generateLockKey(tenantId: string): bigint {
-  const hash = crypto.createHash("sha256").update(tenantId).digest("hex");
-  return BigInt("0x" + hash.substring(0, 15));
-}
 
 const CreateNoteSchema = z.object({
   partyId: z.string().min(1, "Party is required"),
   originalInvoiceNo: z.string().min(1, "Original Invoice Reference is required"),
   reasonForIssuance: z.string().min(1, "Reason for Issuance is required"),
   placeOfSupply: z.string().refine((val) => GST_STATE_CODE_SET.has(val), {
-    message: "Invalid place of supply. Must be a 2-digit GST state code.",
-  }),
+      message: "Invalid place of supply. Must be a 2-digit GST state code.",
+    }),
   noteType: z.enum(["CREDIT_NOTE", "DEBIT_NOTE"]),
   subtotal: z.number().nonnegative().default(0),
   taxAmount: z.number().nonnegative().default(0),
   grandTotal: z.number().nonnegative().default(0),
   isInterState: z.boolean().optional(),
   hsnCode: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (data.taxAmount > 0 && !data.hsnCode?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "HSN code is required since the note contains GST elements.",
+      path: ["hsnCode"],
+    });
+  }
 });
 
 export async function GET(request: NextRequest) {
-  // [FIX #1] Use JWT-verified tenant instead of trusting proxy headers for role
-  const tenantResolution = await resolveReadTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
+  const sessionResolution = await resolveSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, role } = sessionResolution.session;
+
+  if (role === "CUSTOMER") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantId = tenantResolution.tenantId;
 
   try {
     const { searchParams } = new URL(request.url);
@@ -53,11 +52,12 @@ export async function GET(request: NextRequest) {
       type === "CREDIT_NOTE"
         ? ["CREDIT_NOTE"]
         : type === "DEBIT_NOTE"
-          ? ["DEBIT_NOTE"]
-          : ["CREDIT_NOTE", "DEBIT_NOTE"];
+        ? ["DEBIT_NOTE"]
+        : ["CREDIT_NOTE", "DEBIT_NOTE"];
 
     const where = {
       tenantId,
+      isDeleted: false,
       voucherType: { in: voucherTypeFilter as ("CREDIT_NOTE" | "DEBIT_NOTE")[] },
       ...(search
         ? { narration: { contains: search, mode: "insensitive" as const } }
@@ -111,11 +111,8 @@ export async function POST(request: NextRequest) {
   const rateLimitResponse = await checkRateLimit(request, "notes.create", 30);
   if (rateLimitResponse) return rateLimitResponse;
 
-  // [FIX #1] Use JWT-verified session instead of trusting proxy headers
-  const sessionResolution = await resolveWriteSession(request);
-  if (!sessionResolution.ok) {
-    return sessionResolution.response;
-  }
+  const sessionResolution = await resolveSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
   const { tenantId, userId, role } = sessionResolution.session;
 
   if (role === "CUSTOMER") {
@@ -161,78 +158,153 @@ export async function POST(request: NextRequest) {
 
     const note = await prisma.$transaction(async (tx: PrismaTx) => {
       const lockKey = generateLockKey(tenantId);
+      // [LB-1] Prevent indefinite blocking from hung transactions
       await tx.$executeRaw`SET LOCAL lock_timeout = '5s'`;
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
 
+      // We simply create a JournalEntry for the note, no Bill entity is stored for notes in this logic.
+      // If noteType === CREDIT_NOTE, it's a sales return (reduce debtor balance).
+      // If noteType === DEBIT_NOTE, it's a purchase return (reduce creditor balance).
+      
       const isSalesReturn = noteType === "CREDIT_NOTE";
+      
+      if (isSalesReturn) {
+         // Sales return: customer owes us less → balance increases (becomes less negative)
+         await tx.party.update({
+            where: { id: party.id },
+            data: { currentBalance: { increment: grandTotal } },
+         });
 
-      // Update party balance — both note types reduce outstanding
-      await tx.party.update({
-        where: { id: party.id },
-        data: { currentBalance: { increment: grandTotal } },
-      });
+         // Build tax lines (output tax is reversed — debited)
+         const taxLines = taxAmount > 0
+           ? (isInterState
+               ? [{ accountCode: "IGST_OUTPUT", accountName: "IGST Output", tallyGroup: "Duties & Taxes", debit: taxAmount, credit: 0 }]
+               : (() => {
+                   const half = Math.round((taxAmount / 2) * 100) / 100;
+                   const other = Math.round((taxAmount - half) * 100) / 100;
+                   return [
+                     { accountCode: "CGST_OUTPUT", accountName: "CGST Output", tallyGroup: "Duties & Taxes", debit: half, credit: 0 },
+                     { accountCode: "SGST_OUTPUT", accountName: "SGST Output", tallyGroup: "Duties & Taxes", debit: other, credit: 0 },
+                   ];
+                 })())
+           : [];
 
-      // [FIX #4 & #5] Use createJournalEntry for validation + correct Section 170 tax rounding
-      const entry = isSalesReturn
-        ? await createJournalEntry(tx, {
-          tenantId,
-          entryDate: new Date(),
-          narration: `Credit Note against ${originalInvoiceNo} (${reasonForIssuance})`,
-          voucherType: "CREDIT_NOTE",
-          createdBy: userId,
-          lines: [
-            {
-              accountCode: "SUNDRY_DEBTORS",
-              debit: 0,
-              credit: grandTotal,
-              partyId: party.id,
-              partyName: party.name,
+         const entry = await tx.journalEntry.create({
+            data: {
+               tenantId,
+               entryDate: new Date(),
+               narration: `Credit Note against ${originalInvoiceNo} (${reasonForIssuance})`,
+               voucherType: "CREDIT_NOTE",
+               createdBy: userId!,
+               totalDebit: grandTotal,
+               totalCredit: grandTotal,
+               isBalanced: true,
+               lines: {
+                  create: [
+                     {
+                        accountCode: "SUNDRY_DEBTORS",
+                        accountName: "Sundry Debtors",
+                        tallyGroup: "Sundry Debtors",
+                        partyId: party.id,
+                        partyName: party.name,
+                        debit: 0,
+                        credit: grandTotal,
+                     },
+                     {
+                        accountCode: "SALES",
+                        accountName: "Sales",
+                        tallyGroup: "Sales Accounts",
+                        debit: subtotal,
+                        credit: 0,
+                     },
+                     ...taxLines,
+                  ],
+               },
             },
-            {
-              accountCode: "SALES",
-              debit: subtotal,
-              credit: 0,
-            },
-            // Output tax reversed (debited) — uses same rounding as sales bills
-            ...buildSalesTaxLines(taxAmount, "DEBIT", isInterState),
-          ],
-        })
-        : await createJournalEntry(tx, {
-          tenantId,
-          entryDate: new Date(),
-          narration: `Debit Note against ${originalInvoiceNo} (${reasonForIssuance})`,
-          voucherType: "DEBIT_NOTE",
-          createdBy: userId,
-          lines: [
-            {
-              accountCode: "SUNDRY_CREDITORS",
-              debit: grandTotal,
-              credit: 0,
-              partyId: party.id,
-              partyName: party.name,
-            },
-            {
-              accountCode: "PURCHASE",
-              debit: 0,
-              credit: subtotal,
-            },
-            // Input tax reversed (credited) — uses same rounding as purchase bills
-            ...buildPurchaseTaxLines(taxAmount, "CREDIT", isInterState),
-          ],
-        });
+         });
 
-      // [MCA GSR 247(E)] Audit trail
-      await tx.auditLog.create({
-        data: {
-          tenantId,
-          entityType: "JournalEntry",
-          entityId: entry.id,
-          userId,
-          action: "CREATE",
-        },
-      });
+         // [LB-2] MCA GSR 247(E) — audit trail for Credit Note creation
+         await tx.auditLog.create({
+           data: {
+             tenantId,
+             entityType: "JournalEntry",
+             entityId: entry.id,
+             userId: userId!,
+             action: "CREATE",
+           },
+         });
 
-      return entry;
+         return entry;
+      } else {
+         // DEBIT_NOTE (Purchase Return)
+         // Vendor balance is negative for payables. Purchase return reduces payable, so it increases balance.
+         const balanceChange = grandTotal; 
+         await tx.party.update({
+            where: { id: party.id },
+            data: { currentBalance: { increment: balanceChange } },
+         });
+
+         // Minimal implementation for debit note journal entry
+         const totalDebit = grandTotal;
+         const entry = await tx.journalEntry.create({
+            data: {
+               tenantId,
+               entryDate: new Date(),
+               narration: `Debit Note against ${originalInvoiceNo} (${reasonForIssuance})`,
+               voucherType: "DEBIT_NOTE",
+               createdBy: userId!,
+               totalDebit,
+               totalCredit: totalDebit,
+               isBalanced: true,
+               lines: {
+                  create: [
+                     {
+                        accountCode: "SUNDRY_CREDITORS",
+                        accountName: "Sundry Creditors",
+                        tallyGroup: "Sundry Creditors",
+                        partyId: party.id,
+                        partyName: party.name,
+                        debit: grandTotal,
+                        credit: 0,
+                     },
+                     {
+                        accountCode: "PURCHASE",
+                        accountName: "Purchase",
+                        tallyGroup: "Purchase Accounts",
+                        debit: 0,
+                        credit: subtotal,
+                     },
+                     // [LB-3] Proper CGST+SGST split for intra-state debit notes
+                     ...(taxAmount > 0
+                       ? (isInterState
+                           ? [{ accountCode: "IGST_INPUT", accountName: "IGST Input", tallyGroup: "Duties & Taxes", debit: 0, credit: taxAmount }]
+                           : (() => {
+                               const half = Math.round((taxAmount / 2) * 100) / 100;
+                               const other = Math.round((taxAmount - half) * 100) / 100;
+                               return [
+                                 { accountCode: "CGST_INPUT", accountName: "CGST Input", tallyGroup: "Duties & Taxes", debit: 0, credit: half },
+                                 { accountCode: "SGST_INPUT", accountName: "SGST Input", tallyGroup: "Duties & Taxes", debit: 0, credit: other },
+                               ];
+                             })())
+                       : [])
+                  ]
+               }
+            }
+         });
+
+         // [LB-2] MCA GSR 247(E) — audit trail for Debit Note creation
+         await tx.auditLog.create({
+           data: {
+             tenantId,
+             entityType: "JournalEntry",
+             entityId: entry.id,
+             userId: userId!,
+             action: "CREATE",
+           },
+         });
+
+         return entry;
+      }
     }, { isolationLevel: "RepeatableRead" });
 
     return NextResponse.json({ note }, { status: 201 });

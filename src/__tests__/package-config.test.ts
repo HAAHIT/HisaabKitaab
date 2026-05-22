@@ -2,7 +2,7 @@
  * Tests for package.json configuration changes introduced in this PR.
  *
  * This PR:
- * - Renamed the project from "doorcraft-pro" to "hisaabkitaab"
+ * - Renamed the project from "doorcraft-pro" to "solobooks"
  * - Added `"type": "module"` for ESM compatibility
  * - Added `fast-xml-parser` as a production dependency (required for Tally XML export)
  * - Added the `journal:backfill` npm script
@@ -11,8 +11,8 @@ import { describe, it, expect } from "vitest";
 import pkg from "../../package.json";
 
 describe("package.json project identity", () => {
-  it('is named "hisaabkitaab"', () => {
-    expect(pkg.name).toBe("hisaabkitaab");
+  it('is named "solobooks"', () => {
+    expect(pkg.name).toBe("solobooks");
   });
 
   it("is not named the legacy doorcraft-pro name", () => {
@@ -57,6 +57,6 @@ describe("package.json scripts", () => {
   });
 
   it("uses vitest as the test runner", () => {
-    expect(pkg.scripts.test).toBe("vitest");
+    expect(pkg.scripts.test).toContain("vitest");
   });
 });

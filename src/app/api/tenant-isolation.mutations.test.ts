@@ -188,7 +188,7 @@ describe("tenant isolation for critical mutations", () => {
         "x-tenant-id": "tenant-a",
       },
       {
-        companyName: "HisaabKitaab",
+        companyName: "SoloBooks",
         companyAddress: "",
         companyPhone: "",
         companyEmail: "",

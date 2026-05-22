@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { resolveWriteSession } from "@/lib/api-tenant";
+import { resolveSession } from "@/lib/api-tenant";
+import { logError, getRequestId } from "@/lib/observability";
 import {
   escapeCsv,
   formatDateForCsv,
@@ -10,8 +11,7 @@ import {
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
-  // [FIX] Use JWT-verified session instead of trusting proxy headers
-  const sessionResolution = await resolveWriteSession(request);
+  const sessionResolution = await resolveSession(request);
   if (!sessionResolution.ok) return sessionResolution.response;
   const { tenantId, role } = sessionResolution.session;
 
@@ -43,9 +43,9 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // [FIX #38] Scope unbalanced check to export date range
+  try {
   const unbalanced = await prisma.journalEntry.count({
-    where: { tenantId, isBalanced: false, entryDate: { gte: fromDate, lte: toDate } },
+    where: { tenantId, isBalanced: false, isDeleted: false },
   });
 
   if (unbalanced > 0) {
@@ -61,6 +61,7 @@ export async function GET(request: NextRequest) {
   const entries = await prisma.journalEntry.findMany({
     where: {
       tenantId,
+      isDeleted: false,
       entryDate: {
         gte: fromDate,
         lte: toDate,
@@ -132,4 +133,14 @@ export async function GET(request: NextRequest) {
       "Content-Disposition": `attachment; filename="${filename}"`,
     },
   });
+  } catch (error) {
+    logError("export.transactions.error", {
+      requestId: getRequestId(request),
+      error,
+    });
+    return NextResponse.json(
+      { error: "Failed to export transactions" },
+      { status: 500 }
+    );
+  }
 }

@@ -1,48 +1,52 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Button,
-  Card,
-  CardBody,
-  Chip,
-  Input,
-  Pagination,
-  Select,
-  SelectItem,
-  Skeleton,
-} from "@heroui/react";
+import { HKSkeleton } from "@/components/ui/HKSkeleton";
+import { HKPagination } from "@/components/ui/HKPagination";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { EmptyState } from "@/components/ui/empty-state";
-import { Receipt } from "@/components/ui/icons";
+import { type TranslationKey } from "@/lib/i18n/translations";
+import {
+  C, OR, GR, AM, SG, IN, TYPE,
+  fmtFull, useIsMobile,
+  HKCard, StatusChip, HKAvatar, HKToast, SearchBox, PillFilter,
+  PageHeader,
+} from "@/components/ui/hk-design";
+import { HKButton } from "@/components/ui/HKButton";
+import { OverdueBanner } from "@/components/ui/OverdueBanner";
+import { useOverdueData } from "@/hooks/useOverdueData";
+
+type DatePreset = "ALL" | "THIS_MONTH" | "LAST_MONTH" | "LAST_3M" | "CUSTOM";
+
+function getPresetRange(preset: DatePreset): { from: string; to: string } | null {
+  const now = new Date();
+  if (preset === "THIS_MONTH") {
+    const from = new Date(now.getFullYear(), now.getMonth(), 1);
+    const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
+  }
+  if (preset === "LAST_MONTH") {
+    const from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const to = new Date(now.getFullYear(), now.getMonth(), 0);
+    return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
+  }
+  if (preset === "LAST_3M") {
+    const from = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+    const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
+  }
+  return null;
+}
 
 interface Bill {
   id: string;
   billNumber: string;
-  party: {
-    id: string;
-    name: string;
-    type: string;
-  } | null;
+  party: { id: string; name: string; type: string } | null;
   customerName: string;
   grandTotal: number;
   status: string;
   createdAt: string;
-}
-
-const statusColorMap: Record<string, "default" | "primary" | "success" | "danger"> = {
-  DRAFT: "default",
-  FINAL: "success",
-  CANCELLED: "danger",
-};
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(value);
+  date?: string;
 }
 
 async function readError(response: Response) {
@@ -53,79 +57,75 @@ async function readError(response: Response) {
 export default function BillsListPage() {
   const router = useRouter();
   const { t } = useLanguage();
+  const isMobile = useIsMobile();
+  const overdue = useOverdueData();
+
   const [bills, setBills] = useState<Bill[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "DRAFT" | "FINAL" | "CANCELLED">("ALL");
+  const [datePreset, setDatePreset] = useState<DatePreset>("ALL");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [collapsedMonths, setCollapsedMonths] = useState<
-    Record<string, boolean>
-  >({});
-  const [toast, setToast] = useState<{
-    message: string;
-    type: "success" | "error";
-  } | null>(null);
+  const [collapsedMonths, setCollapsedMonths] = useState<Record<string, boolean>>({});
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [billSummary, setBillSummary] = useState({ kulBilled: 0, mila: 0, baaki: 0 });
 
   const monthlyBillGroups = useMemo(() => {
     const monthFormatter = new Intl.DateTimeFormat("en-IN", {
       month: "long",
       year: "numeric",
     });
-    const groups = new Map<
-      string,
-      {
-        label: string;
-        bills: Bill[];
-        total: number;
-      }
-    >();
-
+    const groups = new Map<string, { label: string; bills: Bill[]; total: number }>();
     for (const bill of bills) {
-      const createdDate = new Date(bill.createdAt);
-      const groupKey = `${createdDate.getFullYear()}-${createdDate.getMonth()}`;
-      const existing = groups.get(groupKey);
-
+      const d = new Date(bill.date ?? bill.createdAt);
+      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      const existing = groups.get(key);
       if (existing) {
         existing.bills.push(bill);
         existing.total += Number(bill.grandTotal);
-        continue;
+      } else {
+        groups.set(key, {
+          label: monthFormatter.format(d),
+          bills: [bill],
+          total: Number(bill.grandTotal),
+        });
       }
-
-      groups.set(groupKey, {
-        label: monthFormatter.format(createdDate),
-        bills: [bill],
-        total: Number(bill.grandTotal),
-      });
     }
-
-    return Array.from(groups.entries()).map(([key, group]) => ({
-      key,
-      ...group,
-    }));
+    return Array.from(groups.entries()).map(([key, g]) => ({ key, ...g }));
   }, [bills]);
 
   const fetchBills = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      params.set("partyType", "CUSTOMER"); // Only show sales
-      if (search) {
-        params.set("search", search);
-      }
-      if (statusFilter !== "ALL") {
-        params.set("status", statusFilter);
-      }
+      params.set("partyType", "CUSTOMER");
+      if (search) params.set("search", search);
+      if (statusFilter !== "ALL") params.set("status", statusFilter);
       params.set("page", String(page));
 
+      // Date range — preset takes priority, custom used when CUSTOM selected
+      const range = datePreset !== "CUSTOM" ? getPresetRange(datePreset) : null;
+      const effectiveFrom = range ? range.from : (datePreset === "CUSTOM" ? customFrom : "");
+      const effectiveTo = range ? range.to : (datePreset === "CUSTOM" ? customTo : "");
+      if (effectiveFrom) params.set("from", effectiveFrom + "T00:00:00.000Z");
+      if (effectiveTo) params.set("to", effectiveTo + "T23:59:59.999Z");
+
       const response = await fetch(`/api/bills?${params.toString()}`);
-      if (!response.ok) {
-        throw new Error(await readError(response));
-      }
+      if (!response.ok) throw new Error(await readError(response));
 
       const data = await response.json();
       setBills((data.bills || []) as Bill[]);
       setTotalPages(data.totalPages || 1);
+      if (data.summary) {
+        setBillSummary({
+          kulBilled: data.summary.kulBilled ?? 0,
+          mila: data.summary.mila ?? 0,
+          baaki: data.summary.baaki ?? 0,
+        });
+      }
     } catch (error) {
       setBills([]);
       setTotalPages(1);
@@ -133,14 +133,7 @@ export default function BillsListPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, statusFilter, t]);
-
-  const statusOptions = [
-    { key: "ALL", label: t("bills.filter.all") },
-    { key: "DRAFT", label: t("bills.filter.draft") },
-    { key: "FINAL", label: t("bills.filter.final") },
-    { key: "CANCELLED", label: t("bills.filter.cancelled") },
-  ];
+  }, [page, search, statusFilter, datePreset, customFrom, customTo, t]);
 
   useEffect(() => {
     fetchBills();
@@ -152,210 +145,355 @@ export default function BillsListPage() {
   }
 
   function toggleMonth(key: string) {
-    setCollapsedMonths((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }));
+    setCollapsedMonths((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
+  const totalFinal = bills.filter((b) => b.status === "FINAL").length;
+  const totalDraft = bills.filter((b) => b.status === "DRAFT").length;
+  const totalCancel = bills.filter((b) => b.status === "CANCELLED").length;
+
+  const filterOptions = [
+    { key: "ALL" as const, label: `${t("bills.filter.all" as TranslationKey)} (${bills.length})` },
+    { key: "FINAL" as const, label: `${t("bills.filter.final" as TranslationKey)} (${totalFinal})` },
+    { key: "DRAFT" as const, label: `${t("bills.filter.draft" as TranslationKey)} (${totalDraft})` },
+    { key: "CANCELLED" as const, label: `${t("bills.filter.cancelled" as TranslationKey)} (${totalCancel})` },
+  ];
+
   return (
-    <div className="animate-fade-in p-4 lg:p-8">
-      {toast && (
+    <div
+      style={{
+        background: "var(--sb-bg)",
+        minHeight: "100%",
+        paddingBottom: 0,
+        fontFamily: SG,
+      }}
+    >
+      {toast && <HKToast message={toast.message} type={toast.type} />}
+
+      <div style={{ padding: isMobile ? "18px 14px 100px" : "24px 28px", maxWidth: 1440, margin: "0 auto" }}>
+        <PageHeader
+          title={t("bills.pageTitle" as TranslationKey)}
+          subtitle={t("bills.pageSubtitle" as TranslationKey)}
+          isMobile={isMobile}
+          action={
+            !isMobile && (
+              <HKButton onClick={() => router.push("/bills/new")}>
+                + {t("bills.create" as TranslationKey)}
+              </HKButton>
+            )
+          }
+        />
+        {/* Overdue banner */}
+        <OverdueBanner
+          overdueCount={overdue.overdueCount}
+          overdueAmount={overdue.overdueAmount}
+          overdueParty={overdue.overdueParty}
+        />
+
+        {/* Summary stats — ₹ amounts per PRD §5.2 */}
         <div
-          className={`fixed right-4 top-4 z-[100] rounded-xl px-4 py-3 shadow-lg animate-slide-up ${
-            toast.type === "success" ? "bg-success text-white" : "bg-danger text-white"
-          }`}
-        >
-          {toast.message}
-        </div>
-      )}
-
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">{t("bills.title")}</h1>
-          <p className="mt-1 text-sm text-default-500">
-            {t("bills.subtitle")}
-          </p>
-        </div>
-        <Button
-          color="primary"
-          className="bg-gradient-to-r from-blue-600 to-indigo-600 font-semibold shadow-lg shadow-blue-500/25"
-          onPress={() => router.push("/bills/new")}
-          startContent={
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                d="M12 4v16m8-8H4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-              />
-            </svg>
-          }
-        >
-          {t("bills.create")}
-        </Button>
-      </div>
-
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row">
-        <Input
-          aria-label={t("bills.searchPlaceholder")}
-          placeholder={t("bills.searchPlaceholder")}
-          value={search}
-          onValueChange={setSearch}
-          variant="bordered"
-          className="flex-1"
-          startContent={
-            <svg className="h-4 w-4 text-default-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-              />
-            </svg>
-          }
-        />
-        <Select
-          aria-label={t("bills.filter.all")}
-          placeholder={t("bills.filter.all")}
-          selectedKeys={new Set([statusFilter])}
-          onSelectionChange={(keys) => {
-            const value = Array.from(keys)[0] as string;
-            if (value) {
-              setStatusFilter(value);
-              setPage(1);
-            }
+          style={{
+            display: "grid",
+            gridTemplateColumns: `repeat(3, 1fr)`,
+            gap: 10,
+            marginBottom: 16,
           }}
-          variant="bordered"
-          className="w-40"
         >
-          {statusOptions.map((option) => (
-            <SelectItem key={option.key} textValue={option.label}>{option.label}</SelectItem>
-          ))}
-
-        </Select>
-      </div>
-
-      {loading ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3, 4].map((item) => (
-            <Skeleton key={item} className="h-16 w-full rounded-xl" />
+          {[
+            { l: t("bills.summary.billed" as TranslationKey), v: fmtFull(billSummary.kulBilled), sub: t("bills.summary.billedSub" as TranslationKey), c: "var(--sb-text)", bg: "var(--sb-card)" },
+            { l: t("bills.summary.received" as TranslationKey), v: fmtFull(billSummary.mila), sub: t("bills.summary.receivedSub" as TranslationKey), c: GR, bg: C.positiveSoft },
+            { l: t("bills.summary.pending" as TranslationKey), v: fmtFull(billSummary.baaki), sub: t("bills.summary.pendingSub" as TranslationKey), c: C.primary, bg: C.primarySoft },
+          ].map((item, i) => (
+            <div
+              key={i}
+              style={{
+                padding: "16px 16px",
+                borderRadius: 14,
+                background: item.bg,
+                border: "1px solid var(--sb-border)",
+                boxShadow: "var(--sb-shadow-card)",
+              }}
+            >
+              <p
+                style={{
+                  fontSize: TYPE.caption,
+                  fontWeight: 700,
+                  color: "var(--sb-sub)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.5px",
+                  marginBottom: 6,
+                  fontFamily: SG,
+                }}
+              >
+                {item.l}
+              </p>
+              <p style={{ fontSize: isMobile ? TYPE.numSmall : TYPE.numLarge, fontWeight: 800, color: item.c, fontFamily: IN, lineHeight: 1 }}>
+                {item.v}
+              </p>
+              <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--sb-sub)", marginTop: 4, fontFamily: SG }}>{item.sub}</p>
+            </div>
           ))}
         </div>
-      ) : bills.length === 0 ? (
-        <EmptyState
-          icon={Receipt}
-          title={search || statusFilter !== "ALL" ? t("bills.emptyFiltered") : t("bills.empty")}
-          description={search || statusFilter !== "ALL" ? t("bills.emptyFilteredHint") : t("bills.emptyHint")}
-          actionLabel={!search && statusFilter === "ALL" ? t("bills.create") : undefined}
-          onAction={!search && statusFilter === "ALL" ? () => router.push("/bills/new") : undefined}
-          className="mt-8"
-        />
-      ) : (
-        <>
-          <div className="space-y-6">
+
+        {/* Date range filter */}
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: datePreset === "CUSTOM" ? 8 : 0 }}>
+            {(
+              [
+                { key: "ALL" as DatePreset, label: t("bills.date.all" as TranslationKey) },
+                { key: "THIS_MONTH" as DatePreset, label: t("bills.date.thisMonth" as TranslationKey) },
+                { key: "LAST_MONTH" as DatePreset, label: t("bills.date.lastMonth" as TranslationKey) },
+                { key: "LAST_3M" as DatePreset, label: t("bills.date.last3M" as TranslationKey) },
+                { key: "CUSTOM" as DatePreset, label: t("bills.date.custom" as TranslationKey) },
+              ] as { key: DatePreset; label: string }[]
+            ).map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => { setDatePreset(opt.key); setPage(1); }}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: 20,
+                  border: "1.5px solid",
+                  borderColor: datePreset === opt.key ? "var(--sb-primary)" : "var(--sb-border)",
+                  background: datePreset === opt.key ? "var(--sb-primary)" : "var(--sb-card)",
+                  color: datePreset === opt.key ? "#fff" : "var(--sb-sub)",
+                  fontSize: TYPE.bodySmall,
+                  fontWeight: 600,
+                  fontFamily: SG,
+                  cursor: "pointer",
+                  transition: "all 0.15s",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          {datePreset === "CUSTOM" && (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <input
+                type="date"
+                value={customFrom}
+                onChange={(e) => { setCustomFrom(e.target.value); setPage(1); }}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 10,
+                  border: "1.5px solid var(--sb-border)",
+                  background: "var(--sb-card)",
+                  color: "var(--sb-text)",
+                  fontSize: TYPE.bodySmall,
+                  fontFamily: SG,
+                  cursor: "pointer",
+                  outline: "none",
+                }}
+              />
+              <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG }}>{t("bills.date.to" as TranslationKey)}</span>
+              <input
+                type="date"
+                value={customTo}
+                onChange={(e) => { setCustomTo(e.target.value); setPage(1); }}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 10,
+                  border: "1.5px solid var(--sb-border)",
+                  background: "var(--sb-card)",
+                  color: "var(--sb-text)",
+                  fontSize: TYPE.bodySmall,
+                  fontFamily: SG,
+                  cursor: "pointer",
+                  outline: "none",
+                }}
+              />
+              {(customFrom || customTo) && (
+                <button
+                  onClick={() => { setCustomFrom(""); setCustomTo(""); setPage(1); }}
+                  style={{
+                    padding: "5px 12px",
+                    borderRadius: 10,
+                    border: "1.5px solid var(--sb-border)",
+                    background: "transparent",
+                    color: "var(--sb-sub)",
+                    fontSize: TYPE.bodySmall,
+                    fontFamily: SG,
+                    cursor: "pointer",
+                  }}
+                >
+                  {t("bills.date.clear" as TranslationKey)}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Search + filter */}
+        <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+          <SearchBox value={search} onChange={setSearch} placeholder={t("bills.searchPlaceholder" as TranslationKey)} />
+          <PillFilter
+            options={filterOptions}
+            value={statusFilter}
+            onChange={(v) => { setStatusFilter(v); setPage(1); }}
+          />
+        </div>
+
+        {loading ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {[1, 2, 3, 4].map((i) => (
+              <HKSkeleton key={i} className="h-20 rounded-2xl" />
+            ))}
+          </div>
+        ) : bills.length === 0 ? (
+          <div
+            style={{
+              textAlign: "center",
+              padding: "60px 20px",
+              color: "var(--sb-sub)",
+            }}
+          >
+            <div style={{ fontSize: 52, marginBottom: 16 }}>📋</div>
+            <p
+              style={{
+                fontWeight: 700,
+                fontSize: TYPE.h2,
+                color: "var(--sb-text)",
+                marginBottom: 8,
+                fontFamily: SG,
+              }}
+            >
+              {search || statusFilter !== "ALL" ? t("bills.emptyFiltered" as TranslationKey) : t("bills.empty" as TranslationKey)}
+            </p>
+            <p style={{ fontSize: TYPE.body, fontWeight: 500, fontFamily: SG, marginBottom: 20 }}>
+              {search || statusFilter !== "ALL" ? t("bills.emptyFilteredHint" as TranslationKey) : t("bills.emptyHint" as TranslationKey)}
+            </p>
+            {!search && statusFilter === "ALL" && (
+              <HKButton onClick={() => router.push("/bills/new")}>
+                + {t("bills.create" as TranslationKey)}
+              </HKButton>
+            )}
+          </div>
+        ) : (
+          <>
+            {/* Bill groups by month */}
             {monthlyBillGroups.map((group) => {
               const isCollapsed = collapsedMonths[group.key] === true;
               return (
-                <section key={group.key} className="space-y-3">
+                <div key={group.key} style={{ marginBottom: 20 }}>
+                  {/* Month header */}
                   <button
-                    type="button"
-                    aria-expanded={!isCollapsed}
-                    aria-controls={`bill-month-${group.key}`}
-                    className="w-full rounded-xl border border-default-200 bg-content2/40 px-4 py-2 text-left transition hover:bg-content2/60"
                     onClick={() => toggleMonth(group.key)}
+                    aria-expanded={!isCollapsed}
+                    style={{
+                      width: "100%",
+                      minHeight: 48,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      padding: "10px 16px",
+                      borderRadius: 12,
+                      background: "var(--sb-surface-alt)",
+                      border: "1px solid var(--sb-border)",
+                      marginBottom: 10,
+                      cursor: "pointer",
+                      fontFamily: SG,
+                    }}
                   >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-semibold text-default-700">{group.label}</p>
-                        <Chip size="sm" variant="flat" color="default">
-                          {group.bills.length} bills
-                        </Chip>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <p className="text-sm font-semibold text-default-700">
-                          {formatCurrency(group.total)}
-                        </p>
-                        <svg
-                          className={`h-4 w-4 text-default-500 transition-transform ${
-                            isCollapsed ? "" : "rotate-180"
-                          }`}
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            d="m19 9-7 7-7-7"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={1.8}
-                          />
-                        </svg>
-                      </div>
+                    <span style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)" }}>
+                      {group.label}
+                    </span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span
+                        style={{
+                          fontSize: TYPE.numSmall,
+                          fontWeight: 700,
+                          color: "var(--sb-sub)",
+                          fontFamily: IN,
+                        }}
+                      >
+                        {fmtFull(group.total)}
+                      </span>
+                       <span style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--sb-sub)" }}>
+                        · {group.bills.length} {t("dash.billsCount" as TranslationKey)}
+                      </span>
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--sb-sub)"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        style={{
+                          transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
+                          transition: "transform 0.2s",
+                        }}
+                      >
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
                     </div>
                   </button>
+
                   {!isCollapsed && (
-                    <div
-                      id={`bill-month-${group.key}`}
-                      className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
-                    >
-                      {group.bills.map((bill) => (
-                        <Card
-                          key={bill.id}
-                          isPressable
-                          shadow="sm"
-                          className="transition hover:shadow-md"
-                          onPress={() => router.push(`/bills/${bill.id}`)}
-                        >
-                          <CardBody className="p-4">
-                            <div className="flex items-center justify-between">
-                              <div className="flex flex-col gap-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-mono text-sm font-semibold">{bill.billNumber}</span>
-                                  <Chip
-                                    size="sm"
-                                    variant="flat"
-                                    color={statusColorMap[bill.status] || "default"}
-                                    className="capitalize"
-                                  >
-                                    {bill.status.toLowerCase()}
-                                  </Chip>
-                                </div>
-                                <p className="text-default-600">{bill.customerName}</p>
-                                {bill.party && (
-                                  <p className="text-xs text-default-400">
-                                    {t("bills.partyPrefix")}: {bill.party.name}
-                                  </p>
-                                )}
-                                <p className="text-xs text-default-400">
-                                  {new Date(bill.createdAt).toLocaleDateString("en-IN", {
-                                    day: "numeric",
-                                    month: "short",
-                                    year: "numeric",
-                                  })}
-                                </p>
+                    <HKCard style={{ padding: 0 }}>
+                      {group.bills.map((bill, i) => {
+                        const partyName = bill.party?.name || bill.customerName;
+                        return (
+                          <button
+                            key={bill.id}
+                            onClick={() => router.push(`/bills/${bill.id}`)}
+                            style={{
+                              width: "100%",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 12,
+                              padding: "14px 18px",
+                              border: "none",
+                              background: "transparent",
+                              cursor: "pointer",
+                              borderBottom: i < group.bills.length - 1 ? "1px solid var(--sb-divider)" : "none",
+                              textAlign: "left",
+                              color: "var(--sb-text)",
+                              transition: "background 0.15s",
+                              fontFamily: SG,
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.background = "var(--sb-hover)")}
+                            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                          >
+                            <HKAvatar name={partyName || "—"} size={40} />
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2, flexWrap: "wrap" }}>
+                                <span style={{ fontSize: TYPE.body, fontWeight: 600, color: "var(--sb-text)", fontFamily: SG }}>{partyName}</span>
+                                <StatusChip status={bill.status} />
                               </div>
-                              <div className="text-right">
-                                <p className="text-lg font-bold">{formatCurrency(bill.grandTotal)}</p>
-                              </div>
+                              <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", margin: 0, fontFamily: SG }}>
+                                {bill.billNumber} · {new Date(bill.date ?? bill.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                              </p>
                             </div>
-                          </CardBody>
-                        </Card>
-                      ))}
-                    </div>
+                            <div style={{ textAlign: "right", flexShrink: 0 }}>
+                              <p style={{ fontSize: TYPE.numSm, fontWeight: 700, color: "var(--sb-text)", margin: 0, fontFamily: IN, fontVariantNumeric: "tabular-nums" }}>
+                                {fmtFull(bill.grandTotal)}
+                              </p>
+                            </div>
+                            <svg style={{ color: "var(--sb-muted)", flexShrink: 0 }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="m9 18 6-6-6-6"/>
+                            </svg>
+                          </button>
+                        );
+                      })}
+                    </HKCard>
                   )}
-                </section>
+                </div>
               );
             })}
-          </div>
 
-          {totalPages > 1 && (
-            <div className="mt-6 flex justify-center">
-              <Pagination total={totalPages} page={page} onChange={setPage} showControls />
-            </div>
-          )}
-        </>
-      )}
+            {totalPages > 1 && (
+              <div style={{ marginTop: 24, display: "flex", justifyContent: "center" }}>
+                <HKPagination total={totalPages} page={page} onChange={setPage} showControls />
+              </div>
+            )}
+          </>
+        )}
+
+
+      </div>
     </div>
   );
 }

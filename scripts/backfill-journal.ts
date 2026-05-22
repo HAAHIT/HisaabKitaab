@@ -109,14 +109,11 @@ async function main() {
       continue;
     }
 
-    if (!payment.partyId || !payment.party) {
-      continue;
-    }
-
+    if (!payment.party || !payment.partyId) continue;
     await prisma.$transaction(async (tx) => {
       await journalForPaymentReceived(tx, payment.tenantId, {
         id: payment.id,
-        partyId: payment.partyId,
+        partyId: payment.partyId!,
         partyName: payment.party!.name,
         amount: payment.amount.toNumber(),
         mode: payment.mode,
@@ -141,14 +138,11 @@ async function main() {
       continue;
     }
 
-    if (!payment.partyId || !payment.party) {
-      continue;
-    }
-
+    if (!payment.party || !payment.partyId) continue;
     await prisma.$transaction(async (tx) => {
       await journalForPaymentMade(tx, payment.tenantId, {
         id: payment.id,
-        partyId: payment.partyId,
+        partyId: payment.partyId!,
         partyName: payment.party!.name,
         amount: payment.amount.toNumber(),
         mode: payment.mode,

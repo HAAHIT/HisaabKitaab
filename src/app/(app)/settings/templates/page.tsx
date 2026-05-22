@@ -1,16 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import {
-  Card,
-  CardBody,
-  CardFooter,
-  Button,
-  Skeleton,
-  Chip,
-} from "@heroui/react";
+import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
+import {
+  C, GR, AM, OR, PU, SG, TYPE,
+  HKCard, HKToast, PageHeader, useIsMobile,
+} from "@/components/ui/hk-design";
+import { HKButton } from "@/components/ui/HKButton";
 
 interface Template {
   id: string;
@@ -20,21 +18,36 @@ interface Template {
   _count: { bills: number };
 }
 
+const COL_TYPE_COLOR: Record<string, string> = {
+  formula: AM,
+  number: C.primary,
+  dropdown: GR,
+  date: OR,
+  text: "var(--sb-sub)",
+};
+
 export default function TemplatesPage() {
   const router = useRouter();
   const { t } = useLanguage();
+  const isMobile = useIsMobile();
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [defaultTemplateId, setDefaultTemplateId] = useState<string | null>(null);
+  const [settingDefault, setSettingDefault] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState<{
-    message: string;
-    type: "success" | "error";
-  } | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
-  const fetchTemplates = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     try {
-      const res = await fetch("/api/templates");
-      const data = await res.json();
-      setTemplates(data.templates || []);
+      const [templatesRes, settingsRes] = await Promise.all([
+        fetch("/api/templates"),
+        fetch("/api/settings"),
+      ]);
+      const [templatesData, settingsData] = await Promise.all([
+        templatesRes.json(),
+        settingsRes.json(),
+      ]);
+      setTemplates(templatesData.templates || []);
+      setDefaultTemplateId(settingsData.settings?.defaultTemplateId || null);
     } catch {
       showToast(t("templates.fetchFailed"), "error");
     } finally {
@@ -42,13 +55,30 @@ export default function TemplatesPage() {
     }
   }, [t]);
 
-  useEffect(() => {
-    fetchTemplates();
-  }, [fetchTemplates]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   function showToast(message: string, type: "success" | "error") {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
+  }
+
+  async function handleSetDefault(id: string) {
+    setSettingDefault(id);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ defaultTemplateId: id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setDefaultTemplateId(id);
+      showToast("Default template updated", "success");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to update default", "error");
+    } finally {
+      setSettingDefault(null);
+    }
   }
 
   async function handleDelete(id: string) {
@@ -58,163 +88,142 @@ export default function TemplatesPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       showToast(t("templates.deleted"), "success");
-      fetchTemplates();
+      if (defaultTemplateId === id) setDefaultTemplateId(null);
+      fetchData();
     } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : t("templates.deleteFailed"),
-        "error"
-      );
+      showToast(err instanceof Error ? err.message : t("templates.deleteFailed"), "error");
     }
   }
 
   return (
-    <div className="p-4 lg:p-8 animate-fade-in">
-      {toast && (
-        <div
-          className={`fixed top-4 right-4 z-[100] px-4 py-3 rounded-xl shadow-lg animate-slide-up ${
-            toast.type === "success"
-              ? "bg-success text-white"
-              : "bg-danger text-white"
-          }`}
-        >
-          {toast.message}
-        </div>
-      )}
-
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">{t("templates.title")}</h1>
-          <p className="text-default-500 text-sm mt-1">
-            {t("templates.subtitle")}
-          </p>
-        </div>
-        <Button
-          color="primary"
-          className="font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 shadow-lg shadow-blue-500/25"
-          onPress={() => router.push("/settings/templates/new")}
-          startContent={
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
-          }
-        >
-          {t("templates.create")}
-        </Button>
-      </div>
-
-      {loading ? (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-40 rounded-xl" />
-          ))}
-        </div>
-      ) : templates.length === 0 ? (
-        <Card shadow="sm">
-          <CardBody className="flex flex-col items-center justify-center py-16">
-            <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-              <svg
-                className="w-10 h-10 text-primary"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm0 8a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1v-2zm0 8a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1v-2z"
-                />
-              </svg>
-            </div>
-            <p className="text-lg font-medium text-default-600">
+    <div style={{ fontFamily: SG }}>
+      {toast && <HKToast message={toast.message} type={toast.type} />}
+      <PageHeader
+        title={t("templates.title")}
+        subtitle={t("templates.subtitle")}
+        isMobile={isMobile}
+        action={
+          <HKButton onClick={() => router.push("/settings/templates/new")}>
+            + {t("templates.create")}
+          </HKButton>
+        }
+      />
+      <div>
+        {loading ? (
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 16 }}>
+            {[1, 2, 3].map((i) => <HKSkeleton key={i} className="h-44 rounded-2xl" />)}
+          </div>
+        ) : templates.length === 0 ? (
+          <HKCard style={{ textAlign: "center", padding: "60px 20px" }}>
+            <div style={{ fontSize: 52, marginBottom: 16 }}>📋</div>
+            <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, marginBottom: 8 }}>
               {t("templates.empty")}
             </p>
-            <p className="text-sm text-default-400 mt-1">
+            <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", fontFamily: SG, marginBottom: 20 }}>
               {t("templates.emptySubtitle")}
             </p>
-            <Button
-              color="primary"
-              variant="flat"
-              size="sm"
-              className="mt-4"
-              onPress={() => router.push("/settings/templates/new")}
-            >
+            <HKButton onClick={() => router.push("/settings/templates/new")}>
               {t("templates.create")}
-            </Button>
-          </CardBody>
-        </Card>
-      ) : (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {templates.map((template) => (
-            <Card
-              key={template.id}
-              shadow="sm"
-              className="hover:shadow-md transition"
-            >
-              <CardBody className="p-5">
-                <h3 className="text-lg font-semibold mb-2">{template.name}</h3>
-                <div className="flex flex-wrap gap-1 mb-3">
-                  {(
-                    template.columns as { name: string; type: string }[]
-                  ).map((col, i) => (
-                    <Chip
-                      key={i}
-                      size="sm"
-                      variant="flat"
-                      color={
-                        col.type === "formula"
-                          ? "warning"
-                          : col.type === "number"
-                            ? "primary"
-                            : "default"
-                      }
+            </HKButton>
+          </HKCard>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 16 }}>
+            {templates.map((template) => {
+              const isDefault = template.id === defaultTemplateId;
+              return (
+                <div
+                  key={template.id}
+                  style={{
+                    background: "var(--sb-card)",
+                    borderRadius: 20,
+                    border: `1.5px solid ${isDefault ? C.primary + "60" : "var(--sb-border)"}`,
+                    padding: "20px 20px 16px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 12,
+                    boxShadow: isDefault ? `0 0 0 3px ${C.primary}15` : "none",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                    <p style={{ fontSize: TYPE.bodyLarge, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>
+                      {template.name}
+                    </p>
+                    {isDefault && (
+                      <span
+                        style={{
+                          fontSize: TYPE.chip, fontWeight: 700, color: C.primary,
+                          background: C.primary + "18", padding: "3px 10px", borderRadius: 8,
+                          flexShrink: 0, fontFamily: SG,
+                        }}
+                      >
+                        Default
+                      </span>
+                    )}
+                  </div>
+
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {template.columns.map((col, i) => (
+                      <span
+                        key={i}
+                        style={{
+                          fontSize: TYPE.caption, fontWeight: 700,
+                          color: COL_TYPE_COLOR[col.type] || "var(--sb-sub)",
+                          background: (COL_TYPE_COLOR[col.type] || "var(--sb-sub)") + "18",
+                          padding: "3px 8px", borderRadius: 6, fontFamily: SG,
+                        }}
+                      >
+                        {col.name}
+                      </span>
+                    ))}
+                  </div>
+
+                  <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG, margin: 0 }}>
+                    {template._count.bills} bill(s) · {new Date(template.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                  </p>
+
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {!isDefault && (
+                      <button
+                        onClick={() => handleSetDefault(template.id)}
+                        disabled={settingDefault === template.id}
+                        style={{
+                          padding: "8px 14px", borderRadius: 10,
+                          background: C.primary + "12", border: `1px solid ${C.primary}33`,
+                          color: C.primary, fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: 600,
+                          cursor: settingDefault === template.id ? "not-allowed" : "pointer",
+                          opacity: settingDefault === template.id ? 0.6 : 1,
+                        }}
+                      >
+                        {settingDefault === template.id ? "Setting..." : "Set as Default"}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => router.push(`/settings/templates/${template.id}`)}
+                      style={{
+                        padding: "8px 14px", borderRadius: 10,
+                        background: "var(--sb-badge)", border: "1px solid var(--sb-border)",
+                        color: "var(--sb-text)", fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: 600, cursor: "pointer",
+                      }}
                     >
-                      {col.name}
-                    </Chip>
-                  ))}
+                      {t("templates.edit")}
+                    </button>
+                    <button
+                      onClick={() => handleDelete(template.id)}
+                      style={{
+                        padding: "8px 14px", borderRadius: 10,
+                        background: OR + "12", border: `1px solid ${OR}33`,
+                        color: OR, fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: 600, cursor: "pointer",
+                      }}
+                    >
+                      {t("common.delete")}
+                    </button>
+                  </div>
                 </div>
-                <p className="text-xs text-default-400">
-                  {template._count.bills} bill(s) •{" "}
-                  {new Date(template.createdAt).toLocaleDateString("en-IN", {
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                  })}
-                </p>
-              </CardBody>
-              <CardFooter className="gap-2 pt-0">
-                <Button
-                  size="sm"
-                  variant="flat"
-                  onPress={() =>
-                    router.push(`/settings/templates/${template.id}`)
-                  }
-                >
-                  {t("templates.edit")}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="flat"
-                  color="danger"
-                  onPress={() => handleDelete(template.id)}
-                >
-                  {t("common.delete")}
-                </Button>
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
-      )}
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

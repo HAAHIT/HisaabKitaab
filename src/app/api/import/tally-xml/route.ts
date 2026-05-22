@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { resolveWriteSession } from "@/lib/api-tenant";
+import { resolveSession } from "@/lib/api-tenant";
 import { logError, logInfo, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
-import { parseTallyXml } from "@/lib/tally-xml-import";
+import { parseTallyXml, type TallyParseResult } from "@/lib/tally-xml-import";
 import { processImportJob } from "@/app/api/jobs/process-import/route";
 import { gzipSync } from "zlib";
 
@@ -36,16 +36,16 @@ export async function POST(request: NextRequest) {
   );
   if (rateLimitResponse) return rateLimitResponse;
 
-
-
-  // [FIX] Use JWT-verified session instead of trusting proxy headers
-  const sessionResolution = await resolveWriteSession(request);
+  const sessionResolution = await resolveSession(request);
   if (!sessionResolution.ok) return sessionResolution.response;
-  const { tenantId: tid, userId: sessionUserId, role: sessionRole } = sessionResolution.session;
+  const { tenantId, userId, role } = sessionResolution.session;
 
-  if (sessionRole !== "ADMIN") {
+  if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  const actorId: string = userId;
+  const tid: string = tenantId;
 
   let xmlText: string;
   try {
@@ -54,30 +54,21 @@ export async function POST(request: NextRequest) {
     if (!file || typeof file === "string") {
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
     }
-    const fileSize = file.size;
-    if (fileSize > MAX_BYTES) {
+    const bytes = file.size;
+    if (bytes > MAX_BYTES) {
       return NextResponse.json(
         { error: `File too large (max ${MAX_BYTES / 1024 / 1024} MB)` },
         { status: 413 }
       );
     }
-
-    // Native Tally ERP 9 exports are often UTF-16 LE encoded.
-    // Blob.text() always decodes as UTF-8, producing garbled output for UTF-16.
-    // Detect encoding via BOM and use the correct TextDecoder.
-    const rawBuffer = await file.arrayBuffer();
-    const rawBytes = new Uint8Array(rawBuffer);
-
-    if (rawBytes[0] === 0xFF && rawBytes[1] === 0xFE) {
-      // UTF-16 LE BOM
-      xmlText = new TextDecoder("utf-16le").decode(rawBytes);
-    } else if (rawBytes[0] === 0xFE && rawBytes[1] === 0xFF) {
-      // UTF-16 BE BOM
-      xmlText = new TextDecoder("utf-16be").decode(rawBytes);
-    } else {
-      // Default: UTF-8 (handles BOM-less UTF-8 and UTF-8 with BOM)
-      xmlText = new TextDecoder("utf-8").decode(rawBytes);
-    }
+    // [M-4] Tally ERP 9 exports XML in UTF-16 LE with BOM. Blob.text() assumes
+    // UTF-8 and will produce mojibake. Use TextDecoder with BOM sniffing instead.
+    const arrayBuffer = await file.arrayBuffer();
+    const uint8 = new Uint8Array(arrayBuffer);
+    const hasUtf16LeBom = uint8[0] === 0xFF && uint8[1] === 0xFE;
+    const hasUtf16BeBom = uint8[0] === 0xFE && uint8[1] === 0xFF;
+    const encoding = hasUtf16LeBom ? "utf-16le" : hasUtf16BeBom ? "utf-16be" : "utf-8";
+    xmlText = new TextDecoder(encoding).decode(arrayBuffer);
   } catch (err) {
     logError("import.tally-xml.read-error", {
       requestId: getRequestId(request),
@@ -86,30 +77,32 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Failed to read uploaded file" }, { status: 400 });
   }
 
+  // [PERF-4] Parse upfront to get totalItems and to pass preparsed data to
+  // processImportJob, avoiding a second decompress+parse in the worker.
+  let totalItems = 0;
+  let parseErrors: string[] = [];
+  let preparsed: TallyParseResult | undefined;
+  try {
+    preparsed = parseTallyXml(xmlText);
+    totalItems = preparsed.vouchers.length;
+    parseErrors = preparsed.parseErrors ?? [];
+  } catch {
+    // Non-fatal — job will re-parse and fail gracefully if truly broken
+  }
+
   // [S-W1] Compress XML before DB storage (~80% size reduction).
   // Prefix with "gzip:" so the process-import route can detect and decompress.
   const compressedXml = "gzip:" + gzipSync(Buffer.from(xmlText, "utf-8")).toString("base64");
 
-  // Determine total items up front so the UI doesn't show "0 of 0"
-  let totalItems = 0;
-  let upfrontErrors: string[] = [];
-  try {
-    const parsed = parseTallyXml(xmlText);
-    totalItems = parsed.vouchers.length;
-    upfrontErrors = parsed.parseErrors;
-  } catch (err) {
-    console.error("Failed to parse Tally XML for total item count", err);
-    upfrontErrors.push(err instanceof Error ? err.message : String(err));
-  }
-
   // Create the tracking job
+  // [M-5] Set createdBy so the audit trail records which admin triggered the import.
   const job = await prisma.importJob.create({
     data: {
       tenantId: tid,
-      createdBy: sessionUserId,
-      totalItems: totalItems,
+      totalItems,
       xmlData: compressedXml,
       status: "PENDING",
+      createdBy: actorId,
     }
   });
 
@@ -120,18 +113,15 @@ export async function POST(request: NextRequest) {
     totalItems,
   });
 
-  // Fire-and-forget: process in background so the UI can poll progress
-  processImportJob(job.id).catch((err) => {
-    logError("import.tally-xml.background-error", {
-      jobId: job.id,
-      error: err,
-    });
-  });
+  // Fire-and-forget — do not await, response returns immediately
+  processImportJob(job.id, preparsed).catch((err) =>
+    logError("import.tally-xml.trigger-error", { jobId: job.id, error: err })
+  );
 
   return NextResponse.json({
     jobId: job.id,
-    status: "PENDING",
+    message: "Import job queued successfully.",
     totalDetected: totalItems,
-    parseErrors: upfrontErrors,
+    parseErrors,
   });
 }

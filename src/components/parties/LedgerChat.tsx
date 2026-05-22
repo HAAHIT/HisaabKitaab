@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Button, Chip } from "@heroui/react";
+import { HKChip } from "@/components/ui/HKChip";
+import { HKButton } from "@/components/ui/HKButton";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
@@ -23,7 +24,8 @@ function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(Math.abs(value));
 }
 
@@ -65,9 +67,9 @@ export default function LedgerChat({
               {partyPhone ? `+91 ${partyPhone}` : partyName}
             </p>
           </div>
-          <Chip variant="flat" color={currentBalance >= 0 ? "success" : "danger"}>
+          <HKChip variant="flat" color={currentBalance >= 0 ? "success" : "danger"}>
             {formatBalance(currentBalance, partyType)}
-          </Chip>
+          </HKChip>
         </div>
       </div>
 
@@ -152,22 +154,20 @@ export default function LedgerChat({
       </div>
 
       <div className="sticky bottom-0 flex gap-3 border-t border-divider bg-background/90 p-4 backdrop-blur">
-        <Button
+        <HKButton
           className="flex-1"
-          color="danger"
-          variant="flat"
-          onPress={() => router.push(`/bills/new?partyId=${partyId}`)}
+          variant="secondary"
+          onClick={() => router.push(`/bills/new?partyId=${partyId}`)}
         >
           {t("bills.new")}
-        </Button>
-        <Button
+        </HKButton>
+        <HKButton
           className="flex-1"
-          color="success"
-          variant="flat"
-          onPress={() => router.push(`/payments/new?partyId=${partyId}`)}
+          variant="success"
+          onClick={() => router.push(`/payments/new?partyId=${partyId}`)}
         >
           {t("payments.record")}
-        </Button>
+        </HKButton>
       </div>
     </div>
   );

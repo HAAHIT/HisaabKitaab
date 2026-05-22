@@ -1,19 +1,17 @@
-import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { resolveWriteSession } from "@/lib/api-tenant";
+import { resolveSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
-import { getPaymentBalanceDelta } from "@/lib/accounting";
+import { getPaymentBalanceDelta, asSupportedPartyType } from "@/lib/accounting";
+import { generateLockKey } from "@/lib/locks";
 import {
     journalForPaymentReceived,
     journalForPaymentMade,
     journalForContraEntry,
+    journalForLedgerPayment,
 } from "@/lib/journal";
 
-function generateLockKey(tenantId: string): bigint {
-    const hash = crypto.createHash("sha256").update(tenantId).digest("hex");
-    return BigInt("0x" + hash.substring(0, 15));
-}
+const LEDGER_PARTY_TYPES = new Set(["EXPENSE", "INCOME", "ASSET", "LIABILITY", "EQUITY"]);
 
 const VALID_MODES = new Set(["CASH", "UPI", "BANK_TRANSFER", "CHEQUE"]);
 type SupportedPaymentMode = "CASH" | "UPI" | "BANK_TRANSFER" | "CHEQUE";
@@ -36,8 +34,7 @@ export async function PATCH(
     const reqId = getRequestId(request);
     const { id } = await params;
 
-    // [FIX #1] Use JWT-verified session instead of trusting proxy headers
-    const sessionResolution = await resolveWriteSession(request);
+    const sessionResolution = await resolveSession(request);
     if (!sessionResolution.ok) {
         return sessionResolution.response;
     }
@@ -48,7 +45,6 @@ export async function PATCH(
     }
 
     try {
-
         const body = await request.json();
         const { date, notes, amount, direction, mode, accountId, partyId, destinationAccountId } = body;
 
@@ -84,9 +80,10 @@ export async function PATCH(
 
             // Step 1: Reverse old effects if COMPLETED
             if (payment.status === "COMPLETED") {
-                if (payment.party && payment.partyId) {
+                const oldIsContra = !payment.partyId && !!payment.destinationAccountId;
+                if (payment.party && payment.partyId && !LEDGER_PARTY_TYPES.has(payment.party.type)) {
                     const oldDelta = getPaymentBalanceDelta(
-                        payment.party.type, payment.direction, payment.amount.toNumber()
+                        asSupportedPartyType(payment.party.type), payment.direction, payment.amount.toNumber()
                     );
                     await tx.party.update({
                         where: { id: payment.partyId },
@@ -94,8 +91,9 @@ export async function PATCH(
                     });
                 }
                 if (payment.accountId) {
-                    const oldBankDelta = payment.direction === "INCOMING"
-                        ? payment.amount.toNumber() : -payment.amount.toNumber();
+                    const oldBankDelta = oldIsContra
+                        ? -payment.amount.toNumber()
+                        : (payment.direction === "INCOMING" ? payment.amount.toNumber() : -payment.amount.toNumber());
                     await tx.bankAccount.update({
                         where: { id: payment.accountId },
                         data: { currentBalance: { decrement: oldBankDelta } },
@@ -107,10 +105,12 @@ export async function PATCH(
                         data: { currentBalance: { decrement: payment.amount.toNumber() } },
                     });
                 }
-                // [FIX #7] Void old entries instead of hard-deleting — preserves audit trail
+                // Soft-delete the prior journal entry so its effect is removed from
+                // ledger/exports. A fresh entry is posted below for the new values.
+                // Marking syncState MODIFIED preserves the Tally re-export signal.
                 await tx.journalEntry.updateMany({
-                    where: { paymentId: id, tenantId },
-                    data: { isBalanced: false, syncState: "MODIFIED" },
+                    where: { paymentId: id, tenantId, isDeleted: false },
+                    data: { isDeleted: true, syncState: "MODIFIED" },
                 });
             }
 
@@ -149,15 +149,17 @@ export async function PATCH(
 
             // Step 4: Reapply effects if COMPLETED
             if (payment.status === "COMPLETED") {
-                if (!isContra && newParty) {
-                    const newDelta = getPaymentBalanceDelta(newParty.type, newDirection, newAmount);
+                const isLedgerParty = newParty ? LEDGER_PARTY_TYPES.has(newParty.type) : false;
+
+                if (!isContra && newParty && !isLedgerParty) {
+                    const newDelta = getPaymentBalanceDelta(asSupportedPartyType(newParty.type), newDirection, newAmount);
                     await tx.party.update({
                         where: { id: newParty.id },
                         data: { currentBalance: { increment: newDelta } },
                     });
                 }
                 if (newAccountId) {
-                    const newBankDelta = newDirection === "INCOMING" ? newAmount : -newAmount;
+                    const newBankDelta = isContra ? -newAmount : (newDirection === "INCOMING" ? newAmount : -newAmount);
                     await tx.bankAccount.update({
                         where: { id: newAccountId },
                         data: { currentBalance: { increment: newBankDelta } },
@@ -170,20 +172,22 @@ export async function PATCH(
                     });
                 }
 
-                if (isContra) {
-                    const sourceAcc = await tx.bankAccount.findUnique({ where: { id: newAccountId! }, select: { type: true } });
-                    const destAcc = await tx.bankAccount.findUnique({ where: { id: newDestId! }, select: { type: true } });
+                if (isContra && newAccountId && newDestId) {
+                    const srcAcc = await tx.bankAccount.findUnique({ where: { id: newAccountId }, select: { type: true } });
+                    const dstAcc = await tx.bankAccount.findUnique({ where: { id: newDestId }, select: { type: true } });
                     await journalForContraEntry(tx, tenantId, {
                         id: updated.id, partyId: null, partyName: null,
                         amount: newAmount, mode: newMode, date: newDate, createdBy: payment.createdBy,
-                        sourceAccountType: sourceAcc?.type, destAccountType: destAcc?.type,
-                    } as any);
-                } else if (newParty) {
+                        sourceAccountType: srcAcc?.type, destAccountType: dstAcc?.type,
+                    });
+                } else if (!isContra && newParty) {
                     const journalArgs = {
                         id: updated.id, partyId: newParty.id, partyName: newParty.name,
                         amount: newAmount, mode: newMode, date: newDate, createdBy: payment.createdBy,
                     };
-                    if (newDirection === "INCOMING") {
+                    if (isLedgerParty) {
+                        await journalForLedgerPayment(tx, tenantId, { ...journalArgs, partyType: newParty.type });
+                    } else if (newDirection === "INCOMING") {
                         await journalForPaymentReceived(tx, tenantId, journalArgs);
                     } else {
                         await journalForPaymentMade(tx, tenantId, journalArgs);
@@ -218,8 +222,7 @@ export async function DELETE(
     const reqId = getRequestId(request);
     const { id } = await params;
 
-    // [FIX #1 & #2] Use JWT-verified session + add role check (was missing entirely)
-    const sessionResolution = await resolveWriteSession(request);
+    const sessionResolution = await resolveSession(request);
     if (!sessionResolution.ok) {
         return sessionResolution.response;
     }
@@ -231,7 +234,6 @@ export async function DELETE(
 
     try {
         const result = await prisma.$transaction(async (tx) => {
-            // [FIX #3] Acquire advisory lock to prevent concurrent balance mutations
             const lockKey = generateLockKey(tenantId);
             await tx.$executeRaw`SET LOCAL lock_timeout = '5s'`;
             await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
@@ -241,70 +243,51 @@ export async function DELETE(
                 include: { party: true },
             });
 
-            if (!payment) {
-                throw new Error("Payment not found");
-            }
+            if (!payment) throw new Error("Payment not found");
 
-            // Revert balances if the payment was completed
             if (payment.status === "COMPLETED") {
-                if (payment.party) {
+                const isContra = !payment.partyId && !!payment.destinationAccountId;
+                if (payment.party && payment.partyId && !LEDGER_PARTY_TYPES.has(payment.party.type)) {
                     const balanceChange = getPaymentBalanceDelta(
-                        payment.party.type,
-                        payment.direction,
-                        payment.amount.toNumber()
+                        asSupportedPartyType(payment.party.type), payment.direction, payment.amount.toNumber()
                     );
-
                     await tx.party.update({
-                        where: { id: payment.partyId! },
-                        data: {
-                            currentBalance: { decrement: balanceChange },
-                        },
+                        where: { id: payment.partyId },
+                        data: { currentBalance: { decrement: balanceChange } },
                     });
                 }
-
                 if (payment.accountId) {
-                    const bankBalanceChange = payment.direction === "INCOMING" ? payment.amount.toNumber() : -payment.amount.toNumber();
+                    const bankBalanceChange = isContra
+                        ? -payment.amount.toNumber()
+                        : (payment.direction === "INCOMING" ? payment.amount.toNumber() : -payment.amount.toNumber());
                     await tx.bankAccount.update({
                         where: { id: payment.accountId },
-                        data: {
-                            currentBalance: { decrement: bankBalanceChange },
-                        },
+                        data: { currentBalance: { decrement: bankBalanceChange } },
                     });
                 }
-
                 if (payment.destinationAccountId) {
-                    // Reverse Contra Entry destination money
                     await tx.bankAccount.update({
                         where: { id: payment.destinationAccountId },
-                        data: {
-                            currentBalance: { decrement: payment.amount.toNumber() },
-                        },
+                        data: { currentBalance: { decrement: payment.amount.toNumber() } },
                     });
                 }
-
-                // [FIX #7] Void old entries instead of hard-deleting — preserves audit trail
+                // Soft-delete payment's journal entry so it no longer affects
+                // ledger totals or Tally exports. Payment row itself is soft-deleted below.
                 await tx.journalEntry.updateMany({
-                    where: { paymentId: payment.id, tenantId },
-                    data: { isBalanced: false, syncState: "MODIFIED" },
+                    where: { paymentId: payment.id, tenantId, isDeleted: false },
+                    data: { isDeleted: true, syncState: "MODIFIED" },
                 });
             }
 
-            // Mark payment as deleted
             const deletedPayment = await tx.payment.update({
                 where: { id: payment.id },
-                data: {
-                    isDeleted: true,
-                },
+                data: { isDeleted: true },
             });
 
-            // Audit Log
             await tx.auditLog.create({
                 data: {
-                    tenantId,
-                    entityType: "Payment",
-                    entityId: deletedPayment.id,
-                    userId: userId || payment.createdBy,
-                    action: "DELETE",
+                    tenantId, entityType: "Payment", entityId: deletedPayment.id,
+                    userId: userId || payment.createdBy, action: "DELETE",
                     fieldName: "isDeleted",
                     oldValue: JSON.stringify(false),
                     newValue: JSON.stringify(true),

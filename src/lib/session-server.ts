@@ -2,8 +2,7 @@ import { jwtVerify } from "jose";
 import { getJwtSecret } from "@/lib/jwt-secret";
 import { cookies } from "next/headers";
 import type { NextRequest } from "next/server";
-
-const COOKIE_NAME = "hisaabkitaab-session";
+import { SESSION_COOKIE_NAME } from "@/lib/cookie";
 
 export interface VerifiedSession {
   tenantId: string;
@@ -24,7 +23,7 @@ export interface VerifiedSession {
 export async function resolveVerifiedTenantId(
   request: NextRequest
 ): Promise<string | null> {
-  const token = request.cookies.get(COOKIE_NAME)?.value;
+  const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
 
   // No token at all — caller is unauthenticated. Never fall back to the env
   // variable here: doing so would let any client forge x-user-role/x-user-id
@@ -48,16 +47,10 @@ export async function resolveVerifiedTenantId(
   }
 }
 
-/**
- * [FIX #5] Resolves the full verified session (tenantId, userId, role) from JWT.
- *
- * This replaces the pattern of trusting x-user-role / x-user-id request headers
- * which could be spoofed if the proxy is bypassed or misconfigured.
- */
 export async function resolveVerifiedSession(
   request: NextRequest
 ): Promise<VerifiedSession | null> {
-  const token = request.cookies.get(COOKIE_NAME)?.value;
+  const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
   if (!token) return null;
 
   try {
@@ -78,7 +71,6 @@ export async function resolveVerifiedSession(
       typeof payload.name === "string" ? payload.name.trim() : "";
 
     if (!tenantId || !userId || !role) return null;
-
     return { tenantId, userId, role, name };
   } catch {
     return null;
@@ -87,14 +79,11 @@ export async function resolveVerifiedSession(
 
 /**
  * Resolves the full verified session from the JWT cookie for Server Components.
- *
- * Server Components cannot access NextRequest — they use next/headers cookies()
- * instead. This function provides the same JWT verification as
- * resolveVerifiedSession but reads the cookie via the Server Component API.
+ * Server Components cannot access NextRequest — they use next/headers cookies().
  */
 export async function resolveServerSession(): Promise<VerifiedSession | null> {
   const cookieStore = await cookies();
-  const token = cookieStore.get(COOKIE_NAME)?.value;
+  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   if (!token) return null;
 
   try {
@@ -115,10 +104,8 @@ export async function resolveServerSession(): Promise<VerifiedSession | null> {
       typeof payload.name === "string" ? payload.name.trim() : "";
 
     if (!tenantId || !userId || !role) return null;
-
     return { tenantId, userId, role, name };
   } catch {
     return null;
   }
 }
-

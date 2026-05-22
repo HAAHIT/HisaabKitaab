@@ -1,119 +1,103 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { resolveReadTenant, resolveWriteSession } from "@/lib/api-tenant";
+import { resolveSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
+import { checkRateLimit } from "@/lib/api-rate-limit";
 
 export const runtime = "nodejs";
 
-// GET /api/bank-accounts - List all bank accounts
+/** GET /api/bank-accounts — list active bank accounts for the tenant */
 export async function GET(request: NextRequest) {
-    const reqId = getRequestId(request);
-    const searchParams = request.nextUrl.searchParams;
+  const sessionResolution = await resolveSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId } = sessionResolution.session;
 
-    try {
-        const tenantResolution = await resolveReadTenant(request);
-        if (!tenantResolution.ok) {
-            return tenantResolution.response;
-        }
-        const tenantId = tenantResolution.tenantId;
+  try {
+    const accounts = await prisma.bankAccount.findMany({
+      where: { tenantId, isDeleted: false, isActive: true },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        accountNumber: true,
+        ifscCode: true,
+        openingBalance: true,
+        currentBalance: true,
+        isDefault: true,
+      },
+      orderBy: { createdAt: "asc" },
+    });
 
-        const typeFilter = searchParams.get("type"); // "BANK" | "CASH" | null
-
-        const where: any = {
-            tenantId,
-            isDeleted: false,
-            isActive: true,
-        };
-
-        if (typeFilter && ["BANK", "CASH"].includes(typeFilter)) {
-            where.type = typeFilter;
-        }
-
-        const accounts = await prisma.bankAccount.findMany({
-            where,
-            orderBy: [
-                { type: "desc" }, // CASH first, then BANK (since C before B, desc makes it CASH, BANK) Wait, 'CASH' 'BANK' alphabetical C comes after B. Desc gives CASH first.
-                { name: "asc" }
-            ],
-        });
-
-        return NextResponse.json({ accounts }, { status: 200 });
-    } catch (error) {
-        logError("Failed to fetch bank accounts", { reqId, error });
-        return NextResponse.json(
-            { error: "Internal Server Error" },
-            { status: 500 }
-        );
-    }
+    return NextResponse.json({ accounts });
+  } catch (error) {
+    logError("bank-accounts.list.error", { requestId: getRequestId(request), error });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }
 
-// POST /api/bank-accounts - Create a new bank account or cash ledger
+/** POST /api/bank-accounts — create a new bank account */
 export async function POST(request: NextRequest) {
-    const reqId = getRequestId(request);
+  const sessionResolution = await resolveSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, userId, role } = sessionResolution.session;
 
-    try {
-        const tenantResolution = await resolveWriteSession(request);
-        if (!tenantResolution.ok) {
-            return tenantResolution.response;
-        }
-        const tenantId = tenantResolution.session.tenantId;
-        const userId = tenantResolution.session.userId;
+  if (role !== "ADMIN") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
-        const body = await request.json().catch(() => ({}));
+  const rl = await checkRateLimit(request, `bank-accounts:create:${tenantId}`, 20);
+  if (rl) return rl;
 
-        // Basic Validation
-        if (!body.name || typeof body.name !== "string" || !body.name.trim()) {
-            return NextResponse.json({ error: "Account Name is required" }, { status: 400 });
-        }
+  let body: {
+    name?: unknown;
+    accountNumber?: unknown;
+    ifscCode?: unknown;
+    openingBalance?: unknown;
+    type?: unknown;
+  };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
 
-        if (!body.type || !["BANK", "CASH"].includes(body.type)) {
-            return NextResponse.json({ error: "Invalid Account Type" }, { status: 400 });
-        }
+  const name = typeof body.name === "string" ? body.name.trim() : "";
+  if (!name) {
+    return NextResponse.json({ error: "Bank account name is required" }, { status: 400 });
+  }
 
-        const name = body.name.trim();
+  const accountNumber = typeof body.accountNumber === "string" ? body.accountNumber.trim() : null;
+  const ifscCode = typeof body.ifscCode === "string" ? body.ifscCode.trim().toUpperCase() : null;
+  const openingBalance = Number(body.openingBalance) || 0;
+  const type = body.type === "CASH" ? "CASH" as const : "BANK" as const;
 
-        // Check Duplicate Name
-        const existing = await prisma.bankAccount.findFirst({
-            where: {
-                tenantId,
-                name: {
-                    equals: name,
-                    mode: "insensitive",
-                },
-                isDeleted: false,
-            },
-        });
-
-        if (existing) {
-            return NextResponse.json(
-                { error: "An account with this name already exists" },
-                { status: 409 }
-            );
-        }
-
-        const openingBalance = typeof body.openingBalance === "number" ? body.openingBalance : 0;
-
-        // Create the account
-        // Note: Creating a BankAccount with an opening balance doesn't automatically create a journal entry, 
-        // unless we also add an Opening Balance equity ledger. For simplicity, we just set the balance.
-        const account = await prisma.bankAccount.create({
-            data: {
-                tenantId,
-                name,
-                type: body.type,
-                accountNumber: typeof body.accountNumber === "string" ? body.accountNumber.trim() : null,
-                openingBalance,
-                currentBalance: openingBalance,
-                createdBy: userId,
-            },
-        });
-
-        return NextResponse.json({ account }, { status: 201 });
-    } catch (error) {
-        logError("Failed to create bank account", { reqId, error });
-        return NextResponse.json(
-            { error: "Internal Server Error" },
-            { status: 500 }
-        );
+  try {
+    const existing = await prisma.bankAccount.findFirst({
+      where: { tenantId, name, isDeleted: false },
+      select: { id: true },
+    });
+    if (existing) {
+      return NextResponse.json({ error: `Bank account "${name}" already exists` }, { status: 409 });
     }
+
+    const account = await prisma.bankAccount.create({
+      data: {
+        tenantId,
+        name,
+        type,
+        accountNumber: accountNumber || null,
+        ifscCode: ifscCode || null,
+        openingBalance,
+        currentBalance: openingBalance,
+        createdBy: userId,
+        updatedAt: new Date(),
+      },
+      select: { id: true, name: true, type: true, accountNumber: true, ifscCode: true, openingBalance: true },
+    });
+
+    return NextResponse.json({ account }, { status: 201 });
+  } catch (error) {
+    logError("bank-accounts.create.error", { requestId: getRequestId(request), error });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }

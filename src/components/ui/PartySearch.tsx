@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Button, useDisclosure } from "@heroui/react";
+import { HKButton } from "@/components/ui/HKButton";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getBalanceStatusLabel } from "@/lib/accounting";
 import { QuickAddPartyModal } from "@/components/parties/QuickAddPartyModal";
@@ -30,12 +30,11 @@ interface PartySearchProps {
   variant?: "flat" | "bordered" | "underlined" | "faded";
   size?: "sm" | "md" | "lg";
   label?: string;
-  /** When true, Cash/Bank accounts appear at the top of the list with type "CASH_ACCOUNT" or "BANK_ACCOUNT" */
   includeBankAccounts?: boolean;
 }
 
 function formatSignedBalance(value: number) {
-  const absolute = Math.abs(value).toLocaleString("en-IN");
+  const absolute = Math.abs(value).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   if (value === 0) return `INR ${absolute}`;
   return `${value > 0 ? "+" : "-"}INR ${absolute}`;
 }
@@ -62,7 +61,9 @@ export function PartySearch({
   const [bankAccountOptions, setBankAccountOptions] = useState<PartyOption[]>([]);
   const [searchTerm, setSearchTerm] = useState(initialParty?.name || "");
   const [isLoading, setIsLoading] = useState(false);
-  const { isOpen, onOpen, onOpenChange } = useDisclosure();
+  const [isOpen, setIsOpen] = useState(false);
+  const onOpen = () => setIsOpen(true);
+  const onClose = () => setIsOpen(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const selectedPartyRef = useRef<PartyOption | null>(initialParty ?? null);
 
@@ -130,7 +131,6 @@ export function PartySearch({
   function handleInputChange(val: string) {
     setSearchTerm(val);
 
-    // If the user clears the input, clear the selected value
     if (val === "" && selectedPartyRef.current) {
       selectedPartyRef.current = null;
       onChange(null);
@@ -144,18 +144,17 @@ export function PartySearch({
 
   const bottomSection = (closePopover: () => void) => (
     <div className="p-2 pt-1 border-t border-divider/50 mt-1">
-      <Button
+      <HKButton
         className="w-full justify-start font-medium"
         size="sm"
-        color="primary"
-        variant="light"
-        onPress={() => {
+        variant="ghost"
+        onClick={() => {
           closePopover();
           onOpen();
         }}
       >
-        + Add New {partyType ? t(`parties.${partyType.toLowerCase()}Type` as any) : "Party / Ledger"}
-      </Button>
+        + Add New {partyType ? t(`parties.${partyType.toLowerCase()}Type` as Parameters<typeof t>[0]) : "Party / Ledger"}
+      </HKButton>
     </div>
   );
 
@@ -224,7 +223,7 @@ export function PartySearch({
 
       <QuickAddPartyModal
         isOpen={isOpen}
-        onOpenChange={onOpenChange}
+        onClose={onClose}
         initialType={partyType || filterTypes?.[0] || "CUSTOMER"}
         allowedTypes={filterTypes || (partyType ? [partyType] : ["CUSTOMER", "VENDOR"])}
         onSuccess={(newParty) => {

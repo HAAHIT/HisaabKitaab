@@ -8,7 +8,7 @@ import {
 } from "@/lib/media";
 import { findUniqueCustomerPartyIdForUser } from "@/lib/party-relations";
 import { prisma } from "@/lib/prisma";
-import { resolveWriteSession } from "@/lib/api-tenant";
+import { resolveSession } from "@/lib/api-tenant";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { logError, getRequestId } from "@/lib/observability";
 import type { MeasurementStatus, Prisma } from "@prisma/client";
@@ -62,8 +62,8 @@ async function readMeasurementPayload(request: NextRequest) {
     files: [] as File[],
     legacyPhotoUrls: Array.isArray(body.photos)
       ? body.photos
-        .map((entry: unknown) => extractLegacyPhotoUrl(entry))
-        .filter((entry: string | null): entry is string => Boolean(entry))
+          .map((entry: unknown) => extractLegacyPhotoUrl(entry))
+          .filter((entry: string | null): entry is string => Boolean(entry))
       : [],
   };
 }
@@ -159,8 +159,7 @@ const measurementInclude = {
 
 // GET /api/measurements - List measurements with filters
 export async function GET(request: NextRequest) {
-  // [FIX] Use JWT-verified session instead of trusting proxy headers
-  const sessionResolution = await resolveWriteSession(request);
+  const sessionResolution = await resolveSession(request);
   if (!sessionResolution.ok) return sessionResolution.response;
   const { tenantId, userId, role } = sessionResolution.session;
 
@@ -209,8 +208,7 @@ export async function POST(request: NextRequest) {
   const rateLimitResponse = await checkRateLimit(request, "measurements.upload", 20);
   if (rateLimitResponse) return rateLimitResponse;
 
-  // [FIX] Use JWT-verified session instead of trusting proxy headers
-  const sessionResolution = await resolveWriteSession(request);
+  const sessionResolution = await resolveSession(request);
   if (!sessionResolution.ok) return sessionResolution.response;
   const { tenantId, userId } = sessionResolution.session;
 

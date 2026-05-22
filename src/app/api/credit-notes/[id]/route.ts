@@ -19,6 +19,7 @@ export async function GET(
             where: {
                 id,
                 tenantId,
+                isDeleted: false,
                 voucherType: { in: ["CREDIT_NOTE", "DEBIT_NOTE"] },
             },
             include: {
@@ -32,17 +33,13 @@ export async function GET(
             return NextResponse.json({ error: "Note not found" }, { status: 404 });
         }
 
-        // Look up the creator name from the User table
         const creator = await prisma.user.findUnique({
             where: { id: entry.createdBy },
             select: { name: true },
         });
 
-        // Extract party info from the first line that has a partyId
         const partyLine = entry.lines.find((l) => l.partyId);
 
-        // Parse the narration to extract original invoice reference
-        // Format: "Credit Note against INV-001 (Sales Return)"
         const narrationMatch = entry.narration?.match(
             /(?:Credit|Debit) Note against (.+?) \((.+?)\)/
         );

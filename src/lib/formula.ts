@@ -206,14 +206,25 @@ function evaluateMathExpression(expression: string): number | null {
  * Evaluate a formula given column definitions and current row values.
  * Returns the computed number, or null if inputs are missing.
  */
+function normalizeKey(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
 export function evaluateFormula(
   formula: string,
   rowValues: Record<string, number | string>
 ): number | null {
+  // Build normalized fallback map for fuzzy matching (e.g. {Rate} matches "Rate (₹)")
+  const normalizedMap: Record<string, number | string> = {};
+  for (const [key, val] of Object.entries(rowValues)) {
+    const nk = normalizeKey(key);
+    if (!(nk in normalizedMap)) normalizedMap[nk] = val;
+  }
+
   let hasMissingRef = false;
   let expression = formula.replace(/\{([^}]+)\}/g, (match, ref) => {
     if (hasMissingRef) return match;
-    const value = rowValues[ref];
+    const value = rowValues[ref] ?? normalizedMap[normalizeKey(ref)];
     if (value === undefined || value === "" || value === null) {
       hasMissingRef = true;
       return match;
@@ -247,6 +258,15 @@ export function evaluateRow(
   columns: ColumnDef[]
 ): Record<string, number | string> {
   const result = { ...rowValues };
+
+  // Add name-keyed aliases so formulas stored with {ColumnName} refs work the
+  // same as formulas stored with {columnId} refs (both styles appear in practice).
+  for (const col of columns) {
+    if (col.id in result && !(col.name in result)) {
+      result[col.name] = result[col.id];
+    }
+  }
+
   const sortedColumns = [...columns].sort((a, b) => a.position - b.position);
 
   for (const col of sortedColumns) {
@@ -254,6 +274,7 @@ export function evaluateRow(
       const computed = evaluateFormula(col.formula, result);
       if (computed !== null) {
         result[col.id] = computed;
+        result[col.name] = computed;
       }
     }
   }

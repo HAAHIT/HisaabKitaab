@@ -1,20 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import type { Prisma, PartyType } from "@prisma/client";
-import { resolveWriteSession } from "@/lib/api-tenant";
+import { resolveSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { isValidGstinFormat } from "@/lib/gst-helpers";
 
-const VALID_PARTY_TYPES = new Set<PartyType>([
-  "CUSTOMER",
-  "VENDOR",
-  "EXPENSE",
-  "INCOME",
-  "ASSET",
-  "LIABILITY",
-  "EQUITY"
-]);
+const VALID_PARTY_TYPES = new Set<PartyType>(["CUSTOMER", "VENDOR"]);
 
 function isPartyType(value: string | undefined): value is PartyType {
   return Boolean(value && VALID_PARTY_TYPES.has(value as PartyType));
@@ -40,8 +32,7 @@ function parseOpeningBalance(value: unknown) {
 
 // GET /api/parties — List all parties with balance info
 export async function GET(request: NextRequest) {
-  // [FIX] Use JWT-verified session instead of trusting proxy headers
-  const sessionResolution = await resolveWriteSession(request);
+  const sessionResolution = await resolveSession(request);
   if (!sessionResolution.ok) return sessionResolution.response;
   const { tenantId, role } = sessionResolution.session;
 
@@ -52,9 +43,13 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const search = searchParams.get("search") || "";
   const type = searchParams.get("type") || "";
-  const typesParam = searchParams.get("types") || "";
-  const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
-  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10)));
+  const sortBy = searchParams.get("sortBy") || "balance"; // "balance" or "name"
+  const overdueFilter = searchParams.get("overdue") === "true";
+  const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1);
+  const limit = Math.min(
+    Math.max(1, parseInt(searchParams.get("limit") || "20", 10) || 20),
+    100
+  );
 
   const where: Prisma.PartyWhereInput = { isActive: true, isDeleted: false, tenantId };
 
@@ -65,22 +60,30 @@ export async function GET(request: NextRequest) {
     ];
   }
 
-  if (typesParam) {
-    const types = typesParam
-      .split(",")
-      .map(t => t.trim().toUpperCase())
-      .filter((t) => VALID_PARTY_TYPES.has(t as PartyType)) as PartyType[];
-    if (types.length > 0) {
-      where.type = { in: types };
-    }
-  } else if (type && type !== "ALL" && VALID_PARTY_TYPES.has(type as PartyType)) {
+  if (type && type !== "ALL" && VALID_PARTY_TYPES.has(type as PartyType)) {
     where.type = type as PartyType;
   }
 
-  const [parties, total] = await prisma.$transaction([
+  // §5.3: Overdue filter — parties with negative balance and no payment in 30 days
+  if (overdueFilter) {
+    where.currentBalance = { lt: 0 };
+    where.payments = {
+      none: {
+        isDeleted: false,
+        date: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+      },
+    };
+  }
+
+  const orderBy: Prisma.PartyOrderByWithRelationInput =
+    sortBy === "name"
+      ? { name: "asc" }
+      : { currentBalance: "asc" }; // Most negative (biggest debtors) first
+
+  const [parties, total] = await Promise.all([
     prisma.party.findMany({
       where,
-      orderBy: { name: "asc" },
+      orderBy,
       skip: (page - 1) * limit,
       take: limit,
       include: {
@@ -90,7 +93,13 @@ export async function GET(request: NextRequest) {
     prisma.party.count({ where }),
   ]);
 
-  return NextResponse.json({ parties, total, page, totalPages: Math.ceil(total / limit) });
+  return NextResponse.json({
+    parties,
+    page,
+    limit,
+    total,
+    totalPages: Math.max(1, Math.ceil(total / limit)),
+  });
 }
 
 // POST /api/parties — Create a new party
@@ -98,8 +107,7 @@ export async function POST(request: NextRequest) {
   const rateLimitResponse = await checkRateLimit(request, "parties.create", 20);
   if (rateLimitResponse) return rateLimitResponse;
 
-  // [FIX] Use JWT-verified session instead of trusting proxy headers
-  const sessionResolution = await resolveWriteSession(request);
+  const sessionResolution = await resolveSession(request);
   if (!sessionResolution.ok) return sessionResolution.response;
   const { tenantId, userId, role } = sessionResolution.session;
 
@@ -176,15 +184,7 @@ export async function POST(request: NextRequest) {
     }, { isolationLevel: "RepeatableRead" });
 
     return NextResponse.json({ party }, { status: 201 });
-  } catch (error: any) {
-    if (error.code === "P2002") {
-      logError("parties.create.duplicate", { requestId: getRequestId(request) });
-      return NextResponse.json(
-        { error: "A party or ledger with this exact name already exists." },
-        { status: 409 }
-      );
-    }
-
+  } catch (error) {
     logError("parties.create.error", { requestId: getRequestId(request), error });
     return NextResponse.json(
       { error: "Internal server error" },

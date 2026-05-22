@@ -2,15 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "How to Export Data from HisaabKitaab to TallyPrime | Guide",
-  description: "Learn how to effortlessly sync your daily billing and purchase data generated in HisaabKitaab back into TallyPrime for your CA.",
+  title: "How to Export Data from SoloBooks to TallyPrime | Guide",
+  description: "Learn how to effortlessly sync your daily billing and purchase data generated in SoloBooks back into TallyPrime for your CA.",
 };
 
 export default function ExportToTallyGuide() {
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "HowTo",
-    name: "How to Export Data from HisaabKitaab to TallyPrime",
+    name: "How to Export Data from SoloBooks to TallyPrime",
     description:
       "Syncing daily billing/purchases generated in our SaaS software back into Tally for the user's CA.",
     step: [
@@ -45,7 +45,7 @@ export default function ExportToTallyGuide() {
 
         <header className="mb-10 text-center">
           <h1 className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight mb-6">
-            How to Export Data from HisaabKitaab to{" "}
+            How to Export Data from SoloBooks to{" "}
             <span className="text-teal-600">TallyPrime</span>
           </h1>
           <p className="text-lg text-slate-600 max-w-2xl mx-auto font-medium leading-relaxed">
@@ -60,7 +60,7 @@ export default function ExportToTallyGuide() {
           </h2>
           <p className="text-slate-600 mb-8">
             Your business runs on the cloud, but your Chartered Accountant
-            likely still relies on TallyPrime. HisaabKitaab bridges this gap by
+            likely still relies on TallyPrime. SoloBooks bridges this gap by
             generating standard Tally XML files that can be directly imported
             into Tally without any manual data entry.
           </p>
@@ -69,7 +69,7 @@ export default function ExportToTallyGuide() {
             Understanding the XML Structure
           </h2>
           <p className="text-slate-600 mb-8">
-            To ensuring error-free synchronization, HisaabKitaab meticulously
+            To ensuring error-free synchronization, SoloBooks meticulously
             constructs the XML payload to adhere to strict Tally standards.
           </p>
 
@@ -257,7 +257,7 @@ export default function ExportToTallyGuide() {
           </Link>
           <p className="mt-8 text-xs text-slate-400 leading-relaxed max-w-2xl mx-auto">
             *Tally and TallyPrime are registered trademarks of Tally Solutions Pvt. Ltd. <br />
-            HisaabKitaab is an independent product and is not affiliated with, endorsed by, or sponsored by Tally Solutions.
+            SoloBooks is an independent product and is not affiliated with, endorsed by, or sponsored by Tally Solutions.
           </p>
         </div>
       </article>

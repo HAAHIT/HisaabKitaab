@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { resolveWriteSession } from "@/lib/api-tenant";
+import { resolveSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { NextRequest, NextResponse } from "next/server";
@@ -8,8 +8,7 @@ export const runtime = "nodejs";
 
 // GET /api/templates — List all templates
 export async function GET(request: NextRequest) {
-  // [FIX] Use JWT-verified session instead of trusting proxy headers
-  const sessionResolution = await resolveWriteSession(request);
+  const sessionResolution = await resolveSession(request);
   if (!sessionResolution.ok) return sessionResolution.response;
   const { tenantId, role } = sessionResolution.session;
 
@@ -41,8 +40,7 @@ export async function POST(request: NextRequest) {
   const rateLimitResponse = await checkRateLimit(request, "templates.create", 10);
   if (rateLimitResponse) return rateLimitResponse;
 
-  // [FIX] Use JWT-verified session instead of trusting proxy headers
-  const sessionResolution = await resolveWriteSession(request);
+  const sessionResolution = await resolveSession(request);
   if (!sessionResolution.ok) return sessionResolution.response;
   const { tenantId, userId, role } = sessionResolution.session;
 

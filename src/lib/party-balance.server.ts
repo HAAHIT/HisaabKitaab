@@ -68,6 +68,7 @@ export async function recomputePartyBalance(
             partyId,
             journal: {
               tenantId,
+              isDeleted: false,
               voucherType: { in: ["CREDIT_NOTE", "DEBIT_NOTE"] },
             },
           },

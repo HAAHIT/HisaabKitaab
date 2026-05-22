@@ -2,30 +2,22 @@
 
 import { useState, useEffect, use } from "react";
 import Image from "next/image";
-import {
-  Card,
-  CardBody,
-  CardHeader,
-  Button,
-  Chip,
-  Divider,
-  Modal,
-  ModalBody,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
-  Skeleton,
-} from "@heroui/react";
+import { HKModal } from "@/components/ui/hk-design";
+import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { useRouter } from "next/navigation";
-import { Printer, Pencil, CheckCircle, XCircle } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { type TranslationKey } from "@/lib/i18n/translations";
 import { BillActionBar } from "@/components/bills/BillActionBar";
-import { BillHeader } from "@/components/bills/BillHeader";
-import { BillSummary, type TaxSlab } from "@/components/bills/BillSummary";
-import { BillFooter } from "@/components/bills/BillFooter";
 import type { ColumnDef } from "@/lib/formula";
 import { shareBill } from "@/lib/share";
-import { numberToIndianWords } from "@/lib/number-to-words";
-import { aggregateTaxByRate } from "@/lib/tax-summary";
+import { GST_STATE_CODES } from "@/lib/gst-states";
+import {
+  OR, GR, AM, SG, IN, TYPE, TOUCH,
+  HKToast, StatusChip,
+} from "@/components/ui/hk-design";
+import { HKButton } from "@/components/ui/HKButton";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface BillDetail {
   id: string;
@@ -33,12 +25,8 @@ interface BillDetail {
   partyId: string | null;
   isInterState?: boolean;
   party: {
-    id: string;
-    name: string;
-    type: "CUSTOMER" | "VENDOR";
-    phone: string | null;
-    address: string | null;
-    gstin: string | null;
+    id: string; name: string; type: "CUSTOMER" | "VENDOR";
+    phone: string | null; address: string | null; gstin: string | null;
   } | null;
   customerName: string;
   customerPhone: string | null;
@@ -51,16 +39,13 @@ interface BillDetail {
   taxPercent: number;
   taxAmount: number;
   grandTotal: number;
-  roundOff: number;
+  roundOff?: number | null;
   placeOfSupply: string | null;
   hsnCode: string | null;
-  shippingAddress: string | null;
   status: string;
+  date: string;
   createdAt: string;
-  template: {
-    name: string;
-    columns: ColumnDef[];
-  };
+  template: { name: string; columns: ColumnDef[] };
   creator: { name: string };
 }
 
@@ -72,713 +57,637 @@ interface CompanySettings {
   companyGstin: string | null;
   companyLogo: string | null;
   upiId?: string | null;
+  bankName?: string | null;
+  bankAccountNumber?: string | null;
+  bankBranch?: string | null;
+  bankIfscCode?: string | null;
 }
 
-const statusColorMap: Record<
-  string,
-  "default" | "primary" | "success" | "danger"
-> = {
-  DRAFT: "default",
-  FINAL: "success",
-  CANCELLED: "danger",
-};
+// ─── Utilities ────────────────────────────────────────────────────────────────
 
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 2,
-  }).format(n);
+const ONES = ["","One","Two","Three","Four","Five","Six","Seven","Eight","Nine",
+  "Ten","Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"];
+const TENS = ["","","Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety"];
+
+function w(n: number): string {
+  if (!n) return "";
+  if (n < 20) return ONES[n];
+  if (n < 100) return TENS[Math.floor(n/10)] + (n%10 ? " " + ONES[n%10] : "");
+  return ONES[Math.floor(n/100)] + " Hundred" + (n%100 ? " and " + w(n%100) : "");
+}
+function numberToWords(amount: number): string {
+  const n = Math.round(amount);
+  if (!n) return "Zero Rupees Only";
+  const cr=Math.floor(n/1e7), lk=Math.floor((n%1e7)/1e5), th=Math.floor((n%1e5)/1e3), rm=n%1e3;
+  return "Indian Rupees " +
+    [(cr?w(cr)+" Crore ":""),(lk?w(lk)+" Lakh ":""),(th?w(th)+" Thousand ":""),(rm?w(rm):" ")].join("").trim() +
+    " Only.";
 }
 
-function formatColumnValue(colName: string, value: number): string {
-  const lower = colName.toLowerCase();
-  const isCurrency =
-    lower.includes("rate") ||
-    lower.includes("price") ||
-    lower.includes("amount") ||
-    lower.includes("total") ||
-    lower.includes("₹") ||
-    lower.includes("rs");
-
-  if (isCurrency) return formatCurrency(value);
-
-  return new Intl.NumberFormat("en-IN", {
-    maximumFractionDigits: 2,
-  }).format(value);
+function formatINR(n: number) {
+  return new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
+}
+function formatVal(colName: string, value: number): string {
+  const l = colName.toLowerCase();
+  return (l.includes("rate")||l.includes("price")||l.includes("amount")||l.includes("total")||l.includes("₹")||l.includes("rs"))
+    ? formatINR(value)
+    : new Intl.NumberFormat("en-IN",{maximumFractionDigits:2}).format(value);
+}
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-IN",{day:"2-digit",month:"2-digit",year:"numeric"});
+}
+function stateName(code: string|null) {
+  if (!code) return "";
+  return GST_STATE_CODES[code] ? `${GST_STATE_CODES[code]}` : code;
 }
 
+const PRINT_CSS = `
+@media print {
+  @page { margin: 8mm; size: A4 portrait; }
+  html, body { margin: 0 !important; padding: 0 !important; background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .no-print { display: none !important; }
+  .bill-bg { background: white !important; padding: 0 !important; min-height: 0 !important; }
+  .bill-paper { box-shadow: none !important; border-radius: 0 !important; max-width: 100% !important; width: 100% !important; box-sizing: border-box !important; margin: 0 !important; }
+  .main-content-area { padding: 0 !important; min-height: 0 !important; }
+  .bill-pad-row { display: none !important; }
+  .bill-paper table th { white-space: normal !important; }
+}
+`;
 
-export default function BillDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export default function BillDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
+  const { t } = useLanguage();
   const { id } = use(params);
-  const [bill, setBill] = useState<BillDetail | null>(null);
-  const [settings, setSettings] = useState<CompanySettings | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState<{
-    message: string;
-    type: "success" | "error";
-  } | null>(null);
-  const [confirmAction, setConfirmAction] = useState<"FINAL" | "CANCELLED" | null>(null);
+
+  const [bill,          setBill]          = useState<BillDetail | null>(null);
+  const [settings,      setSettings]      = useState<CompanySettings | null>(null);
+  const [loading,       setLoading]       = useState(true);
+  const [toast,         setToast]         = useState<{ message: string; type: "success"|"error" }|null>(null);
+  const [confirmAction, setConfirmAction] = useState<"FINAL"|"CANCELLED"|null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
-  function showToast(message: string, type: "success" | "error") {
-    setToast({ message, type });
+  useEffect(() => {
+    const el = document.createElement("style");
+    el.setAttribute("data-sb-print", "1");
+    el.textContent = PRINT_CSS;
+    document.head.appendChild(el);
+    return () => { document.head.removeChild(el); };
+  }, []);
+
+  function showToast(msg: string, type: "success"|"error") {
+    setToast({ message: msg, type });
     setTimeout(() => setToast(null), 3000);
   }
 
   useEffect(() => {
-    async function loadData() {
+    (async () => {
       try {
-        const [billRes, settingsRes] = await Promise.all([
-          fetch(`/api/bills/${id}`),
-          fetch("/api/settings"),
-        ]);
-
-        if (billRes.ok) {
-          const { bill: serverBill } = await billRes.json();
-          setBill(serverBill);
-        }
-
-        if (settingsRes.ok) {
-          const { settings: serverSettings } = await settingsRes.json();
-          setSettings(serverSettings);
-        }
-      } catch {
-        // non-critical — loading state handles the empty case
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadData();
+        const [bRes, sRes] = await Promise.all([fetch(`/api/bills/${id}`), fetch("/api/settings")]);
+        if (bRes.ok) setBill((await bRes.json()).bill);
+        if (sRes.ok) setSettings((await sRes.json()).settings);
+      } finally { setLoading(false); }
+    })();
   }, [id]);
 
-  async function executeStatusChange(status: "FINAL" | "CANCELLED") {
+  async function execStatus(status: "FINAL"|"CANCELLED") {
     if (!bill) return;
-    const currentBill = bill;
     setActionLoading(true);
     try {
-      const method = status === "CANCELLED" ? "DELETE" : "PATCH";
-      const body =
-        status === "CANCELLED"
-          ? undefined
-          : JSON.stringify({
-            partyId: currentBill.partyId,
-            customerName: currentBill.customerName,
-            customerPhone: currentBill.customerPhone,
-            customerAddress: currentBill.customerAddress,
-            gstin: currentBill.gstin,
-            rows: currentBill.rows,
-            notes: currentBill.notes,
-            terms: currentBill.terms,
-            taxPercent: currentBill.taxPercent,
-            subtotal: currentBill.subtotal,
-            taxAmount: currentBill.taxAmount,
-            grandTotal: currentBill.grandTotal,
-            roundOff: currentBill.roundOff || 0,
-            isInterState: currentBill.isInterState === true,
-            status,
-          });
-      const headers: Record<string, string> = {};
-      if (body) headers["Content-Type"] = "application/json";
-
-      const res = await fetch(`/api/bills/${id}`, { method, headers, body });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error);
-      }
-
-      showToast(status === "FINAL" ? "Bill finalized!" : "Bill cancelled", "success");
-      const updated = await fetch(`/api/bills/${id}`).then((r) => r.json());
-      setBill(updated.bill);
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "Action failed", "error");
-    } finally {
-      setActionLoading(false);
-      setConfirmAction(null);
-    }
+      const del = status === "CANCELLED";
+      const res = await fetch(`/api/bills/${id}`, {
+        method: del ? "DELETE" : "PATCH",
+        headers: del ? {} : { "Content-Type": "application/json" },
+        body: del ? undefined : JSON.stringify({
+          partyId: bill.partyId, customerName: bill.customerName,
+          customerPhone: bill.customerPhone, customerAddress: bill.customerAddress,
+          gstin: bill.gstin, rows: bill.rows, notes: bill.notes, terms: bill.terms,
+          taxPercent: bill.taxPercent, subtotal: bill.subtotal,
+          taxAmount: bill.taxAmount, grandTotal: bill.grandTotal,
+          isInterState: bill.isInterState === true, status,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      showToast(status === "FINAL" ? t("bills.detail.finalizeSuccess" as TranslationKey) : t("bills.detail.cancelSuccess" as TranslationKey), "success");
+      setBill((await fetch(`/api/bills/${id}`).then(r => r.json())).bill);
+    } catch (e) { showToast(e instanceof Error ? e.message : "Failed", "error"); }
+    finally { setActionLoading(false); setConfirmAction(null); }
   }
 
   async function handleShare() {
-    if (!bill || bill.status !== "FINAL") {
-      return;
-    }
-
-    const didShare = await shareBill({
-      billNumber: bill.billNumber,
-      customerName: bill.customerName,
-      grandTotal: bill.grandTotal,
-      customerPhone: bill.customerPhone,
+    if (!bill || bill.status !== "FINAL") return;
+    await shareBill({
+      billNumber: bill.billNumber, customerName: bill.customerName,
+      grandTotal: bill.grandTotal, customerPhone: bill.customerPhone,
       companyName: settings?.companyName || "My Business",
       companyUpiId: settings?.upiId || null,
-      billUrl: `${window.location.origin}/api/bills/${bill.id}/public`,
+      billUrl: `${window.location.origin}/bill/${bill.id}`,
     });
-
-    if (didShare) {
-      showToast("Share flow opened", "success");
-    }
   }
 
-  if (loading) {
-    return (
-      <div className="p-4 lg:p-8 space-y-4">
-        <Skeleton className="h-8 w-48 rounded-lg" />
-        <Skeleton className="h-60 w-full rounded-xl" />
-        <Skeleton className="h-40 w-full rounded-xl" />
-      </div>
-    );
-  }
+  // ── Loading ───────────────────────────────────────────────────────────────
 
-  if (!bill) {
-    return (
-      <div className="p-4 lg:p-8">
-        <Card>
-          <CardBody className="text-center py-16">
-            <p className="text-lg font-medium">Bill not found</p>
-            <Button
-              className="mt-3"
-              variant="flat"
-              onPress={() => router.push("/bills")}
-            >
-              Back to List
-            </Button>
-          </CardBody>
-        </Card>
-      </div>
-    );
-  }
-
-  const columns = bill.template.columns as ColumnDef[];
-
-  return (
-    <div className="p-4 lg:p-8 animate-fade-in max-w-5xl mx-auto">
-      <style jsx global>{`
-        @media print {
-          @page { margin: 15mm; size: auto; }
-          body { background: white !important; font-size: 12pt; }
-          .no-print { display: none !important; }
-        }
-      `}</style>
-
-      {toast && (
-        <div
-          className={`fixed top-4 right-4 z-[100] px-4 py-3 rounded-xl shadow-lg animate-slide-up no-print ${toast.type === "success"
-            ? "bg-success text-white"
-            : "bg-danger text-white"
-            }`}
-        >
-          {toast.message}
-        </div>
-      )}
-
-      {/* Screen UI: Hidden on Print */}
-      <div className="no-print">
-        {/* Header */}
-        <BillHeader
-          documentNumber={bill.billNumber}
-          documentLabel={bill.party?.type === "VENDOR" ? "Purchase Bill" : "Tax Invoice"}
-          date={new Date(bill.createdAt).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "long", year: "numeric" })}
-          status={bill.status}
-          theme="primary"
-          createdBy={bill.creator.name}
-          backPath={bill.party?.type === "VENDOR" ? "/purchases" : "/bills"}
-          actions={
-            <>
-              <Button variant="flat" size="sm" startContent={<Printer className="h-3.5 w-3.5" />} onPress={() => window.print()}>Print</Button>
-              {bill.status === "DRAFT" && (
-                <>
-                  <Button variant="bordered" size="sm" startContent={<Pencil className="h-3.5 w-3.5" />} onPress={() => router.push(`/bills/${id}/edit`)}>Edit</Button>
-                  <Button color="success" size="sm" variant="flat" startContent={<CheckCircle className="h-3.5 w-3.5" />} onPress={() => setConfirmAction("FINAL")}>Finalize</Button>
-                </>
-              )}
-              {bill.status !== "CANCELLED" && (
-                <Button color="danger" size="sm" variant="flat" startContent={<XCircle className="h-3.5 w-3.5" />} onPress={() => setConfirmAction("CANCELLED")}>Cancel</Button>
-              )}
-            </>
-          }
-        />
-
-        {/* Customer / Invoice Details */}
-        <div className="grid md:grid-cols-2 gap-6 mb-6">
-          {/* Party Card */}
-          <Card shadow="sm" className="border-l-4 border-primary">
-            <CardHeader className="px-6 pt-5 pb-0">
-              <h2 className="font-semibold text-sm text-default-500 uppercase tracking-wider">
-                {bill.party?.type === "VENDOR" ? "Vendor" : "Customer"}
-              </h2>
-            </CardHeader>
-            <CardBody className="p-6 pt-3">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <span className="text-lg font-bold text-primary">
-                    {(bill.customerName || "?")[0].toUpperCase()}
-                  </span>
-                </div>
-                <div>
-                  <p className="font-semibold text-lg">{bill.customerName}</p>
-                  {bill.customerPhone && (
-                    <p className="text-sm text-default-500">{bill.customerPhone}</p>
-                  )}
-                </div>
-              </div>
-              {bill.customerAddress && (
-                <p className="text-sm text-default-500 mt-3">{bill.customerAddress}</p>
-              )}
-              {bill.party && (
-                <Button
-                  size="sm"
-                  variant="light"
-                  color="primary"
-                  className="mt-2 -ml-2"
-                  onPress={() => router.push(`/parties/${bill.party?.id}`)}
-                >
-                  View Party →
-                </Button>
-              )}
-            </CardBody>
-          </Card>
-
-          {/* Invoice Details Card */}
-          <Card shadow="sm" className="border-l-4 border-primary">
-            <CardHeader className="px-6 pt-5 pb-0">
-              <h2 className="font-semibold text-sm text-default-500 uppercase tracking-wider">
-                Invoice Details
-              </h2>
-            </CardHeader>
-            <CardBody className="p-6 pt-3 space-y-3">
-              {bill.gstin && (
-                <div>
-                  <p className="text-xs text-default-400">GSTIN</p>
-                  <p className="font-mono font-semibold text-base">{bill.gstin}</p>
-                </div>
-              )}
-              {bill.placeOfSupply && (
-                <div>
-                  <p className="text-xs text-default-400">Place of Supply</p>
-                  <div className="font-medium">
-                    {bill.placeOfSupply}
-                    {bill.isInterState && (
-                      <Chip size="sm" variant="flat" color="warning" className="ml-2">Inter-State</Chip>
-                    )}
-                  </div>
-                </div>
-              )}
-              {bill.hsnCode && (
-                <div>
-                  <p className="text-xs text-default-400">HSN/SAC</p>
-                  <p className="font-mono font-semibold">{bill.hsnCode}</p>
-                </div>
-              )}
-              {!bill.gstin && !bill.placeOfSupply && !bill.hsnCode && (
-                <div>
-                  <p className="text-xs text-default-400">Narration</p>
-                  <p className="text-sm text-default-600">Tax Invoice #{bill.billNumber}</p>
-                </div>
-              )}
-            </CardBody>
-          </Card>
-        </div>
-
-        {/* Items Table */}
-        <Card shadow="sm" className="mb-6">
-          <CardHeader className="px-6 pt-5 pb-0">
-            <h2 className="font-semibold text-sm text-default-500 uppercase tracking-wider">
-              Line Items
-              {bill.template.name !== "__QUICK_BILL__" && (
-                <span className="ml-2 text-sm font-normal text-default-400">
-                  ({bill.template.name})
-                </span>
-              )}
-            </h2>
-          </CardHeader>
-          <CardBody className="p-6 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b-2 border-divider">
-                  <th className="text-left py-3 px-2 text-default-500 font-semibold uppercase tracking-wider text-xs w-10">#</th>
-                  {columns.map((col) => (
-                    <th key={col.name} className={`py-3 px-2 text-default-500 font-semibold uppercase tracking-wider text-xs ${col.type === "number" || col.type === "formula" ? "text-right" : "text-left"}`}>{col.name}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {(bill.rows as Record<string, string | number>[]).map((row, i) => (
-                  <tr key={i} className="border-b border-divider/30 hover:bg-default-50 dark:hover:bg-default-100/5 transition-colors">
-                    <td className="py-3 px-2 text-default-400">{i + 1}</td>
-                    {columns.map((col) => (
-                      <td key={col.name} className={`py-3 px-2 ${col.type === "number" || col.type === "formula" ? "text-right font-mono" : ""} ${col.type === "formula" ? "text-primary font-medium" : ""}`}>
-                        {(col.type === "number" || col.type === "formula")
-                          ? (() => {
-                            const raw = row[col.id];
-                            const num = typeof raw === "number" ? raw : parseFloat(String(raw));
-                            return !isNaN(num) ? formatColumnValue(col.name, num) : raw || "—";
-                          })()
-                          : row[col.id] || "—"}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </CardBody>
-        </Card>
-
-        {/* Totals & Notes */}
-        <div className="grid lg:grid-cols-2 gap-6 mb-6">
-          <BillFooter
-            notes={bill.notes}
-            terms={bill.terms}
-            showActions={false}
-          />
-          <BillSummary
-            subtotal={bill.subtotal}
-            taxPercent={bill.taxPercent}
-            taxAmount={bill.taxAmount}
-            roundOff={bill.roundOff}
-            grandTotal={bill.grandTotal}
-            theme="primary"
-            showAmountInWords
-          />
-        </div>
-        {/* Spacer for fixed action bar */}
-        <div className="h-24" />
-      </div>
-
-      <BillActionBar bill={{
-        id: bill.id,
-        billNumber: bill.billNumber,
-        customerName: bill.customerName,
-        grandTotal: bill.grandTotal,
-        status: bill.status,
-        customerPhone: bill.customerPhone,
-        partyId: bill.partyId,
-      }} onShare={handleShare} />
-
-      {/* Confirm action modal */}
-      <Modal
-        isOpen={confirmAction !== null}
-        onClose={() => setConfirmAction(null)}
-        size="sm"
-      >
-        <ModalContent>
-          <ModalHeader>
-            {confirmAction === "FINAL" ? "Finalize Bill" : "Cancel Bill"}
-          </ModalHeader>
-          <ModalBody>
-            <p className="text-sm text-default-600">
-              {confirmAction === "FINAL"
-                ? "This will lock the bill and record it in your books. It cannot be edited after finalization."
-                : "This will permanently cancel the bill and reverse any balance changes."}
-            </p>
-          </ModalBody>
-          <ModalFooter>
-            <Button variant="flat" onPress={() => setConfirmAction(null)}>
-              Go back
-            </Button>
-            <Button
-              color={confirmAction === "FINAL" ? "success" : "danger"}
-              isLoading={actionLoading}
-              onPress={() => confirmAction && executeStatusChange(confirmAction)}
-            >
-              {confirmAction === "FINAL" ? "Yes, Finalize" : "Yes, Cancel Bill"}
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-
-      {/* Print-Only Professional Tax Invoice Layout */}
-      <div className="hidden print:block p-0 text-black" style={{ fontSize: '11pt', lineHeight: '1.5' }}>
-        {/* Tax Invoice Title Band */}
-        <div style={{ borderBottom: '3px solid #000', paddingBottom: '16px', marginBottom: '16px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            {/* Left: Company Info */}
-            <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-              {settings?.companyLogo && (
-                <Image
-                  src={settings.companyLogo}
-                  alt="Logo"
-                  width={72}
-                  height={72}
-                  unoptimized
-                  style={{ width: '72px', height: '72px', objectFit: 'contain' }}
-                />
-              )}
-              <div>
-                <h1 style={{ fontSize: '20pt', fontWeight: 800, margin: 0, letterSpacing: '-0.5px' }}>
-                  {settings?.companyName || "My Business"}
-                </h1>
-                <div style={{ fontSize: '9pt', color: '#444', marginTop: '4px', lineHeight: '1.6' }}>
-                  {settings?.companyAddress && <div>{settings.companyAddress}</div>}
-                  {settings?.companyPhone && <div>Phone: {settings.companyPhone}</div>}
-                  {settings?.companyEmail && <div>Email: {settings.companyEmail}</div>}
-                  {settings?.companyGstin && (
-                    <div style={{ fontWeight: 700, marginTop: '2px' }}>GSTIN: {settings.companyGstin}</div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Right: Invoice Meta */}
-            <div style={{ textAlign: 'right' }}>
-              <div style={{
-                fontSize: '14pt',
-                fontWeight: 800,
-                border: '2px solid #000',
-                padding: '4px 16px',
-                display: 'inline-block',
-                marginBottom: '8px',
-                letterSpacing: '2px',
-              }}>
-                {bill.party?.type === "VENDOR" ? "PURCHASE BILL" : "TAX INVOICE"}
-              </div>
-              <div style={{ fontSize: '9pt', lineHeight: '1.8' }}>
-                <div><strong>Invoice No:</strong> <span style={{ fontFamily: 'monospace' }}>{bill.billNumber}</span></div>
-                <div><strong>Date:</strong> {new Date(bill.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</div>
-                <div><strong>Status:</strong> <span style={{ textTransform: 'uppercase' }}>{bill.status}</span></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Bill To / Supply Details / Ship To */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: '24px',
-          marginBottom: '16px',
-          fontSize: '9pt',
-        }}>
-          <div style={{ border: '1px solid #ccc', padding: '12px', borderRadius: '4px' }}>
-            <div style={{ fontSize: '8pt', fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '6px' }}>
-              {bill.party?.type === "VENDOR" ? "Supplier Details" : "Bill To"}
-            </div>
-            <div style={{ fontSize: '12pt', fontWeight: 700, marginBottom: '4px' }}>{bill.customerName}</div>
-            {bill.customerAddress && <div style={{ color: '#444' }}>{bill.customerAddress}</div>}
-            {bill.customerPhone && <div style={{ color: '#444' }}>Phone: {bill.customerPhone}</div>}
-            {bill.gstin && <div style={{ fontWeight: 600, marginTop: '4px' }}>GSTIN: <span style={{ fontFamily: 'monospace' }}>{bill.gstin}</span></div>}
-          </div>
-          <div style={{ border: '1px solid #ccc', padding: '12px', borderRadius: '4px' }}>
-            <div style={{ fontSize: '8pt', fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '6px' }}>
-              Supply Details
-            </div>
-            {bill.placeOfSupply && (
-              <div>
-                <strong>Place of Supply:</strong> {bill.placeOfSupply}
-                {bill.isInterState && <span style={{ color: '#c00', fontWeight: 600, marginLeft: '8px' }}>(Inter-State)</span>}
-              </div>
-            )}
-            {bill.hsnCode && <div><strong>HSN/SAC Code:</strong> <span style={{ fontFamily: 'monospace' }}>{bill.hsnCode}</span></div>}
-            <div><strong>Supply Type:</strong> {bill.isInterState ? "Inter-State (IGST)" : "Intra-State (CGST + SGST)"}</div>
-          </div>
-          {bill.shippingAddress && (
-            <div style={{ border: '1px solid #ccc', padding: '12px', borderRadius: '4px', gridColumn: '1 / -1' }}>
-              <div style={{ fontSize: '8pt', fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '6px' }}>
-                Ship To
-              </div>
-              <div style={{ color: '#444', whiteSpace: 'pre-line' }}>{bill.shippingAddress}</div>
-            </div>
-          )}
-        </div>
-
-        {/* Line Items Table */}
-        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '16px', fontSize: '9pt' }}>
-          <thead>
-            <tr style={{ backgroundColor: '#f5f5f5' }}>
-              <th style={{ border: '1px solid #999', padding: '8px 6px', textAlign: 'center', fontWeight: 700, width: '36px' }}>#</th>
-              {columns.map(col => (
-                <th key={col.id} style={{
-                  border: '1px solid #999',
-                  padding: '8px 6px',
-                  fontWeight: 700,
-                  textAlign: col.type === "number" || col.type === "formula" ? 'right' : 'left',
-                }}>
-                  {col.name}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {bill.rows.map((row, i) => (
-              <tr key={i}>
-                <td style={{ border: '1px solid #ccc', padding: '7px 6px', textAlign: 'center', color: '#666' }}>{i + 1}</td>
-                {columns.map(col => (
-                  <td key={col.id} style={{
-                    border: '1px solid #ccc',
-                    padding: '7px 6px',
-                    textAlign: col.type === "number" || col.type === "formula" ? 'right' : 'left',
-                    fontFamily: col.type === "number" || col.type === "formula" ? 'monospace' : 'inherit',
-                  }}>
-                    {col.type === "number" || col.type === "formula"
-                      ? (() => {
-                        const raw = row[col.id];
-                        const num = typeof raw === "number" ? raw : parseFloat(String(raw));
-                        return !isNaN(num) ? formatColumnValue(col.name, num) : raw || "—";
-                      })()
-                      : row[col.id] || "—"}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {/* Totals + Notes Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-          {/* Left: Notes & Terms */}
-          <div style={{ fontSize: '8pt' }}>
-            {bill.notes && (
-              <div style={{ marginBottom: '12px' }}>
-                <div style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#888', marginBottom: '4px', fontSize: '7pt' }}>Notes</div>
-                <div style={{ color: '#444', whiteSpace: 'pre-line', fontStyle: 'italic' }}>{bill.notes}</div>
-              </div>
-            )}
-            {bill.terms && (
-              <div>
-                <div style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#888', marginBottom: '4px', fontSize: '7pt' }}>Terms & Conditions</div>
-                <div style={{ color: '#555', whiteSpace: 'pre-line' }}>{bill.terms}</div>
-              </div>
-            )}
-
-            {/* Amount in Words */}
-            <div style={{ marginTop: '16px', borderTop: '1px solid #ddd', paddingTop: '8px' }}>
-              <div style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#888', marginBottom: '4px', fontSize: '7pt' }}>Amount in Words</div>
-              <div style={{ fontWeight: 600, fontStyle: 'italic', fontSize: '9pt' }}>
-                {numberToIndianWords(bill.grandTotal)}
-              </div>
-            </div>
-          </div>
-
-          {/* Right: Financial Summary */}
-          <div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9pt' }}>
-              <tbody>
-                <tr>
-                  <td style={{ padding: '6px 8px', borderBottom: '1px solid #eee' }}>Subtotal</td>
-                  <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', borderBottom: '1px solid #eee' }}>{formatCurrency(bill.subtotal)}</td>
-                </tr>
-                {(() => {
-                  const slabs = aggregateTaxByRate(
-                    bill.rows,
-                    columns,
-                    bill.isInterState === true,
-                    { subtotal: bill.subtotal, taxAmount: bill.taxAmount, taxPercent: bill.taxPercent, hsnCode: bill.hsnCode }
-                  );
-                  if (bill.taxAmount === 0) {
-                    return (
-                      <tr>
-                        <td style={{ padding: '6px 8px', borderBottom: '1px solid #eee', color: '#444' }}>Tax</td>
-                        <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', borderBottom: '1px solid #eee' }}>{formatCurrency(0)}</td>
-                      </tr>
-                    );
-                  }
-                  if (slabs.length === 1) {
-                    // Single-slab: show traditional CGST/SGST or IGST rows
-                    const slab = slabs[0];
-                    if (bill.isInterState) {
-                      return (
-                        <tr>
-                          <td style={{ padding: '6px 8px', borderBottom: '1px solid #eee', color: '#444' }}>
-                            IGST ({slab.rate}%)
-                          </td>
-                          <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', borderBottom: '1px solid #eee' }}>
-                            {formatCurrency(slab.igst)}
-                          </td>
-                        </tr>
-                      );
-                    }
-                    return (
-                      <>
-                        <tr>
-                          <td style={{ padding: '6px 8px', borderBottom: '1px solid #eee', color: '#444' }}>
-                            CGST ({(slab.rate / 2).toFixed(1)}%)
-                          </td>
-                          <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', borderBottom: '1px solid #eee' }}>
-                            {formatCurrency(slab.cgst)}
-                          </td>
-                        </tr>
-                        <tr>
-                          <td style={{ padding: '6px 8px', borderBottom: '1px solid #eee', color: '#444' }}>
-                            SGST ({(slab.rate / 2).toFixed(1)}%)
-                          </td>
-                          <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', borderBottom: '1px solid #eee' }}>
-                            {formatCurrency(slab.sgst)}
-                          </td>
-                        </tr>
-                      </>
-                    );
-                  }
-                  // Multi-slab: show per-slab breakdown
-                  return (
-                    <>
-                      {slabs.map((slab, idx) => (
-                        <tr key={idx}>
-                          <td style={{ padding: '6px 8px', borderBottom: '1px solid #eee', color: '#444' }}>
-                            {bill.isInterState
-                              ? `IGST @${slab.rate}%`
-                              : `GST @${slab.rate}% (${(slab.rate / 2).toFixed(1)}+${(slab.rate / 2).toFixed(1)})`}
-                            {slab.hsnCode !== '—' && (
-                              <span style={{ fontSize: '7pt', color: '#888', marginLeft: '4px' }}>[{slab.hsnCode}]</span>
-                            )}
-                          </td>
-                          <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', borderBottom: '1px solid #eee' }}>
-                            {formatCurrency(slab.totalTax)}
-                          </td>
-                        </tr>
-                      ))}
-                    </>
-                  );
-                })()}
-                {bill.roundOff !== 0 && (
-                  <tr>
-                    <td style={{ padding: '6px 8px', borderBottom: '1px solid #eee', color: '#444' }}>
-                      Round Off
-                    </td>
-                    <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', borderBottom: '1px solid #eee' }}>
-                      {bill.roundOff > 0 ? '+' : ''}{formatCurrency(bill.roundOff)}
-                    </td>
-                  </tr>
-                )}
-                <tr style={{ fontWeight: 800 }}>
-                  <td style={{ padding: '10px 8px', borderTop: '2px solid #000', fontSize: '12pt' }}>Grand Total</td>
-                  <td style={{ padding: '10px 8px', textAlign: 'right', fontFamily: 'monospace', borderTop: '2px solid #000', fontSize: '12pt' }}>
-                    {formatCurrency(bill.grandTotal)}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-
-            {/* Authorized Signature */}
-            <div style={{ marginTop: '40px', textAlign: 'right', paddingRight: '8px' }}>
-              <div style={{ borderBottom: '1px solid #999', width: '180px', marginLeft: 'auto', marginBottom: '6px', height: '40px' }}></div>
-              <div style={{ fontSize: '8pt', fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                Authorized Signatory
-              </div>
-              <div style={{ fontSize: '7pt', color: '#999', marginTop: '2px' }}>
-                {settings?.companyName || ""}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Print Footer */}
-        <div style={{
-          marginTop: '32px',
-          borderTop: '1px solid #ccc',
-          paddingTop: '8px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          fontSize: '7pt',
-          color: '#aaa',
-        }}>
-          <div>Generated by HisaabKitaab • This is a computer-generated document</div>
-          <div>Page 1 of 1</div>
-        </div>
+  if (loading) return (
+    <div style={{ background: "var(--sb-bg)", minHeight: "100%", fontFamily: SG }}>
+      <div style={{ height: 57, borderBottom: "1px solid var(--sb-border)", background: "var(--sb-nav)" }} />
+      <div style={{ padding: "24px 20px", maxWidth: 860, margin: "0 auto" }}>
+        <HKSkeleton className="h-[700px] w-full rounded-2xl" />
       </div>
     </div>
   );
+
+  if (!bill) return (
+    <div style={{ background: "var(--sb-bg)", minHeight: "100%", fontFamily: SG, display: "flex", alignItems: "center", justifyContent: "center", padding: 40 }}>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontSize: 52, marginBottom: 16 }}>📋</div>
+        <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", marginBottom: 8 }}>{t("bills.detail.notFound" as TranslationKey)}</p>
+        <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", marginBottom: 24 }}>{t("bills.detail.notFoundDesc" as TranslationKey)}</p>
+        <HKButton onClick={() => router.push("/bills")}>{t("bills.detail.backToBills" as TranslationKey)}</HKButton>
+      </div>
+    </div>
+  );
+
+  // ── Derived ───────────────────────────────────────────────────────────────
+
+  const cols     = bill.template.columns as ColumnDef[];
+  const isIS     = bill.isInterState === true;
+  const halfRate = bill.taxPercent / 2;
+  const halfTax  = Math.round((bill.taxAmount / 2) * 100) / 100;
+  const cgst     = halfTax;
+  const sgst     = halfTax;
+  const supply   = bill.placeOfSupply ? stateName(bill.placeOfSupply) : "";
+  const supplyFull = bill.placeOfSupply ? `${supply} (${bill.placeOfSupply})` : "";
+
+  const lastNumCol = [...cols].reverse().find(c => c.type === "formula" || c.type === "number");
+  const numColCount = cols.filter(c => c.type === "number" || c.type === "formula").length;
+  const templateHasHsnCol = cols.some(c => c.type === "text" && ["hsn","sac"].some(h => c.name.toLowerCase().includes(h)));
+
+  const isMultiRate = (() => {
+    const taxRateCol = cols.find(c => c.type === "number" && ["tax rate","tax%","gst rate","gst%"].some(h => c.name.toLowerCase().includes(h)));
+    if (!taxRateCol) return false;
+    const rates = (bill.rows as Record<string,string|number>[])
+      .map(r => typeof r[taxRateCol.id] === "number" ? r[taxRateCol.id] as number : 0)
+      .filter(r => r > 0);
+    return new Set(rates).size > 1;
+  })();
+
+  const isVendor = bill.party?.type === "VENDOR";
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  return (
+    <>
+      {toast && <HKToast message={toast.message} type={toast.type} />}
+
+      {/* ── Toolbar ─────────────────────────────────────────────────────────── */}
+      <div
+        className="no-print"
+        style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 20,
+          borderBottom: "1px solid var(--sb-border)",
+          background: "var(--sb-nav)",
+          backdropFilter: "blur(12px)",
+        }}
+      >
+        <div style={{ maxWidth: 900, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 16px" }}>
+          {/* Left: back + bill number + status */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
+            <button
+              onClick={() => router.push(isVendor ? "/purchases" : "/bills")}
+              style={{
+                width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+                border: "1.5px solid var(--sb-border)",
+                background: "var(--sb-card)", color: "var(--sb-text)",
+                boxShadow: "var(--sb-shadow-card)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: "pointer",
+              }}
+            >
+              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+            </button>
+            <span style={{ fontSize: TYPE.body, fontWeight: 800, color: "var(--sb-text)", fontFamily: IN, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {bill.billNumber}
+            </span>
+            <StatusChip status={bill.status} />
+            <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG, whiteSpace: "nowrap", display: "none" }} className="sm-visible">
+              {fmtDate(bill.date ?? bill.createdAt)} · {bill.creator.name}
+            </span>
+          </div>
+
+          {/* Right: actions */}
+          <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center" }}>
+            <button
+              onClick={() => window.print()}
+              style={{
+                height: TOUCH.secondary, padding: "0 14px",
+                borderRadius: 10, border: "1.5px solid var(--sb-border)",
+                background: "var(--sb-card)", color: "var(--sb-text)",
+                fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG,
+                cursor: "pointer", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
+              }}
+            >
+              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6v-8z" />
+              </svg>
+              {t("common.print" as TranslationKey)}
+            </button>
+
+            {bill.status === "DRAFT" && (
+              <>
+                <button
+                  onClick={() => router.push(`/bills/${id}/edit`)}
+                  style={{
+                    height: TOUCH.secondary, padding: "0 14px",
+                    borderRadius: 10, border: "1.5px solid var(--sb-border)",
+                    background: "var(--sb-card)", color: "var(--sb-text)",
+                    fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG,
+                    cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+                  }}
+                >
+                  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                  {t("templates.edit" as TranslationKey)}
+                </button>
+                <button
+                  onClick={() => setConfirmAction("FINAL")}
+                  style={{
+                    height: TOUCH.secondary, padding: "0 14px",
+                    borderRadius: 10, border: "none",
+                    background: GR, color: "#fff",
+                    fontSize: TYPE.bodySmall, fontWeight: 700, fontFamily: SG,
+                    cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+                    boxShadow: `0 3px 12px ${GR}40`,
+                  }}
+                >
+                  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 13l4 4L19 7" />
+                  </svg>
+                  {t("bills.finalize" as TranslationKey)}
+                </button>
+              </>
+            )}
+
+            {bill.status !== "CANCELLED" && (
+              <button
+                onClick={() => setConfirmAction("CANCELLED")}
+                style={{
+                  height: TOUCH.secondary, padding: "0 14px",
+                  borderRadius: 10, border: "1.5px solid var(--sb-border)",
+                  background: "transparent", color: OR,
+                  fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG,
+                  cursor: "pointer", whiteSpace: "nowrap",
+                }}
+              >
+                {t("common.cancel" as TranslationKey)}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Invoice document ──────────────────────────────────────────────────── */}
+      <div className="bill-bg" style={{ minHeight: "100vh", padding: "24px 12px 120px", background: "var(--sb-bg)" }}>
+        <div
+          className="bill-paper"
+          style={{
+            maxWidth: 860,
+            margin: "0 auto",
+            background: "white",
+            color: "#111",
+            fontFamily: '"Arial","Helvetica",sans-serif',
+            fontSize: 12,
+            border: "1.5px solid #888",
+            boxShadow: "0 8px 40px rgba(0,0,0,0.18)",
+          }}
+        >
+
+          {/* ══ HEADER ════════════════════════════════════════════════════════ */}
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"6px 14px", borderBottom:"1px solid #ccc", fontSize:10 }}>
+            <span style={{ fontWeight:700, letterSpacing:1, textTransform:"uppercase", color:"#555" }}>Tax Invoice</span>
+            <span style={{ color:"#555" }}>Subject to {supply || "local"} Jurisdiction</span>
+          </div>
+
+          <div style={{ textAlign:"center", padding:"14px 20px 10px", borderBottom:"1.5px solid #333" }}>
+            {settings?.companyLogo && (
+              <div style={{ marginBottom:8 }}>
+                <Image src={settings.companyLogo} alt="Logo" width={80} height={80} unoptimized
+                  style={{ height:60, width:"auto", objectFit:"contain", display:"inline-block" }} />
+              </div>
+            )}
+            <div style={{ fontWeight:900, fontSize:28, letterSpacing:0.5, color:"#111", lineHeight:1 }}>
+              {settings?.companyName || "—"}
+            </div>
+            {settings?.companyAddress && (
+              <div style={{ fontSize:11, color:"#444", marginTop:5, lineHeight:1.4 }}>
+                {settings.companyAddress.replace(/\n/g," · ")}
+                {settings?.companyPhone ? `  ·  Mo: ${settings.companyPhone}` : ""}
+                {settings?.companyEmail ? `  ·  ${settings.companyEmail}` : ""}
+              </div>
+            )}
+            {settings?.companyGstin && (
+              <div style={{ fontSize:11, fontWeight:700, marginTop:4, letterSpacing:0.5 }}>
+                GST NO : {settings.companyGstin}
+              </div>
+            )}
+          </div>
+
+          {/* ══ PARTY + INVOICE META ══════════════════════════════════════════ */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", borderBottom:"1.5px solid #333" }}>
+            <div style={{ padding:"10px 14px", borderRight:"1px solid #999", fontSize:11 }}>
+              <div style={{ fontWeight:700, marginBottom:5, fontSize:11 }}>Party Name &amp; Address :</div>
+              <div style={{ fontWeight:800, fontSize:13 }}>{bill.customerName}</div>
+              {bill.customerAddress && (
+                <div style={{ color:"#444", lineHeight:1.5, marginTop:3, whiteSpace:"pre-line" }}>{bill.customerAddress}</div>
+              )}
+              {bill.customerPhone && <div style={{ marginTop:3 }}>Ph: {bill.customerPhone}</div>}
+              {bill.gstin && (
+                <div style={{ marginTop:5, fontWeight:700 }}>GST No: <span style={{ fontFamily:"monospace" }}>{bill.gstin}</span></div>
+              )}
+              {bill.placeOfSupply && (
+                <div style={{ marginTop:3, color:"#555" }}>
+                  State: {supplyFull}
+                  {" · "}
+                  <span style={{ fontWeight:700, color: isIS ? "#b45309" : "#047857" }}>
+                    {isIS ? "Inter-State" : "Intra-State"}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div style={{ padding:"10px 14px", fontSize:11 }}>
+              {[
+                ["Invoice No", bill.billNumber],
+                ["Date", fmtDate(bill.date || bill.createdAt)],
+                ...(bill.hsnCode ? [["HSN / SAC", bill.hsnCode]] : []),
+                ...(bill.placeOfSupply ? [["Place of Supply", supplyFull]] : []),
+                ...(bill.terms ? [["Payment Terms", bill.terms]] : []),
+              ].map(([label, val]) => (
+                <div key={label} style={{ display:"flex", gap:8, marginBottom:5, alignItems:"flex-start" }}>
+                  <span style={{ minWidth:110, fontWeight:700, color:"#333" }}>{label}</span>
+                  <span style={{ color:"#111" }}>: &nbsp;{val}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ══ ITEMS TABLE ═══════════════════════════════════════════════════ */}
+          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+            <thead>
+              <tr style={{ background:"#f5f5f5", borderBottom:"1.5px solid #333", borderTop:"none" }}>
+                <th style={TH({ w:32, center:true })}>S.No</th>
+                {cols.map((col, i) => (
+                  <th key={col.id} style={TH({ right: col.type==="number"||col.type==="formula", last: i===cols.length-1 })}>
+                    {col.name}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(bill.rows as Record<string,string|number>[]).map((row, ri) => {
+                const rowHsn = typeof row._hsnCode === "string" && row._hsnCode.trim() ? row._hsnCode.trim() : null;
+                const firstTextColId = cols.find(c => c.type !== "number" && c.type !== "formula")?.id ?? null;
+                return (
+                  <tr key={ri} style={{ borderBottom:"1px solid #ddd" }}>
+                    <td style={TD({ center:true, muted:true })}>{ri+1}</td>
+                    {cols.map((col, ci) => (
+                      <td key={col.id} style={TD({
+                        right: col.type==="number"||col.type==="formula",
+                        bold: col.type==="formula",
+                        last: ci===cols.length-1,
+                      })}>
+                        {(col.type==="number"||col.type==="formula")
+                          ? typeof row[col.id]==="number" ? formatVal(col.name, row[col.id] as number) : row[col.id]||"—"
+                          : <>
+                              {row[col.id]||"—"}
+                              {rowHsn && col.id === firstTextColId && !templateHasHsnCol && (
+                                <span style={{ display:"block", fontSize:9, color:"#888", marginTop:1 }}>
+                                  HSN/SAC: {rowHsn}
+                                </span>
+                              )}
+                            </>
+                        }
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+
+              {(() => {
+                const textCols = cols.length - numColCount;
+                const spanLeft = 1 + textCols;
+                const taxRows = isIS
+                  ? [["IGST", isMultiRate ? "" : `@ ${bill.taxPercent}%`, formatINR(bill.taxAmount)]]
+                  : [
+                      ["OUTPUT CENTRAL GST", isMultiRate ? "(CGST)" : `(CGST) @ ${halfRate}%`, formatINR(cgst)],
+                      ["OUTPUT STATE GST",   isMultiRate ? "(SGST)" : `(SGST) @ ${halfRate}%`, formatINR(sgst)],
+                    ];
+                return (
+                  <>
+                    <tr style={{ borderTop:"1.5px solid #555", borderBottom:"1px solid #ddd" }}>
+                      <td colSpan={spanLeft} style={{ ...TD({}), borderRight:"1px solid #ccc" }}> </td>
+                      {numColCount > 1 && Array.from({length:numColCount-1}).map((_,i) => (
+                        <td key={i} style={{ ...TD({ right:true }), borderRight:"1px solid #ccc" }}> </td>
+                      ))}
+                      <td style={{ ...TD({ right:true, last:true, bold:false }), background:"#fafafa" }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", gap:16 }}>
+                          <span style={{ color:"#555", fontWeight:600 }}>Sub Total</span>
+                          <span style={{ fontFamily:"monospace", fontWeight:700 }}>{formatINR(bill.subtotal)}</span>
+                        </div>
+                      </td>
+                    </tr>
+                    {taxRows.map(([label, rate, amt]) => (
+                      <tr key={label} style={{ borderBottom:"1px solid #e5e5e5" }}>
+                        <td colSpan={spanLeft} style={{ ...TD({}), borderRight:"1px solid #ccc" }}> </td>
+                        {numColCount > 1 && Array.from({length:numColCount-1}).map((_,i) => (
+                          <td key={i} style={{ ...TD({ right:true }), borderRight:"1px solid #ccc" }}> </td>
+                        ))}
+                        <td style={{ ...TD({ right:true, last:true }), background:"#fffbf5" }}>
+                          <div style={{ display:"flex", justifyContent:"space-between", gap:16 }}>
+                            <span style={{ color:"#6b4c00", fontSize:11, fontWeight:600 }}>{label} {rate}</span>
+                            <span style={{ fontFamily:"monospace" }}>{amt}</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {Number(bill.roundOff) !== 0 && (
+                      <tr style={{ borderBottom:"1px solid #e5e5e5" }}>
+                        <td colSpan={spanLeft} style={{ ...TD({}), borderRight:"1px solid #ccc" }}> </td>
+                        {numColCount > 1 && Array.from({length:numColCount-1}).map((_,i) => (
+                          <td key={i} style={{ ...TD({ right:true }), borderRight:"1px solid #ccc" }}> </td>
+                        ))}
+                        <td style={{ ...TD({ right:true, last:true }), background:"#fafafa" }}>
+                          <div style={{ display:"flex", justifyContent:"space-between", gap:16 }}>
+                            <span style={{ color:"#6b7280", fontSize:11, fontWeight:600 }}>Round Off</span>
+                            <span style={{ fontFamily:"monospace", fontSize:11 }}>
+                              ({Number(bill.roundOff) > 0 ? "+" : ""}{formatINR(Number(bill.roundOff))})
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                );
+              })()}
+
+              <tr style={{ background:"#1e3a5f", borderTop:"2px solid #1e3a5f" }}>
+                <td colSpan={1} style={{ padding:"10px 10px", color:"white", fontWeight:900, fontSize:14, textAlign:"center", borderRight:"1px solid rgba(255,255,255,0.2)" }}>
+                  Total
+                </td>
+                {cols.map((col, ci) => {
+                  const isLast = ci===cols.length-1;
+                  const isNum  = col.type==="number"||col.type==="formula";
+                  const isLastVal = col === lastNumCol;
+                  return (
+                    <td key={col.id} style={{
+                      padding:"10px 12px",
+                      textAlign: isNum ? "right" : "left",
+                      color:"white",
+                      fontFamily: isNum ? "monospace" : "inherit",
+                      fontWeight: isLastVal ? 900 : 400,
+                      fontSize: isLastVal ? 16 : 13,
+                      borderRight: isLast ? "none" : "1px solid rgba(255,255,255,0.2)",
+                    }}>
+                      {isLastVal ? formatINR(bill.grandTotal) : " "}
+                    </td>
+                  );
+                })}
+              </tr>
+            </tbody>
+          </table>
+
+          {/* ══ AMOUNT IN WORDS ═══════════════════════════════════════════════ */}
+          <div style={{ padding:"10px 14px", borderTop:"1.5px solid #333", borderBottom:"1px solid #ccc", fontSize:12 }}>
+            <span style={{ fontWeight:700 }}>Rs. in words : </span>
+            <span>{numberToWords(bill.grandTotal)}</span>
+          </div>
+
+          {(bill.notes || bill.terms) && (
+            <div style={{ padding:"8px 14px", borderBottom:"1px solid #ccc", fontSize:11, color:"#444" }}>
+              {bill.notes && <div><span style={{ fontWeight:700 }}>Declaration / Notes : </span>{bill.notes}</div>}
+              {bill.terms && !bill.notes && <div><span style={{ fontWeight:700 }}>Terms : </span>{bill.terms}</div>}
+            </div>
+          )}
+
+          {/* ══ FOOTER ════════════════════════════════════════════════════════ */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", borderTop:"1.5px solid #333" }}>
+            <div style={{ padding:"12px 14px", borderRight:"1px solid #999", fontSize:11 }}>
+              <div style={{ fontWeight:800, marginBottom:8, fontSize:12 }}>Company&apos;s Bank Details</div>
+              {settings?.bankName || settings?.bankAccountNumber ? (
+                <div style={{ lineHeight:1.8 }}>
+                  {settings.bankName && <div><span style={{ fontWeight:700 }}>Bank Name :</span> {settings.bankName}</div>}
+                  {settings.bankAccountNumber && <div><span style={{ fontWeight:700 }}>A/c Number :</span> <span style={{ fontFamily:"monospace" }}>{settings.bankAccountNumber}</span></div>}
+                  {settings.bankBranch && <div><span style={{ fontWeight:700 }}>Branch :</span> {settings.bankBranch}</div>}
+                  {settings.bankIfscCode && <div><span style={{ fontWeight:700 }}>IFSC Code :</span> <span style={{ fontFamily:"monospace" }}>{settings.bankIfscCode}</span></div>}
+                  {settings.upiId && <div style={{ marginTop:4 }}><span style={{ fontWeight:700 }}>UPI ID :</span> {settings.upiId}</div>}
+                </div>
+              ) : settings?.upiId ? (
+                <>
+                  <div><span style={{ fontWeight:700 }}>UPI ID :</span> {settings.upiId}</div>
+                  <div style={{ marginTop:4, fontSize:10, color:"#777" }}>Scan &amp; Pay via any UPI app</div>
+                </>
+              ) : (
+                <div style={{ color:"#999", fontSize:10 }}>Contact us for payment details.</div>
+              )}
+            </div>
+
+            <div style={{ padding:"12px 14px", fontSize:11 }}>
+              <div style={{ fontWeight:800, marginBottom:32, textAlign:"right" }}>
+                for {settings?.companyName || "—"}
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", marginTop:24 }}>
+                <div style={{ textAlign:"center" }}>
+                  <div style={{ width:110, borderTop:"1.5px solid #888", paddingTop:4, fontSize:10, color:"#666", textTransform:"uppercase", letterSpacing:0.5 }}>
+                    Customer Seal &amp; Signature
+                  </div>
+                </div>
+                <div style={{ textAlign:"center" }}>
+                  <div style={{ width:110, borderTop:"1.5px solid #888", paddingTop:4, fontSize:10, color:"#666", textTransform:"uppercase", letterSpacing:0.5 }}>
+                    Authorised Signatory
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ borderTop:"1px solid #ccc", padding:"6px 14px", background:"#f9f9f9", display:"flex", justifyContent:"space-between", fontSize:9, color:"#aaa", letterSpacing:0.3 }}>
+            <span>E &amp; O.E.</span>
+            <span>
+              This is a computer-generated invoice by{" "}
+              <strong style={{ color:"#777" }}>SoloBooks</strong>
+              {" "}· No physical signature required
+            </span>
+          </div>
+
+        </div>
+      </div>
+
+      {/* ── Action bar ───────────────────────────────────────────────────────── */}
+      <BillActionBar
+        bill={{ id:bill.id, billNumber:bill.billNumber, customerName:bill.customerName, grandTotal:bill.grandTotal, status:bill.status, customerPhone:bill.customerPhone, partyId:bill.partyId }}
+        onShare={handleShare}
+      />
+
+      {/* ── Confirm modal ────────────────────────────────────────────────────── */}
+      <HKModal
+        isOpen={confirmAction !== null}
+        onClose={() => setConfirmAction(null)}
+        title={confirmAction === "FINAL" ? t("bills.detail.finalizeConfirmTitle" as TranslationKey) : t("bills.detail.cancelConfirmTitle" as TranslationKey)}
+        footer={
+          <>
+            <HKButton variant="secondary" onClick={() => setConfirmAction(null)}>
+              {t("common.back" as TranslationKey)}
+            </HKButton>
+            <HKButton
+              variant={confirmAction === "FINAL" ? "success" : "danger"}
+              isLoading={actionLoading}
+              onClick={() => confirmAction && execStatus(confirmAction)}
+            >
+              {confirmAction === "FINAL" ? t("bills.detail.finalizeConfirmBtn" as TranslationKey) : t("bills.detail.cancelConfirmBtn" as TranslationKey)}
+            </HKButton>
+          </>
+        }
+      >
+        <p style={{ fontFamily: SG, fontSize: TYPE.body, color: "var(--sb-sub)", lineHeight: 1.6 }}>
+          {confirmAction === "FINAL"
+            ? t("bills.detail.finalizeConfirmDesc" as TranslationKey)
+            : t("bills.detail.cancelConfirmDesc" as TranslationKey)}
+        </p>
+      </HKModal>
+    </>
+  );
+}
+
+// ─── Table cell style helpers ─────────────────────────────────────────────────
+
+function TH({ w: width, center, right, last }: { w?: number; center?: boolean; right?: boolean; last?: boolean }): React.CSSProperties {
+  return {
+    padding: "8px 12px",
+    fontWeight: 700,
+    fontSize: 11,
+    color: "#222",
+    textAlign: center ? "center" : right ? "right" : "left",
+    borderBottom: "1.5px solid #333",
+    borderRight: last ? "none" : "1px solid #ccc",
+    background: "#f0f0f0",
+    whiteSpace: "nowrap",
+    ...(width ? { width } : {}),
+  };
+}
+
+function TD({ center, right, bold, muted, last }: { center?: boolean; right?: boolean; bold?: boolean; muted?: boolean; last?: boolean }): React.CSSProperties {
+  return {
+    padding: "8px 12px",
+    verticalAlign: "middle",
+    textAlign: center ? "center" : right ? "right" : "left",
+    fontFamily: right ? "monospace" : "inherit",
+    fontWeight: bold ? 700 : 400,
+    color: muted ? "#888" : "#111",
+    borderRight: last ? "none" : "1px solid #ddd",
+  };
 }

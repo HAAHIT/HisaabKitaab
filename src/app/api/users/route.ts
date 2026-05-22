@@ -2,7 +2,7 @@ import { Role } from "@prisma/client";
 import { hashPassword } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
-import { resolveWriteSession } from "@/lib/api-tenant";
+import { resolveSession } from "@/lib/api-tenant";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { logError, getRequestId } from "@/lib/observability";
 
@@ -25,30 +25,46 @@ function normalizeOptionalString(value: unknown) {
 
 // GET /api/users — List all users (Admin only)
 export async function GET(request: NextRequest) {
-  // [FIX] Use JWT-verified session instead of trusting proxy headers
-  const sessionResolution = await resolveWriteSession(request);
+  const sessionResolution = await resolveSession(request);
   if (!sessionResolution.ok) return sessionResolution.response;
-  const { role } = sessionResolution.session;
+  const { tenantId, role } = sessionResolution.session;
+
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantId = sessionResolution.session.tenantId;
 
-  const users = await prisma.user.findMany({
-    where: { tenantId },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      phone: true,
-      role: true,
-      isActive: true,
-      createdAt: true,
-    },
-    orderBy: { createdAt: "desc" },
+  const { searchParams } = new URL(request.url);
+  const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1);
+  const limit = Math.min(
+    Math.max(1, parseInt(searchParams.get("limit") || "50", 10) || 50),
+    200
+  );
+
+  const [users, total] = await Promise.all([
+    prisma.user.findMany({
+      where: { tenantId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.user.count({ where: { tenantId } }),
+  ]);
+
+  return NextResponse.json({
+    users,
+    total,
+    page,
+    totalPages: Math.max(1, Math.ceil(total / limit)),
   });
-
-  return NextResponse.json({ users });
 }
 
 // POST /api/users — Create a new user (Admin only)
@@ -56,8 +72,7 @@ export async function POST(request: NextRequest) {
   const rateLimitResponse = await checkRateLimit(request, "users.create", 20);
   if (rateLimitResponse) return rateLimitResponse;
 
-  // [FIX] Use JWT-verified session instead of trusting proxy headers
-  const sessionResolution = await resolveWriteSession(request);
+  const sessionResolution = await resolveSession(request);
   if (!sessionResolution.ok) return sessionResolution.response;
   const { tenantId, userId: adminId, role } = sessionResolution.session;
 

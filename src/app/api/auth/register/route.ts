@@ -2,6 +2,8 @@ import { type NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/auth";
 import { logError, getRequestId } from "@/lib/observability";
+import { checkRateLimit } from "@/lib/api-rate-limit";
+import crypto from "crypto";
 
 function normalizeOptionalString(value: unknown) {
   if (value === null || value === undefined) {
@@ -15,6 +17,11 @@ function normalizeOptionalString(value: unknown) {
 }
 
 export async function POST(request: NextRequest) {
+  // 5 registrations per minute per IP — bcrypt is a CPU amplifier, so an
+  // unthrottled endpoint is a trivial DoS vector even before considering spam.
+  const rateLimitResponse = await checkRateLimit(request, "auth.register", 5);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const body = await request.json();
 
@@ -38,14 +45,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Global uniqueness check for email and phone across all tenants
+    // Global uniqueness check for email and phone across all tenants. Use a
+    // generic error so the response does not confirm whether a given email or
+    // phone is registered (account enumeration mitigation).
     if (email) {
       const existingUser = await prisma.user.findFirst({
         where: { email: { equals: email, mode: "insensitive" } },
+        select: { id: true },
       });
       if (existingUser) {
         return NextResponse.json(
-          { error: "Email is already registered" },
+          { error: "Could not create account with the provided credentials" },
           { status: 409 }
         );
       }
@@ -54,31 +64,47 @@ export async function POST(request: NextRequest) {
     if (phone) {
       const existingUser = await prisma.user.findFirst({
         where: { phone },
+        select: { id: true },
       });
       if (existingUser) {
         return NextResponse.json(
-          { error: "Phone number is already registered" },
+          { error: "Could not create account with the provided credentials" },
           { status: 409 }
         );
       }
     }
 
-    // Generate slug from company name
-    const baseSlug = companyName
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
-    
-    // Check if slug exists in loop to guarantee unique
-    let slug = baseSlug || "company";
-    let attempts = 0;
-    while (true) {
+    // Generate slug from company name. Append a short random suffix on
+    // collision rather than a predictable counter — sequential -1, -2, -3
+    // suffixes leak tenant existence and would let an attacker enumerate
+    // every company on the platform by trying slugs.
+    const baseSlug =
+      companyName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "") || "company";
+
+    let slug = baseSlug;
+    for (let attempt = 0; attempt < 8; attempt++) {
       const existingTenant = await prisma.tenant.findUnique({
         where: { slug },
+        select: { id: true },
       });
       if (!existingTenant) break;
-      attempts++;
-      slug = `${baseSlug}-${attempts}`;
+      const suffix = crypto.randomBytes(3).toString("hex");
+      slug = `${baseSlug}-${suffix}`;
+      if (attempt === 7) {
+        // Eight collisions on a 24-bit suffix is astronomically unlikely
+        // and almost certainly indicates abuse or a stuck cuid generator.
+        logError("auth.register.slug_exhausted", {
+          requestId: getRequestId(request),
+          baseSlug,
+        });
+        return NextResponse.json(
+          { error: "Could not create account, please try a different company name" },
+          { status: 409 }
+        );
+      }
     }
 
     const hashedPassword = await hashPassword(password);

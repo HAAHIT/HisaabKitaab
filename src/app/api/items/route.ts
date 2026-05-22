@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { resolveWriteSession } from "@/lib/api-tenant";
+import { resolveSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import {
@@ -19,49 +19,34 @@ function canManageItems(role: string | null) {
 }
 
 export async function GET(request: NextRequest) {
-  // [FIX] Use JWT-verified session instead of trusting proxy headers
-  const sessionResolution = await resolveWriteSession(request);
+  const sessionResolution = await resolveSession(request);
   if (!sessionResolution.ok) return sessionResolution.response;
   const { tenantId, role } = sessionResolution.session;
 
-  if (role === "CUSTOMER") {
+  if (!canViewItems(role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { searchParams } = new URL(request.url);
-  const search = searchParams.get("search") || "";
-  const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
-  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10)));
+  const items = await prisma.itemCatalog.findMany({
+    where: {
+      tenantId,
+      isActive: true,
+    },
+    orderBy: { name: "asc" },
+  });
 
-  const where = {
-    tenantId,
-    isActive: true,
-    ...(search ? { name: { contains: search, mode: "insensitive" as const } } : {}),
-  };
-
-  const [items, total] = await prisma.$transaction([
-    prisma.itemCatalog.findMany({
-      where,
-      orderBy: { name: "asc" },
-      skip: (page - 1) * limit,
-      take: limit,
-    }),
-    prisma.itemCatalog.count({ where }),
-  ]);
-
-  return NextResponse.json({ items, total, page, totalPages: Math.ceil(total / limit) });
+  return NextResponse.json({ items });
 }
 
 export async function POST(request: NextRequest) {
   const rateLimitResponse = await checkRateLimit(request, "items.create", 30);
   if (rateLimitResponse) return rateLimitResponse;
 
-  // [FIX] Use JWT-verified session instead of trusting proxy headers
-  const sessionResolution = await resolveWriteSession(request);
-  if (!sessionResolution.ok) return sessionResolution.response;
-  const { tenantId, role } = sessionResolution.session;
+  const sessionResolution2 = await resolveSession(request);
+  if (!sessionResolution2.ok) return sessionResolution2.response;
+  const { tenantId, role } = sessionResolution2.session;
 
-  if (role !== "ADMIN") {
+  if (!canManageItems(role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

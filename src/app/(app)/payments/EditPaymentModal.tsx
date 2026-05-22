@@ -1,312 +1,362 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-    Button, Input, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader,
-    Select, SelectItem, Tabs, Tab,
-} from "@heroui/react";
+import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
 import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
 import { getSettlementDirectionForParty, type SupportedPartyType } from "@/lib/accounting";
+import {
+  OR, GR, AM, SG, IN, TYPE,
+  HKSheet,
+} from "@/components/ui/hk-design";
+import { HKButton } from "@/components/ui/HKButton";
+import { HKInput } from "@/components/ui/HKInput";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 type BankAccount = {
-    id: string;
-    name: string;
-    type: string;
-    currentBalance: number;
+  id: string;
+  name: string;
+  type: string;
+  currentBalance: number;
 };
 
 export type EditablePayment = {
-    id: string;
-    partyId: string | null;
-    accountId: string | null;
-    destinationAccountId: string | null;
-    amount: number;
-    direction: string;
-    mode: string;
-    date: string;
-    notes: string | null;
-    party: { name: string; type: string } | null;
+  id: string;
+  partyId: string | null;
+  accountId: string | null;
+  destinationAccountId: string | null;
+  amount: number;
+  direction: string;
+  mode: string;
+  date: string;
+  notes: string | null;
+  party: { name: string; type: string } | null;
 };
 
-// [FIX #27] Consistent sanitization — same logic as payments/new/page.tsx
 function sanitizeAmount(value: string) {
-    const normalized = value.replace(/[^\d.]/g, "");
-    const parts = normalized.split(".");
-    const integerPart = parts[0].slice(0, 12); // Cap at 12 digits (~999 billion)
-    if (parts.length === 1) return integerPart;
-    const decimalPart = parts.slice(1).join("").slice(0, 2);
-    return `${integerPart}.${decimalPart}`;
+  const normalized = value.replace(/[^\d.]/g, "");
+  const parts = normalized.split(".");
+  const integerPart = parts[0].slice(0, 12);
+  if (parts.length === 1) return integerPart;
+  return `${integerPart}.${parts.slice(1).join("").slice(0, 2)}`;
 }
 
 async function readError(res: Response) {
-    const data = await res.json().catch(() => null);
-    return data?.error || "Request failed";
+  const data = await res.json().catch(() => null);
+  return data?.error || "Request failed";
 }
 
+type PaymentType = "party" | "ledger" | "contra";
+
+const TABS = [
+  { key: "party", labelKey: "payments.edit.tab.party" as const },
+  { key: "ledger", labelKey: "payments.edit.tab.ledger" as const },
+  { key: "contra", labelKey: "payments.edit.tab.contra" as const },
+] as const;
+
 export function EditPaymentModal({
-    payment,
-    isOpen,
-    onClose,
-    onSuccess,
+  payment,
+  isOpen,
+  onClose,
+  onSuccess,
 }: {
-    payment: EditablePayment | null;
-    isOpen: boolean;
-    onClose: () => void;
-    onSuccess: () => void;
+  payment: EditablePayment | null;
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
 }) {
-    const isContraPayment = !payment?.partyId && !!payment?.destinationAccountId;
-    const isLedgerPayment = payment?.party ? ["EXPENSE", "INCOME", "ASSET", "LIABILITY", "EQUITY"].includes(payment.party.type) : false;
+  const { t } = useLanguage();
+  const isContraPayment = !payment?.partyId && !!payment?.destinationAccountId;
+  const isLedgerPayment = payment?.party
+    ? ["EXPENSE", "INCOME", "ASSET", "LIABILITY", "EQUITY"].includes(payment.party.type)
+    : false;
 
-    const [paymentType, setPaymentType] = useState<"party" | "ledger" | "contra">("party");
-    const [selectedParty, setSelectedParty] = useState<PartyOption | null>(null);
-    const [accountId, setAccountId] = useState("");
-    const [destAccountId, setDestAccountId] = useState("");
-    const [amount, setAmount] = useState("");
-    const [direction, setDirection] = useState("INCOMING");
-    const [mode, setMode] = useState("BANK_TRANSFER");
-    const [date, setDate] = useState("");
-    const [notes, setNotes] = useState("");
-    const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
-    const [isSaving, setIsSaving] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+  const [paymentType, setPaymentType] = useState<PaymentType>("party");
+  const [selectedParty, setSelectedParty] = useState<PartyOption | null>(null);
+  const [accountId, setAccountId] = useState("");
+  const [destAccountId, setDestAccountId] = useState("");
+  const [amount, setAmount] = useState("");
+  const [direction, setDirection] = useState("INCOMING");
+  const [mode, setMode] = useState("BANK_TRANSFER");
+  const [date, setDate] = useState("");
+  const [notes, setNotes] = useState("");
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-    // Populate form when payment changes
-    useEffect(() => {
-        if (!payment) return;
-        setPaymentType(isContraPayment ? "contra" : isLedgerPayment ? "ledger" : "party");
-        setSelectedParty(null); // PartySearch will load by value
-        setAccountId(payment.accountId ?? "");
-        setDestAccountId(payment.destinationAccountId ?? "");
-        setAmount(String(payment.amount));
-        setDirection(payment.direction);
-        setMode(payment.mode);
-        setDate(new Date(payment.date).toISOString().split("T")[0]);
-        setNotes(payment.notes ?? "");
-        setError(null);
-    }, [payment, isContraPayment]);
+  useEffect(() => {
+    if (!payment) return;
+    setPaymentType(isContraPayment ? "contra" : isLedgerPayment ? "ledger" : "party");
+    setSelectedParty(null);
+    setAccountId(payment.accountId ?? "");
+    setDestAccountId(payment.destinationAccountId ?? "");
+    setAmount(String(payment.amount));
+    setDirection(payment.direction);
+    setMode(payment.mode);
+    setDate(new Date(payment.date).toISOString().split("T")[0]);
+    setNotes(payment.notes ?? "");
+    setError(null);
+  }, [payment, isContraPayment, isLedgerPayment]);
 
-    // Load bank accounts once
-    useEffect(() => {
-        if (!isOpen || bankAccounts.length > 0) return;
-        fetch("/api/bank-accounts")
-            .then((r) => r.json())
-            .then((d) => setBankAccounts(d.accounts || []))
-            .catch(() => { });
-    }, [isOpen, bankAccounts.length]);
+  useEffect(() => {
+    if (!isOpen || bankAccounts.length > 0) return;
+    fetch("/api/bank-accounts")
+      .then(async (r) => {
+        if (!r.ok) {
+          setError(t("payments.edit.error.loadAccounts").replace("{status}", String(r.status)));
+          return null;
+        }
+        return r.json();
+      })
+      .then((d) => {
+        if (d && Array.isArray(d.accounts)) setBankAccounts(d.accounts);
+      })
+      .catch(() => {
+        setError(t("payments.edit.error.network"));
+      });
+  }, [isOpen, bankAccounts.length, t]);
 
-    async function handleSave() {
-        if (!payment) return;
-        setError(null);
+  async function handleSave() {
+    if (!payment) return;
+    setError(null);
 
-        if ((paymentType === "party" || paymentType === "ledger") && !selectedParty && !payment.partyId) {
-            setError(paymentType === "ledger" ? "Select an expense/income ledger" : "Select a party");
-            return;
-        }
-        if (!amount || parseFloat(amount) <= 0) {
-            setError("Enter a valid amount");
-            return;
-        }
-        if (!accountId) {
-            setError("Select an account");
-            return;
-        }
-        if (paymentType === "contra" && !destAccountId) {
-            setError("Select a destination account");
-            return;
-        }
-        if (paymentType === "contra" && accountId === destAccountId) {
-            setError("Source and destination accounts cannot be the same");
-            return;
-        }
-
-        setIsSaving(true);
-        try {
-            const res = await fetch(`/api/payments/${payment.id}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    partyId: (paymentType === "party" || paymentType === "ledger") ? (selectedParty?.id ?? payment.partyId) : null,
-                    destinationAccountId: paymentType === "contra" ? destAccountId : null,
-                    accountId,
-                    amount: parseFloat(amount),
-                    direction: paymentType === "contra" ? "OUTGOING" : direction,
-                    mode,
-                    date,
-                    notes: notes.trim() || null,
-                }),
-            });
-            if (!res.ok) throw new Error(await readError(res));
-            onSuccess();
-            onClose();
-        } catch (e) {
-            setError(e instanceof Error ? e.message : "Failed to save");
-        } finally {
-            setIsSaving(false);
-        }
+    if ((paymentType === "party" || paymentType === "ledger") && !selectedParty && !payment.partyId) {
+      setError(paymentType === "ledger" ? t("payments.edit.error.selectLedger") : t("payments.edit.error.selectParty"));
+      return;
+    }
+    if (!amount || parseFloat(amount) <= 0) {
+      setError(t("payments.edit.error.invalidAmount"));
+      return;
+    }
+    if (!accountId) {
+      setError(t("payments.edit.error.selectAccount"));
+      return;
+    }
+    if (paymentType === "contra" && !destAccountId) {
+      setError(t("payments.edit.error.selectDestination"));
+      return;
+    }
+    if (paymentType === "contra" && accountId === destAccountId) {
+      setError(t("payments.edit.error.sameAccounts"));
+      return;
     }
 
-    return (
-        <Modal
-            isOpen={isOpen}
-            onOpenChange={(open) => { if (!open) onClose(); }}
-            backdrop="blur"
-            placement="center"
-            size="lg"
-            scrollBehavior="inside"
-            classNames={{ backdrop: "bg-black/60" }}
-        >
-            <ModalContent>
-                {() => (
-                    <>
-                        <ModalHeader className="text-xl font-bold">Edit Payment</ModalHeader>
-                        <ModalBody className="space-y-4 pb-2">
-                            <Tabs
-                                aria-label="Payment type"
-                                selectedKey={paymentType}
-                                onSelectionChange={(k) => setPaymentType(k as "party" | "ledger" | "contra")}
-                                classNames={{ base: "w-full", tabList: "w-full" }}
-                            >
-                                <Tab key="party" title="Party Payment" />
-                                <Tab key="ledger" title="Expense / Income" />
-                                <Tab key="contra" title="Bank Transfer (Contra)" />
-                            </Tabs>
+    setIsSaving(true);
+    try {
+      const res = await fetch(`/api/payments/${payment.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          partyId: (paymentType === "party" || paymentType === "ledger")
+            ? (selectedParty?.id ?? payment.partyId) : null,
+          destinationAccountId: paymentType === "contra" ? destAccountId : null,
+          accountId,
+          amount: parseFloat(amount),
+          direction: paymentType === "contra" ? "OUTGOING" : direction,
+          mode,
+          date,
+          notes: notes.trim() || null,
+        }),
+      });
+      if (!res.ok) throw new Error(await readError(res));
+      onSuccess();
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t("payments.edit.error.saveFailed"));
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
-                            {(paymentType === "party" || paymentType === "ledger") && (
-                                <PartySearch
-                                    value={selectedParty?.id ?? payment?.partyId ?? null}
-                                    onChange={(party) => {
-                                        setSelectedParty(party);
-                                        if (party) setDirection(getSettlementDirectionForParty(party.type as SupportedPartyType));
-                                    }}
-                                    placeholder={paymentType === "ledger" ? "Select expense, income, or other ledger" : "Select customer, vendor, or ledger"}
-                                    filterTypes={paymentType === "ledger" ? ["EXPENSE", "INCOME", "ASSET", "LIABILITY", "EQUITY"] : undefined}
-                                />
-                            )}
+  const fmtBalance = (n: number) =>
+    new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 
-                            <Input
-                                label="Amount (INR)"
-                                type="text"
-                                value={amount}
-                                onValueChange={(v) => setAmount(sanitizeAmount(v))}
-                                variant="bordered"
-                                inputMode="decimal"
-                                startContent={<span className="text-default-400">INR</span>}
-                            />
+  return (
+    <HKSheet
+      isOpen={isOpen}
+      onClose={onClose}
+      title={t("payments.edit.title")}
+      footer={
+        <>
+          <HKButton variant="secondary" onClick={onClose} isDisabled={isSaving}>{t("common.cancel")}</HKButton>
+          <HKButton onClick={handleSave} isLoading={isSaving}>{t("payments.edit.save")}</HKButton>
+        </>
+      }
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
 
-                            <div className="grid grid-cols-2 gap-3">
-                                {(paymentType === "party" || paymentType === "ledger") && (
-                                    <Select
-                                        label="Type"
-                                        selectedKeys={new Set([direction])}
-                                        onSelectionChange={(keys) => {
-                                            const v = Array.from(keys)[0] as string;
-                                            if (v) setDirection(v);
-                                        }}
-                                        variant="bordered"
-                                        isDisabled={paymentType === "ledger"}
-                                    >
-                                        <SelectItem key="INCOMING">Received</SelectItem>
-                                        <SelectItem key="OUTGOING">Paid</SelectItem>
-                                    </Select>
-                                )}
+        {/* Payment type tabs */}
+        <div style={{ display: "flex", gap: 6, background: "var(--sb-badge)", padding: 4, borderRadius: 12 }}>
+          {TABS.map((tab) => {
+            const active = paymentType === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setPaymentType(tab.key)}
+                style={{
+                  flex: 1, padding: "8px 10px", borderRadius: 9, border: "none",
+                  background: active ? "var(--sb-card)" : "transparent",
+                  boxShadow: active ? "0 1px 4px rgba(0,0,0,0.10)" : "none",
+                  color: active ? "var(--sb-text)" : "var(--sb-sub)",
+                  fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: active ? 700 : 500,
+                  cursor: "pointer", transition: "all 0.15s",
+                }}
+              >
+                {t(tab.labelKey)}
+              </button>
+            );
+          })}
+        </div>
 
-                                <Select
-                                    label={paymentType === "contra" ? "Source Account" : "Account"}
-                                    selectedKeys={new Set(accountId ? [accountId] : [])}
-                                    onSelectionChange={(keys) => {
-                                        const v = Array.from(keys)[0] as string;
-                                        if (v) {
-                                            setAccountId(v);
-                                            const acc = bankAccounts.find((a) => a.id === v);
-                                            if (acc) setMode(acc.type === "CASH" ? "CASH" : "BANK_TRANSFER");
-                                        }
-                                    }}
-                                    variant="bordered"
-                                >
-                                    {bankAccounts.map((acc) => (
-                                        <SelectItem key={acc.id} textValue={acc.name}>
-                                            {acc.name} (₹{acc.currentBalance})
-                                        </SelectItem>
-                                    ))}
-                                </Select>
+        {/* Party / Ledger search */}
+        {(paymentType === "party" || paymentType === "ledger") && (
+          <PartySearch
+            value={selectedParty?.id ?? payment?.partyId ?? null}
+            initialParty={
+              payment?.partyId && payment.party
+                ? {
+                    id: payment.partyId,
+                    name: payment.party.name,
+                    type: payment.party.type,
+                    phone: null,
+                    currentBalance: 0,
+                    address: null,
+                    gstin: null,
+                  }
+                : null
+            }
+            onChange={(party) => {
+              setSelectedParty(party);
+              if (party) setDirection(getSettlementDirectionForParty(party.type as SupportedPartyType));
+            }}
+            placeholder={
+              paymentType === "ledger"
+                ? t("payments.edit.error.selectLedger")
+                : t("payments.edit.error.selectParty")
+            }
+            filterTypes={
+              paymentType === "ledger"
+                ? ["EXPENSE", "INCOME", "ASSET", "LIABILITY", "EQUITY"]
+                : undefined
+            }
+          />
+        )}
 
-                                {paymentType === "contra" && (
-                                    <Select
-                                        label="Destination Account"
-                                        selectedKeys={new Set(destAccountId ? [destAccountId] : [])}
-                                        onSelectionChange={(keys) => {
-                                            const v = Array.from(keys)[0] as string;
-                                            if (v) setDestAccountId(v);
-                                        }}
-                                        variant="bordered"
-                                    >
-                                        {bankAccounts.map((acc) => (
-                                            <SelectItem key={acc.id} textValue={acc.name}>
-                                                {acc.name} (₹{acc.currentBalance})
-                                            </SelectItem>
-                                        ))}
-                                    </Select>
-                                )}
+        {/* Amount */}
+        <HKInput
+          label={t("payments.record.amountLabel")}
+          type="text"
+          value={amount}
+          onValueChange={(v) => setAmount(sanitizeAmount(v))}
+          inputMode="decimal"
+          startContent={<span style={{ color: "var(--sb-sub)", fontFamily: IN }}>₹</span>}
+          classNames={{ label: "font-semibold" }}
+        />
 
-                                {(paymentType === "party" || paymentType === "ledger") && (
-                                    <Select
-                                        label="Payment Mode"
-                                        selectedKeys={new Set([mode])}
-                                        onSelectionChange={(keys) => {
-                                            const v = Array.from(keys)[0] as string;
-                                            if (!v) return;
-                                            setMode(v);
-                                            if (v === "CASH") {
-                                                const cashAcc = bankAccounts.find((a) => a.type === "CASH");
-                                                if (cashAcc) setAccountId(cashAcc.id);
-                                            } else {
-                                                const currentAcc = bankAccounts.find((a) => a.id === accountId);
-                                                if (currentAcc?.type === "CASH") {
-                                                    const bankAcc = bankAccounts.find((a) => a.type === "BANK");
-                                                    if (bankAcc) setAccountId(bankAcc.id);
-                                                }
-                                            }
-                                        }}
-                                        variant="bordered"
-                                    >
-                                        <SelectItem key="BANK_TRANSFER">Bank Transfer</SelectItem>
-                                        <SelectItem key="CASH">Cash</SelectItem>
-                                        <SelectItem key="UPI">UPI</SelectItem>
-                                        <SelectItem key="CHEQUE">Cheque</SelectItem>
-                                    </Select>
-                                )}
-                            </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          {/* Direction */}
+          {(paymentType === "party" || paymentType === "ledger") && (
+            <HKSelect
+              label={t("payments.record.type")}
+              value={direction}
+              onValueChange={(v) => { if (v) setDirection(v); }}
+              isDisabled={paymentType === "ledger"}
+            >
+              <HKSelectItem value="INCOMING">{t("payments.edit.direction.incoming")}</HKSelectItem>
+              <HKSelectItem value="OUTGOING">{t("payments.edit.direction.outgoing")}</HKSelectItem>
+            </HKSelect>
+          )}
 
-                            <Input label="Date" type="date" value={date} onValueChange={setDate} variant="bordered" />
-                            <Input
-                                label="Notes"
-                                placeholder="Optional notes..."
-                                value={notes}
-                                onValueChange={setNotes}
-                                variant="bordered"
-                            />
+          {/* Source account */}
+          <HKSelect
+            label={paymentType === "contra" ? t("payments.record.sourceAccount") : t("payments.record.account")}
+            value={accountId}
+            placeholder={bankAccounts.length === 0 ? t("payments.edit.noAccounts") : t("payments.edit.selectAccount")}
+            onValueChange={(v) => {
+              if (!v) return;
+              setAccountId(v);
+              const acc = bankAccounts.find((a) => a.id === v);
+              if (acc) setMode(acc.type === "CASH" ? "CASH" : "BANK_TRANSFER");
+            }}
+          >
+            {bankAccounts.map((acc) => (
+              <HKSelectItem key={acc.id} value={acc.id}>
+                {acc.name} · {fmtBalance(acc.currentBalance)}
+              </HKSelectItem>
+            ))}
+          </HKSelect>
 
-                            {error && (
-                                <p className="text-sm text-danger">{error}</p>
-                            )}
-                        </ModalBody>
-                        <ModalFooter>
-                            <Button variant="flat" onPress={onClose} isDisabled={isSaving}>
-                                Cancel
-                            </Button>
-                            <Button
-                                color="primary"
-                                variant="solid"
-                                onPress={handleSave}
-                                isLoading={isSaving}
-                                className="font-semibold"
-                            >
-                                Save Changes
-                            </Button>
-                        </ModalFooter>
-                    </>
-                )}
-            </ModalContent>
-        </Modal>
-    );
+          {/* Destination (contra only) */}
+          {paymentType === "contra" && (
+            <HKSelect
+              label={t("payments.record.destinationAccount")}
+              value={destAccountId}
+              placeholder={bankAccounts.length === 0 ? t("payments.edit.noAccounts") : t("payments.edit.selectDestination")}
+              onValueChange={(v) => { if (v) setDestAccountId(v); }}
+            >
+              {bankAccounts.map((acc) => (
+                <HKSelectItem key={acc.id} value={acc.id}>
+                  {acc.name} · {fmtBalance(acc.currentBalance)}
+                </HKSelectItem>
+              ))}
+            </HKSelect>
+          )}
+
+          {/* Mode */}
+          {(paymentType === "party" || paymentType === "ledger") && (
+            <HKSelect
+              label={t("payments.record.paymentMode")}
+              value={mode}
+              onValueChange={(v) => {
+                if (!v) return;
+                setMode(v);
+                if (v === "CASH") {
+                  // Auto-pick the cash account if one exists; otherwise
+                  // clear so the user doesn't accidentally leave a bank
+                  // account selected for a CASH payment.
+                  const cashAcc = bankAccounts.find((a) => a.type === "CASH");
+                  setAccountId(cashAcc ? cashAcc.id : "");
+                } else {
+                  const cur = bankAccounts.find((a) => a.id === accountId);
+                  if (cur?.type === "CASH") {
+                    const bank = bankAccounts.find((a) => a.type === "BANK");
+                    if (bank) setAccountId(bank.id);
+                  }
+                }
+              }}
+            >
+              <HKSelectItem value="BANK_TRANSFER">{t("payments.record.mode.bank")}</HKSelectItem>
+              <HKSelectItem value="CASH">{t("payments.record.mode.cash")}</HKSelectItem>
+              <HKSelectItem value="UPI">{t("payments.record.mode.upi")}</HKSelectItem>
+              <HKSelectItem value="CHEQUE">{t("payments.record.mode.cheque")}</HKSelectItem>
+            </HKSelect>
+          )}
+        </div>
+
+        <HKInput
+          label={t("payments.record.date")}
+          type="date"
+          value={date}
+          onValueChange={setDate}
+        />
+
+        <HKInput
+          label={t("payments.record.notes")}
+          placeholder={t("payments.edit.notesPlaceholder")}
+          value={notes}
+          onValueChange={setNotes}
+        />
+
+        {/* Error */}
+        {error && (
+          <div style={{
+            padding: "10px 14px", borderRadius: 10,
+            background: OR + "15", border: `1px solid ${OR}33`,
+            fontSize: TYPE.bodySmall, fontWeight: 600, color: OR, fontFamily: SG,
+          }}>
+            {error}
+          </div>
+        )}
+      </div>
+    </HKSheet>
+  );
 }

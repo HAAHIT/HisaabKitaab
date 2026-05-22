@@ -4,12 +4,6 @@ import { resolveWriteTenant } from "@/lib/api-tenant";
 
 export const runtime = "nodejs";
 
-/**
- * GET /api/import/active
- *
- * Returns the most recent PENDING or PROCESSING import job for the tenant,
- * so the UI can resume the progress bar after a page refresh.
- */
 export async function GET(request: NextRequest) {
   const tenantResolution = await resolveWriteTenant(request);
   if (!tenantResolution.ok) {
@@ -37,6 +31,7 @@ export async function GET(request: NextRequest) {
     totalItems: job.totalItems,
     processed: job.processed,
     failed: job.failed,
+    skipped: job.skipped,
     partiesCreated: job.partiesCreated,
   });
 }

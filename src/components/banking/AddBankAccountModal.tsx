@@ -1,37 +1,29 @@
 "use client";
 
 import { useState } from "react";
-import {
-    Modal,
-    ModalContent,
-    ModalHeader,
-    ModalBody,
-    ModalFooter,
-    Button,
-    Input,
-    Select,
-    SelectItem,
-} from "@heroui/react";
+import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
+import { HKSheet, SG, OR, TYPE } from "@/components/ui/hk-design";
+import { HKButton } from "@/components/ui/HKButton";
+import { HKInput } from "@/components/ui/HKInput";
 
 interface Props {
     isOpen: boolean;
-    onOpenChange: (isOpen: boolean) => void;
-    onSuccess: (account: any) => void;
+    onClose: () => void;
+    onSuccess: () => void;
 }
 
-export function AddBankAccountModal({ isOpen, onOpenChange, onSuccess }: Props) {
+export function AddBankAccountModal({ isOpen, onClose, onSuccess }: Props) {
     const [name, setName] = useState("");
     const [type, setType] = useState<string>("BANK");
     const [accountNumber, setAccountNumber] = useState("");
     const [ifscCode, setIfscCode] = useState("");
     const [openingBalance, setOpeningBalance] = useState("0");
-
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState("");
 
-    async function handleSave(onClose: () => void) {
+    async function handleSave() {
         if (!name.trim()) {
-            setError("Name is required");
+            setError("Account ka naam daalo");
             return;
         }
 
@@ -53,102 +45,88 @@ export function AddBankAccountModal({ isOpen, onOpenChange, onSuccess }: Props) 
 
             if (!response.ok) {
                 const data = await response.json();
-                throw new Error(data.error || "Failed to create account");
+                throw new Error(data.error || "Account nahi bana");
             }
 
-            const data = await response.json();
-            onSuccess(data);
+            onSuccess();
             onClose();
-            // Reset form
             setName("");
             setAccountNumber("");
             setIfscCode("");
             setOpeningBalance("0");
             setType("BANK");
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Account nahi bana");
         } finally {
             setIsLoading(false);
         }
     }
 
     return (
-        <Modal
+        <HKSheet
             isOpen={isOpen}
-            onOpenChange={onOpenChange}
-            size="md"
-            backdrop="blur"
+            onClose={onClose}
+            title="Account Jodo"
+            footer={
+                <>
+                    <HKButton variant="secondary" onClick={onClose} isDisabled={isLoading}>Cancel</HKButton>
+                    <HKButton onClick={handleSave} isLoading={isLoading}>Account Banao</HKButton>
+                </>
+            }
         >
-            <ModalContent>
-                {(onClose) => (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {error && (
+                    <div style={{
+                        padding: "10px 14px", borderRadius: 10,
+                        background: OR + "15", border: `1px solid ${OR}33`,
+                        fontSize: TYPE.bodySmall, fontWeight: 600, color: OR, fontFamily: SG,
+                    }}>
+                        {error}
+                    </div>
+                )}
+
+                <HKSelect
+                    label="Account Type"
+                    value={type}
+                    onValueChange={(v) => { if (v) setType(v); }}
+                >
+                    <HKSelectItem value="BANK">Bank Account</HKSelectItem>
+                    <HKSelectItem value="CASH">Cash Register</HKSelectItem>
+                </HKSelect>
+
+                <HKInput
+                    label="Account Name *"
+                    autoFocus
+                    placeholder="e.g. HDFC Current Account"
+                    value={name}
+                    onValueChange={setName}
+                />
+
+                {type === "BANK" && (
                     <>
-                        <ModalHeader className="flex flex-col gap-1">Add Account</ModalHeader>
-                        <ModalBody>
-                            {error && (
-                                <div className="bg-danger-50 text-danger-600 px-4 py-2 rounded-lg text-sm mb-2 border border-danger-200">
-                                    {error}
-                                </div>
-                            )}
-                            <div className="flex flex-col gap-4">
-                                <Select
-                                    label="Account Type *"
-                                    variant="bordered"
-                                    selectedKeys={[type]}
-                                    onSelectionChange={(keys) => setType(Array.from(keys)[0] as string)}
-                                >
-                                    <SelectItem key="BANK">Bank Account</SelectItem>
-                                    <SelectItem key="CASH">Cash Register</SelectItem>
-                                </Select>
-
-                                <Input
-                                    label="Account Name *"
-                                    autoFocus
-                                    placeholder="e.g. HDFC Current Account"
-                                    value={name}
-                                    onValueChange={setName}
-                                    variant="bordered"
-                                />
-
-                                {type === "BANK" && (
-                                    <>
-                                        <Input
-                                            label="Account Number"
-                                            placeholder="Optional"
-                                            value={accountNumber}
-                                            onValueChange={setAccountNumber}
-                                            variant="bordered"
-                                        />
-                                        <Input
-                                            label="IFSC Code"
-                                            placeholder="Optional"
-                                            value={ifscCode}
-                                            onValueChange={setIfscCode}
-                                            variant="bordered"
-                                        />
-                                    </>
-                                )}
-
-                                <Input
-                                    label="Opening Balance"
-                                    type="number"
-                                    placeholder="0.00"
-                                    value={openingBalance}
-                                    onValueChange={setOpeningBalance}
-                                    variant="bordered"
-                                />
-                            </div>
-                        </ModalBody>
-                        <ModalFooter>
-                            <Button color="danger" variant="light" onPress={onClose}>
-                                Cancel
-                            </Button>
-                            <Button color="primary" onPress={() => handleSave(onClose)} isLoading={isLoading}>
-                                Create Account
-                            </Button>
-                        </ModalFooter>
+                        <HKInput
+                            label="Account Number"
+                            placeholder="Optional"
+                            value={accountNumber}
+                            onValueChange={setAccountNumber}
+                        />
+                        <HKInput
+                            label="IFSC Code"
+                            placeholder="Optional"
+                            value={ifscCode}
+                            onValueChange={setIfscCode}
+                        />
                     </>
                 )}
-            </ModalContent>
-        </Modal>
+
+                <HKInput
+                    label="Opening Balance (₹)"
+                    type="number"
+                    placeholder="0"
+                    value={openingBalance}
+                    onValueChange={setOpeningBalance}
+                />
+            </div>
+        </HKSheet>
     );
 }

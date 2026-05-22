@@ -1,40 +1,28 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Card,
-  CardBody,
-  Input,
-  Button,
-  Select,
-  SelectItem,
-  Chip,
-} from "@heroui/react";
+import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
 import { useRouter } from "next/navigation";
 import { validateFormula, translateFormulaToIds, type ColumnDef } from "@/lib/formula";
 import { useLanguage } from "@/contexts/LanguageContext";
+import {
+  C, GR, AM, OR, PU, SG, TYPE,
+  HKCard, HKToast, PageHeader, useIsMobile,
+} from "@/components/ui/hk-design";
+import { HKButton } from "@/components/ui/HKButton";
+import { HKInput } from "@/components/ui/HKInput";
 
 export default function CreateTemplatePage() {
   const router = useRouter();
   const { t } = useLanguage();
+  const isMobile = useIsMobile();
   const [name, setName] = useState("");
-  const DEFAULT_COLUMNS: ColumnDef[] = [
-    { id: "col_item", name: "Item", type: "text", position: 0, isSystem: true },
-    { id: "col_hsn", name: "HSN Code", type: "text", position: 1, isSystem: true },
-    { id: "col_qty", name: "Qty", type: "number", position: 2, isSystem: true },
-    { id: "col_rate", name: "Rate", type: "number", position: 3, isSystem: true },
-    { id: "col_tax_percent", name: "Tax %", type: "number", position: 4, isSystem: true },
-    { id: "col_tax_amount", name: "Tax Amount", type: "formula", formula: "{Qty} * ({Rate} * {Tax %} / 100)", position: 5, isSystem: true },
-    { id: "col_amount", name: "Amount", type: "formula", formula: "({Qty} * {Rate}) + {Tax Amount}", position: 6, isSystem: true },
-  ];
-
-  const [columns, setColumns] = useState<ColumnDef[]>(DEFAULT_COLUMNS);
+  const [columns, setColumns] = useState<ColumnDef[]>([
+    { id: crypto.randomUUID(), name: "", type: "text", position: 0 },
+  ]);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<number, string>>({});
-  const [toast, setToast] = useState<{
-    message: string;
-    type: "success" | "error";
-  } | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const columnTypeOptions = [
     { key: "text", label: t("templates.type.text") },
@@ -50,48 +38,25 @@ export default function CreateTemplatePage() {
   }
 
   function addColumn() {
-    setColumns([
-      ...columns,
-      { id: crypto.randomUUID(), name: "", type: "text", position: columns.length },
-    ]);
+    setColumns([...columns, { id: crypto.randomUUID(), name: "", type: "text", position: columns.length }]);
   }
 
   function removeColumn(index: number) {
-    // Check if any formula references this column
     const colName = columns[index].name;
-    const dependents = columns.filter(
-      (c) =>
-        c.type === "formula" &&
-        c.formula &&
-        c.formula.includes(`{${colName}}`)
-    );
-
+    const dependents = columns.filter((c) => c.type === "formula" && c.formula && c.formula.includes(`{${colName}}`));
     if (dependents.length > 0 && colName) {
       const names = dependents.map((d) => d.name).join(", ");
-      if (
-        !confirm(
-          `This column is used in formulas for: ${names}. Delete anyway?`
-        )
-      )
-        return;
+      if (!confirm(`This column is used in formulas for: ${names}. Delete anyway?`)) return;
     }
-
     const newCols = columns.filter((_, i) => i !== index);
     newCols.forEach((c, i) => (c.position = i));
     setColumns(newCols);
   }
 
-  function updateColumn(
-    index: number,
-    field: keyof ColumnDef,
-    value: string
-  ) {
+  function updateColumn(index: number, field: keyof ColumnDef, value: string) {
     const newCols = [...columns];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (newCols[index] as any)[field] = value;
+    newCols[index] = { ...newCols[index], [field]: value } as ColumnDef;
     setColumns(newCols);
-
-    // Clear error for this column
     const newErrors = { ...errors };
     delete newErrors[index];
     setErrors(newErrors);
@@ -115,61 +80,28 @@ export default function CreateTemplatePage() {
   function validateAll(): boolean {
     const newErrors: Record<number, string> = {};
     let valid = true;
-
-    // Check template name
-    if (!name.trim()) {
-      showToast(t("templates.nameRequired"), "error");
-      return false;
-    }
-
-    // Check column names
+    if (!name.trim()) { showToast(t("templates.nameRequired"), "error"); return false; }
     const colNames = new Set<string>();
     columns.forEach((col, i) => {
-      if (!col.name.trim()) {
-        newErrors[i] = t("templates.columnRequired");
-        valid = false;
-        return;
-      }
-      if (colNames.has(col.name)) {
-        newErrors[i] = t("templates.duplicateColumn");
-        valid = false;
-        return;
-      }
+      if (!col.name.trim()) { newErrors[i] = t("templates.columnRequired"); valid = false; return; }
+      if (colNames.has(col.name)) { newErrors[i] = t("templates.duplicateColumn"); valid = false; return; }
       colNames.add(col.name);
-
-      // Validate formula
       if (col.type === "formula") {
-        if (!col.formula?.trim()) {
-          newErrors[i] = t("templates.formulaRequired");
-          valid = false;
-          return;
-        }
+        if (!col.formula?.trim()) { newErrors[i] = t("templates.formulaRequired"); valid = false; return; }
         const result = validateFormula(col.formula, col.name, columns);
-        if (!result.valid) {
-          newErrors[i] = result.error || t("templates.invalidFormula");
-          valid = false;
-        }
+        if (!result.valid) { newErrors[i] = result.error || t("templates.invalidFormula"); valid = false; }
       }
     });
-
     setErrors(newErrors);
     return valid;
   }
 
   async function handleSave() {
     if (!validateAll()) return;
-
-    // Translate formulas to use persistent IDs before securing perfectly to database
-    const encodedColumns = columns.map(col => {
-      if (col.type === "formula" && col.formula) {
-        return {
-          ...col,
-          formula: translateFormulaToIds(col.formula, columns)
-        };
-      }
+    const encodedColumns = columns.map((col) => {
+      if (col.type === "formula" && col.formula) return { ...col, formula: translateFormulaToIds(col.formula, columns) };
       return col;
     });
-
     setSaving(true);
     try {
       const res = await fetch("/api/templates", {
@@ -177,266 +109,254 @@ export default function CreateTemplatePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, columns: encodedColumns }),
       });
-
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-
       showToast(t("templates.createdSuccess"), "success");
       setTimeout(() => router.push("/settings/templates"), 500);
     } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : "Failed to save",
-        "error"
-      );
+      showToast(err instanceof Error ? err.message : "Failed to save", "error");
     } finally {
       setSaving(false);
     }
   }
 
+  const iconBtnStyle = (color: string, disabled?: boolean): React.CSSProperties => ({
+    width: 32, height: 32, borderRadius: 8,
+    display: "flex", alignItems: "center", justifyContent: "center",
+    background: color + "12", border: `1px solid ${color}33`, color,
+    cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.35 : 1,
+  });
+
   return (
-    <div className="p-4 lg:p-8 animate-fade-in max-w-4xl mx-auto">
-      {toast && (
-        <div
-          className={`fixed top-4 right-4 z-[100] px-4 py-3 rounded-xl shadow-lg animate-slide-up ${
-            toast.type === "success"
-              ? "bg-success text-white"
-              : "bg-danger text-white"
-          }`}
-        >
-          {toast.message}
-        </div>
-      )}
+    <>
+      {toast && <HKToast message={toast.message} type={toast.type} />}
 
-      <div className="flex items-center gap-3 mb-6">
-        <Button
-          isIconOnly
-          variant="light"
-          aria-label="Back to templates"
-          onPress={() => router.push("/settings/templates")}
-        >
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={1.5}
-              d="M10 19l-7-7m0 0l7-7m-7 7h18"
-            />
-          </svg>
-        </Button>
+      <div style={{ fontFamily: SG }}>
+        <PageHeader
+          title={t("templates.createTitle")}
+          subtitle={t("templates.createSubtitle")}
+          isMobile={isMobile}
+          action={
+            <button
+              onClick={() => router.push("/settings/templates")}
+              style={{
+                minHeight: 44, padding: "0 18px", borderRadius: 12,
+                background: "var(--sb-badge)", border: "1px solid var(--sb-border)",
+                color: "var(--sb-text)", fontFamily: SG, fontSize: TYPE.body, fontWeight: 600, cursor: "pointer",
+              }}
+            >
+              ← Back
+            </button>
+          }
+        />
         <div>
-          <h1 className="text-2xl font-bold">{t("templates.createTitle")}</h1>
-          <p className="text-default-500 text-sm mt-1">
-            {t("templates.createSubtitle")}
-          </p>
-        </div>
-      </div>
+          {/* Template name */}
+          <HKCard style={{ marginBottom: 20 }}>
+            <HKInput
+              label={t("templates.templateName")}
+              placeholder={t("templates.templateNamePlaceholder")}
+              value={name}
+              onValueChange={setName}
+              size="lg"
+              isRequired
+            />
+          </HKCard>
 
-      <Card shadow="sm" className="mb-6">
-        <CardBody className="p-6">
-          <Input
-            label={t("templates.templateName")}
-            placeholder={t("templates.templateNamePlaceholder")}
-            value={name}
-            onValueChange={setName}
-            variant="bordered"
-            size="lg"
-            isRequired
-          />
-        </CardBody>
-      </Card>
+          {/* Columns */}
+          <HKCard style={{ marginBottom: 20 }}>
+            <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: "0 0 20px" }}>
+              {t("templates.columns")}
+            </p>
 
-      <Card shadow="sm" className="mb-6">
-        <CardBody className="p-6">
-          <h2 className="text-lg font-semibold mb-4">{t("templates.columns")}</h2>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {columns.map((col, index) => (
+                <div
+                  key={index}
+                  style={{
+                    background: "var(--sb-bg)", border: "1px solid var(--sb-border)", borderRadius: 16,
+                    padding: "16px", display: "flex", flexDirection: "column", gap: 12,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                    {/* Up/down controls */}
+                    <div style={{
+                      display: "flex", flexDirection: "column", gap: 2, alignItems: "center",
+                      background: "var(--sb-badge)", borderRadius: 8, padding: "4px",
+                    }}>
+                      <button
+                        onClick={() => moveColumn(index, index - 1)}
+                        disabled={index === 0}
+                        style={iconBtnStyle("var(--sb-sub)" as string, index === 0)}
+                        aria-label="Move up"
+                      >
+                        <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => moveColumn(index, index + 1)}
+                        disabled={index === columns.length - 1}
+                        style={iconBtnStyle("var(--sb-sub)" as string, index === columns.length - 1)}
+                        aria-label="Move down"
+                      >
+                        <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+                    </div>
 
-          <div className="space-y-4">
-            {columns.map((col, index) => (
-              <div
-                key={index}
-                className="flex flex-col gap-4 p-5 rounded-2xl bg-default-50 border shadow-sm border-default-200 transition-all hover:border-primary/30"
-              >
-                <div className="flex items-start md:items-center gap-4">
-                  <div className="flex flex-col gap-1 items-center bg-default-100 dark:bg-default-200/50 rounded-lg p-1">
+                    {/* Position badge */}
+                    <div style={{
+                      width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
+                      background: C.primary + "18", display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: TYPE.bodySmall, fontWeight: 700, color: C.primary, fontFamily: SG,
+                    }}>
+                      {index + 1}
+                    </div>
+
+                    {/* Name + Type inputs */}
+                    <div style={{ flex: 1, display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
+                      <HKInput
+                        label={t("templates.columnName")}
+                        placeholder={t("templates.columnNamePlaceholder")}
+                        value={col.name}
+                        onValueChange={(v) => updateColumn(index, "name", v)}
+                        size="sm"
+                        isRequired
+                      />
+                      <HKSelect
+                        label={t("templates.type")}
+                        placeholder={t("templates.type")}
+                        value={col.type}
+                        onValueChange={(val) => { if (val) updateColumn(index, "type", val); }}
+                        size="sm"
+                      >
+                        {columnTypeOptions.map((option) => (
+                          <HKSelectItem key={option.key} value={option.key}>{option.label}</HKSelectItem>
+                        ))}
+                      </HKSelect>
+                    </div>
+
+                    {/* Delete button */}
                     <button
-                      onClick={() => moveColumn(index, index - 1)}
-                      disabled={index === 0}
-                      className="text-default-400 hover:text-primary disabled:opacity-30 transition p-1"
+                      onClick={() => removeColumn(index)}
+                      disabled={columns.length === 1}
+                      aria-label={`Remove column ${index + 1}`}
+                      style={iconBtnStyle(OR, columns.length === 1)}
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M5 15l7-7 7 7"
-                        />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => moveColumn(index, index + 1)}
-                      disabled={index === columns.length - 1}
-                      className="text-default-400 hover:text-primary disabled:opacity-30 transition p-1"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                       </svg>
                     </button>
                   </div>
 
-                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-sm">
-                    {index + 1}
-                  </span>
-
-                  <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Input
-                      label={t("templates.columnName")}
-                      placeholder={t("templates.columnNamePlaceholder")}
-                      value={col.name}
-                      onValueChange={(v) => updateColumn(index, "name", v)}
-                      variant="bordered"
-                      size="sm"
-                      isRequired
-                      isDisabled={col.isSystem}
-                    />
-                    <Select
-                      label={t("templates.type")}
-                      placeholder={t("templates.type")}
-                      selectedKeys={new Set([col.type])}
-                      onSelectionChange={(keys) => {
-                        const val = Array.from(keys)[0] as string;
-                        if (val) updateColumn(index, "type", val);
-                      }}
-                      variant="bordered"
-                      size="sm"
-                      isDisabled={col.isSystem}
-                    >
-                      {columnTypeOptions.map((option) => (
-                        <SelectItem key={option.key} textValue={option.label}>{option.label}</SelectItem>
-
-                      ))}
-                    </Select>
-                  </div>
-
-                  {/* Delete button */}
-                  <Button
-                    isIconOnly
-                    variant="flat"
-                    color="danger"
-                    aria-label={`Remove column ${index + 1}`}
-                    onPress={() => removeColumn(index)}
-                    isDisabled={columns.length === 1 || col.isSystem}
-                    className="mt-1 md:mt-0"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </Button>
-                </div>
-
-                {col.type === "formula" && (
-                  <div className="ml-0 md:ml-16 p-4 rounded-xl bg-warning-50 dark:bg-warning/10 border border-warning/20">
-                    <p className="text-sm font-semibold text-warning-700 dark:text-warning-500 mb-3 flex items-center gap-2">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                      {t("templates.buildFormula")}
-                    </p>
-                    <Input
-                      aria-label={t("templates.buildFormula")}
-                      placeholder={t("templates.formulaPlaceholder")}
-                      value={col.formula || ""}
-                      onValueChange={(v) => updateColumn(index, "formula", v)}
-                      variant="faded"
-                      isInvalid={!!errors[index]}
-                      errorMessage={errors[index] || t("templates.formulaHelp")}
-                    />
-                    
-                    <div className="mt-4">
-                      <p className="text-xs text-default-500 mb-2 font-medium">{t("templates.insertColumns")}</p>
-                      <div className="flex flex-wrap gap-2">
-                        {columns.slice(0, index).filter(c => c.name.trim()).length > 0 ? (
-                          columns.slice(0, index).filter(c => c.name.trim()).map((prevCol, i) => (
-                            <Chip 
-                              key={i} 
-                              size="sm" 
-                              variant="flat" 
-                              color="warning"
-                              className="cursor-pointer hover:bg-warning-200 transition px-2 py-4 shadow-sm"
-                              onClick={() => appendToFormula(index, prevCol.name)}
-                            >
-                              <span className="font-mono text-sm">{prevCol.name}</span>
-                            </Chip>
-                          ))
-                        ) : (
-                          <span className="text-xs text-default-400 italic">{t("templates.noPreviousColumns")}</span>
-                        )}
+                  {/* Formula builder */}
+                  {col.type === "formula" && (
+                    <div style={{
+                      marginLeft: isMobile ? 0 : 80, padding: 14, borderRadius: 12,
+                      background: AM + "10", border: `1px solid ${AM}33`,
+                    }}>
+                      <p style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: AM, fontFamily: SG, margin: "0 0 10px", display: "flex", alignItems: "center", gap: 6 }}>
+                        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                        {t("templates.buildFormula")}
+                      </p>
+                      <HKInput
+                        aria-label={t("templates.buildFormula")}
+                        placeholder={t("templates.formulaPlaceholder")}
+                        value={col.formula || ""}
+                        onValueChange={(v) => updateColumn(index, "formula", v)}
+                        isInvalid={!!errors[index]}
+                        errorMessage={errors[index] || t("templates.formulaHelp")}
+                      />
+                      <div style={{ marginTop: 12 }}>
+                        <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG, marginBottom: 8, fontWeight: 600 }}>
+                          {t("templates.insertColumns")}
+                        </p>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                          {columns.slice(0, index).filter((c) => c.name.trim()).length > 0 ? (
+                            columns.slice(0, index).filter((c) => c.name.trim()).map((prevCol, i) => (
+                              <span
+                                key={i}
+                                onClick={() => appendToFormula(index, prevCol.name)}
+                                style={{
+                                  fontSize: TYPE.caption, fontWeight: 700, color: AM,
+                                  background: AM + "18", padding: "3px 8px", borderRadius: 6,
+                                  fontFamily: SG, cursor: "pointer",
+                                }}
+                              >
+                                {prevCol.name}
+                              </span>
+                            ))
+                          ) : (
+                            <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG, fontStyle: "italic" }}>
+                              {t("templates.noPreviousColumns")}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {col.type === "dropdown" && (
-                  <div className="ml-0 md:ml-16 p-4 rounded-xl bg-primary-50 dark:bg-primary/10 border border-primary/20">
-                    <p className="text-sm font-semibold text-primary-700 dark:text-primary-500 mb-3 flex items-center gap-2">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" /></svg>
-                      {t("templates.dropdownOptions")}
+                  {/* Dropdown options */}
+                  {col.type === "dropdown" && (
+                    <div style={{
+                      marginLeft: isMobile ? 0 : 80, padding: 14, borderRadius: 12,
+                      background: PU + "10", border: `1px solid ${PU}33`,
+                    }}>
+                      <p style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: PU, fontFamily: SG, margin: "0 0 10px", display: "flex", alignItems: "center", gap: 6 }}>
+                        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" /></svg>
+                        {t("templates.dropdownOptions")}
+                      </p>
+                      <HKInput
+                        aria-label={t("templates.dropdownOptions")}
+                        placeholder={t("templates.dropdownPlaceholder")}
+                        value={(col.options || []).join(",")}
+                        onValueChange={(v) => {
+                          const newCols = [...columns];
+                          newCols[index].options = v.split(",");
+                          setColumns(newCols);
+                        }}
+                        description={t("templates.dropdownDescription")}
+                      />
+                    </div>
+                  )}
+
+                  {errors[index] && col.type !== "formula" && (
+                    <p style={{ fontSize: TYPE.bodySmall, color: OR, fontFamily: SG, margin: "0 0 0 80px", fontWeight: 600 }}>
+                      {errors[index]}
                     </p>
-                    <Input
-                      aria-label={t("templates.dropdownOptions")}
-                      placeholder={t("templates.dropdownPlaceholder")}
-                      value={(col.options || []).join(",")}
-                      onValueChange={(v) => {
-                        const newCols = [...columns];
-                        newCols[index].options = v.split(",");
-                        setColumns(newCols);
-                      }}
-                      variant="faded"
-                      description={t("templates.dropdownDescription")}
-                    />
-                  </div>
-                )}
+                  )}
+                </div>
+              ))}
+            </div>
 
-                {errors[index] && col.type !== "formula" && (
-                  <p className="text-danger text-sm ml-0 md:ml-16 font-medium">{errors[index]}</p>
-                )}
-              </div>
-            ))}
-          </div>
-
-          <Button
-            variant="flat"
-            className="mt-4"
-            onPress={addColumn}
-            startContent={
-              <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <button
+              onClick={addColumn}
+              style={{
+                marginTop: 16, width: "100%", minHeight: 44, borderRadius: 12,
+                background: GR + "10", border: `1.5px dashed ${GR}44`,
+                color: GR, fontFamily: SG, fontSize: TYPE.body, fontWeight: 700, cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              }}
+            >
+              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
-            }
-          >
-            {t("templates.addColumn")}
-          </Button>
-        </CardBody>
-      </Card>
+              {t("templates.addColumn")}
+            </button>
+          </HKCard>
 
-      {/* Actions */}
-      <div className="flex gap-3 justify-end">
-        <Button
-          variant="flat"
-          onPress={() => router.push("/settings/templates")}
-        >
-          {t("common.cancel")}
-        </Button>
-        <Button
-          color="primary"
-          className="bg-gradient-to-r from-blue-600 to-indigo-600 font-semibold"
-          onPress={handleSave}
-          isLoading={saving}
-        >
-          {t("templates.saveTemplate")}
-        </Button>
+          {/* Actions */}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
+            <HKButton variant="secondary" onClick={() => router.push("/settings/templates")}>
+              {t("common.cancel")}
+            </HKButton>
+            <HKButton onClick={handleSave} isLoading={saving}>
+              {t("templates.saveTemplate")}
+            </HKButton>
+          </div>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

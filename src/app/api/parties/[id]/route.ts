@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { resolveWriteSession } from "@/lib/api-tenant";
+import { resolveSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 import { NextRequest, NextResponse } from "next/server";
 import type { PartyType } from "@prisma/client";
@@ -42,8 +42,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // [FIX] Use JWT-verified session instead of trusting proxy headers
-  const sessionResolution = await resolveWriteSession(request);
+  const sessionResolution = await resolveSession(request);
   if (!sessionResolution.ok) return sessionResolution.response;
   const { tenantId, role } = sessionResolution.session;
 
@@ -66,12 +65,8 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // [FIX #1] Use JWT-verified session instead of trusting proxy headers
-  const { resolveWriteSession } = await import("@/lib/api-tenant");
-  const sessionResolution = await resolveWriteSession(request);
-  if (!sessionResolution.ok) {
-    return sessionResolution.response;
-  }
+  const sessionResolution = await resolveSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
   const { tenantId, userId, role } = sessionResolution.session;
 
   if (role === "CUSTOMER") {
@@ -157,49 +152,54 @@ export async function PATCH(
       );
     }
 
-    const party = await prisma.party.update({
-      where: { id },
-      data: {
-        name: nextName,
-        phone: normalizeOptionalString(body.phone),
-        email: normalizeOptionalString(body.email),
-        address: normalizeOptionalString(body.address),
-        gstin: normalizedGstin,
-        type: nextType,
-      },
-    });
-
-    // [MCA GSR 247(E)] Append-only edit log — mandatory since April 1 2023.
-    // Captures field-level changes for statutory audit compliance.
-    const changedFields = Object.keys(body);
-    if (changedFields.length > 0) {
-      await prisma.auditLog.create({
+    const party = await prisma.$transaction(async (tx) => {
+      const updatedParty = await tx.party.update({
+        where: { id },
         data: {
-          tenantId,
-          entityType: "Party",
-          entityId: party.id,
-          userId: userId || null,
-          action: "UPDATE",
-          fieldName: changedFields.join(","),
-          oldValue: JSON.stringify(
-            Object.fromEntries(
-              changedFields.map((f) => [
-                f,
-                (existingParty as Record<string, unknown>)[f] ?? null,
-              ])
-            )
-          ),
-          newValue: JSON.stringify(
-            Object.fromEntries(
-              changedFields.map((f) => [
-                f,
-                (party as Record<string, unknown>)[f] ?? null,
-              ])
-            )
-          ),
+          name: nextName,
+          phone: normalizeOptionalString(body.phone),
+          email: normalizeOptionalString(body.email),
+          address: normalizeOptionalString(body.address),
+          gstin: normalizedGstin,
+          type: nextType,
         },
       });
-    }
+
+      // [MCA GSR 247(E)] Append-only edit log — mandatory since April 1 2023.
+      // Captures field-level changes for statutory audit compliance.
+      // Runs inside the same transaction as the update so both succeed or both fail.
+      const changedFields = Object.keys(body);
+      if (changedFields.length > 0) {
+        await tx.auditLog.create({
+          data: {
+            tenantId,
+            entityType: "Party",
+            entityId: updatedParty.id,
+            userId: userId,
+            action: "UPDATE",
+            fieldName: changedFields.join(","),
+            oldValue: JSON.stringify(
+              Object.fromEntries(
+                changedFields.map((f) => [
+                  f,
+                  (existingParty as Record<string, unknown>)[f] ?? null,
+                ])
+              )
+            ),
+            newValue: JSON.stringify(
+              Object.fromEntries(
+                changedFields.map((f) => [
+                  f,
+                  (updatedParty as Record<string, unknown>)[f] ?? null,
+                ])
+              )
+            ),
+          },
+        });
+      }
+
+      return updatedParty;
+    });
 
     return NextResponse.json({ party });
   } catch (error) {
@@ -216,12 +216,8 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // [FIX #1] Use JWT-verified session instead of trusting proxy headers
-  const { resolveWriteSession } = await import("@/lib/api-tenant");
-  const sessionResolution = await resolveWriteSession(request);
-  if (!sessionResolution.ok) {
-    return sessionResolution.response;
-  }
+  const sessionResolution = await resolveSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
   const { tenantId, userId, role } = sessionResolution.session;
 
   if (role !== "ADMIN") {
@@ -236,12 +232,14 @@ export async function DELETE(
       return NextResponse.json({ error: "Party not found" }, { status: 404 });
     }
 
-    // [FIX #31] Block deletion if party has outstanding balance
-    const balance = existingParty.currentBalance?.toNumber?.() ?? existingParty.currentBalance ?? 0;
-    if (Math.abs(Number(balance)) > 0.01) {
+    // [M-7] Guard: block deletion if the party has an outstanding balance
+    const balance = existingParty.currentBalance
+      ? Number(existingParty.currentBalance)
+      : 0;
+    if (Math.abs(balance) >= 0.01) {
       return NextResponse.json(
-        { error: "Cannot delete a party with outstanding balance. Settle all dues first." },
-        { status: 400 }
+        { error: "Cannot delete a party with an outstanding balance. Please settle all dues first." },
+        { status: 409 }
       );
     }
 
@@ -260,7 +258,7 @@ export async function DELETE(
         tenantId,
         entityType: "Party",
         entityId: existingParty.id,
-        userId: userId || null,
+        userId: userId,
         action: "DELETE",
         fieldName: "isDeleted",
         oldValue: JSON.stringify(false),

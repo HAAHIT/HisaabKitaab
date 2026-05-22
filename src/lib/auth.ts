@@ -2,8 +2,8 @@ import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { getJwtSecret } from "@/lib/jwt-secret";
+import { SESSION_COOKIE_NAME } from "@/lib/cookie";
 
-const COOKIE_NAME = "hisaabkitaab-session";
 const SESSION_DURATION = 7 * 24 * 60 * 60; // 7 days in seconds
 
 export interface SessionPayload {
@@ -54,7 +54,7 @@ export async function verifyToken(
 export async function createSession(payload: SessionPayload): Promise<string> {
   const token = await signToken(payload);
   const cookieStore = await cookies();
-  cookieStore.set(COOKIE_NAME, token, {
+  cookieStore.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -66,12 +66,12 @@ export async function createSession(payload: SessionPayload): Promise<string> {
 
 export async function getSession(): Promise<SessionPayload | null> {
   const cookieStore = await cookies();
-  const token = cookieStore.get(COOKIE_NAME)?.value;
+  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   if (!token) return null;
   return verifyToken(token);
 }
 
 export async function deleteSession(): Promise<void> {
   const cookieStore = await cookies();
-  cookieStore.delete(COOKIE_NAME);
+  cookieStore.delete(SESSION_COOKIE_NAME);
 }

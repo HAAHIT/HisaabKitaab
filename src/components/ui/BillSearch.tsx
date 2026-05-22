@@ -19,10 +19,6 @@ interface BillSearchProps {
   description?: string;
 }
 
-/**
- * Searchable combobox for selecting a bill linked to a party.
- * Fetches bills from /api/bills with debounced search.
- */
 export function BillSearch({
   value,
   onChange,
@@ -56,7 +52,6 @@ export function BillSearch({
       if (response.ok) {
         const data = await response.json();
         const results = (data.bills || []) as BillOption[];
-        // Keep the selected bill in the list
         if (
           selectedBillRef.current &&
           !results.some((b) => b.id === selectedBillRef.current!.id)
@@ -71,7 +66,6 @@ export function BillSearch({
     }
   }
 
-  // Load bills when partyId changes
   useEffect(() => {
     if (!partyId) {
       setBills([]);
@@ -94,7 +88,6 @@ export function BillSearch({
   function handleInputChange(val: string) {
     setSearchTerm(val);
 
-    // Clear selection if deleted
     if (val === "" && selectedBillRef.current) {
       selectedBillRef.current = null;
       onChange(null);
@@ -112,13 +105,13 @@ export function BillSearch({
         <SearchableSelect<BillOption>
           items={[]}
           inputValue=""
-          onInputChange={() => { }}
-          onSelectionChange={() => { }}
+          onInputChange={() => {}}
+          onSelectionChange={() => {}}
           label="Linked Bill"
           placeholder={partyId ? placeholder : "Select a party first"}
           getKey={(b) => b.id}
           getTextValue={(b) => b.billNumber}
-          renderItem={(b) => <></>}
+          renderItem={() => <></>}
         />
         {description && <p className="text-xs text-default-400 mt-1 pl-1">{description}</p>}
       </div>
@@ -146,12 +139,10 @@ export function BillSearch({
           <div className="flex w-full items-center justify-between gap-3">
             <div className="flex flex-col">
               <span className="font-semibold">{bill.billNumber}</span>
-              <span className="text-xs text-default-400">
-                {bill.customerName}
-              </span>
+              <span className="text-xs text-default-400">{bill.customerName}</span>
             </div>
             <span className="text-sm font-medium text-default-500">
-              ₹{bill.grandTotal.toLocaleString("en-IN")}
+              ₹{bill.grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>
         )}

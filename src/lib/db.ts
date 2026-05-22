@@ -28,7 +28,7 @@ interface LegacyMeasurementRecord {
   isDeleted?: boolean;
 }
 
-export class HisaabKitaabDB extends Dexie {
+export class SoloBooksDB extends Dexie {
   measurements!: Table<LegacyMeasurementRecord, string | number>;
   parties!: Table<Record<string, unknown>, string>;
   bills!: Table<Record<string, unknown>, string>;
@@ -37,7 +37,7 @@ export class HisaabKitaabDB extends Dexie {
   measurementDrafts!: Table<MeasurementDraft, string>;
 
   constructor() {
-    super("HisaabKitaabDB");
+    super("SoloBooksDB");
 
     // Retain legacy tables only long enough to migrate old offline measurements into draft records.
     this.version(2).stores({
@@ -92,4 +92,4 @@ export class HisaabKitaabDB extends Dexie {
   }
 }
 
-export const db = new HisaabKitaabDB();
+export const db = new SoloBooksDB();

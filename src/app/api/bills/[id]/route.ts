@@ -3,13 +3,14 @@ import { GST_STATE_CODE_SET } from "@/lib/gst-states";
 import {
   buildBillSnapshotFromParty,
   getBillBalanceDeltaForTransition,
+  asSupportedPartyType,
 } from "@/lib/accounting";
 import {
   journalForCancelledSalesBill,
   journalForSalesBill,
 } from "@/lib/journal";
 import { NextRequest, NextResponse } from "next/server";
-import { resolveWriteSession } from "@/lib/api-tenant";
+import { resolveSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 
 // Derive Prisma types from the client instance to avoid the
@@ -37,7 +38,6 @@ const ALLOWED_BILL_PATCH_KEYS = new Set([
   "status",
   "isInterState",
   "hsnCode",
-  "shippingAddress",
 ]);
 
 const ALLOWED_BILL_PATCH_STATUSES = new Set(["DRAFT", "FINAL"]);
@@ -99,15 +99,13 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // [FIX] Use JWT-verified session instead of trusting proxy headers
-  const sessionResolution = await resolveWriteSession(request);
+  const sessionResolution = await resolveSession(request);
   if (!sessionResolution.ok) return sessionResolution.response;
   const { tenantId, role } = sessionResolution.session;
 
   if (role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-
 
   const { id } = await params;
   const bill = await findVisibleBill(id, tenantId);
@@ -116,17 +114,7 @@ export async function GET(
     return NextResponse.json({ error: "Bill not found" }, { status: 404 });
   }
 
-  // Prisma Decimal fields don't serialize to JSON correctly — convert to plain numbers
-  const serializedBill = {
-    ...bill,
-    subtotal: bill.subtotal?.toNumber() ?? 0,
-    taxPercent: bill.taxPercent?.toNumber() ?? 0,
-    taxAmount: bill.taxAmount?.toNumber() ?? 0,
-    grandTotal: bill.grandTotal?.toNumber() ?? 0,
-    roundOff: bill.roundOff?.toNumber() ?? 0,
-  };
-
-  return NextResponse.json({ bill: serializedBill });
+  return NextResponse.json({ bill });
 }
 
 // PATCH /api/bills/[id] - Update a draft bill
@@ -134,11 +122,8 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // [FIX #1] Use JWT-verified session instead of trusting proxy headers
-  const sessionResolution = await resolveWriteSession(request);
-  if (!sessionResolution.ok) {
-    return sessionResolution.response;
-  }
+  const sessionResolution = await resolveSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
   const { tenantId, userId, role } = sessionResolution.session;
 
   if (role === "CUSTOMER") {
@@ -298,6 +283,16 @@ export async function PATCH(
       updateData[field] = value;
     }
 
+    if (hasOwn(body, "roundOff") && body.roundOff !== null) {
+      const value = parseOptionalNumber(body.roundOff);
+      if (value !== undefined) updateData.roundOff = value;
+    }
+
+    if (hasOwn(body, "billDate") && typeof body.billDate === "string") {
+      const parsed = new Date(body.billDate);
+      if (!Number.isNaN(parsed.getTime())) updateData.date = parsed;
+    }
+
     if (hasOwn(body, "status")) {
       if (
         typeof body.status !== "string" ||
@@ -325,19 +320,6 @@ export async function PATCH(
     if (hasOwn(body, "hsnCode")) {
       const hsn = body.hsnCode;
       updateData.hsnCode = typeof hsn === "string" && hsn.trim() ? hsn.trim() : null;
-    }
-
-    // Round-off: clamp to ±0.99
-    if (hasOwn(body, "roundOff")) {
-      const ro = parseOptionalNumber(body.roundOff);
-      if (ro !== undefined && Math.abs(ro) <= 0.99) {
-        updateData.roundOff = ro;
-      }
-    }
-
-    // Shipping address
-    if (hasOwn(body, "shippingAddress")) {
-      updateData.shippingAddress = normalizeOptionalString(body.shippingAddress);
     }
 
     let nextPartyId = existing.partyId;
@@ -485,23 +467,19 @@ export async function PATCH(
 
     // [P0] Block FINAL transition if tax > 0 but no HSN code present in rows.
     // Without HSN, GSTR-1 Table 12 (HSN-wise summary) will be incomplete.
-    if (finalStatus === "FINAL" && nextTaxAmount > 0) {
+    if (finalStatus === "FINAL" && nextTaxPercent > 0) {
       const rowsToCheck = (updateData.rows ?? existing.rows) as unknown[];
       const hasHsn =
         Array.isArray(rowsToCheck) &&
         rowsToCheck.some(
-          (row) => {
-            if (!row || typeof row !== "object") return false;
-            // Check if ANY value contains an HSN code (either col_hsn, _hsnCode, or any key containing 'hsn')
-            return Object.entries(row).some(([key, val]) =>
-              (key === "col_hsn" || key === "_hsnCode" || key.toLowerCase().includes("hsn")) &&
-              typeof val === "string" &&
-              val.trim() !== ""
-            );
-          }
+          (row) =>
+            row &&
+            typeof row === "object" &&
+            typeof (row as Record<string, unknown>)["_hsnCode"] === "string" &&
+            ((row as Record<string, unknown>)["_hsnCode"] as string).trim() !== ""
         );
       const hasFallbackHsn = hasOwn(updateData, "hsnCode") ? !!updateData.hsnCode : !!existing.hsnCode;
-
+      
       if (!hasHsn && !hasFallbackHsn) {
         return NextResponse.json(
           {
@@ -594,7 +572,7 @@ export async function PATCH(
       }
 
       const balanceChange = getBillBalanceDeltaForTransition({
-        partyType: party.type,
+        partyType: asSupportedPartyType(party.type),
         previousStatus: existing.status,
         previousAmount: existing.grandTotal.toNumber(),
         nextStatus: finalStatus,
@@ -611,7 +589,6 @@ export async function PATCH(
       }
 
       if (existing.status !== "FINAL" && finalStatus === "FINAL") {
-        const nextRoundOff = (updateData.roundOff as number | undefined) ?? 0;
         await journalForSalesBill(tx, tenantId, {
           id: updatedBill.id,
           billNumber: updatedBill.billNumber,
@@ -620,7 +597,6 @@ export async function PATCH(
           subtotal: nextSubtotal,
           taxAmount: nextTaxAmount,
           grandTotal: nextGrandTotal,
-          roundOff: nextRoundOff,
           createdBy: userId || updatedBill.createdBy,
           entryDate: updatedBill.updatedAt,
           isInterState,
@@ -645,11 +621,8 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // [FIX #1] Use JWT-verified session instead of trusting proxy headers
-  const sessionResolution = await resolveWriteSession(request);
-  if (!sessionResolution.ok) {
-    return sessionResolution.response;
-  }
+  const sessionResolution = await resolveSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
   const { tenantId, userId, role } = sessionResolution.session;
 
   if (role !== "ADMIN") {
@@ -681,6 +654,25 @@ export async function DELETE(
       return NextResponse.json({ error: "Bill not found" }, { status: 404 });
     }
 
+    // Block cancellation if any non-deleted payments are linked to this bill.
+    // Cancelling would orphan the payment row (linked to a CANCELLED bill) and
+    // leave the audit trail inconsistent. Force the user to reverse/refund
+    // the payment first.
+    const linkedPaymentCount = await prisma.payment.count({
+      where: { linkedBillId: id, tenantId, isDeleted: false },
+    });
+    if (linkedPaymentCount > 0) {
+      return NextResponse.json(
+        {
+          error:
+            `Cannot cancel: ${linkedPaymentCount} payment(s) are linked to this bill. ` +
+            `Reverse or delete those payments first.`,
+          linkedPaymentCount,
+        },
+        { status: 409 }
+      );
+    }
+
     await prisma.$transaction(async (tx: PrismaTx) => {
       await tx.bill.update({
         where: { id },
@@ -693,7 +685,7 @@ export async function DELETE(
           tenantId,
           entityType: "Bill",
           entityId: existing.id,
-          userId: userId!,  // ADMIN-only endpoint; userId guarded at line 562
+          userId: userId,
           action: "DELETE",
           fieldName: "status",
           oldValue: existing.status,
@@ -732,7 +724,7 @@ export async function DELETE(
       }
 
       const balanceChange = getBillBalanceDeltaForTransition({
-        partyType: party.type,
+        partyType: asSupportedPartyType(party.type),
         previousStatus: existing.status,
         previousAmount: existing.grandTotal.toNumber(),
         nextStatus: "CANCELLED",

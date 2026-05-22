@@ -1,5 +1,5 @@
 {
-  "name": "hisaabkitaab",
+  "name": "solobooks",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -14,7 +14,9 @@
     "journal:backfill": "npx tsx scripts/backfill-journal.ts",
     "media:migrate": "npx tsx scripts/migrate-legacy-media.ts",
     "postinstall": "prisma generate",
-    "test": "vitest"
+    "clean": "node -e \"fs.rmSync('.next', { recursive: true, force: true })\"",
+    "test": "node --max-old-space-size=4096 ./node_modules/vitest/vitest.mjs",
+    "test:ci": "node --max-old-space-size=4096 ./node_modules/vitest/vitest.mjs run"
   },
   "overrides": {
     "picomatch": "^2.3.2",

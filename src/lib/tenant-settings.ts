@@ -103,6 +103,12 @@ export function serializeTenantSettings(tenant: TenantSettingsSource) {
     taxRegistrationType: normalizeTaxRegistrationType(
       settings.taxRegistrationType
     ),
+    defaultTemplateId: normalizeOptionalString(settings.defaultTemplateId),
+    // Bank account details (shown on invoice footer)
+    bankName: normalizeString(settings.bankName),
+    bankAccountNumber: normalizeString(settings.bankAccountNumber),
+    bankBranch: normalizeString(settings.bankBranch),
+    bankIfscCode: normalizeString(settings.bankIfscCode),
   };
 }
 
@@ -120,12 +126,16 @@ export function mergeTenantSettings(
     upiId: string | null;
     businessType: BusinessType;
     taxRegistrationType: TaxRegistrationType;
-    onboardingComplete: boolean;
+    defaultTemplateId: string | null;
+    bankName: string | null;
+    bankAccountNumber: string | null;
+    bankBranch: string | null;
+    bankIfscCode: string | null;
   }>
 ) {
   const existing = getFlatTenantSettings(currentSettings);
 
-  const result: Record<string, unknown> = {
+  return {
     ...existing,
     companyName: nextSettings.companyName ?? normalizeString(existing.companyName),
     companyPhone:
@@ -148,11 +158,13 @@ export function mergeTenantSettings(
     taxRegistrationType:
       nextSettings.taxRegistrationType ??
       normalizeTaxRegistrationType(existing.taxRegistrationType),
+    defaultTemplateId:
+      "defaultTemplateId" in nextSettings
+        ? nextSettings.defaultTemplateId ?? null
+        : normalizeOptionalString(existing.defaultTemplateId),
+    bankName: nextSettings.bankName ?? normalizeString(existing.bankName),
+    bankAccountNumber: nextSettings.bankAccountNumber ?? normalizeString(existing.bankAccountNumber),
+    bankBranch: nextSettings.bankBranch ?? normalizeString(existing.bankBranch),
+    bankIfscCode: nextSettings.bankIfscCode ?? normalizeString(existing.bankIfscCode),
   };
-
-  if (nextSettings.onboardingComplete !== undefined) {
-    result.onboardingComplete = nextSettings.onboardingComplete;
-  }
-
-  return result;
 }

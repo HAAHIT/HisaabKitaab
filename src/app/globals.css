@@ -1,13 +1,137 @@
 @import "tailwindcss";
 
-/* ── HeroUI Tailwind Plugin ───────────────────────────── */
-@source "../../node_modules/@heroui/theme/dist";
-@plugin "../../hero.ts";
-
 /* ── Custom Theme ─────────────────────────────────────── */
 @theme inline {
-  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-sans: var(--font-inter), "Inter", system-ui, -apple-system, sans-serif;
+  --font-display: var(--font-eczar), "Eczar", Georgia, serif;
+  --font-brand: var(--font-tiro-devanagari), var(--font-eczar), Georgia, serif;
   --font-mono: "JetBrains Mono", "Fira Code", monospace;
+  --font-space-grotesk: var(--font-inter), "Inter", system-ui, sans-serif;
+
+  /* ── Semantic color tokens ── */
+  --color-background:   var(--sb-bg);
+  --color-foreground:   var(--sb-text);
+  --color-divider:      var(--sb-border);
+  --color-content1:     var(--sb-card);
+  --color-content2:     var(--sb-surface-alt);
+
+  --color-default-50:   var(--surface-50);
+  --color-default-100:  var(--surface-100);
+  --color-default-200:  var(--surface-200);
+  --color-default-300:  var(--surface-300);
+  --color-default-400:  var(--sb-muted);
+  --color-default-500:  var(--sb-sub);
+  --color-default-600:  var(--surface-600);
+  --color-default-700:  var(--sb-text);
+  --color-default-900:  var(--sb-text);
+
+  --color-primary:      var(--sb-primary);
+  --color-secondary:    var(--sb-info);
+  --color-success:      var(--sb-positive);
+  --color-warning:      var(--sb-warning);
+  --color-danger:       var(--sb-negative);
+
+  --radius-medium:      0.75rem;
+  --radius-large:       1rem;
+  --shadow-large:       0 8px 32px rgba(0,0,0,0.12);
+  --shadow-medium:      0 4px 16px rgba(0,0,0,0.08);
+}
+
+/* ── SoloBooks Design Tokens ───────────────────────── */
+:root {
+  color-scheme: light;
+
+  /* Accent — used sparingly */
+  --sb-primary:        #2563eb;
+  --sb-primary-soft:   #e8f0fe;
+  --sb-primary-dark:   #13224a;
+
+  /* Semantic (only on amounts / status) */
+  --sb-positive:       #0a8754;
+  --sb-positive-soft:  #e6f5ee;
+  --sb-negative:       #c43e1c;
+  --sb-negative-soft:  #fdebe5;
+  --sb-warning:        #b07a00;
+  --sb-warning-soft:   #fff5d9;
+  --sb-info:           #5b4dbf;
+  --sb-info-soft:      #efedfb;
+
+  /* Legacy compat aliases */
+  --sb-orange: #2563eb;
+  --sb-purple: #5b4dbf;
+  --sb-green:  #0a8754;
+  --sb-amber:  #b07a00;
+
+  /* Light theme surface tokens — warm paper identity */
+  --sb-bg:          #faf7f0;
+  --sb-nav:         #ffffff;
+  --sb-card:        #ffffff;
+  --sb-surface-alt: #f5f1e7;
+  --sb-border:      rgba(60,40,15,0.10);
+  --sb-border-strong: rgba(60,40,15,0.18);
+  --sb-text:        #1a1410;
+  --sb-sub:         #5c5340;
+  --sb-muted:       #9a8e72;
+  --sb-divider:     rgba(60,40,15,0.07);
+  --sb-hover:       rgba(60,40,15,0.04);
+  --sb-pill:        rgba(60,40,15,0.05);
+  --sb-pill-active: #f0ebe0;
+  --sb-badge:       rgba(60,40,15,0.05);
+  --sb-line:        rgba(60,40,15,0.05);
+  --sb-input:       #f5f1e7;
+  --sb-shadow:         0 1px 2px rgba(60,40,15,0.04), 0 0 0 1px rgba(60,40,15,0.05);
+  --sb-shadow-card:    0 1px 3px rgba(60,40,15,0.08), 0 0 0 1px rgba(60,40,15,0.07);
+  --sb-shadow-card-hover: 0 4px 12px rgba(60,40,15,0.12), 0 0 0 1px rgba(60,40,15,0.09);
+  --sb-shadow-lg:   0 24px 60px -16px rgba(60,40,15,0.18);
+  --sb-overlay:     rgba(15,15,25,0.45);
+
+  /* Surface scale (light) */
+  --surface-50:  #fdfcf8;
+  --surface-100: #f5f1e7;
+  --surface-200: #ede7d6;
+  --surface-300: #d8cdb4;
+  --surface-600: #5c5340;
+}
+
+.dark {
+  color-scheme: dark;
+
+  /* Dark theme surface tokens */
+  --sb-bg:          #0b0b14;
+  --sb-nav:         #141420;
+  --sb-card:        #141420;
+  --sb-surface-alt: #1c1c2a;
+  --sb-border:      rgba(255,255,255,0.08);
+  --sb-border-strong: rgba(255,255,255,0.18);
+  --sb-text:        #eef0f7;
+  --sb-sub:         #9498ab;
+  --sb-muted:       #5e6177;
+  --sb-divider:     rgba(255,255,255,0.06);
+  --sb-hover:       rgba(255,255,255,0.04);
+  --sb-pill:        rgba(255,255,255,0.07);
+  --sb-pill-active: #1e1e3a;
+  --sb-badge:       rgba(255,255,255,0.06);
+  --sb-line:        rgba(255,255,255,0.05);
+  --sb-input:       rgba(255,255,255,0.05);
+  --sb-shadow:         0 1px 2px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.06);
+  --sb-shadow-card:    0 1px 3px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.07);
+  --sb-shadow-card-hover: 0 4px 12px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.10);
+  --sb-shadow-lg:   0 24px 60px -16px rgba(0,0,0,0.6);
+  --sb-overlay:     rgba(0,0,0,0.62);
+
+  /* Surface scale (dark) */
+  --surface-50:  #161628;
+  --surface-100: #1e1e3a;
+  --surface-200: #2a2a4a;
+  --surface-300: #40445a;
+  --surface-600: #b0b4cc;
+
+  /* Dark soft tones */
+  --sb-positive-soft:  rgba(10,135,84,0.15);
+  --sb-negative-soft:  rgba(196,62,28,0.15);
+  --sb-warning-soft:   rgba(176,122,0,0.15);
+  --sb-info-soft:      rgba(91,77,191,0.15);
+  --sb-primary-soft:   rgba(37,99,235,0.15);
 }
 
 /* ── Base Styles ──────────────────────────────────────── */
@@ -17,132 +141,156 @@ html {
 
 body {
   font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* ── Light-mode ruled-paper backdrop ─────────────────── */
+body:not(.dark)::before,
+html:not(.dark) body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 27px,
+    rgba(60,40,15,0.04) 28px,
+    transparent 29px
+  );
+  opacity: 0.7;
+}
+
+body > * {
+  position: relative;
+  z-index: 1;
+}
+
 /* ── Scrollbar Styling ────────────────────────────────── */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: hsl(0 0% 50% / 0.3);
-  border-radius: 999px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: hsl(0 0% 50% / 0.5);
-}
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: hsl(0 0% 50% / 0.2); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: hsl(0 0% 50% / 0.35); }
 
 /* ── Utility Classes ──────────────────────────────────── */
 .glass {
   backdrop-filter: blur(12px) saturate(180%);
   background-color: hsl(0 0% 100% / 0.72);
 }
+.dark .glass { background-color: hsl(0 0% 6% / 0.72); }
 
-.dark .glass {
-  background-color: hsl(0 0% 6% / 0.72);
+.font-display { font-family: var(--font-display); }
+.font-brand   { font-family: var(--font-brand); }
+.font-mono    { font-family: var(--font-mono); }
+
+/* ── HK Card ──────────────────────────────────────────── */
+.sb-card {
+  background: var(--sb-card);
+  border-radius: 16px;
+  border: 1px solid var(--sb-border);
+  padding: 20px;
+  transition: background 0.25s, border-color 0.15s;
 }
 
-/* Dashboard glassmorphism — !important overrides @heroui Card's theme background */
-.glass-card {
-  background: rgba(255, 255, 255, 0.7) !important;
-  backdrop-filter: blur(12px) saturate(180%) !important;
-  -webkit-backdrop-filter: blur(12px) saturate(180%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.08) !important;
-}
+.sb-bg { background: var(--sb-bg); }
 
-.dark .glass-card {
-  background: rgba(255, 255, 255, 0.08) !important;
-  border-color: rgba(255, 255, 255, 0.1) !important;
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3) !important;
-}
+/* Login & register: pure white right-side panel in light mode only */
+.sb-auth-shell { --sb-bg: #ffffff; }
+.dark .sb-auth-shell { --sb-bg: #0b0b14; }
 
 /* ── Animations ───────────────────────────────────────── */
+@keyframes sb-spin    { to { transform: rotate(360deg); } }
+@keyframes sb-fade    { from { opacity: 0 } to { opacity: 1 } }
+@keyframes sb-sheet-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+@keyframes sb-sheet-right {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+@keyframes sb-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@keyframes sb-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
 @keyframes fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
-
 @keyframes slide-up {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
-
 @keyframes scale-in {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
 }
 
-.animate-fade-in {
-  animation: fade-in 0.3s ease-out forwards;
+.sb-spin           { animation: sb-spin 0.7s linear infinite; }
+.animate-fade-in   { animation: fade-in 0.3s ease-out forwards; }
+.animate-slide-up  { animation: slide-up 0.4s ease-out forwards; }
+.animate-scale-in  { animation: scale-in 0.2s ease-out forwards; }
+
+/* ── Focus ring — accessible ─────────────────────────── */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--sb-primary);
+  outline-offset: 2px;
+  border-radius: 6px;
 }
 
-.animate-slide-up {
-  animation: slide-up 0.4s ease-out forwards;
-}
+/* ── Remove number input spinners ─────────────────────── */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type=number] { -moz-appearance: textfield; }
 
-.animate-scale-in {
-  animation: scale-in 0.2s ease-out forwards;
-}
-
-/* ── Bottom Nav Safe Area ─────────────────────────────── */
+/* ── Safe area & layout ───────────────────────────────── */
 .pb-safe-bottom {
   padding-bottom: max(env(safe-area-inset-bottom, 0px), 1rem);
 }
 
-/* ── Bottom Sheet Dialog ─────────────────────────────── */
-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.4);
+/* Bottom nav padding on mobile */
+@media (max-width: 1023px) {
+  .main-content-area {
+    padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px) + 1rem);
+  }
 }
 
-dialog[open] {
-  display: flex;
-}
+/* ── Dialog / sheet backdrop ─────────────────────────── */
+dialog::backdrop { background: rgba(0, 0, 0, 0.4); }
+dialog[open] { display: flex; }
 
-/* ── Bottom Nav Glass Effect ─────────────────────────── */
+/* ── Bottom Nav ──────────────────────────────────────── */
 .bottom-nav-glass {
   backdrop-filter: blur(20px) saturate(180%);
-  background-color: hsl(0 0% 100% / 0.85);
+  background-color: hsl(0 0% 100% / 0.92);
 }
-
 .dark .bottom-nav-glass {
-  background-color: hsl(0 0% 6% / 0.85);
+  background-color: hsl(240 12% 8% / 0.92);
 }
 
 /* ── Touch Feedback ──────────────────────────────────── */
 @media (hover: none) {
-  button:active {
-    transform: scale(0.97);
-  }
+  button:active { transform: scale(0.97); }
 }
 
-/* ── Content area padding to account for bottom nav ─── */
-@media (max-width: 1023px) {
-  .main-content-area {
-    padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px) + 1rem);
+/* ── Print ───────────────────────────────────────────── */
+@media print {
+  .no-print { display: none !important; }
+  html, body, .app-shell-root, .main-content-area {
+    height: auto !important;
+    min-height: 0 !important;
   }
 }
 

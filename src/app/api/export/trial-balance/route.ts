@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { resolveWriteSession } from "@/lib/api-tenant";
+import { resolveSession } from "@/lib/api-tenant";
 import { CHART_OF_ACCOUNTS } from "@/lib/chart-of-accounts";
+import { logError, getRequestId } from "@/lib/observability";
 import {
   escapeCsv,
   parseIndianDateRange,
@@ -11,8 +12,7 @@ import {
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
-  // [FIX] Use JWT-verified session instead of trusting proxy headers
-  const sessionResolution = await resolveWriteSession(request);
+  const sessionResolution = await resolveSession(request);
   if (!sessionResolution.ok) return sessionResolution.response;
   const { tenantId, role } = sessionResolution.session;
 
@@ -44,9 +44,9 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // [FIX #38] Scope unbalanced check to export date range
+  try {
   const unbalanced = await prisma.journalEntry.count({
-    where: { tenantId, isBalanced: false, entryDate: { gte: fromDate, lte: toDate } },
+    where: { tenantId, isBalanced: false, isDeleted: false },
   });
 
   if (unbalanced > 0) {
@@ -64,6 +64,7 @@ export async function GET(request: NextRequest) {
       const matchingJournals = await tx.journalEntry.findMany({
         where: {
           tenantId,
+          isDeleted: false,
           entryDate: {
             gte: fromDate,
             lte: toDate,
@@ -85,12 +86,12 @@ export async function GET(request: NextRequest) {
     { isolationLevel: "RepeatableRead" }
   );
 
-  const aggregateMap: Record<string, {
-    accountCode: string;
-    accountName: string;
-    tallyGroup: string;
-    debit: number;
-    credit: number;
+  const aggregateMap: Record<string, { 
+    accountCode: string; 
+    accountName: string; 
+    tallyGroup: string; 
+    debit: number; 
+    credit: number; 
   }> = {};
 
   for (const line of lines) {
@@ -176,4 +177,14 @@ export async function GET(request: NextRequest) {
       "Content-Disposition": `attachment; filename="${filename}"`,
     },
   });
+  } catch (error) {
+    logError("export.trial-balance.error", {
+      requestId: getRequestId(request),
+      error,
+    });
+    return NextResponse.json(
+      { error: "Failed to export trial balance" },
+      { status: 500 }
+    );
+  }
 }

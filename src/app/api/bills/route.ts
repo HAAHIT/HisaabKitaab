@@ -12,6 +12,7 @@ import {
   buildBillSnapshotFromParty,
   getPostedBillBalanceDelta,
   getPaymentBalanceDelta,
+  asSupportedPartyType,
 } from "@/lib/accounting";
 import {
   journalForPaymentMade,
@@ -19,17 +20,12 @@ import {
   journalForSalesBill,
 } from "@/lib/journal";
 import { NextRequest, NextResponse } from "next/server";
-import { resolveReadTenant, resolveWriteSession } from "@/lib/api-tenant";
+import { resolveSession } from "@/lib/api-tenant";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { logError, getRequestId } from "@/lib/observability";
-import crypto from "crypto";
+import { generateLockKey } from "@/lib/locks";
+import { getIstCalendar, istMidnightUtc } from "@/lib/journal-reporting";
 import { z } from "zod";
-
-function generateLockKey(tenantId: string): bigint {
-  const hash = crypto.createHash("sha256").update(tenantId).digest("hex");
-  // Use the first 15 hex characters (60 bits) to fit easily into PostgreSQL's 64-bit bigint lock space
-  return BigInt("0x" + hash.substring(0, 15));
-}
 
 type SupportedPaymentMode = "CASH" | "UPI" | "BANK_TRANSFER" | "CHEQUE";
 const VALID_PAYMENT_MODES = new Set([
@@ -49,12 +45,11 @@ function normalizePaymentMode(mode: unknown): SupportedPaymentMode | null {
   return VALID_PAYMENT_MODES.has(mode) ? (mode as SupportedPaymentMode) : null;
 }
 
-function isValidBillRequest(finalTemplateId: unknown, partyId: unknown, rows: unknown, hasPaymentMode: boolean): boolean {
+function isValidBillRequest(finalTemplateId: unknown, partyId: unknown, rows: unknown): boolean {
   if (!finalTemplateId || typeof finalTemplateId !== "string" || !finalTemplateId.trim()) {
     return false;
   }
-  // partyId is optional for cash/bank sales
-  if (!hasPaymentMode && (!partyId || typeof partyId !== "string" || !partyId.trim())) {
+  if (!partyId || typeof partyId !== "string" || !partyId.trim()) {
     return false;
   }
   if (!Array.isArray(rows) || rows.length === 0) {
@@ -84,7 +79,7 @@ const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
 
 const CreateBillSchema = z.object({
   templateId: z.string().min(1),
-  partyId: z.string().min(1).nullish(),
+  partyId: z.string().min(1),
   customerName: z.string().optional(),
   customerPhone: z.string().nullish(),
   customerAddress: z.string().nullish(),
@@ -118,14 +113,12 @@ const CreateBillSchema = z.object({
   subtotal: z.number().nonnegative().default(0),
   taxAmount: z.number().nonnegative().default(0),
   grandTotal: z.number().nonnegative().default(0),
-  roundOff: z.number().min(-0.99).max(0.99).default(0), // Round-off adjustment (±₹0.99 max)
+  roundOff: z.number().finite().optional().default(0),
+  billDate: z.string().optional(),
   status: z.string().optional(),
   isInterState: z.boolean().optional(),
   paymentMode: z.string().optional(),
-  accountId: z.string().optional(),
   hsnCode: z.string().nullish(),
-  shippingAddress: z.string().nullish(), // Ship To address
-  date: z.string().optional(), // [ADDED] Allow custom issue dates
 }).superRefine((data, ctx) => {
   // [P0] FINAL bills must always declare place of supply for GSTR-1 compliance.
   // Not limited to B2B — even B2C inter-state supplies require placeOfSupply.
@@ -142,18 +135,14 @@ const CreateBillSchema = z.object({
   // Without HSN, GSTR-1 Table 12 (HSN-wise summary) will be incomplete.
   if (
     data.status === "FINAL" &&
-    (data.taxAmount ?? 0) > 0 &&
+    (data.taxPercent ?? 0) > 0 &&
     Array.isArray(data.rows) &&
     !data.rows.some(
-      (row) => {
-        if (!row || typeof row !== "object") return false;
-        // Check if ANY value contains an HSN code (either col_hsn, _hsnCode, or any key containing 'hsn')
-        return Object.entries(row).some(([key, val]) =>
-          (key === "col_hsn" || key === "_hsnCode" || key.toLowerCase().includes("hsn")) &&
-          typeof val === "string" &&
-          val.trim() !== ""
-        );
-      }
+      (row) =>
+        row &&
+        typeof row === "object" &&
+        typeof (row as Record<string, unknown>)["_hsnCode"] === "string" &&
+        ((row as Record<string, unknown>)["_hsnCode"] as string).trim() !== ""
     ) &&
     !(typeof data.hsnCode === "string" && data.hsnCode.trim() !== "")
   ) {
@@ -195,11 +184,13 @@ async function loadBillingSettings(tenantId: string) {
 
 // GET /api/bills — List bills with filtering
 export async function GET(request: NextRequest) {
-  const tenantResolution = await resolveReadTenant(request);
-  if (!tenantResolution.ok) {
-    return tenantResolution.response;
+  const sessionResolution = await resolveSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, role } = sessionResolution.session;
+
+  if (role === "CUSTOMER") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const tenantId = tenantResolution.tenantId;
 
   try {
     const { searchParams } = new URL(request.url);
@@ -253,7 +244,6 @@ export async function GET(request: NextRequest) {
       where.partyId = partyId;
     }
 
-    // [FIX #19] Validate date params before passing to Prisma
     if (from || to) {
       where.createdAt = {};
       if (from) {
@@ -266,10 +256,16 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const [bills, total] = await Promise.all([
+    // Current-month summary boundaries computed in IST so the "this month"
+    // total doesn't shift by 5h30m on a UTC host.
+    const nowIst = getIstCalendar(new Date());
+    const summaryMonthStart = istMidnightUtc(nowIst.year, nowIst.month, 1);
+    const summaryMonthEnd = istMidnightUtc(nowIst.year, nowIst.month + 1, 1);
+
+    const [bills, total, kulBilledAgg, milaAgg] = await Promise.all([
       prisma.bill.findMany({
         where,
-        orderBy: { createdAt: "desc" },
+        orderBy: { date: "desc" },
         skip: (page - 1) * limit,
         take: limit,
         select: {
@@ -287,16 +283,42 @@ export async function GET(request: NextRequest) {
           grandTotal: true,
           status: true,
           createdAt: true,
+          date: true,
         },
       }),
       prisma.bill.count({ where }),
+      // Total billed (FINAL only, current month) — scoped by partyType so /purchases gets vendor totals
+      prisma.bill.aggregate({
+        where: {
+          tenantId, isDeleted: false, status: "FINAL",
+          createdAt: { gte: summaryMonthStart, lt: summaryMonthEnd },
+          ...(partyType === "VENDOR" ? { party: { type: "VENDOR" } } : {}),
+          ...(partyType === "CUSTOMER" ? { OR: [{ party: { type: "CUSTOMER" } }, { partyId: null }] } : {}),
+        },
+        _sum: { grandTotal: true },
+      }),
+      // Total collected / paid out — INCOMING for sales, OUTGOING for purchases
+      prisma.payment.aggregate({
+        where: {
+          tenantId, isDeleted: false,
+          direction: partyType === "VENDOR" ? "OUTGOING" : "INCOMING",
+          status: "COMPLETED",
+          date: { gte: summaryMonthStart, lt: summaryMonthEnd },
+        },
+        _sum: { amount: true },
+      }),
     ]);
+
+    const kulBilled = kulBilledAgg._sum.grandTotal?.toNumber() ?? 0;
+    const mila = milaAgg._sum.amount?.toNumber() ?? 0;
+    const baaki = Math.max(0, kulBilled - mila);
 
     return NextResponse.json({
       bills,
       total,
       page,
       totalPages: Math.max(1, Math.ceil(total / limit)),
+      summary: { kulBilled, mila, baaki },
     });
   } catch (error) {
     logError("bills.list.error", { requestId: getRequestId(request), error });
@@ -312,11 +334,8 @@ export async function POST(request: NextRequest) {
   const rateLimitResponse = await checkRateLimit(request, "bills.create", 30);
   if (rateLimitResponse) return rateLimitResponse;
 
-  // [FIX #5] Use JWT-verified session instead of trusting proxy headers
-  const sessionResolution = await resolveWriteSession(request);
-  if (!sessionResolution.ok) {
-    return sessionResolution.response;
-  }
+  const sessionResolution = await resolveSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
   const { tenantId, userId, role } = sessionResolution.session;
 
   if (role === "CUSTOMER") {
@@ -366,11 +385,8 @@ export async function POST(request: NextRequest) {
       subtotal,
       taxAmount,
       grandTotal,
-      roundOff,
       status,
       hsnCode,
-      shippingAddress,
-      date,
     } = body;
 
     let finalTemplateId = templateId;
@@ -410,7 +426,7 @@ export async function POST(request: NextRequest) {
       finalTemplateId = quickTemplate.id;
     }
 
-    if (!isValidBillRequest(finalTemplateId, partyId, rows, !!body.paymentMode)) {
+    if (!isValidBillRequest(finalTemplateId, partyId, rows)) {
       return NextResponse.json(
         { error: "Template, party, and at least one row are required" },
         { status: 400 }
@@ -430,26 +446,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Template not found" }, { status: 404 });
     }
 
-    const party = partyId
-      ? await prisma.party.findFirst({
-          where: {
-            id: partyId,
-            tenantId,
-            isDeleted: false,
-            isActive: true,
-          },
-          select: {
-            id: true,
-            name: true,
-            type: true,
-            phone: true,
-            address: true,
-            gstin: true,
-          },
-        })
-      : null;
+    const party = await prisma.party.findFirst({
+      where: {
+        id: partyId,
+        tenantId,
+        isDeleted: false,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        phone: true,
+        address: true,
+        gstin: true,
+      },
+    });
 
-    if (partyId && !party) {
+    if (!party) {
       return NextResponse.json({ error: "Party not found" }, { status: 404 });
     }
 
@@ -461,7 +475,7 @@ export async function POST(request: NextRequest) {
       where: { id: tenantId },
       select: { gstin: true },
     });
-
+    
     const resolvedGrandTotal =
       typeof grandTotal === "number" && Number.isFinite(grandTotal)
         ? grandTotal
@@ -483,48 +497,21 @@ export async function POST(request: NextRequest) {
       }
     }
     // [G-C1] Auto-derive from GSTIN state codes; manual override is fallback only
-    const effectiveGstin = gstin || party?.gstin;
+    const effectiveGstin = gstin || party.gstin;
     const isInterState = deriveIsInterState(effectiveGstin, tenant?.gstin, body.isInterState);
     const normalizedPaymentMode = normalizePaymentMode(body.paymentMode);
-
-    // Use the explicitly provided bill date if present, otherwise default to now
-    // [FIX #11] Limit backdating to 180 days to prevent altering locked GST periods
-    let billDateObj = new Date();
-    if (typeof date === "string" && date.trim() !== "") {
-      const parsedDate = new Date(date);
-      if (!Number.isNaN(parsedDate.getTime())) {
-        const maxBackdateDays = 180;
-        const minAllowedDate = new Date();
-        minAllowedDate.setDate(minAllowedDate.getDate() - maxBackdateDays);
-        if (parsedDate < minAllowedDate) {
-          return NextResponse.json(
-            { error: `Bill date cannot be more than ${maxBackdateDays} days in the past` },
-            { status: 400 }
-          );
-        }
-        // [FIX #8] Block future-dated bills — they'd land in wrong GST period
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        tomorrow.setHours(0, 0, 0, 0);
-        if (parsedDate >= tomorrow) {
-          return NextResponse.json(
-            { error: "Bill date cannot be in the future" },
-            { status: 400 }
-          );
-        }
-        billDateObj = parsedDate;
-      }
-    }
-
-    // Still use the system's current time for yearMonth formatting and period locking (for sequence generation)
-    // to strictly prevent sequence clashes, but `date` dictates the financial timestamp.
-    const now = new Date();
-    const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-
-    const nullParty = { name: customerName || "Cash", phone: null, address: null, gstin: null };
-    const snapshot = buildBillSnapshotFromParty(party ?? nullParty, {
+    const billDate = body.billDate ? new Date(body.billDate) : new Date();
+    // Bill numbers (BILL-YYYYMM-NNN) must reflect the IST calendar month, not
+    // the server's local month. On a UTC host a bill filed at 00:30 IST on
+    // Apr 1 would otherwise be stamped 202503 and re-use the prior month's
+    // sequence — breaking GSTR-1 reconciliation and producing duplicate
+    // numbers across the IST midnight boundary.
+    const billIst = getIstCalendar(billDate);
+    const yearMonth = `${billIst.year}${String(billIst.month + 1).padStart(2, "0")}`;
+    const monthStart = istMidnightUtc(billIst.year, billIst.month, 1);
+    const nextMonthStart = istMidnightUtc(billIst.year, billIst.month + 1, 1);
+    
+    const snapshot = buildBillSnapshotFromParty(party, {
       customerName,
       customerPhone,
       customerAddress,
@@ -557,8 +544,7 @@ export async function POST(request: NextRequest) {
       await tx.$executeRaw`SET LOCAL lock_timeout = '5s'`;
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
 
-      // [FIX #1] Use max bill sequence number instead of count to prevent gaps
-      // from cancelled/deleted bills causing duplicate numbers on next creation.
+      // Use max sequence number (not count) so soft-deleted bills don't cause duplicates
       const lastBill = await tx.bill.findFirst({
         where: {
           tenantId,
@@ -576,12 +562,12 @@ export async function POST(request: NextRequest) {
       }
       const billNumber = `${prefix}-${yearMonth}-${String(nextSeq).padStart(3, "0")}`;
 
-      const createdBill = await (tx as any).bill.create({
+      const createdBill = await tx.bill.create({
         data: {
           tenantId,
           billNumber,
           templateId: template.id,
-          partyId: party?.id ?? null,
+          partyId: party.id,
           customerName: snapshot.customerName,
           customerPhone: snapshot.customerPhone,
           customerAddress: snapshot.customerAddress,
@@ -593,13 +579,12 @@ export async function POST(request: NextRequest) {
           taxPercent: taxPercent ?? billingSettings.defaultTaxPercent,
           taxAmount: taxAmount || 0,
           grandTotal: resolvedGrandTotal,
-          roundOff: roundOff || 0,
+          roundOff: body.roundOff ?? 0,
+          date: billDate,
           status: billStatus,
           isInterState,
           placeOfSupply: body.placeOfSupply ?? null,  // [B1] GSTR-1 mandatory field
           hsnCode: hsnCode ?? null, // Fallback HSN Code
-          shippingAddress: shippingAddress ?? null,
-          date: billDateObj, // Store custom bill date 
           createdBy: userId!,
           isDeleted: false,
         },
@@ -618,50 +603,44 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      if (party) {
-        const balanceChange = getPostedBillBalanceDelta(
-          party.type,
-          billStatus,
-          resolvedGrandTotal
-        );
+      const balanceChange = getPostedBillBalanceDelta(
+        asSupportedPartyType(party.type),
+        billStatus,
+        resolvedGrandTotal
+      );
 
-        if (balanceChange !== 0) {
-          await tx.party.update({
-            where: { id: party.id },
-            data: {
-              currentBalance: { increment: balanceChange },
-            },
-          });
-        }
+      if (balanceChange !== 0) {
+        await tx.party.update({
+          where: { id: party.id },
+          data: {
+            currentBalance: { increment: balanceChange },
+          },
+        });
       }
 
       if (billStatus === "FINAL") {
         await journalForSalesBill(tx, tenantId, {
           id: createdBill.id,
           billNumber,
-          partyId: party?.id ?? null,
-          partyName: party?.name ?? snapshot.customerName,
+          partyId: party.id,
+          partyName: party.name,
           subtotal: createdBill.subtotal.toNumber(),
           taxAmount: createdBill.taxAmount.toNumber(),
           grandTotal: createdBill.grandTotal.toNumber(),
-          roundOff: roundOff || 0,
           createdBy: userId!,
           entryDate: createdBill.date,
           isInterState,
         });
       }
 
-      if (normalizedPaymentMode) {
-        const direction = party?.type === "VENDOR" ? "OUTGOING" : "INCOMING";
-
-        const createdPayment = await (tx as any).payment.create({
+      if (isQuickBill && normalizedPaymentMode) {
+        const createdPayment = await tx.payment.create({
           data: {
             tenantId,
-            partyId: party?.id ?? null,
-            accountId: body.accountId || null,
-            direction,
+            partyId: party.id,
+            direction: party.type === "CUSTOMER" ? "INCOMING" : "OUTGOING",
             amount: resolvedGrandTotal,
-            date: billDateObj,
+            date: billDate,
             mode: normalizedPaymentMode,
             status: "COMPLETED",
             linkedBillId: createdBill.id,
@@ -669,32 +648,21 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        if (party) {
-          const paymentDelta = getPaymentBalanceDelta(
-            party.type as "CUSTOMER" | "VENDOR",
-            direction,
-            resolvedGrandTotal
-          );
-          await tx.party.update({
-            where: { id: party.id },
-            data: { currentBalance: { increment: paymentDelta } },
-          });
-        }
+        const paymentDelta = getPaymentBalanceDelta(
+          party.type as "CUSTOMER" | "VENDOR",
+          party.type === "CUSTOMER" ? "INCOMING" : "OUTGOING",
+          resolvedGrandTotal
+        );
+        await tx.party.update({
+          where: { id: party.id },
+          data: { currentBalance: { increment: paymentDelta } },
+        });
 
-        // Update bank account balance
-        if (body.accountId) {
-          const bankBalanceChange = direction === "INCOMING" ? resolvedGrandTotal : -resolvedGrandTotal;
-          await (tx as any).bankAccount.update({
-            where: { id: body.accountId },
-            data: { currentBalance: { increment: bankBalanceChange } },
-          });
-        }
-
-        if (!party || party.type === "CUSTOMER") {
+        if (party.type === "CUSTOMER") {
           await journalForPaymentReceived(tx, tenantId, {
             id: createdPayment.id,
-            partyId: party?.id ?? null,
-            partyName: party?.name ?? snapshot.customerName,
+            partyId: party.id,
+            partyName: party.name,
             amount: createdPayment.amount.toNumber(),
             mode: createdPayment.mode,
             date: createdPayment.date,

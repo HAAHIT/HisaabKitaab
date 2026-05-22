@@ -52,9 +52,44 @@ export function parseIndianDateRange(from: string, to: string) {
   return { fromDate, toDate };
 }
 
+/**
+ * Returns the calendar year/month/day of `referenceDate` as seen in IST.
+ * Use this anywhere server-local `getMonth()`/`getFullYear()` would otherwise
+ * be wrong by up to 5h30m on a UTC host — financial year boundaries, monthly
+ * report ranges, bill-number prefixes, etc.
+ *
+ * `month` is 0-indexed to match `Date.getMonth()`.
+ */
+export function getIstCalendar(
+  referenceDate: Date
+): { year: number; month: number; day: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: INDIA_TIMEZONE,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  }).formatToParts(referenceDate);
+  const year = Number(parts.find((p) => p.type === "year")?.value);
+  const month = Number(parts.find((p) => p.type === "month")?.value) - 1;
+  const day = Number(parts.find((p) => p.type === "day")?.value);
+  return { year, month, day };
+}
+
+function getIstYearMonth(referenceDate: Date): { year: number; month: number } {
+  const { year, month } = getIstCalendar(referenceDate);
+  return { year, month };
+}
+
+/**
+ * Returns a UTC Date instant equal to IST midnight on the given calendar day.
+ * IST = UTC+05:30, so IST midnight = the previous day's 18:30 UTC.
+ */
+export function istMidnightUtc(year: number, month: number, day: number): Date {
+  return new Date(Date.UTC(year, month, day, -5, -30, 0, 0));
+}
+
 export function getCurrentFinancialYearRange(referenceDate = new Date()) {
-  const year = referenceDate.getFullYear();
-  const month = referenceDate.getMonth();
+  const { year, month } = getIstYearMonth(referenceDate);
   const startYear = month >= 3 ? year : year - 1;
   const endYear = startYear + 1;
 
@@ -66,8 +101,7 @@ export function getCurrentFinancialYearRange(referenceDate = new Date()) {
 }
 
 export function getCurrentQuarterRange(referenceDate = new Date()) {
-  const year = referenceDate.getFullYear();
-  const month = referenceDate.getMonth();
+  const { year, month } = getIstYearMonth(referenceDate);
 
   if (month >= 3 && month <= 5) {
     return { label: "Q1", from: `${year}-04-01`, to: `${year}-06-30` };

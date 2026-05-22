@@ -1,6 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import { comparePassword, createSession } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
+
+// Pre-computed bcrypt hash used to equalise timing when the requested
+// account does not exist — without it, "unknown user" returns in ~10ms while
+// "wrong password" runs the bcrypt comparison and returns in ~150-200ms,
+// letting an attacker enumerate valid credentials by latency. The plaintext
+// of this hash is unknown to anyone, so it can never match a real password.
+const TIMING_EQUALISATION_HASH =
+  "$2a$12$0000000000000000000000000000000000000000000000000000u";
 import {
   assertLoginAllowed,
   clearLoginFailures,
@@ -154,6 +162,9 @@ export async function POST(request: NextRequest) {
     });
 
     if (!user) {
+      // Run a throwaway bcrypt compare so the response latency matches the
+      // "wrong password" path and an attacker cannot enumerate valid accounts.
+      await comparePassword(password, TIMING_EQUALISATION_HASH);
       await recordLoginFailure(prisma, {
         credential,
         ip: clientIp,

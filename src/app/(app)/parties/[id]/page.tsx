@@ -1,4 +1,4 @@
-import { buildPartyLedger } from "@/lib/accounting";
+import { buildPartyLedger, asSupportedPartyType } from "@/lib/accounting";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import PartyProfileClient from "./PartyProfileClient";
@@ -13,9 +13,7 @@ export default async function PartyProfilePage({
 }) {
   const { id } = await params;
   const session = await resolveServerSession();
-  if (!session) {
-    return notFound();
-  }
+  if (!session) return notFound();
   const { tenantId, role } = session;
 
   const party = await prisma.party.findFirst({
@@ -29,7 +27,7 @@ export default async function PartyProfilePage({
     return notFound();
   }
 
-  const [payments, bills, measurements, journalLines] = await Promise.all([
+  const [payments, bills, allBills, measurements, journalLines] = await Promise.all([
     prisma.payment.findMany({
       where: {
         tenantId,
@@ -47,6 +45,15 @@ export default async function PartyProfilePage({
         status: "FINAL",
       },
       orderBy: { createdAt: "asc" },
+    }),
+    prisma.bill.findMany({
+      where: {
+        tenantId,
+        partyId: id,
+        isDeleted: false,
+      },
+      select: { id: true, billNumber: true, status: true, grandTotal: true, createdAt: true },
+      orderBy: { createdAt: "desc" },
     }),
     prisma.measurementUpload.findMany({
       where: {
@@ -82,8 +89,8 @@ export default async function PartyProfilePage({
     credit: Number(line.credit),
   }));
 
-  const { ledger, calculatedCurrent } = buildPartyLedger({
-    partyType: party.type,
+  const { calculatedCurrent } = buildPartyLedger({
+    partyType: asSupportedPartyType(party.type),
     openingBalance: party.openingBalance.toNumber(),
     createdAt: party.createdAt,
     bills: bills.map((b: { id: string; billNumber: string; grandTotal: any; createdAt: Date }) => ({
@@ -115,10 +122,23 @@ export default async function PartyProfilePage({
         openingBalance: party.openingBalance.toNumber(),
         createdAt: party.createdAt,
       }}
-      ledger={ledger}
       measurements={measurements}
       calculatedCurrent={calculatedCurrent}
       role={role}
+      billsList={allBills.map((b) => ({
+        id: b.id,
+        billNumber: b.billNumber,
+        status: b.status,
+        grandTotal: Number(b.grandTotal),
+        createdAt: b.createdAt,
+      }))}
+      paymentsList={payments.slice().reverse().slice(0, 10).map((p) => ({
+        id: p.id,
+        direction: p.direction,
+        mode: p.mode,
+        date: p.date,
+        amount: Number(p.amount),
+      }))}
     />
   );
 }

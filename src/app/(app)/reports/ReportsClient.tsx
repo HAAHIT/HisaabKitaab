@@ -1,16 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState, startTransition } from "react";
-import {
-  Button,
-  Card,
-  CardBody,
-  Input,
-  Select,
-  SelectItem,
-  Skeleton,
-} from "@heroui/react";
+import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
+import { HKSkeleton } from "@/components/ui/HKSkeleton";
+import { HKInput } from "@/components/ui/HKInput";
+import { HKButton } from "@/components/ui/HKButton";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { type TranslationKey } from "@/lib/i18n/translations";
 import {
   getCurrentFinancialYearRange,
   getCurrentQuarterRange,
@@ -22,6 +18,52 @@ interface ReportsClientProps {
   totalEntries: number;
   unbalancedCount: number;
   parties: { id: string; name: string; type: string }[];
+}
+
+interface GstMonthRow {
+  month: string;
+  b2bCount: number;
+  b2cCount: number;
+  taxableValue: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  grandTotal: number;
+}
+
+interface GstHsnRow {
+  hsnCode: string;
+  taxableValue: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  grandTotal: number;
+  invoiceCount: number;
+}
+
+interface GstB2bRow {
+  partyName: string;
+  gstin: string;
+  invoiceCount: number;
+  taxableValue: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  grandTotal: number;
+}
+
+interface GstReport {
+  totalBills: number;
+  totals: {
+    taxableValue: number;
+    cgst: number;
+    sgst: number;
+    igst: number;
+    grandTotal: number;
+  };
+  monthWise: GstMonthRow[];
+  hsnSummary: GstHsnRow[];
+  b2bParties: GstB2bRow[];
 }
 
 interface TrialBalancePreview {
@@ -47,6 +89,12 @@ function buildDownloadUrl(path: string, params: Record<string, string>) {
 
 function downloadFile(url: string) {
   window.open(url, "_blank", "noopener,noreferrer");
+}
+
+function inr(n: number): string {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency", currency: "INR", minimumFractionDigits: 2, maximumFractionDigits: 2,
+  }).format(n);
 }
 
 type TallyImportResult = {
@@ -76,37 +124,15 @@ export default function ReportsClient({
   const [importResult, setImportResult] = useState<TallyImportResult | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [importJobId, setImportJobId] = useState<string | null>(null);
-  const [jobProgress, setJobProgress] = useState({ processed: 0, total: 0, status: "", stage: "queued" });
+  const [jobProgress, setJobProgress] = useState({ processed: 0, total: 0, status: "" });
   const [preview, setPreview] = useState<TrialBalancePreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [gstReport, setGstReport] = useState<GstReport | null>(null);
+  const [gstLoading, setGstLoading] = useState(false);
+  const [gstError, setGstError] = useState<string | null>(null);
+  const [gstTab, setGstTab] = useState<"month" | "hsn" | "b2b">("month");
 
   const exportBlocked = unbalancedCount > 0;
-
-  // Resume progress bar if an import job is already running (e.g. after page refresh)
-  useEffect(() => {
-    let cancelled = false;
-    async function checkActive() {
-      try {
-        const res = await fetch("/api/import/active");
-        if (!res.ok || cancelled) return;
-        const data = await res.json();
-        if (data.active && data.jobId) {
-          setImportJobId(data.jobId);
-          setImporting(true);
-          setJobProgress({
-            processed: data.processed ?? 0,
-            total: data.totalItems ?? 0,
-            status: data.status ?? "PROCESSING",
-            stage: data.stage ?? "queued",
-          });
-        }
-      } catch {
-        // Ignore — non-critical
-      }
-    }
-    checkActive();
-    return () => { cancelled = true; };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const presetOptions = useMemo(() => {
     const fy = getCurrentFinancialYearRange();
@@ -195,6 +221,38 @@ export default function ReportsClient({
   }, [exportBlocked, from, t, to]);
 
   useEffect(() => {
+    if (!from || !to) return;
+    const controller = new AbortController();
+    setGstLoading(true);
+    setGstError(null);
+
+    void fetch(
+      buildDownloadUrl("/api/reports/gst", { from, to }),
+      { signal: controller.signal }
+    )
+      .then(async (res) => {
+        if (!res.ok) {
+          const p = await res.json().catch(() => null);
+          throw new Error(p?.error || "Failed to load GST report");
+        }
+        return res.json() as Promise<GstReport>;
+      })
+      .then((data) => {
+        startTransition(() => {
+          setGstReport(data);
+          setGstLoading(false);
+        });
+      })
+      .catch((err) => {
+        if (controller.signal.aborted) return;
+        setGstError(err instanceof Error ? err.message : "Error loading GST data");
+        setGstLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [from, to]);
+
+  useEffect(() => {
     if (!importJobId) return;
 
     const interval = setInterval(async () => {
@@ -202,13 +260,11 @@ export default function ReportsClient({
         const res = await fetch(`/api/import/status/${importJobId}`);
         if (!res.ok) throw new Error("Failed to fetch job status");
         const data = await res.json();
-        const processed = data.processed ?? 0;
 
         setJobProgress({
-          processed,
-          total: data.totalItems ?? 0,
+          processed: data.processed, // Total successfully or skipped processed
+          total: data.totalItems,
           status: data.status,
-          stage: data.stage ?? "queued",
         });
 
         if (data.status === "COMPLETED" || data.status === "FAILED") {
@@ -218,21 +274,21 @@ export default function ReportsClient({
 
           if (data.status === "COMPLETED") {
             setImportResult({
-              partiesCreated: data.partiesCreated ?? 0,
-              imported: Math.max(0, (data.processed ?? 0) - (data.failed ?? 0)),
+              partiesCreated: 0, // Detailed metrics omitted in async architecture
+              imported: data.processed, 
               skipped: 0,
-              failed: data.failed ?? 0,
-              parseErrors: data.parseErrors ?? [],
-              importErrors: data.importErrors ?? [],
+              failed: data.failed,
+              parseErrors: [],
+              importErrors: [],
             });
           } else {
-            setImportError(data.error || "Import failed");
+            setImportError(data.error || "Job failed in background");
           }
         }
       } catch {
-        // Silently retry on next interval
+        // polling failure is transient; next interval will retry
       }
-    }, 1500);
+    }, 2000);
 
     return () => clearInterval(interval);
   }, [importJobId]);
@@ -248,26 +304,17 @@ export default function ReportsClient({
       const res = await fetch("/api/import/tally-xml", { method: "POST", body });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Import failed");
-
-      setImportJobId(data.jobId);
-      setJobProgress({ processed: 0, total: data.totalDetected || 0, status: "PENDING", stage: "queued" });
+      
+      if (data.jobId) {
+        setImportJobId(data.jobId);
+        setJobProgress({ processed: 0, total: data.totalDetected || 0, status: "PENDING" });
+      } else {
+        setImportResult(data as TallyImportResult);
+        setImporting(false);
+      }
     } catch (err) {
       setImportError(err instanceof Error ? err.message : "Import failed");
       setImporting(false);
-    }
-  }
-
-  async function handleCancelImport() {
-    if (!importJobId) return;
-    try {
-      const res = await fetch(`/api/import/cancel/${importJobId}`, { method: "POST" });
-      if (res.ok) {
-        setImportJobId(null);
-        setImporting(false);
-        setImportError("Import cancelled");
-      }
-    } catch {
-      // Ignore
     }
   }
 
@@ -297,35 +344,29 @@ export default function ReportsClient({
         <p className="mt-1 text-sm text-default-500">{t("reports.subtitle")}</p>
       </div>
 
-      <Card shadow="sm">
-        <CardBody className="space-y-4 p-6">
+      <div className="rounded-2xl border border-[var(--sb-border)] bg-[var(--sb-card)] shadow-sm">
+        <div className="space-y-4 p-6">
           <div>
             <h2 className="text-lg font-semibold">{t("reports.dateRange")}</h2>
             <p className="text-sm text-default-500">{t("reports.financialYearHelp")}</p>
           </div>
 
           <div className="grid gap-4 lg:grid-cols-[260px,1fr,1fr]">
-            <Select
+            <HKSelect
               label={t("reports.financialYear")}
-              selectedKeys={[preset]}
-              onSelectionChange={(keys) => {
-                const nextPreset = Array.from(keys)[0];
-                if (
-                  nextPreset === "currentFy" ||
-                  nextPreset === "currentQuarter" ||
-                  nextPreset === "custom"
-                ) {
-                  applyPreset(nextPreset);
+              value={preset}
+              onValueChange={(v) => {
+                if (v === "currentFy" || v === "currentQuarter" || v === "custom") {
+                  applyPreset(v);
                 }
               }}
-              variant="bordered"
             >
               {presetOptions.map((option) => (
-                <SelectItem key={option.key}>{option.label}</SelectItem>
+                <HKSelectItem key={option.key} value={option.key}>{option.label}</HKSelectItem>
               ))}
-            </Select>
+            </HKSelect>
 
-            <Input
+            <HKInput
               label={t("reports.from")}
               type="date"
               value={from}
@@ -335,10 +376,9 @@ export default function ReportsClient({
                 setPreviewError(null);
                 setFrom(value);
               }}
-              variant="bordered"
             />
 
-            <Input
+            <HKInput
               label={t("reports.to")}
               type="date"
               value={to}
@@ -348,282 +388,294 @@ export default function ReportsClient({
                 setPreviewError(null);
                 setTo(value);
               }}
-              variant="bordered"
             />
           </div>
-        </CardBody>
-      </Card>
+        </div>
+      </div>
+
+      {/* ── GST Summary Report ──────────────────────────────────────────────── */}
+      <div className="rounded-2xl border border-[var(--sb-border)] bg-[var(--sb-card)] shadow-sm">
+        <div className="p-6 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">{t("reports.gst.title" as TranslationKey)}</h2>
+              <p className="text-sm text-default-500 mt-0.5">
+                {t("reports.gst.subtitle" as TranslationKey)}
+              </p>
+            </div>
+            {gstReport && (
+              <div className="flex flex-wrap gap-4 text-sm">
+                <span className="text-default-500">
+                  <span className="font-bold text-foreground">{gstReport.totalBills}</span> {t("reports.gst.invoices" as TranslationKey)}
+                </span>
+                <span className="text-default-500">
+                  {t("reports.gst.taxable" as TranslationKey)}: <span className="font-bold text-foreground">{inr(gstReport.totals.taxableValue)}</span>
+                </span>
+                <span className="text-default-500">
+                  CGST: <span className="font-semibold">{inr(gstReport.totals.cgst)}</span>
+                </span>
+                <span className="text-default-500">
+                  SGST: <span className="font-semibold">{inr(gstReport.totals.sgst)}</span>
+                </span>
+                {gstReport.totals.igst > 0 && (
+                  <span className="text-default-500">
+                    IGST: <span className="font-semibold">{inr(gstReport.totals.igst)}</span>
+                  </span>
+                )}
+                <span className="text-default-500">
+                  {t("reports.gst.grandTotal" as TranslationKey)}: <span className="font-bold text-foreground">{inr(gstReport.totals.grandTotal)}</span>
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Tab switcher */}
+          <div className="flex gap-2 border-b border-divider pb-1">
+            {(["month", "hsn", "b2b"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setGstTab(tab)}
+                className={`px-3 py-1.5 text-sm font-semibold rounded-t transition-colors ${
+                  gstTab === tab
+                    ? "border-b-2 border-primary text-primary bg-primary/5"
+                    : "text-default-500 hover:text-foreground"
+                }`}
+              >
+                {tab === "month"
+                  ? t("reports.gst.tab.month" as TranslationKey)
+                  : tab === "hsn"
+                  ? t("reports.gst.tab.hsn" as TranslationKey)
+                  : t("reports.gst.tab.b2b" as TranslationKey)}
+              </button>
+            ))}
+          </div>
+
+          {gstLoading ? (
+            <div className="grid gap-2">
+              {[1, 2, 3].map((i) => <HKSkeleton key={i} className="h-10 rounded-xl" />)}
+            </div>
+          ) : gstError ? (
+            <p className="text-sm text-danger">{gstError}</p>
+          ) : !gstReport || gstReport.totalBills === 0 ? (
+            <p className="text-sm text-default-500 py-4 text-center">
+              {t("reports.gst.noBills" as TranslationKey)}
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              {gstTab === "month" && (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-divider text-xs text-default-500 uppercase tracking-wide">
+                      <th className="py-2 pr-4 text-left font-semibold">{t("reports.gst.header.month" as TranslationKey)}</th>
+                      <th className="py-2 pr-4 text-right font-semibold">{t("reports.gst.header.b2b" as TranslationKey)}</th>
+                      <th className="py-2 pr-4 text-right font-semibold">{t("reports.gst.header.b2c" as TranslationKey)}</th>
+                      <th className="py-2 pr-4 text-right font-semibold">{t("reports.gst.header.taxableValue" as TranslationKey)}</th>
+                      <th className="py-2 pr-4 text-right font-semibold">CGST</th>
+                      <th className="py-2 pr-4 text-right font-semibold">SGST</th>
+                      <th className="py-2 pr-4 text-right font-semibold">IGST</th>
+                      <th className="py-2 text-right font-semibold">{t("reports.gst.grandTotal" as TranslationKey)}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {gstReport.monthWise.map((row) => (
+                      <tr key={row.month} className="border-b border-divider/40 hover:bg-default-50">
+                        <td className="py-2.5 pr-4 font-medium">{row.month}</td>
+                        <td className="py-2.5 pr-4 text-right text-default-500">{row.b2bCount}</td>
+                        <td className="py-2.5 pr-4 text-right text-default-500">{row.b2cCount}</td>
+                        <td className="py-2.5 pr-4 text-right">{inr(row.taxableValue)}</td>
+                        <td className="py-2.5 pr-4 text-right text-default-600">{inr(row.cgst)}</td>
+                        <td className="py-2.5 pr-4 text-right text-default-600">{inr(row.sgst)}</td>
+                        <td className="py-2.5 pr-4 text-right text-default-600">{row.igst > 0 ? inr(row.igst) : "—"}</td>
+                        <td className="py-2.5 text-right font-bold">{inr(row.grandTotal)}</td>
+                      </tr>
+                    ))}
+                    <tr className="border-t-2 border-divider bg-default-50 font-bold">
+                      <td className="py-2.5 pr-4">{t("reports.gst.header.total" as TranslationKey)}</td>
+                      <td className="py-2.5 pr-4 text-right">{gstReport.monthWise.reduce((s, r) => s + r.b2bCount, 0)}</td>
+                      <td className="py-2.5 pr-4 text-right">{gstReport.monthWise.reduce((s, r) => s + r.b2cCount, 0)}</td>
+                      <td className="py-2.5 pr-4 text-right">{inr(gstReport.totals.taxableValue)}</td>
+                      <td className="py-2.5 pr-4 text-right">{inr(gstReport.totals.cgst)}</td>
+                      <td className="py-2.5 pr-4 text-right">{inr(gstReport.totals.sgst)}</td>
+                      <td className="py-2.5 pr-4 text-right">{gstReport.totals.igst > 0 ? inr(gstReport.totals.igst) : "—"}</td>
+                      <td className="py-2.5 text-right">{inr(gstReport.totals.grandTotal)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              )}
+
+              {gstTab === "hsn" && (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-divider text-xs text-default-500 uppercase tracking-wide">
+                      <th className="py-2 pr-4 text-left font-semibold">{t("reports.gst.header.hsn" as TranslationKey)}</th>
+                      <th className="py-2 pr-4 text-right font-semibold">{t("reports.gst.header.invoices" as TranslationKey)}</th>
+                      <th className="py-2 pr-4 text-right font-semibold">{t("reports.gst.header.taxableValue" as TranslationKey)}</th>
+                      <th className="py-2 pr-4 text-right font-semibold">CGST</th>
+                      <th className="py-2 pr-4 text-right font-semibold">SGST</th>
+                      <th className="py-2 pr-4 text-right font-semibold">IGST</th>
+                      <th className="py-2 text-right font-semibold">{t("reports.gst.grandTotal" as TranslationKey)}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {gstReport.hsnSummary.map((row) => (
+                      <tr key={row.hsnCode} className="border-b border-divider/40 hover:bg-default-50">
+                        <td className="py-2.5 pr-4 font-mono font-semibold">{row.hsnCode}</td>
+                        <td className="py-2.5 pr-4 text-right text-default-500">{row.invoiceCount}</td>
+                        <td className="py-2.5 pr-4 text-right">{inr(row.taxableValue)}</td>
+                        <td className="py-2.5 pr-4 text-right text-default-600">{inr(row.cgst)}</td>
+                        <td className="py-2.5 pr-4 text-right text-default-600">{inr(row.sgst)}</td>
+                        <td className="py-2.5 pr-4 text-right text-default-600">{row.igst > 0 ? inr(row.igst) : "—"}</td>
+                        <td className="py-2.5 text-right font-bold">{inr(row.grandTotal)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              {gstTab === "b2b" && (
+                gstReport.b2bParties.length === 0 ? (
+                  <p className="text-sm text-default-500 py-4 text-center">
+                    {t("reports.gst.noB2b" as TranslationKey)}
+                  </p>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-divider text-xs text-default-500 uppercase tracking-wide">
+                        <th className="py-2 pr-4 text-left font-semibold">{t("reports.gst.header.party" as TranslationKey)}</th>
+                        <th className="py-2 pr-4 text-left font-semibold">{t("reports.gst.header.gstin" as TranslationKey)}</th>
+                        <th className="py-2 pr-4 text-right font-semibold">{t("reports.gst.header.invoices" as TranslationKey)}</th>
+                        <th className="py-2 pr-4 text-right font-semibold">{t("reports.gst.header.taxableValue" as TranslationKey)}</th>
+                        <th className="py-2 pr-4 text-right font-semibold">CGST</th>
+                        <th className="py-2 pr-4 text-right font-semibold">SGST</th>
+                        <th className="py-2 pr-4 text-right font-semibold">IGST</th>
+                        <th className="py-2 text-right font-semibold">{t("reports.gst.grandTotal" as TranslationKey)}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {gstReport.b2bParties.map((row) => (
+                        <tr key={row.gstin} className="border-b border-divider/40 hover:bg-default-50">
+                          <td className="py-2.5 pr-4 font-medium">{row.partyName}</td>
+                          <td className="py-2.5 pr-4 font-mono text-xs text-default-500">{row.gstin}</td>
+                          <td className="py-2.5 pr-4 text-right text-default-500">{row.invoiceCount}</td>
+                          <td className="py-2.5 pr-4 text-right">{inr(row.taxableValue)}</td>
+                          <td className="py-2.5 pr-4 text-right text-default-600">{inr(row.cgst)}</td>
+                          <td className="py-2.5 pr-4 text-right text-default-600">{inr(row.sgst)}</td>
+                          <td className="py-2.5 pr-4 text-right text-default-600">{row.igst > 0 ? inr(row.igst) : "—"}</td>
+                          <td className="py-2.5 text-right font-bold">{inr(row.grandTotal)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )
+              )}
+            </div>
+          )}
+        </div>
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <Card shadow="sm">
-          <CardBody className="space-y-3 p-6">
+        <div className="rounded-2xl border border-[var(--sb-border)] bg-[var(--sb-card)] shadow-sm">
+          <div className="space-y-3 p-6">
             <div>
               <h3 className="text-lg font-semibold">{t("reports.transactionRegister")}</h3>
               <p className="text-sm text-default-500">{t("reports.transactionDesc")}</p>
             </div>
-            <Button
-              color="primary"
-              className="bg-gradient-to-r from-blue-600 to-indigo-600 font-semibold"
+            <HKButton
               isDisabled={exportBlocked}
-              onPress={() => downloadFile(transactionUrl)}
+              onClick={() => downloadFile(transactionUrl)}
             >
               {t("reports.downloadCSV")}
-            </Button>
-          </CardBody>
-        </Card>
+            </HKButton>
+          </div>
+        </div>
 
-        <Card shadow="sm">
-          <CardBody className="space-y-3 p-6">
+        <div className="rounded-2xl border border-[var(--sb-border)] bg-[var(--sb-card)] shadow-sm">
+          <div className="space-y-3 p-6">
             <div>
               <h3 className="text-lg font-semibold">{t("reports.trialBalance")}</h3>
               <p className="text-sm text-default-500">{t("reports.trialBalanceDesc")}</p>
             </div>
-            <Button
-              color="primary"
-              variant="flat"
+            <HKButton
               isDisabled={exportBlocked}
-              onPress={() => downloadFile(trialBalanceUrl)}
+              onClick={() => downloadFile(trialBalanceUrl)}
             >
               {t("reports.downloadCSV")}
-            </Button>
-          </CardBody>
-        </Card>
+            </HKButton>
+          </div>
+        </div>
 
-        <Card shadow="sm">
-          <CardBody className="space-y-3 p-6">
+        <div className="rounded-2xl border border-[var(--sb-border)] bg-[var(--sb-card)] shadow-sm">
+          <div className="space-y-3 p-6">
             <div>
               <h3 className="text-lg font-semibold">{t("reports.partyLedger")}</h3>
               <p className="text-sm text-default-500">{t("reports.partyLedgerDesc")}</p>
             </div>
-            <Select
+            <HKSelect
               label={t("reports.selectParty")}
-              selectedKeys={selectedPartyId ? [selectedPartyId] : []}
-              onSelectionChange={(keys) => {
-                const nextValue = Array.from(keys)[0];
-                if (typeof nextValue === "string") {
-                  setSelectedPartyId(nextValue);
-                }
-              }}
-              variant="bordered"
+              value={selectedPartyId}
+              onValueChange={(v) => { if (v) setSelectedPartyId(v); }}
             >
               {parties.map((party) => (
-                <SelectItem key={party.id} textValue={`${party.name} (${party.type.toLowerCase()})`}>
-
+                <HKSelectItem key={party.id} value={party.id}>
                   {party.name} ({party.type.toLowerCase()})
-                </SelectItem>
+                </HKSelectItem>
               ))}
-            </Select>
-            <Button
-              color="primary"
-              variant="flat"
+            </HKSelect>
+            <HKButton
               isDisabled={exportBlocked || !selectedPartyId}
-              onPress={() => downloadFile(partyLedgerUrl)}
+              onClick={() => downloadFile(partyLedgerUrl)}
             >
               {t("reports.downloadCSV")}
-            </Button>
-          </CardBody>
-        </Card>
+            </HKButton>
+          </div>
+        </div>
       </div>
 
-      <Card shadow="sm" className="border border-amber-500/20">
-        <CardBody className="p-6 space-y-4">
-          <div className="flex items-start gap-3">
-            <div className="flex-1">
-              <h3 className="text-lg font-semibold">{t("reports.tallyExport")}</h3>
-              <p className="text-sm text-default-500">{t("reports.tallyExportDesc")}</p>
-            </div>
-            <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-              Tally
-            </span>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-[1fr,auto]">
-            <Select
-              label={t("reports.tallyExportType")}
-              selectedKeys={[tallyExportType]}
-              onSelectionChange={(keys) => {
-                const next = Array.from(keys)[0];
-                if (next === "all" || next === "masters" || next === "vouchers") {
-                  setTallyExportType(next);
-                }
-              }}
-              variant="bordered"
-            >
-              <SelectItem key="all">{t("reports.tallyAll")}</SelectItem>
-              <SelectItem key="masters">{t("reports.tallyMasters")}</SelectItem>
-              <SelectItem key="vouchers">{t("reports.tallyVouchers")}</SelectItem>
-            </Select>
-
-            <div className="flex items-end">
-              <Button
-                color="warning"
-                variant="flat"
-                className="font-semibold"
-                isDisabled={exportBlocked}
-                onPress={() =>
-                  downloadFile(
-                    buildDownloadUrl("/api/export/tally-xml", {
-                      from,
-                      to,
-                      type: tallyExportType,
-                    })
-                  )
-                }
-              >
-                {t("reports.downloadXML")}
-              </Button>
-            </div>
-          </div>
-
-          <p className="text-xs text-default-400">{t("reports.tallyHelp")}</p>
-        </CardBody>
-      </Card>
-
-      <Card shadow="sm" className="border border-amber-500/20">
-        <CardBody className="p-6 space-y-4">
-          <div className="flex items-start gap-3">
-            <div className="flex-1">
-              <h3 className="text-lg font-semibold">{t("reports.tallyImport")}</h3>
-              <p className="text-sm text-default-500">{t("reports.tallyImportDesc")}</p>
-            </div>
-            <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-              Tally
-            </span>
-          </div>
-
-          <div className="flex items-end gap-3">
-            <div className="flex-1">
-              <input
-                type="file"
-                accept=".xml,text/xml,application/xml"
-                className="w-full cursor-pointer rounded-xl border border-default-200 bg-default-50 px-3 py-2 text-sm file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-primary/10 file:px-3 file:py-1 file:text-sm file:font-medium file:text-primary"
-                onChange={(e) => {
-                  setImportFile(e.target.files?.[0] ?? null);
-                  setImportResult(null);
-                  setImportError(null);
-                }}
-              />
-            </div>
-            <Button
-              color="warning"
-              variant="flat"
-              className="font-semibold shrink-0"
-              isDisabled={!importFile || importing}
-              isLoading={importing && !importJobId}
-              onPress={handleImport}
-            >
-              Import
-            </Button>
-          </div>
-
-          {importJobId && (() => {
-            const stageLabels: Record<string, string> = {
-              queued: "Preparing import...",
-              parsing: "Parsing XML file...",
-              parties: "Creating party records...",
-              importing: `Importing vouchers... (${jobProgress.processed} of ${jobProgress.total})`,
-              balances: "Recomputing party balances...",
-              done: "Finalizing...",
-            };
-            const stageOrder = ["queued", "parsing", "parties", "importing", "balances", "done"];
-            const stageWeights: Record<string, number> = {
-              queued: 0, parsing: 5, parties: 15, importing: 80, balances: 95, done: 100,
-            };
-            const stage = jobProgress.stage || "queued";
-            const basePercent = stageWeights[stage] ?? 0;
-            // Within "importing" stage, interpolate between 15% and 80% based on voucher progress
-            const percent = stage === "importing" && jobProgress.total > 0
-              ? 15 + (jobProgress.processed / jobProgress.total) * 65
-              : basePercent;
-            const currentIdx = stageOrder.indexOf(stage);
-
-            return (
-              <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-4 text-sm space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="font-medium text-primary">
-                    {stageLabels[stage] ?? "Processing..."}
-                  </p>
-                  <span className="text-xs font-mono text-default-400">
-                    {Math.round(percent)}%
-                  </span>
-                </div>
-
-                <div className="w-full bg-default-200 rounded-full h-2.5 dark:bg-default-700 overflow-hidden">
-                  <div
-                    className="bg-primary h-2.5 rounded-full transition-all duration-700 ease-out"
-                    style={{ width: `${Math.max(3, percent)}%` }}
-                  />
-                </div>
-
-                <div className="flex justify-between text-xs text-default-400">
-                  {stageOrder.slice(1, -1).map((s, i) => (
-                    <span key={s} className={currentIdx > i + 1 ? "text-primary" : currentIdx === i + 1 ? "text-primary font-medium" : ""}>
-                      {s === "parsing" ? "Parse" : s === "parties" ? "Parties" : s === "importing" ? "Vouchers" : "Balances"}
-                    </span>
-                  ))}
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-default-500">
-                    You can navigate away — progress resumes when you return.
-                  </p>
-                  <Button
-                    size="sm"
-                    variant="flat"
-                    color="danger"
-                    onPress={handleCancelImport}
-                  >
-                    Cancel
-                  </Button>
-                </div>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div className="rounded-2xl border border-amber-500/20 bg-[var(--sb-card)] shadow-sm">
+          <div className="p-6 flex flex-col justify-between items-start gap-4">
+            <div className="flex items-start gap-3 w-full">
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold">{t("reports.tallyExport")}</h3>
+                <p className="text-sm text-default-500 mt-1">{t("reports.tallyExportDesc")}</p>
               </div>
-            );
-          })()}
-
-          {importError && (
-            <p className="rounded-xl border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger">
-              {importError}
-            </p>
-          )}
-
-          {importResult && (
-            <div className="rounded-xl border border-success/20 bg-success/5 px-4 py-3 text-sm space-y-1">
-              <p className="font-medium text-success">Import complete</p>
-              <p className="text-default-500">
-                {importResult.imported} vouchers imported · {importResult.skipped} skipped (duplicates) · {importResult.partiesCreated} parties created
-                {importResult.failed > 0 && (
-                  <span className="text-danger"> · {importResult.failed} failed</span>
-                )}
-              </p>
-              {importResult.parseErrors.length > 0 && (
-                <details className="mt-2">
-                  <summary className="cursor-pointer text-xs text-default-400">
-                    {importResult.parseErrors.length} parse warning(s)
-                  </summary>
-                  <ul className="mt-1 space-y-0.5 text-xs text-default-500">
-                    {importResult.parseErrors.map((e, i) => <li key={i}>{e}</li>)}
-                  </ul>
-                </details>
-              )}
-              {importResult.importErrors.length > 0 && (
-                <details className="mt-2">
-                  <summary className="cursor-pointer text-xs text-danger">
-                    {importResult.importErrors.length} import error(s)
-                  </summary>
-                  <ul className="mt-1 space-y-0.5 text-xs text-danger/80">
-                    {importResult.importErrors.map((e, i) => <li key={i}>{e}</li>)}
-                  </ul>
-                </details>
-              )}
+              <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                Tally
+              </span>
             </div>
-          )}
+            <HKButton
+              className="w-full sm:w-auto"
+              onClick={() => window.location.href = "/settings/tally-export"}
+            >
+              {t("reports.button.sendToCA" as TranslationKey)}
+            </HKButton>
+          </div>
+        </div>
 
-          <p className="text-xs text-default-400">{t("reports.tallyImportHelp")}</p>
-        </CardBody>
-      </Card>
+        <div className="rounded-2xl border border-amber-500/20 bg-[var(--sb-card)] shadow-sm">
+          <div className="p-6 flex flex-col justify-between items-start gap-4">
+            <div className="flex items-start gap-3 w-full">
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold">{t("reports.tallyImport")}</h3>
+                <p className="text-sm text-default-500 mt-1">{t("reports.tallyImportDesc")}</p>
+              </div>
+              <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                Tally
+              </span>
+            </div>
+            <HKButton
+              variant="secondary"
+              className="w-full sm:w-auto"
+              onClick={() => window.location.href = "/settings/tally-import"}
+            >
+              {t("reports.button.startImport" as TranslationKey)}
+            </HKButton>
+          </div>
+        </div>
+      </div>
 
-      <Card shadow="sm">
-        <CardBody className="space-y-4 p-6">
+      <div className="rounded-2xl border border-[var(--sb-border)] bg-[var(--sb-card)] shadow-sm">
+        <div className="space-y-4 p-6">
           <div className="flex flex-col gap-1">
             <h2 className="text-lg font-semibold">{t("reports.systemCheck")}</h2>
             <p className="text-sm text-default-500">
@@ -661,7 +713,7 @@ export default function ReportsClient({
             ) : !preview && !previewError ? (
               <div className="grid gap-3 md:grid-cols-3">
                 {[1, 2, 3].map((index) => (
-                  <Skeleton key={index} className="h-20 rounded-xl" />
+                  <HKSkeleton key={index} className="h-20 rounded-xl" />
                 ))}
               </div>
             ) : previewError ? (
@@ -679,7 +731,7 @@ export default function ReportsClient({
                     {t("reports.totalDebit")}
                   </p>
                   <p className="mt-1 text-2xl font-semibold">
-                    ₹{preview.totalDebit.toLocaleString("en-IN")}
+                    ₹{preview.totalDebit.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                 </div>
                 <div className="rounded-xl bg-background p-4">
@@ -687,7 +739,7 @@ export default function ReportsClient({
                     {t("reports.totalCredit")}
                   </p>
                   <p className="mt-1 text-2xl font-semibold">
-                    ₹{preview.totalCredit.toLocaleString("en-IN")}
+                    ₹{preview.totalCredit.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                 </div>
               </div>
@@ -695,8 +747,8 @@ export default function ReportsClient({
               <p className="text-sm text-default-500">{t("reports.noPreview")}</p>
             )}
           </div>
-        </CardBody>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

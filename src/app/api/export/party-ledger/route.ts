@@ -3,8 +3,10 @@ import { prisma } from "@/lib/prisma";
 import {
   buildPartyLedger,
   getLedgerAmountsForBalanceDelta,
+  asSupportedPartyType,
 } from "@/lib/accounting";
-import { resolveWriteSession } from "@/lib/api-tenant";
+import { resolveSession } from "@/lib/api-tenant";
+import { logError, getRequestId } from "@/lib/observability";
 import {
   escapeCsv,
   formatDateForCsv,
@@ -14,8 +16,7 @@ import {
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
-  // [FIX] Use JWT-verified session instead of trusting proxy headers
-  const sessionResolution = await resolveWriteSession(request);
+  const sessionResolution = await resolveSession(request);
   if (!sessionResolution.ok) return sessionResolution.response;
   const { tenantId, role } = sessionResolution.session;
 
@@ -48,9 +49,9 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // [FIX #38] Scope unbalanced check to export date range
+  try {
   const unbalanced = await prisma.journalEntry.count({
-    where: { tenantId, isBalanced: false, entryDate: { gte: fromDate, lte: toDate } },
+    where: { tenantId, isBalanced: false, isDeleted: false },
   });
 
   if (unbalanced > 0) {
@@ -123,7 +124,7 @@ export async function GET(request: NextRequest) {
   ]);
 
   const { ledger } = buildPartyLedger({
-    partyType: party.type,
+    partyType: asSupportedPartyType(party.type),
     openingBalance: party.openingBalance.toNumber(),
     createdAt: party.createdAt,
     bills: bills.map((b) => ({ ...b, grandTotal: b.grandTotal.toNumber() })),
@@ -140,7 +141,7 @@ export async function GET(request: NextRequest) {
     break;
   }
 
-  const openingRow = getLedgerAmountsForBalanceDelta(party.type, openingBalance);
+  const openingRow = getLedgerAmountsForBalanceDelta(asSupportedPartyType(party.type), openingBalance);
   const rangedLedger = ledger.filter(
     (entry) =>
       entry.date.getTime() >= fromDate.getTime() &&
@@ -195,4 +196,14 @@ export async function GET(request: NextRequest) {
       "Content-Disposition": `attachment; filename="${filename}"`,
     },
   });
+  } catch (error) {
+    logError("export.party-ledger.error", {
+      requestId: getRequestId(request),
+      error,
+    });
+    return NextResponse.json(
+      { error: "Failed to export party ledger" },
+      { status: 500 }
+    );
+  }
 }
