@@ -13,7 +13,7 @@ import { type TranslationKey } from "@/lib/i18n/translations";
 import { evaluateRow, type ColumnDef } from "@/lib/formula";
 import { GST_STATE_CODES } from "@/lib/gst-states";
 import {
-  OR, GR, AM, PU, SG, IN, TYPE, TOUCH, DISPLAY,
+  C, OR, GR, AM, PU, SG, IN, TYPE, TOUCH, DISPLAY,
   HKCard, HKToast, useIsMobile,
 } from "@/components/ui/hk-design";
 import { formatCurrency } from "@/lib/currency";
@@ -288,7 +288,7 @@ export function PurchaseBillForm() {
                 <span style={{
                   fontSize: TYPE.bodySmall, fontWeight: 700, fontFamily: SG,
                   padding: "4px 12px", borderRadius: 20,
-                  background: AM + "18", color: AM, border: `1px solid ${AM}30`,
+                  background: C.primary + "18", color: C.primary, border: `1px solid ${C.primary}30`,
                 }}>
                   {selectedTemplate.name}
                 </span>
@@ -370,7 +370,7 @@ export function PurchaseBillForm() {
                     style={{
                       height: TOUCH.secondary, padding: "0 14px",
                       borderRadius: 10, border: "none",
-                      background: AM, color: "#fff",
+                      background: C.primary, color: "#fff",
                       fontSize: TYPE.bodySmall, fontWeight: 700, fontFamily: SG,
                       cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
                     }}
@@ -465,7 +465,7 @@ export function PurchaseBillForm() {
                 </HKCard>
 
                 {/* Summary */}
-                <HKCard style={{ background: AM + "08", border: `1px solid ${AM}20` }}>
+                <HKCard style={{ background: C.primary + "08", border: `1px solid ${C.primary}20` }}>
                   <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, marginBottom: 16 }}>{t("bills.new.summary" as TranslationKey)}</p>
 
                   <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -514,7 +514,7 @@ export function PurchaseBillForm() {
                           checked={enableRoundOff}
                           onChange={(e) => { if (grandTotal !== 0) setEnableRoundOff(e.target.checked); }}
                           disabled={grandTotal === 0}
-                          style={{ accentColor: AM }}
+                          style={{ accentColor: C.primary }}
                         />
                         <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}>{t("bills.new.roundOff" as TranslationKey)}</span>
                       </label>
@@ -527,7 +527,7 @@ export function PurchaseBillForm() {
 
                     <div style={{ borderTop: "1px solid var(--sb-border)", paddingTop: 12, marginTop: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <span style={{ fontSize: TYPE.h2, fontWeight: 800, color: "var(--sb-text)", fontFamily: SG }}>{t("bills.new.grandTotal" as TranslationKey)}</span>
-                      <span style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: AM, fontFamily: IN }}>{formatCurrency(roundedGrandTotal)}</span>
+                      <span style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: C.primary, fontFamily: IN }}>{formatCurrency(roundedGrandTotal)}</span>
                     </div>
                   </div>
                 </HKCard>

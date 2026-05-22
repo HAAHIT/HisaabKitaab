@@ -9,7 +9,7 @@ import { evaluateRow, type ColumnDef } from "@/lib/formula";
 import { GST_STATE_CODES } from "@/lib/gst-states";
 import ItemCatalogPicker from "@/components/bills/ItemCatalogPicker";
 import {
-  GR, AM, OR, PU, SG, IN, TYPE, TOUCH, DISPLAY,
+  C, GR, AM, OR, SG, IN, TYPE, TOUCH, DISPLAY,
   fmtFull,
   HKCard, HKToast, useIsMobile,
 } from "@/components/ui/hk-design";
@@ -367,7 +367,7 @@ export default function EditBillPage({
             <span style={{
               fontSize: TYPE.bodySmall, fontWeight: 700, fontFamily: SG,
               padding: "4px 12px", borderRadius: 20,
-              background: PU + "18", color: PU, border: `1px solid ${PU}30`,
+              background: C.primary + "18", color: C.primary, border: `1px solid ${C.primary}30`,
             }}>
               {selectedTemplate.name}
             </span>
@@ -417,7 +417,7 @@ export default function EditBillPage({
                 <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG }}>
                   Subtotal: <span style={{ fontFamily: IN, fontWeight: 700, color: "var(--sb-text)" }}>{fmtFull(subtotal)}</span>
                 </span>
-                <span style={{ fontSize: TYPE.bodySmall, color: PU, fontFamily: SG }}>
+                <span style={{ fontSize: TYPE.bodySmall, color: C.primary, fontFamily: SG }}>
                   Total: <span style={{ fontFamily: IN, fontWeight: 800 }}>{fmtFull(grandTotal)}</span>
                 </span>
               </div>
@@ -428,9 +428,9 @@ export default function EditBillPage({
                     style={{
                       height: TOUCH.secondary, padding: "0 12px",
                       borderRadius: 10, fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG,
-                      border: `1.5px solid ${hsnPerRow ? PU : "var(--sb-border)"}`,
-                      background: hsnPerRow ? PU + "18" : "transparent",
-                      color: hsnPerRow ? PU : "var(--sb-sub)",
+                      border: `1.5px solid ${hsnPerRow ? C.primary : "var(--sb-border)"}`,
+                      background: hsnPerRow ? C.primary + "18" : "transparent",
+                      color: hsnPerRow ? C.primary : "var(--sb-sub)",
                       cursor: "pointer",
                     }}
                     title="Add HSN/SAC code per line item for GSTR-1 Table 12"
@@ -442,8 +442,8 @@ export default function EditBillPage({
                   onClick={() => setShowCatalogPicker(true)}
                   style={{
                     height: TOUCH.secondary, padding: "0 12px",
-                    borderRadius: 10, border: `1.5px solid ${PU}44`,
-                    background: PU + "12", color: PU,
+                    borderRadius: 10, border: `1.5px solid ${C.primary}44`,
+                    background: C.primary + "12", color: C.primary,
                     fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG,
                     cursor: "pointer",
                   }}
@@ -455,7 +455,7 @@ export default function EditBillPage({
                   style={{
                     height: TOUCH.secondary, padding: "0 14px",
                     borderRadius: 10, border: "none",
-                    background: PU, color: "#fff",
+                    background: C.primary, color: "#fff",
                     fontSize: TYPE.bodySmall, fontWeight: 700, fontFamily: SG,
                     cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
                   }}
@@ -584,7 +584,7 @@ export default function EditBillPage({
             </HKCard>
 
             {/* Summary */}
-            <HKCard style={{ background: PU + "08", border: `1px solid ${PU}20` }}>
+            <HKCard style={{ background: C.primary + "08", border: `1px solid ${C.primary}20` }}>
               <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, marginBottom: 16 }}>Summary</p>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -628,7 +628,7 @@ export default function EditBillPage({
                       type="checkbox"
                       checked={isInterState}
                       onChange={(e) => setIsInterState(e.target.checked)}
-                      style={{ accentColor: PU }}
+                      style={{ accentColor: C.primary }}
                     />
                     <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}>Inter-state (IGST)</span>
                   </label>
@@ -677,7 +677,7 @@ export default function EditBillPage({
                       checked={enableRoundOff}
                       onChange={(e) => { if (grandTotal !== 0) setEnableRoundOff(e.target.checked); }}
                       disabled={grandTotal === 0}
-                      style={{ accentColor: PU }}
+                      style={{ accentColor: C.primary }}
                     />
                     <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}>Round off to nearest ₹</span>
                   </label>
@@ -690,7 +690,7 @@ export default function EditBillPage({
 
                 <div style={{ borderTop: "1px solid var(--sb-border)", paddingTop: 12, marginTop: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontSize: TYPE.h2, fontWeight: 800, color: "var(--sb-text)", fontFamily: SG }}>Grand Total</span>
-                  <span style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: PU, fontFamily: IN }}>{fmtFull(roundedGrandTotal)}</span>
+                  <span style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: C.primary, fontFamily: IN }}>{fmtFull(roundedGrandTotal)}</span>
                 </div>
               </div>
             </HKCard>

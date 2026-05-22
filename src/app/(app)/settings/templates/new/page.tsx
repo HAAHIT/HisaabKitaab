@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { validateFormula, translateFormulaToIds, type ColumnDef } from "@/lib/formula";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
-  GR, AM, OR, PU, SG, TYPE,
+  C, GR, AM, OR, PU, SG, TYPE,
   HKCard, HKToast, PageHeader, useIsMobile,
 } from "@/components/ui/hk-design";
 import { HKButton } from "@/components/ui/HKButton";
@@ -208,8 +208,8 @@ export default function CreateTemplatePage() {
                     {/* Position badge */}
                     <div style={{
                       width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
-                      background: PU + "18", display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: TYPE.bodySmall, fontWeight: 700, color: PU, fontFamily: SG,
+                      background: C.primary + "18", display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: TYPE.bodySmall, fontWeight: 700, color: C.primary, fontFamily: SG,
                     }}>
                       {index + 1}
                     </div>

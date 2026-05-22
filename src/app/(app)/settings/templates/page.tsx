@@ -5,7 +5,7 @@ import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
-  GR, AM, OR, PU, SG, TYPE,
+  C, GR, AM, OR, PU, SG, TYPE,
   HKCard, HKToast, PageHeader, useIsMobile,
 } from "@/components/ui/hk-design";
 import { HKButton } from "@/components/ui/HKButton";
@@ -20,7 +20,7 @@ interface Template {
 
 const COL_TYPE_COLOR: Record<string, string> = {
   formula: AM,
-  number: PU,
+  number: C.primary,
   dropdown: GR,
   date: OR,
   text: "var(--sb-sub)",
@@ -136,12 +136,12 @@ export default function TemplatesPage() {
                   style={{
                     background: "var(--sb-card)",
                     borderRadius: 20,
-                    border: `1.5px solid ${isDefault ? PU + "60" : "var(--sb-border)"}`,
+                    border: `1.5px solid ${isDefault ? C.primary + "60" : "var(--sb-border)"}`,
                     padding: "20px 20px 16px",
                     display: "flex",
                     flexDirection: "column",
                     gap: 12,
-                    boxShadow: isDefault ? `0 0 0 3px ${PU}15` : "none",
+                    boxShadow: isDefault ? `0 0 0 3px ${C.primary}15` : "none",
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
@@ -151,8 +151,8 @@ export default function TemplatesPage() {
                     {isDefault && (
                       <span
                         style={{
-                          fontSize: TYPE.chip, fontWeight: 700, color: PU,
-                          background: PU + "18", padding: "3px 10px", borderRadius: 8,
+                          fontSize: TYPE.chip, fontWeight: 700, color: C.primary,
+                          background: C.primary + "18", padding: "3px 10px", borderRadius: 8,
                           flexShrink: 0, fontFamily: SG,
                         }}
                       >
@@ -188,8 +188,8 @@ export default function TemplatesPage() {
                         disabled={settingDefault === template.id}
                         style={{
                           padding: "8px 14px", borderRadius: 10,
-                          background: PU + "12", border: `1px solid ${PU}33`,
-                          color: PU, fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: 600,
+                          background: C.primary + "12", border: `1px solid ${C.primary}33`,
+                          color: C.primary, fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: 600,
                           cursor: settingDefault === template.id ? "not-allowed" : "pointer",
                           opacity: settingDefault === template.id ? 0.6 : 1,
                         }}

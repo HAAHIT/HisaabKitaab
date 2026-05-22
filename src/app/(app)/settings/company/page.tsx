@@ -216,8 +216,8 @@ export default function CompanySettingsPage() {
               <div
                 style={{
                   width: 120, height: 120, borderRadius: 16,
-                  border: `2px dashed ${displayedCompanyLogo ? C.info : "var(--sb-border)"}`,
-                  background: displayedCompanyLogo ? C.infoSoft : "var(--sb-surface-alt)",
+                  border: `2px dashed ${displayedCompanyLogo ? C.primary : "var(--sb-border)"}`,
+                  background: displayedCompanyLogo ? C.primarySoft : "var(--sb-surface-alt)",
                   display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden",
                 }}
               >
@@ -239,8 +239,8 @@ export default function CompanySettingsPage() {
                 <button
                   onClick={() => document.getElementById("logo-input")?.click()}
                   style={{
-                    padding: "8px 14px", borderRadius: 10, background: C.infoSoft, border: `1px solid ${C.info}44`,
-                    color: C.info, fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: 600, cursor: "pointer",
+                    padding: "8px 14px", borderRadius: 10, background: C.primarySoft, border: `1px solid ${C.primary}44`,
+                    color: C.primary, fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: 600, cursor: "pointer",
                   }}
                 >
                   {displayedCompanyLogo ? t("common.change") : t("common.upload")}
@@ -333,8 +333,8 @@ export default function CompanySettingsPage() {
               <button
                 onClick={() => router.push("/settings/tally-export")}
                 style={{
-                  padding: "10px 18px", borderRadius: 10, background: C.infoSoft, border: `1px solid ${C.info}44`,
-                  color: C.info, fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: 700, cursor: "pointer", alignSelf: "flex-start",
+                  padding: "10px 18px", borderRadius: 10, background: C.primarySoft, border: `1px solid ${C.primary}44`,
+                  color: C.primary, fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: 700, cursor: "pointer", alignSelf: "flex-start",
                 }}
               >
                 Start Export

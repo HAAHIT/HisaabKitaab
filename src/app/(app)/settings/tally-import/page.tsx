@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { type TranslationKey } from "@/lib/i18n/translations";
 import {
-  GR, AM, OR, PU, SG, IN, TYPE,
+  C, GR, AM, OR, SG, IN, TYPE,
   HKCard, HKToast, PageHeader, useIsMobile,
 } from "@/components/ui/hk-design";
 import { HKButton } from "@/components/ui/HKButton";
@@ -177,7 +177,7 @@ function TallyImportContent() {
           {/* Step progress */}
           <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
             {[1, 2, 3, 4].map((i) => (
-              <div key={i} style={{ height: 8, flex: 1, borderRadius: 999, background: step >= i ? PU : "var(--sb-border)", transition: "background 0.3s" }} />
+              <div key={i} style={{ height: 8, flex: 1, borderRadius: 999, background: step >= i ? C.primary : "var(--sb-border)", transition: "background 0.3s" }} />
             ))}
           </div>
 
@@ -203,8 +203,8 @@ function TallyImportContent() {
                     />
                     <div style={{
                       padding: "10px 20px", borderRadius: 12,
-                      background: PU + "18", border: `1px solid ${PU}44`,
-                      color: PU, fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: 700,
+                      background: C.primary + "18", border: `1px solid ${C.primary}44`,
+                      color: C.primary, fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: 700,
                       display: "flex", alignItems: "center", gap: 8,
                     }}>
                       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -286,7 +286,7 @@ function TallyImportContent() {
                 <div style={{
                   width: 64, height: 64,
                   border: `4px solid var(--sb-border)`,
-                  borderTopColor: PU,
+                  borderTopColor: C.primary,
                   borderRadius: "50%",
                 }} className="animate-spin" />
                 <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>
@@ -304,7 +304,7 @@ function TallyImportContent() {
                     </div>
                     <div style={{ height: 8, borderRadius: 999, background: "var(--sb-border)", overflow: "hidden" }}>
                       <div style={{
-                        height: "100%", borderRadius: 999, background: PU,
+                        height: "100%", borderRadius: 999, background: C.primary,
                         width: `${Math.max(5, (jobProgress.processed / (jobProgress.total || 1)) * 100)}%`,
                         transition: "width 0.4s ease",
                       }} />
@@ -338,9 +338,9 @@ function TallyImportContent() {
                     </div>
                   )}
                   {importResult.partiesCreated > 0 && (
-                    <div style={{ padding: "14px 16px", borderRadius: 12, background: PU + "10", border: `1px solid ${PU}33`, minWidth: 130 }}>
-                      <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: PU, textTransform: "uppercase", fontFamily: SG, marginBottom: 4 }}>{t("tally.import.successParties" as TranslationKey)}</p>
-                      <p style={{ fontSize: TYPE.numMedium, fontWeight: 700, color: PU, fontFamily: IN, margin: 0 }}>{importResult.partiesCreated}</p>
+                    <div style={{ padding: "14px 16px", borderRadius: 12, background: C.primary + "10", border: `1px solid ${C.primary}33`, minWidth: 130 }}>
+                      <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: C.primary, textTransform: "uppercase", fontFamily: SG, marginBottom: 4 }}>{t("tally.import.successParties" as TranslationKey)}</p>
+                      <p style={{ fontSize: TYPE.numMedium, fontWeight: 700, color: C.primary, fontFamily: IN, margin: 0 }}>{importResult.partiesCreated}</p>
                     </div>
                   )}
                   {importResult.skipped > 0 && (

@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { type TranslationKey } from "@/lib/i18n/translations";
 import {
-  GR, AM, OR, PU, SG, IN, TYPE,
+  C, GR, AM, OR, SG, IN, TYPE,
   fmtFull,
   HKCard, HKToast, PageHeader, useIsMobile,
 } from "@/components/ui/hk-design";
@@ -172,7 +172,7 @@ export default function TallyExportPage() {
           {/* Step progress */}
           <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
             {[1, 2, 3].map((i) => (
-              <div key={i} style={{ height: 8, flex: 1, borderRadius: 999, background: step >= i ? PU : "var(--sb-border)", transition: "background 0.3s" }} />
+              <div key={i} style={{ height: 8, flex: 1, borderRadius: 999, background: step >= i ? C.primary : "var(--sb-border)", transition: "background 0.3s" }} />
             ))}
           </div>
 
@@ -262,10 +262,10 @@ export default function TallyExportPage() {
                 </p>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  <button onClick={() => handleExport("download")} disabled={exporting} style={exportBtnStyle(PU)}>
+                  <button onClick={() => handleExport("download")} disabled={exporting} style={exportBtnStyle(C.primary)}>
                     📥 {t("tally.export.downloadXml" as TranslationKey)}
                   </button>
-                  <button onClick={() => handleExport("email")} disabled={exporting} style={exportBtnStyle(PU)}>
+                  <button onClick={() => handleExport("email")} disabled={exporting} style={exportBtnStyle(C.primary)}>
                     📧 {t("tally.export.emailToCa" as TranslationKey)}{caEmail && (
                       <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG, fontWeight: 400 }}>
                         {" "}({caEmail})

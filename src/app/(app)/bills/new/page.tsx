@@ -12,7 +12,7 @@ import { evaluateRow, type ColumnDef } from "@/lib/formula";
 import { GST_STATE_CODES } from "@/lib/gst-states";
 import { deriveIsInterState, extractGstinStateCode } from "@/lib/gst-helpers";
 import {
-  OR, GR, AM, PU, SG, IN, TYPE, TOUCH, DISPLAY,
+  C, OR, GR, AM, PU, SG, IN, TYPE, TOUCH, DISPLAY,
   HKCard, HKToast,
   fmtFull, useIsMobile,
 } from "@/components/ui/hk-design";
@@ -501,8 +501,8 @@ export default function NewBillPage() {
               <span style={{
                 fontSize: TYPE.bodySmall, fontWeight: 700, fontFamily: SG,
                 padding: "4px 12px", borderRadius: 20,
-                background: PU + "18", color: PU,
-                border: `1px solid ${PU}30`,
+                background: C.primary + "18", color: C.primary,
+                border: `1px solid ${C.primary}30`,
               }}>
                 {selectedTemplate.name}
               </span>
@@ -594,7 +594,7 @@ export default function NewBillPage() {
                   <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG }}>
                     {t("bills.new.subtotal" as TranslationKey)}: <span style={{ fontFamily: IN, fontWeight: 700, color: "var(--sb-text)" }}>{formatCurrency(subtotal)}</span>
                   </span>
-                  <span style={{ fontSize: TYPE.bodySmall, color: PU, fontFamily: SG }}>
+                  <span style={{ fontSize: TYPE.bodySmall, color: C.primary, fontFamily: SG }}>
                     {t("bills.new.grandTotal" as TranslationKey)}: <span style={{ fontFamily: IN, fontWeight: 800 }}>{formatCurrency(grandTotal)}</span>
                   </span>
                 </div>
@@ -620,7 +620,7 @@ export default function NewBillPage() {
                     style={{
                       height: TOUCH.secondary, padding: "0 14px",
                       borderRadius: 10, border: "none",
-                      background: PU, color: "#fff",
+                      background: C.primary, color: "#fff",
                       fontSize: TYPE.bodySmall, fontWeight: 700, fontFamily: SG,
                       cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
                     }}
@@ -833,7 +833,7 @@ export default function NewBillPage() {
               </HKCard>
 
               {/* Summary */}
-              <HKCard style={{ background: PU + "08", border: `1px solid ${PU}20` }}>
+              <HKCard style={{ background: C.primary + "08", border: `1px solid ${C.primary}20` }}>
                 <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, marginBottom: 16 }}>{t("bills.new.summary" as TranslationKey)}</p>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -947,7 +947,7 @@ export default function NewBillPage() {
 
                   <div style={{ borderTop: "1px solid var(--sb-border)", paddingTop: 12, marginTop: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <span style={{ fontSize: TYPE.h2, fontWeight: 800, color: "var(--sb-text)", fontFamily: SG }}>{t("bills.new.grandTotal" as TranslationKey)}</span>
-                    <span style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: PU, fontFamily: IN }}>{formatCurrency(roundedGrandTotal)}</span>
+                    <span style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: C.primary, fontFamily: IN }}>{formatCurrency(roundedGrandTotal)}</span>
                   </div>
                 </div>
               </HKCard>
