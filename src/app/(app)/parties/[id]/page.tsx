@@ -54,7 +54,6 @@ export default async function PartyProfilePage({
       },
       select: { id: true, billNumber: true, status: true, grandTotal: true, createdAt: true },
       orderBy: { createdAt: "desc" },
-      take: 10,
     }),
     prisma.measurementUpload.findMany({
       where: {
@@ -90,7 +89,7 @@ export default async function PartyProfilePage({
     credit: Number(line.credit),
   }));
 
-  const { ledger, calculatedCurrent } = buildPartyLedger({
+  const { calculatedCurrent } = buildPartyLedger({
     partyType: asSupportedPartyType(party.type),
     openingBalance: party.openingBalance.toNumber(),
     createdAt: party.createdAt,
@@ -123,7 +122,6 @@ export default async function PartyProfilePage({
         openingBalance: party.openingBalance.toNumber(),
         createdAt: party.createdAt,
       }}
-      ledger={ledger}
       measurements={measurements}
       calculatedCurrent={calculatedCurrent}
       role={role}

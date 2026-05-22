@@ -6,12 +6,11 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { type TranslationKey } from "@/lib/i18n/translations";
 import {
   C, GR, AM, SG, TYPE, FONT, MONO, RADIUS,
-  typo, fmtFull, useIsMobile, HKCard, HKAvatar, HKChip, StatusChip, HKToast,
+  typo, fmtFull, useIsMobile, HKCard, HKAvatar, HKChip, StatusChip,
 } from "@/components/ui/hk-design";
 import { HKButton } from "@/components/ui/HKButton";
 import {
   getBalanceStatusLabel,
-  type PartyLedgerEntry,
   type SupportedPartyType,
 } from "@/lib/accounting";
 
@@ -61,7 +60,6 @@ type ReconcileResult = {
 
 export default function PartyProfileClient({
   party,
-  ledger: _ledger,
   measurements,
   calculatedCurrent,
   partyId,
@@ -70,7 +68,6 @@ export default function PartyProfileClient({
   paymentsList,
 }: {
   party: PartyProfile;
-  ledger: PartyLedgerEntry[];
   measurements: MeasurementItem[];
   calculatedCurrent: number;
   partyId: string;
@@ -84,8 +81,6 @@ export default function PartyProfileClient({
   const [reconcileResult, setReconcileResult] = useState<ReconcileResult | null>(null);
   const [reconcileLoading, setReconcileLoading] = useState<"check" | "fix" | null>(null);
   const [reconcileError, setReconcileError] = useState<string | null>(null);
-  const [toast] = useState<{ message: string; type: "success" | "error" } | null>(null);
-
   const isCustomer = party.type === "CUSTOMER";
 
   const balanceColor = calculatedCurrent === 0 ? "var(--sb-sub)" : calculatedCurrent > 0 ? GR : C.negative;
@@ -101,9 +96,7 @@ export default function PartyProfileClient({
     .reduce((s, b) => s + b.grandTotal, 0);
   const billCount = billsList.filter(b => b.status !== "CANCELLED").length;
 
-  const lastPayment = paymentsList.length > 0
-    ? paymentsList.reduce((latest, p) => new Date(p.date) > new Date(latest.date) ? p : latest)
-    : null;
+  const lastPayment = paymentsList.length > 0 ? paymentsList[0] : null;
   const lastPayDays = lastPayment
     ? Math.floor((Date.now() - new Date(lastPayment.date).getTime()) / 86400000)
     : null;
@@ -150,8 +143,6 @@ export default function PartyProfileClient({
 
   return (
     <div style={{ background: "var(--sb-bg)", minHeight: "100%", fontFamily: SG }}>
-      {toast && <HKToast message={toast.message} type={toast.type} />}
-
       <div style={{ padding: isMobile ? "14px 14px 100px" : "24px 28px", maxWidth: 1080, margin: "0 auto" }}>
 
         {/* Header */}
