@@ -154,7 +154,7 @@ export default function RegisterPage() {
             height: 620,
             borderRadius: "50%",
             background:
-              "radial-gradient(circle at center, rgba(247, 96, 0, 0.35) 0%, rgba(123, 94, 246, 0.22) 45%, transparent 70%)",
+              "radial-gradient(circle at center, rgba(37, 99, 235, 0.35) 0%, rgba(37, 99, 235, 0.18) 45%, transparent 70%)",
             filter: "blur(40px)",
             pointerEvents: "none",
           }}
@@ -167,11 +167,11 @@ export default function RegisterPage() {
               width: 40,
               height: 40,
               borderRadius: 12,
-              background: "linear-gradient(135deg, #f76000, #7b5ef6)",
+              background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              boxShadow: "0 6px 20px rgba(247, 96, 0, 0.35)",
+              boxShadow: "0 6px 20px rgba(37, 99, 235, 0.35)",
             }}
           >
             <svg
@@ -246,7 +246,7 @@ export default function RegisterPage() {
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
-              style={{ color: "#f76000" }}
+              style={{ color: "#2563eb" }}
             >
               <path d="M9 12l2 2 4-4" />
               <circle cx="12" cy="12" r="9" />
@@ -328,8 +328,8 @@ export default function RegisterPage() {
                 minWidth: 48,
                 padding: "0 10px",
                 borderRadius: 8,
-                background: "rgba(123, 94, 246, 0.10)",
-                color: "#7b5ef6",
+                background: "rgba(37, 99, 235, 0.10)",
+                color: "#2563eb",
                 fontSize: 12,
                 fontWeight: 700,
                 textDecoration: "none",
@@ -459,11 +459,11 @@ export default function RegisterPage() {
                 style={{
                   padding: "10px 14px",
                   borderRadius: 10,
-                  border: "1px solid rgba(247, 96, 0, 0.25)",
-                  background: "rgba(247, 96, 0, 0.08)",
+                  border: "1px solid rgba(196, 62, 28, 0.25)",
+                  background: "rgba(196, 62, 28, 0.08)",
                   fontSize: 13,
                   fontWeight: 600,
-                  color: "#f76000",
+                  color: "#c43e1c",
                 }}
                 aria-live="polite"
               >
@@ -483,13 +483,13 @@ export default function RegisterPage() {
                 gap: 10,
                 height: 50,
                 borderRadius: 12,
-                background: "linear-gradient(135deg, #f76000, #7b5ef6)",
+                background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
                 color: "#fff",
                 fontSize: 15,
                 fontWeight: 700,
                 border: "none",
                 cursor: isPending ? "not-allowed" : "pointer",
-                boxShadow: "0 6px 20px rgba(247, 96, 0, 0.3)",
+                boxShadow: "0 6px 20px rgba(37, 99, 235, 0.3)",
                 opacity: isPending ? 0.7 : 1,
                 transition: "opacity 0.15s, transform 0.15s",
               }}
@@ -526,7 +526,7 @@ export default function RegisterPage() {
               href="/login"
               style={{
                 fontWeight: 700,
-                color: "#f76000",
+                color: "#2563eb",
                 textDecoration: "none",
               }}
             >
@@ -544,8 +544,8 @@ export default function RegisterPage() {
               to { transform: rotate(360deg); }
             }
             .sb-login-input-group:focus-within {
-              border-color: #f76000 !important;
-              box-shadow: 0 0 0 3px rgba(247, 96, 0, 0.12);
+              border-color: #2563eb !important;
+              box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
             }
             @media (max-width: 1023px) {
               .sb-auth-marketing { display: none !important; }
