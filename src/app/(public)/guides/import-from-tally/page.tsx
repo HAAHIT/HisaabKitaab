@@ -2,15 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "How to Import Data from TallyPrime into HisaabKitaab | Guide",
-  description: "Learn step-by-step how to migrate existing ledgers, parties, and historical vouchers out of TallyPrime cleanly and seamlessly into HisaabKitaab.",
+  title: "How to Import Data from TallyPrime into SoloBooks | Guide",
+  description: "Learn step-by-step how to migrate existing ledgers, parties, and historical vouchers out of TallyPrime cleanly and seamlessly into SoloBooks.",
 };
 
 export default function ImportFromTallyGuide() {
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "HowTo",
-    name: "How to Import Data from TallyPrime into HisaabKitaab",
+    name: "How to Import Data from TallyPrime into SoloBooks",
     description:
       "Migrate your existing ledgers, parties, and historical vouchers out of Tally and into our cloud platform.",
     step: [
@@ -26,8 +26,8 @@ export default function ImportFromTallyGuide() {
       },
       {
         "@type": "HowToStep",
-        name: "Upload to HisaabKitaab",
-        text: "Log into your HisaabKitaab dashboard. Navigate to Settings > Data Management > Import from Tally. Upload the Master.xml first, followed by the DayBook.xml.",
+        name: "Upload to SoloBooks",
+        text: "Log into your SoloBooks dashboard. Navigate to Settings > Data Management > Import from Tally. Upload the Master.xml first, followed by the DayBook.xml.",
       },
       {
         "@type": "HowToStep",
@@ -52,7 +52,7 @@ export default function ImportFromTallyGuide() {
         <header className="mb-10 text-center">
           <h1 className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight mb-6">
             How to Import Data from{" "}
-            <span className="text-teal-600">TallyPrime</span> into HisaabKitaab
+            <span className="text-teal-600">TallyPrime</span> into SoloBooks
           </h1>
           <p className="text-lg text-slate-600 max-w-2xl mx-auto font-medium leading-relaxed">
             A comprehensive guide to migrating your existing ledgers, parties,
@@ -62,11 +62,11 @@ export default function ImportFromTallyGuide() {
 
         <div className="prose prose-slate prose-teal max-w-none prose-headings:font-semibold prose-a:text-teal-600 hover:prose-a:text-teal-500 prose-p:leading-relaxed">
           <h2 className="text-2xl font-bold text-slate-800 mb-4 mt-8">
-            Why Migrate to HisaabKitaab?
+            Why Migrate to SoloBooks?
           </h2>
           <p className="text-slate-600 mb-8">
             Moving from traditional desktop software like TallyPrime to a modern
-            cloud-based solution like HisaabKitaab gives you real-time access to
+            cloud-based solution like SoloBooks gives you real-time access to
             your financial data, anywhere, anytime. Our system is designed
             specifically for Indian MSMEs to streamline their workflow.
           </p>
@@ -119,10 +119,10 @@ export default function ImportFromTallyGuide() {
                 <span className="flex-shrink-0 w-8 h-8 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-sm">
                   3
                 </span>
-                Step 3: Upload to HisaabKitaab
+                Step 3: Upload to SoloBooks
               </h3>
               <p className="text-slate-600 mb-0 pl-11">
-                Log into your HisaabKitaab dashboard. Navigate to{" "}
+                Log into your SoloBooks dashboard. Navigate to{" "}
                 <strong>Settings &gt; Data Management &gt; Import from Tally</strong>
                 . Upload the{" "}
                 <code className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded text-sm whitespace-nowrap">
@@ -163,7 +163,7 @@ export default function ImportFromTallyGuide() {
           </Link>
           <p className="mt-8 text-xs text-slate-400 leading-relaxed max-w-2xl mx-auto">
             *Tally and TallyPrime are registered trademarks of Tally Solutions Pvt. Ltd. <br />
-            HisaabKitaab is an independent product and is not affiliated with, endorsed by, or sponsored by Tally Solutions.
+            SoloBooks is an independent product and is not affiliated with, endorsed by, or sponsored by Tally Solutions.
           </p>
         </div>
       </article>

@@ -122,24 +122,18 @@ export default function ItemCatalogPage() {
   }
 
   return (
-    <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG }}>
+    <div style={{ fontFamily: SG }}>
       {toast && <HKToast message={toast.message} type={toast.type} />}
-
-      <PageHeader
-        title={t("items.title")}
-        subtitle={t("items.subtitle")}
-        isMobile={isMobile}
-      />
-
-      <div style={{ padding: isMobile ? "0 14px 80px" : "0 28px 80px", maxWidth: 1200, margin: "0 auto" }}>
+      <PageHeader title={t("items.title")} subtitle={t("items.subtitle")} isMobile={isMobile} />
+      <div>
         {/* Add / Edit form */}
         <HKCard style={{ marginBottom: 20 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
             <div>
-              <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, margin: 0 }}>
+              <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>
                 {editingId ? t("items.edit") : t("items.add")}
               </p>
-              <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG, marginTop: 4 }}>
+              <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG, marginTop: 4 }}>
                 {t("items.hsnHelp")}
               </p>
             </div>
@@ -148,8 +142,8 @@ export default function ItemCatalogPage() {
                 onClick={resetForm}
                 style={{
                   padding: "8px 16px", borderRadius: 10,
-                  background: "var(--hk-badge)", border: "1px solid var(--hk-border)",
-                  color: "var(--hk-sub)", fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: 600, cursor: "pointer",
+                  background: "var(--sb-badge)", border: "1px solid var(--sb-border)",
+                  color: "var(--sb-sub)", fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: 600, cursor: "pointer",
                 }}
               >
                 {t("common.cancel")}
@@ -185,9 +179,9 @@ export default function ItemCatalogPage() {
               {[1, 2, 3].map((i) => <HKSkeleton key={i} className="h-20 rounded-2xl" />)}
             </div>
           ) : items.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "40px 20px", border: "2px dashed var(--hk-border)", borderRadius: 16 }}>
-              <p style={{ fontSize: TYPE.bodyLarge, fontWeight: 700, color: "var(--hk-sub)", fontFamily: SG }}>{t("items.empty")}</p>
-              <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG, marginTop: 6 }}>{t("items.emptyHint")}</p>
+            <div style={{ textAlign: "center", padding: "40px 20px", border: "2px dashed var(--sb-border)", borderRadius: 16 }}>
+              <p style={{ fontSize: TYPE.bodyLarge, fontWeight: 700, color: "var(--sb-sub)", fontFamily: SG }}>{t("items.empty")}</p>
+              <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG, marginTop: 6 }}>{t("items.emptyHint")}</p>
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -199,40 +193,40 @@ export default function ItemCatalogPage() {
                     alignItems: isMobile ? "flex-start" : "center",
                     justifyContent: "space-between",
                     gap: 12, padding: "16px 20px", borderRadius: 14,
-                    background: "var(--hk-bg)", border: "1px solid var(--hk-border)",
+                    background: "var(--sb-bg)", border: "1px solid var(--sb-border)",
                   }}
                 >
                   <div style={{ display: "grid", flex: 1, gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: 12 }}>
                     <div>
-                      <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: "var(--hk-sub)", textTransform: "uppercase", letterSpacing: "0.5px", fontFamily: SG, marginBottom: 4 }}>
+                      <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: "var(--sb-sub)", textTransform: "uppercase", letterSpacing: "0.5px", fontFamily: SG, marginBottom: 4 }}>
                         {t("items.name")}
                       </p>
-                      <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG }}>{item.name}</p>
+                      <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG }}>{item.name}</p>
                     </div>
                     <div>
-                      <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: "var(--hk-sub)", textTransform: "uppercase", letterSpacing: "0.5px", fontFamily: SG, marginBottom: 4 }}>
+                      <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: "var(--sb-sub)", textTransform: "uppercase", letterSpacing: "0.5px", fontFamily: SG, marginBottom: 4 }}>
                         {t("items.hsnCode")}
                       </p>
-                      <p style={{ fontSize: TYPE.body, color: "var(--hk-text)", fontFamily: SG }}>{item.hsnCode || "—"}</p>
+                      <p style={{ fontSize: TYPE.body, color: "var(--sb-text)", fontFamily: SG }}>{item.hsnCode || "—"}</p>
                     </div>
                     <div>
-                      <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: "var(--hk-sub)", textTransform: "uppercase", letterSpacing: "0.5px", fontFamily: SG, marginBottom: 4 }}>
+                      <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: "var(--sb-sub)", textTransform: "uppercase", letterSpacing: "0.5px", fontFamily: SG, marginBottom: 4 }}>
                         {t("items.unit")}
                       </p>
-                      <p style={{ fontSize: TYPE.body, color: "var(--hk-text)", fontFamily: SG }}>{item.unit}</p>
+                      <p style={{ fontSize: TYPE.body, color: "var(--sb-text)", fontFamily: SG }}>{item.unit}</p>
                     </div>
                     <div>
-                      <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: "var(--hk-sub)", textTransform: "uppercase", letterSpacing: "0.5px", fontFamily: SG, marginBottom: 4 }}>
+                      <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: "var(--sb-sub)", textTransform: "uppercase", letterSpacing: "0.5px", fontFamily: SG, marginBottom: 4 }}>
                         {t("items.rate")}
                       </p>
-                      <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", fontFamily: IN }}>{fmtFull(item.rate)}</p>
+                      <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)", fontFamily: IN }}>{fmtFull(item.rate)}</p>
                     </div>
                   </div>
 
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
                     <div style={{ textAlign: "right" }}>
-                      <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>{t("items.taxRate")}</p>
-                      <p style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG }}>
+                      <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}>{t("items.taxRate")}</p>
+                      <p style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG }}>
                         {item.taxRate != null ? `${item.taxRate}%` : t("items.useBusinessDefault")}
                       </p>
                     </div>
@@ -240,8 +234,8 @@ export default function ItemCatalogPage() {
                       onClick={() => startEdit(item)}
                       style={{
                         padding: "8px 14px", borderRadius: 10,
-                        background: "var(--hk-badge)", border: "1px solid var(--hk-border)",
-                        color: "var(--hk-text)", fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: 600, cursor: "pointer",
+                        background: "var(--sb-badge)", border: "1px solid var(--sb-border)",
+                        color: "var(--sb-text)", fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: 600, cursor: "pointer",
                       }}
                     >
                       {t("items.edit")}

@@ -62,7 +62,7 @@ export interface TallyVoucher {
   /**
    * Stable unique ID for this voucher — used as <GUID> and <REMOTEID>.
    * Prevents duplicate entries on Tally re-import.  Pass journal entry ID.
-   * Format emitted: "HisaabKitaab-{guid}"
+   * Format emitted: "SoloBooks-{guid}"
    */
   guid?: string;
   /**
@@ -417,8 +417,8 @@ function buildVoucherXml(voucher: TallyVoucher): string {
   // GUID prevents duplicate imports on re-import (TallyPrime idempotency).
   const guidTag = voucher.guid
     ? `
-        <GUID>HisaabKitaab-${escapeXml(voucher.guid)}</GUID>
-        <REMOTEID>HisaabKitaab-${escapeXml(voucher.guid)}</REMOTEID>`
+        <GUID>SoloBooks-${escapeXml(voucher.guid)}</GUID>
+        <REMOTEID>SoloBooks-${escapeXml(voucher.guid)}</REMOTEID>`
     : "";
 
   // PLACEOFSUPPLY: convert 2-digit GST code to English state name for Tally.

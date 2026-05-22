@@ -70,7 +70,7 @@ export default function PartyProfileClient({
   const accentColor = isCustomer ? PU : OR;
   const accentBg = isCustomer ? PU + "18" : OR + "18";
 
-  const balanceColor = calculatedCurrent === 0 ? "var(--hk-sub)" : calculatedCurrent > 0 ? GR : OR;
+  const balanceColor = calculatedCurrent === 0 ? "var(--sb-sub)" : calculatedCurrent > 0 ? GR : OR;
   const balanceLabel = getBalanceStatusLabel(party.type, calculatedCurrent);
   const balanceIndicator = getBalanceIndicator(party.type, calculatedCurrent);
 
@@ -106,33 +106,33 @@ export default function PartyProfileClient({
   }
 
   return (
-    <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG }}>
+    <div style={{ background: "var(--sb-bg)", minHeight: "100%", fontFamily: SG }}>
       {toast && <HKToast message={toast.message} type={toast.type} />}
 
       {/* Top bar */}
       <div style={{
         position: "sticky", top: 0, zIndex: 50,
-        background: "var(--hk-nav)", borderBottom: "1px solid var(--hk-border)",
+        background: "var(--sb-nav)", borderBottom: "1px solid var(--sb-border)",
         display: "flex", alignItems: "center", gap: 12,
         padding: "0 20px", height: 57,
       }}>
         <button
           onClick={() => router.push("/parties")}
           style={{
-            width: 36, height: 36, borderRadius: 10, border: "1px solid var(--hk-border)",
-            background: "var(--hk-card)", display: "flex", alignItems: "center",
+            width: 36, height: 36, borderRadius: 10, border: "1px solid var(--sb-border)",
+            background: "var(--sb-card)", display: "flex", alignItems: "center",
             justifyContent: "center", cursor: "pointer", flexShrink: 0,
           }}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--hk-text)" strokeWidth="2" strokeLinecap="round">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--sb-text)" strokeWidth="2" strokeLinecap="round">
             <path d="M19 12H5M12 5l-7 7 7 7" />
           </svg>
         </button>
         <div style={{ minWidth: 0, flex: 1 }}>
-          <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {party.name}
           </p>
-          <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)" }}>
+          <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)" }}>
             {party.phone ? `+91 ${party.phone}` : party.email || "No contact"}
           </p>
         </div>
@@ -151,13 +151,13 @@ export default function PartyProfileClient({
         <HKCard style={{ marginBottom: 16, borderLeft: `4px solid ${balanceColor}` }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
             <div>
-              <p style={{ fontSize: TYPE.caption, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", color: "var(--hk-sub)", marginBottom: 4 }}>
+              <p style={{ fontSize: TYPE.caption, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", color: "var(--sb-sub)", marginBottom: 4 }}>
                 Current Balance
               </p>
               <p style={{ fontSize: isMobile ? 28 : TYPE.numLarge, fontWeight: 800, color: balanceColor, fontFamily: IN }}>
                 {fmtAbs(calculatedCurrent)}
               </p>
-              <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", marginTop: 4 }}>
+              <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", marginTop: 4 }}>
                 {balanceLabel}{balanceIndicator ? ` · ${balanceIndicator}` : ""}
               </p>
             </div>
@@ -184,10 +184,10 @@ export default function PartyProfileClient({
 
           {/* Ledger (left) */}
           <HKCard style={{ padding: 0 }}>
-            <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--hk-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--sb-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
-                <p style={{ fontSize: TYPE.label, fontWeight: 700, color: "var(--hk-text)" }}>{t("khata.ledgerTitle")}</p>
-                <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)" }}>{party.phone ? `+91 ${party.phone}` : party.name}</p>
+                <p style={{ fontSize: TYPE.label, fontWeight: 700, color: "var(--sb-text)" }}>{t("khata.ledgerTitle")}</p>
+                <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)" }}>{party.phone ? `+91 ${party.phone}` : party.name}</p>
               </div>
               <span style={{
                 fontSize: TYPE.bodySmall, fontWeight: 700,
@@ -205,8 +205,8 @@ export default function PartyProfileClient({
                 const isOpening = entry.type === "OPENING";
                 const isDebit = entry.debit > 0;
                 const amount = isDebit ? `-${fmtAbs(entry.debit)}` : entry.credit > 0 ? `+${fmtAbs(entry.credit)}` : fmtAbs(0);
-                const entryColor = isOpening ? "var(--hk-sub)" : isDebit ? OR : GR;
-                const entryBg = isOpening ? "var(--hk-badge)" : isDebit ? OR + "12" : GR + "12";
+                const entryColor = isOpening ? "var(--sb-sub)" : isDebit ? OR : GR;
+                const entryBg = isOpening ? "var(--sb-badge)" : isDebit ? OR + "12" : GR + "12";
 
                 return (
                   <div
@@ -215,9 +215,9 @@ export default function PartyProfileClient({
                   >
                     <div style={{
                       maxWidth: "88%", borderRadius: 16, padding: "12px 14px",
-                      background: entryBg, border: isOpening ? "1px solid var(--hk-border)" : "none",
+                      background: entryBg, border: isOpening ? "1px solid var(--sb-border)" : "none",
                     }}>
-                      <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", marginBottom: 4 }}>
+                      <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", marginBottom: 4 }}>
                         {new Date(entry.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
                         {" · "}{entry.type}
                       </p>
@@ -229,10 +229,10 @@ export default function PartyProfileClient({
                           {entry.description}
                         </button>
                       ) : (
-                        <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)" }}>{entry.description}</p>
+                        <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)" }}>{entry.description}</p>
                       )}
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: 6, gap: 16 }}>
-                        <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)" }}>
+                        <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)" }}>
                           {t("khata.balanceAfter")} {fmtAbs(entry.balanceAfter)}
                           {getBalanceIndicator(party.type, entry.balanceAfter) ? ` (${getBalanceIndicator(party.type, entry.balanceAfter)})` : ""}
                         </p>
@@ -244,7 +244,7 @@ export default function PartyProfileClient({
               })}
 
               {ledger.length <= 1 && (
-                <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--hk-sub)", fontSize: TYPE.body }}>
+                <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--sb-sub)", fontSize: TYPE.body }}>
                   {t("khata.noTransactions")}
                 </div>
               )}
@@ -256,7 +256,7 @@ export default function PartyProfileClient({
 
             {/* Party details */}
             <HKCard>
-              <p style={{ fontSize: TYPE.label, fontWeight: 700, color: "var(--hk-text)", marginBottom: 14 }}>Party Details</p>
+              <p style={{ fontSize: TYPE.label, fontWeight: 700, color: "var(--sb-text)", marginBottom: 14 }}>Party Details</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {[
                   { label: "Address", value: party.address },
@@ -271,8 +271,8 @@ export default function PartyProfileClient({
                   { label: "Registered", value: new Date(party.createdAt).toLocaleDateString("en-IN") },
                 ].map(({ label, value, mono }) => (
                   <div key={label}>
-                    <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", marginBottom: 2 }}>{label}</p>
-                    <p style={{ fontSize: TYPE.bodySmall, fontWeight: 600, color: "var(--hk-text)", fontFamily: mono ? IN : SG }}>
+                    <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", marginBottom: 2 }}>{label}</p>
+                    <p style={{ fontSize: TYPE.bodySmall, fontWeight: 600, color: "var(--sb-text)", fontFamily: mono ? IN : SG }}>
                       {value || "Not provided"}
                     </p>
                   </div>
@@ -283,17 +283,17 @@ export default function PartyProfileClient({
             {/* Measurements (customers only) */}
             {isCustomer && measurements.length > 0 && (
               <HKCard>
-                <p style={{ fontSize: TYPE.label, fontWeight: 700, color: "var(--hk-text)", marginBottom: 14 }}>Measurements</p>
+                <p style={{ fontSize: TYPE.label, fontWeight: 700, color: "var(--sb-text)", marginBottom: 14 }}>Measurements</p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {measurements.map((m) => (
                     <div key={m.id} style={{
                       display: "flex", justifyContent: "space-between", alignItems: "center",
-                      padding: "10px 12px", borderRadius: 10, border: "1px solid var(--hk-border)",
-                      background: "var(--hk-badge)",
+                      padding: "10px 12px", borderRadius: 10, border: "1px solid var(--sb-border)",
+                      background: "var(--sb-badge)",
                     }}>
                       <div>
-                        <p style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--hk-text)" }}>{m.label}</p>
-                        <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)" }}>
+                        <p style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--sb-text)" }}>{m.label}</p>
+                        <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)" }}>
                           {m.roomName || "Unspecified"} · {new Date(m.createdAt).toLocaleDateString("en-IN")}
                         </p>
                       </div>
@@ -312,8 +312,8 @@ export default function PartyProfileClient({
             {/* Balance health (admin only) */}
             {role === "ADMIN" && (
               <HKCard>
-                <p style={{ fontSize: TYPE.label, fontWeight: 700, color: "var(--hk-text)", marginBottom: 6 }}>Balance Health</p>
-                <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", marginBottom: 12 }}>
+                <p style={{ fontSize: TYPE.label, fontWeight: 700, color: "var(--sb-text)", marginBottom: 6 }}>Balance Health</p>
+                <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", marginBottom: 12 }}>
                   Verify all party balances match journal history.
                 </p>
 
@@ -336,9 +336,9 @@ export default function PartyProfileClient({
                         </div>
                         <div style={{ maxHeight: 140, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
                           {reconcileResult.drifted.map((d) => (
-                            <div key={d.partyId} style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--hk-border)", fontSize: TYPE.caption }}>
-                              <p style={{ fontWeight: 700, color: "var(--hk-text)" }}>{d.name}</p>
-                              <p style={{ color: "var(--hk-sub)", marginTop: 2 }}>
+                            <div key={d.partyId} style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--sb-border)", fontSize: TYPE.caption }}>
+                              <p style={{ fontWeight: 700, color: "var(--sb-text)" }}>{d.name}</p>
+                              <p style={{ color: "var(--sb-sub)", marginTop: 2 }}>
                                 Stored: {fmtAbs(d.stored)} → Actual: {fmtAbs(d.computed)}
                               </p>
                             </div>
@@ -354,8 +354,8 @@ export default function PartyProfileClient({
                     onClick={handleCheckBalances}
                     disabled={reconcileLoading !== null}
                     style={{
-                      flex: 1, padding: "9px 0", borderRadius: 10, border: "1px solid var(--hk-border)",
-                      background: "var(--hk-badge)", color: "var(--hk-text)", fontFamily: SG,
+                      flex: 1, padding: "9px 0", borderRadius: 10, border: "1px solid var(--sb-border)",
+                      background: "var(--sb-badge)", color: "var(--sb-text)", fontFamily: SG,
                       fontSize: TYPE.bodySmall, fontWeight: 600, cursor: reconcileLoading ? "not-allowed" : "pointer",
                       opacity: reconcileLoading ? 0.6 : 1,
                     }}

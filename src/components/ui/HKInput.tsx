@@ -88,10 +88,10 @@ export const HKInput = forwardRef<HTMLInputElement, HKInputProps>(
 
     const borderClass = isInvalid
       ? "border-[#ef4444]"
-      : "border-[var(--hk-border)] hover:border-[var(--hk-orange)]/50 focus-within:border-[var(--hk-orange)]";
+      : "border-[var(--sb-border)] hover:border-[var(--sb-orange)]/50 focus-within:border-[var(--sb-orange)]";
 
     const wrapperClass = [
-      "relative flex items-center w-full rounded-xl border bg-[var(--hk-input)] transition-colors",
+      "relative flex items-center w-full rounded-xl border bg-[var(--sb-input)] transition-colors",
       borderClass,
       SIZE_HEIGHT[size] ?? SIZE_HEIGHT.md,
       isDisabled ? "opacity-50" : "",
@@ -101,7 +101,7 @@ export const HKInput = forwardRef<HTMLInputElement, HKInputProps>(
       .join(" ");
 
     const inputClass = [
-      "flex-1 h-full bg-transparent outline-none text-[var(--hk-text)] placeholder:text-[var(--hk-muted)] font-medium text-sm disabled:cursor-not-allowed",
+      "flex-1 h-full bg-transparent outline-none text-[var(--sb-text)] placeholder:text-[var(--sb-muted)] font-medium text-sm disabled:cursor-not-allowed",
       !startContent ? "pl-3" : "pl-1",
       !endContent ? "pr-3" : "pr-1",
       toClass(classNames?.input),
@@ -119,7 +119,7 @@ export const HKInput = forwardRef<HTMLInputElement, HKInputProps>(
         {label && (
           <label
             htmlFor={id}
-            className={`text-xs font-semibold text-[var(--hk-sub)] ${toClass(classNames?.label)}`}
+            className={`text-xs font-semibold text-[var(--sb-sub)] ${toClass(classNames?.label)}`}
           >
             {label}
             {isRequired && <span className="ml-0.5 text-[#ef4444]">*</span>}
@@ -160,7 +160,7 @@ export const HKInput = forwardRef<HTMLInputElement, HKInputProps>(
           </p>
         )}
         {!isInvalid && description && (
-          <p className={`text-xs text-[var(--hk-muted)] ${toClass(classNames?.description)}`}>
+          <p className={`text-xs text-[var(--sb-muted)] ${toClass(classNames?.description)}`}>
             {description}
           </p>
         )}

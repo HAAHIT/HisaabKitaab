@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { HKButton } from "@/components/ui/HKButton";
-import { OR, PU, GR, AM, SG, IN, TYPE } from "@/components/ui/hk-design";
+import { OR, PU, GR, AM, SG, IN, TYPE, PageHeader, useIsMobile } from "@/components/ui/hk-design";
 import { SUPPORTED_BANKS } from "@/lib/bank-reconciliation/parsers/index";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -57,6 +57,7 @@ function fmtDate(iso: string): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ReconcilePage() {
+  const isMobile = useIsMobile();
   const [step, setStep] = useState<Step>("history");
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
@@ -195,8 +196,7 @@ export default function ReconcilePage() {
   // ─── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 16px", fontFamily: SG }}>
-      {/* Toast */}
+    <div style={{ fontFamily: SG }}>
       {toast && (
         <div style={{
           position: "fixed", top: 80, left: "50%", transform: "translateX(-50%)",
@@ -207,22 +207,17 @@ export default function ReconcilePage() {
           {toast.msg}
         </div>
       )}
-
-      {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: TYPE.h1, fontWeight: 800, color: "var(--hk-text)", fontFamily: SG, margin: 0 }}>
-          Bank Reconciliation
-        </h1>
-        <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", marginTop: 6, fontFamily: SG }}>
-          Bank statement upload karo — payments se match karega
-        </p>
-      </div>
+      <PageHeader
+        title="Bank Reconciliation"
+        subtitle="Bank statement upload karo — payments se match karega"
+        isMobile={isMobile}
+      />
 
       {/* ── Step: History ──────────────────────────────────────────────────── */}
       {step === "history" && (
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-            <p style={{ fontSize: TYPE.bodyLarge, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG }}>
+            <p style={{ fontSize: TYPE.bodyLarge, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG }}>
               Uploaded Statements
             </p>
             <HKButton
@@ -233,18 +228,18 @@ export default function ReconcilePage() {
           </div>
 
           {loading && (
-            <p style={{ color: "var(--hk-sub)", fontSize: TYPE.body, fontFamily: SG }}>Loading...</p>
+            <p style={{ color: "var(--sb-sub)", fontSize: TYPE.body, fontFamily: SG }}>Loading...</p>
           )}
 
           {!loading && statements.length === 0 && (
             <div style={{
-              border: "2px dashed var(--hk-border)", borderRadius: 16, padding: 40,
+              border: "2px dashed var(--sb-border)", borderRadius: 16, padding: 40,
               textAlign: "center",
             }}>
-              <p style={{ fontSize: TYPE.bodyLarge, fontWeight: 700, color: "var(--hk-sub)", fontFamily: SG }}>
+              <p style={{ fontSize: TYPE.bodyLarge, fontWeight: 700, color: "var(--sb-sub)", fontFamily: SG }}>
                 Koi statement nahi mila
               </p>
-              <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", marginTop: 8, fontFamily: SG }}>
+              <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", marginTop: 8, fontFamily: SG }}>
                 Pehla statement upload karo
               </p>
             </div>
@@ -253,15 +248,15 @@ export default function ReconcilePage() {
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {statements.map((s) => (
               <div key={s.id} style={{
-                border: "1.5px solid var(--hk-border)", borderRadius: 16, padding: "16px 20px",
-                background: "var(--hk-card)",
+                border: "1.5px solid var(--sb-border)", borderRadius: 16, padding: "16px 20px",
+                background: "var(--sb-card)",
               }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                   <div>
-                    <p style={{ fontSize: TYPE.bodyLarge, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, margin: 0 }}>
+                    <p style={{ fontSize: TYPE.bodyLarge, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>
                       {s.bankAccount.name}
                     </p>
-                    <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG, marginTop: 4 }}>
+                    <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG, marginTop: 4 }}>
                       {fmtDate(s.periodFrom)} – {fmtDate(s.periodTo)}
                     </p>
                   </div>
@@ -279,11 +274,11 @@ export default function ReconcilePage() {
                   {[
                     { l: "Total Rows", v: s.rowCount },
                     { l: "Matched", v: s.matchedCount, c: GR },
-                    { l: "Unmatched", v: s.unmatchedCount, c: s.unmatchedCount > 0 ? AM : "var(--hk-sub)" },
+                    { l: "Unmatched", v: s.unmatchedCount, c: s.unmatchedCount > 0 ? AM : "var(--sb-sub)" },
                   ].map((stat) => (
                     <div key={stat.l}>
-                      <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG, margin: 0 }}>{stat.l}</p>
-                      <p style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: stat.c ?? "var(--hk-text)", fontFamily: IN, margin: 0 }}>
+                      <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG, margin: 0 }}>{stat.l}</p>
+                      <p style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: stat.c ?? "var(--sb-text)", fontFamily: IN, margin: 0 }}>
                         {stat.v}
                       </p>
                     </div>
@@ -305,14 +300,14 @@ export default function ReconcilePage() {
             ← Wapas
           </button>
 
-          <h2 style={{ fontSize: TYPE.h2, fontWeight: 800, color: "var(--hk-text)", fontFamily: SG, marginBottom: 24 }}>
+          <h2 style={{ fontSize: TYPE.h2, fontWeight: 800, color: "var(--sb-text)", fontFamily: SG, marginBottom: 24 }}>
             Statement Upload Karo
           </h2>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
             {/* Bank Account */}
             <div>
-              <label style={{ display: "block", fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--hk-sub)", fontFamily: SG, marginBottom: 8 }}>
+              <label style={{ display: "block", fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--sb-sub)", fontFamily: SG, marginBottom: 8 }}>
                 Bank Account *
               </label>
               <select
@@ -320,7 +315,7 @@ export default function ReconcilePage() {
                 onChange={(e) => setBankAccountId(e.target.value)}
                 style={{
                   width: "100%", padding: "12px 16px", borderRadius: 12, fontSize: TYPE.body, fontFamily: SG,
-                  border: "1.5px solid var(--hk-border)", background: "var(--hk-card)", color: "var(--hk-text)",
+                  border: "1.5px solid var(--sb-border)", background: "var(--sb-card)", color: "var(--sb-text)",
                   outline: "none",
                 }}
               >
@@ -333,7 +328,7 @@ export default function ReconcilePage() {
 
             {/* Bank Format */}
             <div>
-              <label style={{ display: "block", fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--hk-sub)", fontFamily: SG, marginBottom: 8 }}>
+              <label style={{ display: "block", fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--sb-sub)", fontFamily: SG, marginBottom: 8 }}>
                 Bank Format *
               </label>
               <select
@@ -341,7 +336,7 @@ export default function ReconcilePage() {
                 onChange={(e) => setBankSlug(e.target.value)}
                 style={{
                   width: "100%", padding: "12px 16px", borderRadius: 12, fontSize: TYPE.body, fontFamily: SG,
-                  border: "1.5px solid var(--hk-border)", background: "var(--hk-card)", color: "var(--hk-text)",
+                  border: "1.5px solid var(--sb-border)", background: "var(--sb-card)", color: "var(--sb-text)",
                   outline: "none",
                 }}
               >
@@ -354,7 +349,7 @@ export default function ReconcilePage() {
             {/* Period */}
             <div style={{ display: "flex", gap: 12 }}>
               <div style={{ flex: 1 }}>
-                <label style={{ display: "block", fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--hk-sub)", fontFamily: SG, marginBottom: 8 }}>
+                <label style={{ display: "block", fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--sb-sub)", fontFamily: SG, marginBottom: 8 }}>
                   Period Se *
                 </label>
                 <input
@@ -363,13 +358,13 @@ export default function ReconcilePage() {
                   onChange={(e) => setPeriodFrom(e.target.value)}
                   style={{
                     width: "100%", padding: "12px 16px", borderRadius: 12, fontSize: TYPE.body, fontFamily: SG,
-                    border: "1.5px solid var(--hk-border)", background: "var(--hk-card)", color: "var(--hk-text)",
+                    border: "1.5px solid var(--sb-border)", background: "var(--sb-card)", color: "var(--sb-text)",
                     outline: "none", boxSizing: "border-box",
                   }}
                 />
               </div>
               <div style={{ flex: 1 }}>
-                <label style={{ display: "block", fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--hk-sub)", fontFamily: SG, marginBottom: 8 }}>
+                <label style={{ display: "block", fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--sb-sub)", fontFamily: SG, marginBottom: 8 }}>
                   Period Tak *
                 </label>
                 <input
@@ -378,7 +373,7 @@ export default function ReconcilePage() {
                   onChange={(e) => setPeriodTo(e.target.value)}
                   style={{
                     width: "100%", padding: "12px 16px", borderRadius: 12, fontSize: TYPE.body, fontFamily: SG,
-                    border: "1.5px solid var(--hk-border)", background: "var(--hk-card)", color: "var(--hk-text)",
+                    border: "1.5px solid var(--sb-border)", background: "var(--sb-card)", color: "var(--sb-text)",
                     outline: "none", boxSizing: "border-box",
                   }}
                 />
@@ -387,21 +382,21 @@ export default function ReconcilePage() {
 
             {/* File Upload */}
             <div>
-              <label style={{ display: "block", fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--hk-sub)", fontFamily: SG, marginBottom: 8 }}>
+              <label style={{ display: "block", fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--sb-sub)", fontFamily: SG, marginBottom: 8 }}>
                 CSV File *
               </label>
               <div
                 onClick={() => fileRef.current?.click()}
                 style={{
-                  border: "2px dashed var(--hk-border)", borderRadius: 12, padding: "24px 20px",
+                  border: "2px dashed var(--sb-border)", borderRadius: 12, padding: "24px 20px",
                   textAlign: "center", cursor: "pointer",
-                  background: "var(--hk-bg)",
+                  background: "var(--sb-bg)",
                 }}
               >
-                <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", fontFamily: SG, margin: 0 }}>
+                <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", fontFamily: SG, margin: 0 }}>
                   📂 CSV file tap karke choose karo
                 </p>
-                <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG, marginTop: 4 }}>
+                <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG, marginTop: 4 }}>
                   Only .csv files supported
                 </p>
               </div>
@@ -438,7 +433,7 @@ export default function ReconcilePage() {
             ← Wapas
           </button>
 
-          <h2 style={{ fontSize: TYPE.h2, fontWeight: 800, color: "var(--hk-text)", fontFamily: SG, marginBottom: 8 }}>
+          <h2 style={{ fontSize: TYPE.h2, fontWeight: 800, color: "var(--sb-text)", fontFamily: SG, marginBottom: 8 }}>
             Parse Preview
           </h2>
 
@@ -480,16 +475,16 @@ export default function ReconcilePage() {
               const matched = !!row.matchedPaymentId && !ignored.has(row.matchedPaymentId);
               return (
                 <div key={idx} style={{
-                  border: `1.5px solid ${matched ? GR + "44" : "var(--hk-border)"}`,
+                  border: `1.5px solid ${matched ? GR + "44" : "var(--sb-border)"}`,
                   borderRadius: 12, padding: "12px 16px",
-                  background: matched ? GR + "08" : "var(--hk-card)",
+                  background: matched ? GR + "08" : "var(--sb-card)",
                   display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12,
                 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <p style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {row.description || "—"}
                     </p>
-                    <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG, marginTop: 2 }}>
+                    <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG, marginTop: 2 }}>
                       {fmtDate(row.date)} · {row.direction === "INCOMING" ? "↓ Aaya" : "↑ Gaya"}
                     </p>
                     {matched && (
@@ -505,7 +500,7 @@ export default function ReconcilePage() {
                     {matched && row.matchedPaymentId && (
                       <button
                         onClick={() => setIgnored((prev) => new Set([...prev, row.matchedPaymentId!]))}
-                        style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", background: "none", border: "none", cursor: "pointer", fontFamily: SG, marginTop: 4 }}
+                        style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", background: "none", border: "none", cursor: "pointer", fontFamily: SG, marginTop: 4 }}
                       >
                         Ignore
                       </button>
@@ -543,22 +538,22 @@ export default function ReconcilePage() {
             ← Wapas
           </button>
 
-          <h2 style={{ fontSize: TYPE.h2, fontWeight: 800, color: "var(--hk-text)", fontFamily: SG, marginBottom: 8 }}>
+          <h2 style={{ fontSize: TYPE.h2, fontWeight: 800, color: "var(--sb-text)", fontFamily: SG, marginBottom: 8 }}>
             Confirm Reconciliation
           </h2>
-          <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", fontFamily: SG, marginBottom: 24 }}>
+          <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", fontFamily: SG, marginBottom: 24 }}>
             Ek baar commit ho gaya toh statement lock ho jaayega.
           </p>
 
-          <div style={{ border: "1.5px solid var(--hk-border)", borderRadius: 16, padding: 20, marginBottom: 24 }}>
+          <div style={{ border: "1.5px solid var(--sb-border)", borderRadius: 16, padding: 20, marginBottom: 24 }}>
             {[
               { l: "Total Rows", v: uploadResult.rowCount },
               { l: "Auto Matched", v: uploadResult.matchedCount - ignored.size, c: GR },
               { l: "Ignored / Unmatched", v: uploadResult.rowCount - uploadResult.matchedCount + ignored.size, c: AM },
             ].map((s) => (
-              <div key={s.l} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid var(--hk-border)" }}>
-                <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", fontFamily: SG, margin: 0 }}>{s.l}</p>
-                <p style={{ fontSize: TYPE.bodyLarge, fontWeight: 800, color: s.c ?? "var(--hk-text)", fontFamily: IN, margin: 0 }}>{s.v}</p>
+              <div key={s.l} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid var(--sb-border)" }}>
+                <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", fontFamily: SG, margin: 0 }}>{s.l}</p>
+                <p style={{ fontSize: TYPE.bodyLarge, fontWeight: 800, color: s.c ?? "var(--sb-text)", fontFamily: IN, margin: 0 }}>{s.v}</p>
               </div>
             ))}
           </div>
@@ -581,7 +576,7 @@ export default function ReconcilePage() {
           <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, color: GR, fontFamily: SG, marginBottom: 8 }}>
             Reconciliation Ho Gayi!
           </h2>
-          <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", fontFamily: SG, marginBottom: 24 }}>
+          <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", fontFamily: SG, marginBottom: 24 }}>
             {commitResult.matchedCount} rows matched · {commitResult.ambiguousCount} ambiguous
           </p>
           <HKButton

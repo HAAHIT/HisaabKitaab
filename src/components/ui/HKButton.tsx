@@ -1,6 +1,6 @@
 "use client";
 
-import { OR, PU, GR, SG, TYPE, TOUCH } from "@/components/ui/hk-design";
+import { C, OR, PU, GR, SG, TYPE, TOUCH } from "@/components/ui/hk-design";
 
 // ── Variant & size maps ───────────────────────────────────────────────────────
 
@@ -29,26 +29,26 @@ const SIZE_MAP: Record<HKButtonSize, SizeDef> = {
 
 const VARIANT_STYLES: Record<HKButtonVariant, React.CSSProperties> = {
   primary: {
-    background: `linear-gradient(135deg, ${OR}, ${PU})`,
+    background: C.primary,
     color: "#fff",
     border: "none",
-    boxShadow: `0 4px 16px ${OR}44`,
+    boxShadow: `0 2px 8px ${C.primary}44`,
   },
   success: {
-    background: `linear-gradient(135deg, ${GR}, #0aab74)`,
+    background: C.positive,
     color: "#fff",
     border: "none",
-    boxShadow: `0 4px 12px ${GR}44`,
+    boxShadow: `0 2px 8px ${C.positive}44`,
   },
   secondary: {
-    background: "var(--hk-badge)",
-    color: "var(--hk-text)",
-    border: "1px solid var(--hk-border)",
+    background: "var(--sb-card)",
+    color: "var(--sb-text)",
+    border: "1px solid var(--sb-border-strong)",
     boxShadow: "none",
   },
   ghost: {
     background: "transparent",
-    color: "var(--hk-sub)",
+    color: "var(--sb-sub)",
     border: "none",
     boxShadow: "none",
   },
@@ -60,13 +60,13 @@ const VARIANT_STYLES: Record<HKButtonVariant, React.CSSProperties> = {
   },
 };
 
-// ── Spinner (uses .hk-spin from globals.css) ──────────────────────────────────
+// ── Spinner (uses .sb-spin from globals.css) ──────────────────────────────────
 
 function Spinner({ size }: { size: HKButtonSize }) {
   const px = size === "sm" ? 14 : 16;
   return (
     <svg
-      className="hk-spin"
+      className="sb-spin"
       width={px}
       height={px}
       viewBox="0 0 24 24"
@@ -100,7 +100,7 @@ export interface HKButtonProps
 }
 
 /**
- * Single canonical button for HisaabKitaab.
+ * Single canonical button for SoloBooks.
  *
  * Replaces:
  *   - GradientButton (variant="primary" | "success")

@@ -1,6 +1,6 @@
 {
-  "name": "HisaabKitaab — Digital Khata",
-  "short_name": "HisaabKitaab",
+  "name": "SoloBooks — Digital Khata",
+  "short_name": "SoloBooks",
   "description": "Fast billing and payment tracking for your business",
   "start_url": "/dashboard",
   "display": "standalone",

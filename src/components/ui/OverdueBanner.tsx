@@ -5,7 +5,7 @@
 // Shows when any party has outstanding balance and no payment in 30+ days.
 
 import { useRouter } from "next/navigation";
-import { OR, SG, IN, TYPE, fmtFull } from "@/components/ui/hk-design";
+import { C, SG, TYPE, fmtFull } from "@/components/ui/hk-design";
 
 interface OverdueBannerProps {
   overdueCount: number;
@@ -23,13 +23,9 @@ export function OverdueBanner({
 
   if (overdueCount === 0) return null;
 
-  // Build the message per PRD spec
-  let message: string;
-  if (overdueCount === 1 && overdueParty) {
-    message = `${overdueParty} ka ${fmtFull(overdueAmount)} 30 din se baaki hai`;
-  } else {
-    message = `${overdueCount} parties ka ${fmtFull(overdueAmount)} 30+ din se baaki hai`;
-  }
+  const sub = overdueCount === 1 && overdueParty
+    ? `from ${overdueParty} — chase karo`
+    : `from ${overdueCount} parties — ek chakkar laga lo`;
 
   return (
     <button
@@ -40,84 +36,56 @@ export function OverdueBanner({
         display: "flex",
         alignItems: "center",
         gap: 12,
-        padding: "14px 18px",
-        borderRadius: 14,
-        background: OR + "14",
-        border: `1.5px solid ${OR}30`,
+        padding: "12px 14px",
+        borderRadius: 12,
+        background: C.primarySoft,
+        border: `1px solid ${C.primary}33`,
         cursor: "pointer",
         marginBottom: 16,
-        transition: "background 0.15s, border-color 0.15s",
+        transition: "border-color 0.15s",
         textAlign: "left",
         fontFamily: SG,
       }}
+      onMouseEnter={e => (e.currentTarget.style.borderColor = `${C.primary}66`)}
+      onMouseLeave={e => (e.currentTarget.style.borderColor = `${C.primary}33`)}
     >
-      {/* Warning icon */}
+      {/* Icon */}
       <div
         style={{
           width: 40,
           height: 40,
-          borderRadius: 11,
-          background: OR + "22",
+          borderRadius: 12,
+          background: C.primary,
+          color: "#fff",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           flexShrink: 0,
         }}
       >
-        <svg
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke={OR}
-          strokeWidth="2.2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-          <line x1="12" y1="9" x2="12" y2="13" />
-          <line x1="12" y1="17" x2="12.01" y2="17" />
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/>
+          <line x1="12" y1="17" x2="12.01" y2="17"/>
         </svg>
       </div>
 
       {/* Text */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p
-          style={{
-            fontSize: TYPE.body,
-            fontWeight: 700,
-            color: OR,
-            fontFamily: SG,
-            lineHeight: 1.3,
-          }}
-        >
-          {message}
+        <p style={{ fontSize: TYPE.h3, fontWeight: 700, color: C.primaryDark, fontFamily: SG, margin: 0, lineHeight: 1.3 }}>
+          {fmtFull(overdueAmount)} overdue
         </p>
-        <p
-          style={{
-            fontSize: TYPE.bodySmall,
-            fontWeight: 500,
-            color: "var(--hk-sub)",
-            fontFamily: SG,
-            marginTop: 3,
-          }}
-        >
-          Tap karke dekhein →
+        <p style={{ fontSize: TYPE.caption, fontWeight: 500, color: C.primaryDark, fontFamily: SG, margin: "2px 0 0", opacity: 0.7 }}>
+          {sub}
         </p>
       </div>
 
-      {/* Amount badge */}
-      <span
-        style={{
-          fontSize: TYPE.numSmall,
-          fontWeight: 800,
-          color: OR,
-          fontFamily: IN,
-          whiteSpace: "nowrap",
-          flexShrink: 0,
-        }}
-      >
-        {fmtFull(overdueAmount)}
+      {/* CTA */}
+      <span style={{ fontSize: TYPE.label, fontWeight: 700, color: C.primary, display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+        Dekho
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="m9 18 6-6-6-6"/>
+        </svg>
       </span>
     </button>
   );

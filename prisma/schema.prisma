@@ -257,9 +257,9 @@ model JournalEntry {
   createdBy       String
   createdAt       DateTime      @default(now())
   /// *
-  ///    * remoteId — Tally <REMOTEID> / <GUID> value (stripped of "HisaabKitaab-" prefix).
+  ///    * remoteId — Tally <REMOTEID> / <GUID> value (stripped of "SoloBooks-" prefix).
   ///    * Used as the primary idempotency key for Tally XML re-imports.
-  ///    * Null for entries created natively in HisaabKitaab (not via Tally import).
+  ///    * Null for entries created natively in SoloBooks (not via Tally import).
   remoteId        String?
   /// *
   ///    * isReverseCharge — true when this entry is an RCM purchase under

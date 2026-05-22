@@ -12,9 +12,9 @@ import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
-  OR, PU, GR, SG, IN, TYPE,
+  C, OR, PU, GR, SG, IN, TYPE,
   fmt, fmtFull, useIsMobile,
-  HKCard, HKToast, SearchBox, PillFilter,
+  HKCard, HKAvatar, HKToast, SearchBox, PillFilter,
   PageHeader,
 } from "@/components/ui/hk-design";
 import { HKButton } from "@/components/ui/HKButton";
@@ -239,7 +239,7 @@ export default function PartiesPage() {
     <>
       <div
         style={{
-          background: "var(--hk-bg)",
+          background: "var(--sb-bg)",
           minHeight: "100%",
           paddingBottom: 0,
           fontFamily: SG,
@@ -247,14 +247,13 @@ export default function PartiesPage() {
       >
         {toast && <HKToast message={toast.message} type={toast.type} />}
 
-        <PageHeader
-          title="Udhar Khata"
-          subtitle="Party-wise hisaab"
-          isMobile={isMobile}
-          action={<HKButton onClick={openCreate}>+ Party Jodo</HKButton>}
-        />
-
-        <div style={{ padding: isMobile ? "0 14px" : "0 28px", maxWidth: 1440, margin: "0 auto" }}>
+        <div style={{ padding: isMobile ? "18px 14px 100px" : "24px 28px", maxWidth: 1440, margin: "0 auto" }}>
+          <PageHeader
+            title="Udhar Khata"
+            subtitle="Party-wise hisaab"
+            isMobile={isMobile}
+            action={<HKButton onClick={openCreate}>+ Party Jodo</HKButton>}
+          />
           {/* Overdue banner */}
           <OverdueBanner
             overdueCount={overdue.overdueCount}
@@ -263,88 +262,21 @@ export default function PartiesPage() {
           />
 
           {/* Lena/Dena summary */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: 10,
-              marginBottom: 16,
-            }}
-          >
-            <div
-              style={{
-                padding: "18px 20px",
-                borderRadius: 16,
-                background: GR + "14",
-                border: `1px solid ${GR}28`,
-              }}
-            >
-              <p
-                style={{
-                  fontSize: TYPE.caption,
-                  fontWeight: 700,
-                  color: GR,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.6px",
-                  marginBottom: 6,
-                  fontFamily: SG,
-                }}
-              >
-                ↑ Lena Baki
-              </p>
-              <p
-                style={{
-                  fontSize: isMobile ? TYPE.numMedium + 4 : TYPE.numLarge,
-                  fontWeight: 800,
-                  color: "var(--hk-text)",
-                  fontFamily: IN,
-                  letterSpacing: "-0.5px",
-                  lineHeight: 1.1,
-                }}
-              >
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+            <HKCard style={{ padding: isMobile ? 14 : 18 }}>
+              <p style={{ fontSize: TYPE.caption, fontWeight: 600, color: "var(--sb-muted)", marginBottom: 4, fontFamily: SG }}>Lena Baki</p>
+              <p style={{ fontFamily: IN, fontWeight: 700, color: GR, fontSize: isMobile ? 18 : 24, letterSpacing: "-0.4px", fontVariantNumeric: "tabular-nums", margin: 0 }}>
                 {fmtFull(lenaTotal)}
               </p>
-              <p style={{ fontSize: TYPE.bodySmall, fontWeight: 600, color: GR, marginTop: 6, fontFamily: SG }}>
-                {lenaCount} {lenaCount === 1 ? "party" : "parties"} se milna hai
-              </p>
-            </div>
-            <div
-              style={{
-                padding: "18px 20px",
-                borderRadius: 16,
-                background: OR + "14",
-                border: `1px solid ${OR}28`,
-              }}
-            >
-              <p
-                style={{
-                  fontSize: TYPE.caption,
-                  fontWeight: 700,
-                  color: OR,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.6px",
-                  marginBottom: 6,
-                  fontFamily: SG,
-                }}
-              >
-                ↓ Dena Baki
-              </p>
-              <p
-                style={{
-                  fontSize: isMobile ? TYPE.numMedium + 4 : TYPE.numLarge,
-                  fontWeight: 800,
-                  color: "var(--hk-text)",
-                  fontFamily: IN,
-                  letterSpacing: "-0.5px",
-                  lineHeight: 1.1,
-                }}
-              >
+              <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", marginTop: 2, fontFamily: SG }}>customers se</p>
+            </HKCard>
+            <HKCard style={{ padding: isMobile ? 14 : 18 }}>
+              <p style={{ fontSize: TYPE.caption, fontWeight: 600, color: "var(--sb-muted)", marginBottom: 4, fontFamily: SG }}>Dena Baki</p>
+              <p style={{ fontFamily: IN, fontWeight: 700, color: C.negative, fontSize: isMobile ? 18 : 24, letterSpacing: "-0.4px", fontVariantNumeric: "tabular-nums", margin: 0 }}>
                 {fmtFull(denaTotal)}
               </p>
-              <p style={{ fontSize: TYPE.bodySmall, fontWeight: 600, color: OR, marginTop: 6, fontFamily: SG }}>
-                {denaCount} {denaCount === 1 ? "party" : "parties"} ko dena hai
-              </p>
-            </div>
+              <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", marginTop: 2, fontFamily: SG }}>suppliers ko</p>
+            </HKCard>
           </div>
 
           {/* Search + filter */}
@@ -359,8 +291,8 @@ export default function PartiesPage() {
               <div style={{
                 display: "inline-flex", alignItems: "center", gap: 6,
                 padding: "6px 12px", borderRadius: 20,
-                background: OR + "18", border: `1px solid ${OR}40`,
-                fontSize: TYPE.bodySmall, fontWeight: 700, color: OR, fontFamily: SG,
+                background: C.primarySoft, border: `1px solid ${C.primary}33`,
+                fontSize: TYPE.bodySmall, fontWeight: 700, color: C.primary, fontFamily: SG,
               }}>
                 ⏰ Overdue parties sirf
                 <button
@@ -383,13 +315,13 @@ export default function PartiesPage() {
               ))}
             </div>
           ) : parties.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--hk-sub)" }}>
+            <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--sb-sub)" }}>
               <div style={{ fontSize: 52, marginBottom: 16 }}>👥</div>
               <p
                 style={{
                   fontWeight: 700,
                   fontSize: TYPE.h2,
-                  color: "var(--hk-text)",
+                  color: "var(--sb-text)",
                   marginBottom: 8,
                   fontFamily: SG,
                 }}
@@ -406,138 +338,61 @@ export default function PartiesPage() {
               )}
             </div>
           ) : (
-            <HKCard style={{ padding: "0 16px" }}>
+            <HKCard style={{ padding: 0 }}>
               {parties.map((party, i) => {
-                const isLena = party.currentBalance < 0;
-                const color = isLena ? GR : OR;
-                const initials = party.name
-                  .split(" ")
-                  .map((n) => n[0])
-                  .join("")
-                  .slice(0, 2)
-                  .toUpperCase();
+                const owesUs = party.currentBalance < 0;
+                const weOwe = party.currentBalance > 0;
+                const balColor = owesUs ? GR : weOwe ? C.negative : "var(--sb-muted)";
                 return (
                   <div
                     key={party.id}
                     style={{
                       display: "flex",
                       alignItems: "center",
-                      gap: 14,
-                      padding: "16px 0",
-                      borderBottom:
-                        i < parties.length - 1 ? "1px solid var(--hk-border)" : "none",
-                      minHeight: 72,
+                      gap: 12,
+                      padding: "14px 18px",
+                      borderBottom: i < parties.length - 1 ? "1px solid var(--sb-divider)" : "none",
+                      transition: "background 0.15s",
                     }}
+                    onMouseEnter={e => (e.currentTarget.style.background = "var(--sb-hover)")}
+                    onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
                   >
-                    <div
+                    <button
                       onClick={() => router.push(`/parties/${party.id}`)}
                       style={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: 13,
-                        background: color + "20",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
-                        cursor: "pointer",
+                        display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0,
+                        background: "transparent", border: "none", cursor: "pointer",
+                        padding: 0, textAlign: "left", color: "var(--sb-text)",
                       }}
                     >
-                      <span style={{ fontSize: TYPE.body, fontWeight: 800, color, fontFamily: IN }}>
-                        {initials}
-                      </span>
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "flex-start",
-                          gap: 12,
-                        }}
-                      >
-                        <div
-                          onClick={() => router.push(`/parties/${party.id}`)}
-                          style={{ cursor: "pointer", minWidth: 0, flex: 1 }}
-                        >
-                          <p
-                            style={{
-                              fontSize: TYPE.bodyLarge,
-                              fontWeight: 700,
-                              color: "var(--hk-text)",
-                              marginBottom: 5,
-                              fontFamily: SG,
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {party.name}
-                          </p>
-                          <div
-                            style={{
-                              display: "flex",
-                              gap: 8,
-                              alignItems: "center",
-                              flexWrap: "wrap",
-                            }}
-                          >
-                            <span
-                              style={{
-                                fontSize: TYPE.chip,
-                                fontWeight: 700,
-                                color: party.type === "CUSTOMER" ? PU : "var(--hk-sub)",
-                                background:
-                                  party.type === "CUSTOMER" ? PU + "18" : "var(--hk-badge)",
-                                padding: "3px 9px",
-                                borderRadius: 6,
-                                fontFamily: SG,
-                              }}
-                            >
-                              {party.type === "CUSTOMER" ? "Grahak" : "Supplier"}
-                            </span>
-                            {party.phone && (
-                              <span
-                                style={{
-                                  fontSize: TYPE.bodySmall,
-                                  fontWeight: 500,
-                                  color: "var(--hk-sub)",
-                                  fontFamily: SG,
-                                }}
-                              >
-                                {party.phone}
-                              </span>
-                            )}
-                          </div>
+                      <HKAvatar name={party.name} size={44} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                          <span style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG }}>{party.name}</span>
+                          {overdueFilter && (
+                            <span style={{
+                              display: "inline-flex", alignItems: "center", height: 22, padding: "0 8px",
+                              borderRadius: 8, background: C.primarySoft, color: C.primary,
+                              fontSize: 11, fontWeight: 600, fontFamily: SG, letterSpacing: "0.1px",
+                            }}>Overdue</span>
+                          )}
                         </div>
-                        <div style={{ textAlign: "right", flexShrink: 0 }}>
-                          <p
-                            style={{
-                              fontSize: TYPE.numMedium,
-                              fontWeight: 800,
-                              color,
-                              fontFamily: IN,
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {isLena ? "+" : "-"}
-                            {fmt(Math.abs(party.currentBalance))}
+                        <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", margin: "2px 0 0", fontFamily: SG }}>
+                          {party.type === "CUSTOMER" ? "Customer" : "Supplier"}
+                          {party.phone ? ` · ${party.phone}` : ""}
+                        </p>
+                      </div>
+                      <div style={{ textAlign: "right", marginRight: 8 }}>
+                        <p style={{ fontFamily: IN, fontWeight: 700, fontSize: 16, color: balColor, margin: 0, fontVariantNumeric: "tabular-nums" }}>
+                          {owesUs ? fmtFull(Math.abs(party.currentBalance)) : weOwe ? fmtFull(party.currentBalance) : "Settled"}
+                        </p>
+                        {party.currentBalance !== 0 && (
+                          <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", margin: "2px 0 0", fontFamily: SG }}>
+                            {owesUs ? "lena baki" : "dena baki"}
                           </p>
-                          <p
-                            style={{
-                              fontSize: TYPE.caption,
-                              fontWeight: 600,
-                              color: "var(--hk-sub)",
-                              marginTop: 4,
-                              fontFamily: SG,
-                            }}
-                          >
-                            {getBalanceStatusLabel(
-                              party.type as SupportedPartyType,
-                              roundBalance(party.currentBalance)
-                            )}
-                          </p>
-                        </div>
+                        )}
+                      </div>
+                    </button>
                         {/* Call / WhatsApp / Overflow (§5.3) */}
                         <div
                           style={{
@@ -556,8 +411,8 @@ export default function PartiesPage() {
                                 width: 36,
                                 height: 36,
                                 borderRadius: 10,
-                                border: "1px solid var(--hk-border)",
-                                background: GR + "14",
+                                border: "1px solid var(--sb-border)",
+                                background: "var(--sb-surface-alt)",
                                 color: GR,
                                 display: "flex",
                                 alignItems: "center",
@@ -587,8 +442,8 @@ export default function PartiesPage() {
                                 width: 36,
                                 height: 36,
                                 borderRadius: 10,
-                                border: "1px solid var(--hk-border)",
-                                background: "#25D36614",
+                                border: "1px solid var(--sb-border)",
+                                background: "var(--sb-surface-alt)",
                                 color: "#25D366",
                                 display: "flex",
                                 alignItems: "center",
@@ -624,9 +479,9 @@ export default function PartiesPage() {
                               width: 36,
                               height: 36,
                               borderRadius: 10,
-                              border: "1px solid var(--hk-border)",
-                              background: "var(--hk-badge)",
-                              color: "var(--hk-sub)",
+                              border: "1px solid var(--sb-border)",
+                              background: "var(--sb-surface-alt)",
+                              color: "var(--sb-sub)",
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
@@ -644,8 +499,8 @@ export default function PartiesPage() {
                                   top: "100%",
                                   right: 0,
                                   marginTop: 4,
-                                  background: "var(--hk-card)",
-                                  border: "1px solid var(--hk-border)",
+                                  background: "var(--sb-card)",
+                                  border: "1px solid var(--sb-border)",
                                   borderRadius: 12,
                                   boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
                                   zIndex: 10,
@@ -659,7 +514,7 @@ export default function PartiesPage() {
                                     width: "100%", padding: "10px 14px",
                                     display: "flex", alignItems: "center", gap: 8,
                                     background: "transparent", border: "none", cursor: "pointer",
-                                    fontSize: 14, fontWeight: 600, color: "var(--hk-text)", fontFamily: SG,
+                                    fontSize: 14, fontWeight: 600, color: "var(--sb-text)", fontFamily: SG,
                                   }}
                                 >
                                   <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
@@ -671,20 +526,20 @@ export default function PartiesPage() {
                                     width: "100%", padding: "10px 14px",
                                     display: "flex", alignItems: "center", gap: 8,
                                     background: "transparent", border: "none", cursor: "pointer",
-                                    fontSize: 14, fontWeight: 600, color: "var(--hk-text)", fontFamily: SG,
+                                    fontSize: 14, fontWeight: 600, color: "var(--sb-text)", fontFamily: SG,
                                   }}
                                 >
                                   <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
                                   Payment Record
                                 </button>
-                                <div style={{ height: 1, background: "var(--hk-border)", margin: "4px 0" }} />
+                                <div style={{ height: 1, background: "var(--sb-border)", margin: "4px 0" }} />
                                 <button
                                   onClick={(e) => { e.stopPropagation(); setOverflowPartyId(null); openEdit(party); }}
                                   style={{
                                     width: "100%", padding: "10px 14px",
                                     display: "flex", alignItems: "center", gap: 8,
                                     background: "transparent", border: "none", cursor: "pointer",
-                                    fontSize: 14, fontWeight: 600, color: "var(--hk-text)", fontFamily: SG,
+                                    fontSize: 14, fontWeight: 600, color: "var(--sb-text)", fontFamily: SG,
                                   }}
                                 >
                                   <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -696,7 +551,7 @@ export default function PartiesPage() {
                                     width: "100%", padding: "10px 14px",
                                     display: "flex", alignItems: "center", gap: 8,
                                     background: "transparent", border: "none", cursor: "pointer",
-                                    fontSize: 14, fontWeight: 600, color: OR, fontFamily: SG,
+                                    fontSize: 14, fontWeight: 600, color: C.negative, fontFamily: SG,
                                   }}
                                 >
                                   <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
@@ -706,8 +561,6 @@ export default function PartiesPage() {
                             )}
                           </div>
                         </div>
-                      </div>
-                    </div>
                   </div>
                 );
               })}
@@ -746,8 +599,8 @@ export default function PartiesPage() {
               zIndex: 500,
               display: "flex",
               flexDirection: "column",
-              background: "var(--hk-card)",
-              borderLeft: "1px solid var(--hk-border)",
+              background: "var(--sb-card)",
+              borderLeft: "1px solid var(--sb-border)",
               boxShadow: "-16px 0 48px rgba(0,0,0,0.35)",
               fontFamily: SG,
               animation: "slideInRight 0.3s ease-out",
@@ -760,7 +613,7 @@ export default function PartiesPage() {
                 alignItems: "center",
                 gap: 12,
                 padding: "16px 20px",
-                borderBottom: "1px solid var(--hk-border)",
+                borderBottom: "1px solid var(--sb-border)",
                 flexShrink: 0,
               }}
             >
@@ -770,13 +623,13 @@ export default function PartiesPage() {
                   width: 34,
                   height: 34,
                   borderRadius: 9,
-                  border: "1px solid var(--hk-border)",
-                  background: "var(--hk-badge)",
+                  border: "1px solid var(--sb-border)",
+                  background: "var(--sb-surface-alt)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   cursor: "pointer",
-                  color: "var(--hk-sub)",
+                  color: "var(--sb-sub)",
                   flexShrink: 0,
                 }}
                 aria-label="Close panel"
@@ -798,14 +651,14 @@ export default function PartiesPage() {
                   style={{
                     fontSize: TYPE.h2,
                     fontWeight: 700,
-                    color: "var(--hk-text)",
+                    color: "var(--sb-text)",
                     letterSpacing: "-0.3px",
                     fontFamily: SG,
                   }}
                 >
                   {editingParty ? "Party Edit Karo" : "Nayi Party Jodo"}
                 </h2>
-                <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--hk-sub)", marginTop: 3, fontFamily: SG }}>
+                <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--sb-sub)", marginTop: 3, fontFamily: SG }}>
                   {editingParty ? "Details update karo" : "Grahak ya supplier add karo"}
                 </p>
               </div>
@@ -884,7 +737,7 @@ export default function PartiesPage() {
             <div
               style={{
                 padding: "14px 20px",
-                borderTop: "1px solid var(--hk-border)",
+                borderTop: "1px solid var(--sb-border)",
                 display: "flex",
                 gap: 10,
                 flexShrink: 0,

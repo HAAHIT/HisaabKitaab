@@ -36,8 +36,8 @@ export function HKCheckbox({
         <div
           className={`h-5 w-5 rounded-md border-2 transition-colors ${
             isSelected
-              ? "border-[var(--hk-orange)] bg-[var(--hk-orange)]"
-              : "border-[var(--hk-border)] bg-[var(--hk-input)] peer-hover:border-[var(--hk-orange)]/50"
+              ? "border-[var(--sb-orange)] bg-[var(--sb-orange)]"
+              : "border-[var(--sb-border)] bg-[var(--sb-input)] peer-hover:border-[var(--sb-orange)]/50"
           }`}
         />
         {isSelected && (
@@ -57,7 +57,7 @@ export function HKCheckbox({
         )}
       </div>
       {children && (
-        <span className="text-sm font-medium text-[var(--hk-text)]">
+        <span className="text-sm font-medium text-[var(--sb-text)]">
           {children}
         </span>
       )}

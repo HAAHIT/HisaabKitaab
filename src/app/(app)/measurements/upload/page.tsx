@@ -227,15 +227,15 @@ export default function UploadMeasurementsPage() {
             type="button"
             aria-label="Back to my uploads"
             onClick={() => router.push("/measurements/my-uploads")}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--hk-border)] bg-[var(--hk-card)] text-[var(--hk-sub)] hover:bg-[var(--hk-badge)]"
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--sb-border)] bg-[var(--sb-card)] text-[var(--sb-sub)] hover:bg-[var(--sb-badge)]"
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M10 19l-7-7m0 0l7-7m-7 7h18" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} />
             </svg>
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-[var(--hk-text)]">{t("measurements.uploadTitle")}</h1>
-            <p className="mt-1 text-sm text-[var(--hk-sub)]">{t("measurements.uploadSubtitle")}</p>
+            <h1 className="text-2xl font-bold text-[var(--sb-text)]">{t("measurements.uploadTitle")}</h1>
+            <p className="mt-1 text-sm text-[var(--sb-sub)]">{t("measurements.uploadSubtitle")}</p>
           </div>
         </div>
 
@@ -249,9 +249,9 @@ export default function UploadMeasurementsPage() {
         </div>
       </div>
 
-      <div className="mb-4 rounded-2xl border border-[var(--hk-border)] bg-[var(--hk-card)] shadow-sm">
+      <div className="mb-4 rounded-2xl border border-[var(--sb-border)] bg-[var(--sb-card)] shadow-sm">
         <div className="px-6 pt-6 pb-0">
-          <h2 className="font-semibold text-[var(--hk-text)]">{t("measurements.photos")}</h2>
+          <h2 className="font-semibold text-[var(--sb-text)]">{t("measurements.photos")}</h2>
         </div>
         <div className="p-6">
           {photos.length > 0 && (
@@ -259,7 +259,7 @@ export default function UploadMeasurementsPage() {
               {photos.map((photo, index) => (
                 <div
                   key={`${photo.slice(0, 20)}-${index}`}
-                  className="group relative aspect-[4/3] overflow-hidden rounded-xl border border-[var(--hk-border)] bg-[var(--hk-badge)]"
+                  className="group relative aspect-[4/3] overflow-hidden rounded-xl border border-[var(--sb-border)] bg-[var(--sb-badge)]"
                 >
                   <Image src={photo} alt={`Photo ${index + 1}`} fill unoptimized className="object-cover" />
                   <button
@@ -282,7 +282,7 @@ export default function UploadMeasurementsPage() {
               type="button"
               onClick={() => cameraRef.current?.click()}
               disabled={processing}
-              className="flex h-20 flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-[var(--hk-border)] bg-transparent text-[var(--hk-sub)] hover:border-[var(--hk-purple)] hover:text-[var(--hk-purple)] disabled:opacity-50"
+              className="flex h-20 flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-[var(--sb-border)] bg-transparent text-[var(--sb-sub)] hover:border-[var(--sb-purple)] hover:text-[var(--sb-purple)] disabled:opacity-50"
             >
               <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} />
@@ -295,7 +295,7 @@ export default function UploadMeasurementsPage() {
               type="button"
               onClick={() => fileRef.current?.click()}
               disabled={processing}
-              className="flex h-20 flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-[var(--hk-border)] bg-transparent text-[var(--hk-sub)] hover:border-[var(--hk-purple)] hover:text-[var(--hk-purple)] disabled:opacity-50"
+              className="flex h-20 flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-[var(--sb-border)] bg-transparent text-[var(--sb-sub)] hover:border-[var(--sb-purple)] hover:text-[var(--sb-purple)] disabled:opacity-50"
             >
               <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} />
@@ -304,13 +304,13 @@ export default function UploadMeasurementsPage() {
             </button>
           </div>
 
-          <p className="mt-2 text-center text-xs text-[var(--hk-sub)]">{t("measurements.imagesCompressed")}</p>
+          <p className="mt-2 text-center text-xs text-[var(--sb-sub)]">{t("measurements.imagesCompressed")}</p>
         </div>
       </div>
 
-      <div className="mb-6 rounded-2xl border border-[var(--hk-border)] bg-[var(--hk-card)] shadow-sm">
+      <div className="mb-6 rounded-2xl border border-[var(--sb-border)] bg-[var(--sb-card)] shadow-sm">
         <div className="px-6 pt-6 pb-0">
-          <h2 className="font-semibold text-[var(--hk-text)]">{t("measurements.details")}</h2>
+          <h2 className="font-semibold text-[var(--sb-text)]">{t("measurements.details")}</h2>
         </div>
         <div className="space-y-5 p-6">
           <HKInput label={t("measurements.label")} placeholder={t("measurements.labelPlaceholder")} value={label} onValueChange={setLabel} isRequired />
@@ -347,12 +347,12 @@ export default function UploadMeasurementsPage() {
           </>
         }
       >
-        <p className="mb-3 text-xs text-[var(--hk-sub)]">{t("measurements.reviewSubtitle")}</p>
+        <p className="mb-3 text-xs text-[var(--sb-sub)]">{t("measurements.reviewSubtitle")}</p>
         <div className="grid grid-cols-2 gap-3">
           {pendingPhotos.map((photo, index) => (
             <div
               key={`${photo.slice(0, 20)}-${index}`}
-              className="relative aspect-[4/3] overflow-hidden rounded-xl border border-[var(--hk-border)] shadow-sm"
+              className="relative aspect-[4/3] overflow-hidden rounded-xl border border-[var(--sb-border)] shadow-sm"
             >
               <Image src={photo} alt={`Review ${index + 1}`} fill unoptimized className="object-cover" />
             </div>

@@ -166,7 +166,7 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
     <>
       {toast && <HKToast message={toast.message} type={toast.type} />}
 
-      <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG }}>
+      <div style={{ fontFamily: SG }}>
         <PageHeader
           title="Edit Template"
           subtitle="Update columns and formulas"
@@ -176,16 +176,15 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
               onClick={() => router.push("/settings/templates")}
               style={{
                 minHeight: 44, padding: "0 18px", borderRadius: 12,
-                background: "var(--hk-badge)", border: "1px solid var(--hk-border)",
-                color: "var(--hk-text)", fontFamily: SG, fontSize: TYPE.body, fontWeight: 600, cursor: "pointer",
+                background: "var(--sb-badge)", border: "1px solid var(--sb-border)",
+                color: "var(--sb-text)", fontFamily: SG, fontSize: TYPE.body, fontWeight: 600, cursor: "pointer",
               }}
             >
               ← Back
             </button>
           }
         />
-
-        <div style={{ padding: isMobile ? "0 14px 80px" : "0 28px 80px", maxWidth: 900, margin: "0 auto" }}>
+        <div>
           {/* Template name */}
           <HKCard style={{ marginBottom: 20 }}>
             <HKInput
@@ -200,7 +199,7 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
 
           {/* Columns */}
           <HKCard style={{ marginBottom: 20 }}>
-            <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, margin: "0 0 20px" }}>
+            <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: "0 0 20px" }}>
               Columns
             </p>
 
@@ -209,7 +208,7 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
                 <div
                   key={index}
                   style={{
-                    background: "var(--hk-bg)", border: "1px solid var(--hk-border)", borderRadius: 16,
+                    background: "var(--sb-bg)", border: "1px solid var(--sb-border)", borderRadius: 16,
                     padding: "16px", display: "flex", flexDirection: "column", gap: 12,
                   }}
                 >
@@ -217,12 +216,12 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
                     {/* Up/down controls */}
                     <div style={{
                       display: "flex", flexDirection: "column", gap: 2, alignItems: "center",
-                      background: "var(--hk-badge)", borderRadius: 8, padding: "4px",
+                      background: "var(--sb-badge)", borderRadius: 8, padding: "4px",
                     }}>
                       <button
                         onClick={() => moveColumn(index, index - 1)}
                         disabled={index === 0}
-                        style={iconBtnStyle("var(--hk-sub)" as string, index === 0)}
+                        style={iconBtnStyle("var(--sb-sub)" as string, index === 0)}
                         aria-label="Move up"
                       >
                         <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -232,7 +231,7 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
                       <button
                         onClick={() => moveColumn(index, index + 1)}
                         disabled={index === columns.length - 1}
-                        style={iconBtnStyle("var(--hk-sub)" as string, index === columns.length - 1)}
+                        style={iconBtnStyle("var(--sb-sub)" as string, index === columns.length - 1)}
                         aria-label="Move down"
                       >
                         <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -305,7 +304,7 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
                         errorMessage={errors[index] || "Formula must be valid math. Supports +, -, *, /, ()"}
                       />
                       <div style={{ marginTop: 12 }}>
-                        <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG, marginBottom: 8, fontWeight: 600 }}>
+                        <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG, marginBottom: 8, fontWeight: 600 }}>
                           Click to insert existing columns:
                         </p>
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -324,7 +323,7 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
                               </span>
                             ))
                           ) : (
-                            <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG, fontStyle: "italic" }}>
+                            <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG, fontStyle: "italic" }}>
                               No previous columns defined yet.
                             </span>
                           )}

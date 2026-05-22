@@ -17,7 +17,7 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
-    const match = document.cookie.match(/(?:^|;)\s*hisaabkitaab-lang=([^;]*)/);
+    const match = document.cookie.match(/(?:^|;)\s*solobooks-lang=([^;]*)/);
     setLanguage(normalizeLanguage(match ? match[1] : undefined));
   }, []);
 
@@ -85,8 +85,8 @@ export default function RegisterPage() {
     padding: "0 14px",
     height: 48,
     borderRadius: 10,
-    border: "1.5px solid var(--hk-border)",
-    background: "var(--hk-input)",
+    border: "1.5px solid var(--sb-border)",
+    background: "var(--sb-input)",
     transition: "border-color 0.15s, box-shadow 0.15s",
   };
 
@@ -97,14 +97,14 @@ export default function RegisterPage() {
     outline: "none",
     fontSize: 15,
     fontWeight: 500,
-    color: "var(--hk-text)",
+    color: "var(--sb-text)",
   };
 
   const labelTextStyle: React.CSSProperties = {
     display: "block",
     fontSize: 13,
     fontWeight: 600,
-    color: "var(--hk-text)",
+    color: "var(--sb-text)",
     marginBottom: 8,
   };
 
@@ -112,7 +112,7 @@ export default function RegisterPage() {
     width: 18,
     height: 18,
     fill: "none",
-    stroke: "var(--hk-sub)",
+    stroke: "var(--sb-sub)",
     viewBox: "0 0 24 24",
     strokeWidth: 1.8,
     strokeLinecap: "round" as const,
@@ -121,17 +121,17 @@ export default function RegisterPage() {
 
   return (
     <div
-      className="hk-auth-shell"
+      className="sb-auth-shell"
       style={{
         minHeight: "100vh",
         display: "flex",
-        background: "var(--hk-bg)",
+        background: "var(--sb-bg)",
         fontFamily: "var(--font-space-grotesk), sans-serif",
       }}
     >
       {/* Marketing side — 60% */}
       <aside
-        className="hk-auth-marketing"
+        className="sb-auth-marketing"
         style={{
           flex: "0 0 60%",
           position: "relative",
@@ -191,7 +191,7 @@ export default function RegisterPage() {
             </svg>
           </div>
           <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.2px" }}>
-            HisaabKitaab
+            SoloBooks
           </div>
         </div>
 
@@ -264,13 +264,13 @@ export default function RegisterPage() {
             color: "rgba(255, 255, 255, 0.48)",
           }}
         >
-          © {new Date().getFullYear()} HisaabKitaab
+          © {new Date().getFullYear()} SoloBooks
         </div>
       </aside>
 
       {/* Form side — 40% */}
       <main
-        className="hk-auth-form-panel"
+        className="sb-auth-form-panel"
         style={{
           flex: "0 0 40%",
           display: "flex",
@@ -297,7 +297,7 @@ export default function RegisterPage() {
                 fontSize: 28,
                 fontWeight: 700,
                 letterSpacing: "-0.5px",
-                color: "var(--hk-text)",
+                color: "var(--sb-text)",
                 lineHeight: 1.2,
                 margin: 0,
               }}
@@ -308,7 +308,7 @@ export default function RegisterPage() {
               style={{
                 fontSize: 14,
                 fontWeight: 400,
-                color: "var(--hk-sub)",
+                color: "var(--sb-sub)",
                 marginTop: 8,
               }}
             >
@@ -344,7 +344,7 @@ export default function RegisterPage() {
             {/* Company Name */}
             <label htmlFor="company-input" style={{ display: "block" }}>
               <span style={labelTextStyle}>{t("register.companyName")}</span>
-              <div className="hk-login-input-group" style={inputGroupStyle}>
+              <div className="sb-login-input-group" style={inputGroupStyle}>
                 <svg {...iconProps}>
                   <path d="M3 21V7l9-4 9 4v14" />
                   <path d="M9 21V12h6v9" />
@@ -365,7 +365,7 @@ export default function RegisterPage() {
             {/* Full Name */}
             <label htmlFor="name-input" style={{ display: "block" }}>
               <span style={labelTextStyle}>{t("register.name")}</span>
-              <div className="hk-login-input-group" style={inputGroupStyle}>
+              <div className="sb-login-input-group" style={inputGroupStyle}>
                 <svg {...iconProps}>
                   <path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zm-4 7a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
@@ -384,7 +384,7 @@ export default function RegisterPage() {
             {/* Credential */}
             <label htmlFor="credential-input" style={{ display: "block" }}>
               <span style={labelTextStyle}>{t("login.credentialLabel")}</span>
-              <div className="hk-login-input-group" style={inputGroupStyle}>
+              <div className="sb-login-input-group" style={inputGroupStyle}>
                 <svg {...iconProps}>
                   <path d="M4 6h16v12H4z" />
                   <path d="M4 6l8 7 8-7" />
@@ -404,7 +404,7 @@ export default function RegisterPage() {
             {/* Password */}
             <label htmlFor="password-input" style={{ display: "block" }}>
               <span style={labelTextStyle}>{t("login.passwordLabel")}</span>
-              <div className="hk-login-input-group" style={inputGroupStyle}>
+              <div className="sb-login-input-group" style={inputGroupStyle}>
                 <svg {...iconProps}>
                   <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
@@ -430,7 +430,7 @@ export default function RegisterPage() {
                     borderRadius: 8,
                     border: "none",
                     background: "transparent",
-                    color: "var(--hk-sub)",
+                    color: "var(--sb-sub)",
                     cursor: "pointer",
                     display: "flex",
                     alignItems: "center",
@@ -503,7 +503,7 @@ export default function RegisterPage() {
                     border: "2.5px solid rgba(255,255,255,0.3)",
                     borderTopColor: "white",
                     display: "inline-block",
-                    animation: "hk-spin 0.7s linear infinite",
+                    animation: "sb-spin 0.7s linear infinite",
                   }}
                 />
               )}
@@ -518,7 +518,7 @@ export default function RegisterPage() {
               textAlign: "center",
               fontSize: 13,
               fontWeight: 500,
-              color: "var(--hk-sub)",
+              color: "var(--sb-sub)",
             }}
           >
             {t("register.hasAccount")}{" "}
@@ -539,17 +539,17 @@ export default function RegisterPage() {
       <style
         dangerouslySetInnerHTML={{
           __html: `
-            @keyframes hk-spin {
+            @keyframes sb-spin {
               from { transform: rotate(0deg); }
               to { transform: rotate(360deg); }
             }
-            .hk-login-input-group:focus-within {
+            .sb-login-input-group:focus-within {
               border-color: #f76000 !important;
               box-shadow: 0 0 0 3px rgba(247, 96, 0, 0.12);
             }
             @media (max-width: 1023px) {
-              .hk-auth-marketing { display: none !important; }
-              .hk-auth-form-panel { flex: 1 1 100% !important; }
+              .sb-auth-marketing { display: none !important; }
+              .sb-auth-form-panel { flex: 1 1 100% !important; }
             }
           `,
         }}

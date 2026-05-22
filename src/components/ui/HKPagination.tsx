@@ -39,7 +39,7 @@ export function HKPagination({
         type="button"
         onClick={() => onChange(page - 1)}
         disabled={page <= 1}
-        className="flex h-8 w-8 items-center justify-center rounded-lg text-sm text-[var(--hk-sub)] transition-colors hover:bg-[var(--surface-100)] disabled:pointer-events-none disabled:opacity-40"
+        className="flex h-8 w-8 items-center justify-center rounded-lg text-sm text-[var(--sb-sub)] transition-colors hover:bg-[var(--surface-100)] disabled:pointer-events-none disabled:opacity-40"
       >
         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path d="m15 18-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} />
@@ -48,7 +48,7 @@ export function HKPagination({
 
       {visible.map((p, i) =>
         p === "..." ? (
-          <span key={`ellipsis-${i}`} className="flex h-8 w-8 items-center justify-center text-sm text-[var(--hk-muted)]">
+          <span key={`ellipsis-${i}`} className="flex h-8 w-8 items-center justify-center text-sm text-[var(--sb-muted)]">
             …
           </span>
         ) : (
@@ -58,8 +58,8 @@ export function HKPagination({
             onClick={() => onChange(p)}
             className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm font-medium transition-colors ${
               p === page
-                ? "bg-[var(--hk-orange)] text-white"
-                : "text-[var(--hk-sub)] hover:bg-[var(--surface-100)]"
+                ? "bg-[var(--sb-orange)] text-white"
+                : "text-[var(--sb-sub)] hover:bg-[var(--surface-100)]"
             }`}
           >
             {p}
@@ -71,7 +71,7 @@ export function HKPagination({
         type="button"
         onClick={() => onChange(page + 1)}
         disabled={page >= total}
-        className="flex h-8 w-8 items-center justify-center rounded-lg text-sm text-[var(--hk-sub)] transition-colors hover:bg-[var(--surface-100)] disabled:pointer-events-none disabled:opacity-40"
+        className="flex h-8 w-8 items-center justify-center rounded-lg text-sm text-[var(--sb-sub)] transition-colors hover:bg-[var(--surface-100)] disabled:pointer-events-none disabled:opacity-40"
       >
         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path d="m9 18 6-6-6-6" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} />

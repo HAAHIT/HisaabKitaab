@@ -48,21 +48,21 @@ export const HKSelect = forwardRef<HTMLSelectElement, HKSelectProps>(
     const id = useId();
     const borderClass = isInvalid
       ? "border-[#ef4444]"
-      : "border-[var(--hk-border)] hover:border-[var(--hk-orange)]/50 focus-within:border-[var(--hk-orange)]";
+      : "border-[var(--sb-border)] hover:border-[var(--sb-orange)]/50 focus-within:border-[var(--sb-orange)]";
 
     return (
       <div className={`flex flex-col gap-1 ${className || ""}`}>
         {label && (
           <label
             htmlFor={id}
-            className="text-xs font-semibold text-[var(--hk-sub)]"
+            className="text-xs font-semibold text-[var(--sb-sub)]"
           >
             {label}
             {isRequired && <span className="ml-0.5 text-[#ef4444]">*</span>}
           </label>
         )}
         <div
-          className={`relative flex items-center rounded-xl border bg-[var(--hk-card)] transition-colors ${borderClass} ${SIZE_CLASS[size] ?? SIZE_CLASS.md} ${isDisabled ? "opacity-50" : ""}`}
+          className={`relative flex items-center rounded-xl border bg-[var(--sb-card)] transition-colors ${borderClass} ${SIZE_CLASS[size] ?? SIZE_CLASS.md} ${isDisabled ? "opacity-50" : ""}`}
         >
           {startContent && (
             <div className="flex shrink-0 items-center pl-3">
@@ -80,8 +80,8 @@ export const HKSelect = forwardRef<HTMLSelectElement, HKSelectProps>(
             className="h-full w-full flex-1 cursor-pointer appearance-none px-3 font-medium outline-none disabled:cursor-not-allowed"
             style={{
               paddingRight: "2rem",
-              background: "var(--hk-card)",
-              color: "var(--hk-text)",
+              background: "var(--sb-card)",
+              color: "var(--sb-text)",
               borderRadius: "inherit",
             }}
           >
@@ -95,7 +95,7 @@ export const HKSelect = forwardRef<HTMLSelectElement, HKSelectProps>(
           {/* Chevron icon */}
           <div className="pointer-events-none absolute right-3 flex items-center">
             <svg
-              className="h-4 w-4 text-[var(--hk-muted)]"
+              className="h-4 w-4 text-[var(--sb-muted)]"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -113,7 +113,7 @@ export const HKSelect = forwardRef<HTMLSelectElement, HKSelectProps>(
           <p className="text-xs text-[#ef4444]">{errorMessage}</p>
         )}
         {!isInvalid && description && (
-          <p className="text-xs text-[var(--hk-muted)]">{description}</p>
+          <p className="text-xs text-[var(--sb-muted)]">{description}</p>
         )}
       </div>
     );
@@ -130,7 +130,7 @@ export function HKSelectItem({
   return (
     <option
       value={value}
-      style={{ background: "var(--hk-card)", color: "var(--hk-text)" }}
+      style={{ background: "var(--sb-card)", color: "var(--sb-text)" }}
     >
       {children}
     </option>

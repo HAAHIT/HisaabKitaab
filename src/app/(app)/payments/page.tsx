@@ -7,9 +7,9 @@ import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { EditPaymentModal, type EditablePayment } from "./EditPaymentModal";
 import {
-  OR, PU, GR, AM, SG, IN, TYPE,
-  fmt, fmtFull, useIsMobile,
-  HKCard, HKToast, SearchBox, PillFilter,
+  C, OR, PU, GR, AM, SG, IN, TYPE, DISPLAY,
+  fmtFull, useIsMobile,
+  HKCard, HKToast, HKAvatar, SearchBox, PillFilter,
   PageHeader, HKModal,
 } from "@/components/ui/hk-design";
 import { HKButton } from "@/components/ui/HKButton";
@@ -226,7 +226,7 @@ export default function PaymentsListPage() {
   return (
     <div
       style={{
-        background: "var(--hk-bg)",
+        background: "var(--sb-bg)",
         minHeight: "100%",
         paddingBottom: 0,
         fontFamily: SG,
@@ -234,18 +234,18 @@ export default function PaymentsListPage() {
     >
       {toast && <HKToast message={toast.message} type={toast.type} />}
 
-      <PageHeader
-        title="Payments"
-        subtitle="Aana-jaana sab yahaan"
-        isMobile={isMobile}
-        action={
-          <HKButton variant="success" onClick={() => router.push("/payments/new")}>
-            + Payment Likho
-          </HKButton>
-        }
-      />
+      <div style={{ padding: isMobile ? "18px 14px 100px" : "24px 28px", maxWidth: 1440, margin: "0 auto" }}>
+        <PageHeader
+          title="Payments"
+          subtitle="Aana-jaana sab yahaan"
+          isMobile={isMobile}
+          action={
+            <HKButton variant="success" onClick={() => router.push("/payments/new")}>
+              + Payment Likho
+            </HKButton>
+          }
+        />
 
-      <div style={{ padding: isMobile ? "0 14px" : "0 28px", maxWidth: 1440, margin: "0 auto" }}>
         {/* Summary stats */}
         <div
           style={{
@@ -256,17 +256,18 @@ export default function PaymentsListPage() {
           }}
         >
           {[
-            { l: "Mila ↓", v: totalIn, c: GR, sub: "received" },
-            { l: "Diya ↑", v: totalOut, c: OR, sub: "paid out" },
-            { l: "Net", v: net, c: PU, sub: "this period" },
+            { l: "Is Mahine Mila",  v: totalIn,  c: GR,         bg: C.positiveSoft, sub: "received" },
+            { l: "Is Mahine Diya", v: totalOut, c: C.negative, bg: C.negativeSoft, sub: "paid out" },
+            { l: "Net Cash Flow",  v: net,      c: net >= 0 ? GR : C.negative, bg: net >= 0 ? C.positiveSoft : C.negativeSoft, sub: "this period" },
           ].map((item, i) => (
             <div
               key={i}
               style={{
                 padding: "16px 18px",
                 borderRadius: 14,
-                background: item.c + "14",
-                border: `1px solid ${item.c}25`,
+                background: item.bg,
+                border: "1px solid var(--sb-border)",
+                boxShadow: "var(--sb-shadow-card)",
               }}
             >
               <p
@@ -286,14 +287,14 @@ export default function PaymentsListPage() {
                 style={{
                   fontSize: isMobile ? TYPE.numMedium + 2 : TYPE.numLarge - 4,
                   fontWeight: 800,
-                  color: "var(--hk-text)",
+                  color: "var(--sb-text)",
                   fontFamily: IN,
                   lineHeight: 1.1,
                 }}
               >
-                {fmt(item.v)}
+                {fmtFull(item.v)}
               </p>
-              <p style={{ fontSize: TYPE.caption, fontWeight: 600, color: "var(--hk-sub)", marginTop: 6, fontFamily: SG }}>
+              <p style={{ fontSize: TYPE.caption, fontWeight: 600, color: "var(--sb-sub)", marginTop: 6, fontFamily: SG }}>
                 {item.sub}
               </p>
             </div>
@@ -330,13 +331,13 @@ export default function PaymentsListPage() {
             ))}
           </div>
         ) : payments.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--hk-sub)" }}>
+          <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--sb-sub)" }}>
             <div style={{ fontSize: 52, marginBottom: 16 }}>💸</div>
             <p
               style={{
                 fontWeight: 700,
                 fontSize: TYPE.h2,
-                color: "var(--hk-text)",
+                color: "var(--sb-text)",
                 marginBottom: 8,
                 fontFamily: SG,
               }}
@@ -362,46 +363,40 @@ export default function PaymentsListPage() {
                 <div style={{
                   display: "flex", alignItems: "center", gap: 10, marginBottom: 12,
                 }}>
-                  <h2 style={{ fontSize: TYPE.bodyLarge, fontWeight: 700, color: AM, fontFamily: SG }}>
-                    🔔 Action Chahiye
+                  <div style={{ width: 3, height: 18, borderRadius: 2, background: AM, flexShrink: 0 }} />
+                  <h2 style={{ fontSize: TYPE.bodyLarge, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>
+                    Action Chahiye
                   </h2>
                   <span style={{
                     padding: "3px 10px", borderRadius: 8,
-                    background: AM + "20", color: AM,
+                    background: C.warningSoft, color: AM,
                     fontSize: TYPE.caption, fontWeight: 700, fontFamily: IN,
                   }}>
-                    {pendingPayments.length}
+                    {pendingPayments.length} pending
                   </span>
                 </div>
-                <div style={{ borderRadius: 16, border: "1px solid var(--hk-border)", overflow: "hidden", background: "var(--hk-card)" }}>
+                <div style={{ borderRadius: 16, border: "1px solid var(--sb-border)", overflow: "hidden", background: "var(--sb-card)" }}>
                   {pendingPayments.map((p, i) => {
                     const isIn = p.direction === "INCOMING";
-                    const mc = modeColor(p.mode);
                     return (
                       <div
                         key={p.id}
                         style={{
                           padding: "14px 18px",
-                          borderBottom: i < pendingPayments.length - 1 ? "1px solid var(--hk-border)" : undefined,
+                          borderBottom: i < pendingPayments.length - 1 ? "1px solid var(--sb-border)" : undefined,
+                          borderLeft: `3px solid ${AM}`,
                           display: "flex",
                           alignItems: "center",
                           gap: 12,
-                          background: AM + "06",
+                          background: "transparent",
                         }}
                       >
-                        <div style={{
-                          width: 40, height: 40, borderRadius: 11,
-                          background: AM + "18",
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          flexShrink: 0,
-                        }}>
-                          <span style={{ fontSize: 18 }}>{isIn ? "↓" : "↑"}</span>
-                        </div>
+                        <HKAvatar name={counterLedgerLabel(p)} size={40} />
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, lineHeight: 1.3 }}>
+                          <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, lineHeight: 1.3 }}>
                             {counterLedgerLabel(p)}
                           </p>
-                          <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--hk-sub)", fontFamily: SG, marginTop: 2 }}>
+                          <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--sb-sub)", fontFamily: SG, marginTop: 2 }}>
                             {isIn ? "Milega" : "Dena hai"} • {modeLabel(p.mode)}
                           </p>
                         </div>
@@ -414,7 +409,7 @@ export default function PaymentsListPage() {
                           style={{
                             padding: "8px 16px",
                             borderRadius: 10,
-                            background: GR + "18",
+                            background: C.positiveSoft,
                             border: `1px solid ${GR}33`,
                             color: GR,
                             fontSize: TYPE.bodySmall,
@@ -430,17 +425,17 @@ export default function PaymentsListPage() {
                         </button>
                         <button
                           onClick={() => { setPaymentToEdit(p); setIsEditModalOpen(true); }}
-                          style={{ width: 34, height: 34, borderRadius: 9, border: "1px solid var(--hk-border)", background: "var(--hk-badge)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+                          style={{ width: 34, height: 34, borderRadius: 9, border: "1px solid var(--sb-border)", background: "var(--sb-surface-alt)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
                           title="Edit"
                         >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hk-text)" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--sb-text)" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
                         </button>
                         <button
                           onClick={() => { setPaymentToDelete(p); setIsDeleteModalOpen(true); }}
-                          style={{ width: 34, height: 34, borderRadius: 9, border: `1px solid ${OR}33`, background: OR + "10", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+                          style={{ width: 34, height: 34, borderRadius: 9, border: `1px solid ${C.negative}33`, background: C.negativeSoft, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
                           title="Delete"
                         >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={OR} strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.negative} strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
                         </button>
                       </div>
                     );
@@ -452,12 +447,35 @@ export default function PaymentsListPage() {
             {/* §5.4: "Hua Hai" section label — only when pending also visible */}
             {pendingPayments.length > 0 && monthlyPaymentGroups.length > 0 && (
               <div style={{
-                display: "flex", alignItems: "center", gap: 10, marginBottom: 14,
+                display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14,
               }}>
-                <h2 style={{ fontSize: TYPE.bodyLarge, fontWeight: 700, color: "var(--hk-sub)", fontFamily: SG }}>
-                  Hua Hai
-                </h2>
-                <div style={{ flex: 1, height: 1, background: "var(--hk-border)" }} />
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ width: 3, height: 18, borderRadius: 2, background: "var(--sb-border-strong)", flexShrink: 0 }} />
+                  <h2 style={{ fontSize: TYPE.bodyLarge, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>
+                    Hua Hai
+                  </h2>
+                </div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {typeFilterOptions.map((opt) => (
+                    <button
+                      key={opt.key}
+                      onClick={() => { setTypeFilter(opt.key); setPage(1); }}
+                      style={{
+                        padding: "5px 13px",
+                        borderRadius: 20,
+                        border: typeFilter === opt.key ? `1px solid ${C.primary}` : "1px solid var(--sb-border)",
+                        background: typeFilter === opt.key ? C.primarySoft : "var(--sb-surface-alt)",
+                        color: typeFilter === opt.key ? C.primary : "var(--sb-sub)",
+                        fontSize: TYPE.bodySmall,
+                        fontWeight: 700,
+                        fontFamily: SG,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -478,8 +496,8 @@ export default function PaymentsListPage() {
                       alignItems: "center",
                       padding: "10px 16px",
                       borderRadius: 12,
-                      background: "var(--hk-badge)",
-                      border: "1px solid var(--hk-border)",
+                      background: "var(--sb-surface-alt)",
+                      border: "1px solid var(--sb-border)",
                       marginBottom: 10,
                       cursor: "pointer",
                       fontFamily: SG,
@@ -487,17 +505,17 @@ export default function PaymentsListPage() {
                       gap: 10,
                     }}
                   >
-                    <span style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)" }}>
+                    <span style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)" }}>
                       {group.label}
                     </span>
                     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                       <span style={{ fontSize: TYPE.numSmall, fontWeight: 800, color: GR, fontFamily: IN }}>
                         +{fmtFull(group.incomingTotal)}
                       </span>
-                      <span style={{ fontSize: TYPE.numSmall, fontWeight: 800, color: OR, fontFamily: IN }}>
+                      <span style={{ fontSize: TYPE.numSmall, fontWeight: 800, color: C.negative, fontFamily: IN }}>
                         -{fmtFull(group.outgoingTotal)}
                       </span>
-                      <span style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--hk-sub)" }}>
+                      <span style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--sb-sub)" }}>
                         · {group.payments.length}
                       </span>
                       <svg
@@ -505,7 +523,7 @@ export default function PaymentsListPage() {
                         height="16"
                         viewBox="0 0 24 24"
                         fill="none"
-                        stroke="var(--hk-sub)"
+                        stroke="var(--sb-sub)"
                         strokeWidth="1.8"
                         strokeLinecap="round"
                         style={{
@@ -523,7 +541,7 @@ export default function PaymentsListPage() {
                       {group.payments.map((p, i) => {
                         const isIncoming = p.direction === "INCOMING";
                         const isExpected = p.status === "EXPECTED";
-                        const dirColor = isIncoming ? GR : OR;
+                        const dirColor = isIncoming ? GR : C.negative;
                         return (
                           <div
                             key={p.id}
@@ -534,7 +552,7 @@ export default function PaymentsListPage() {
                               padding: "16px 0",
                               borderBottom:
                                 i < group.payments.length - 1
-                                  ? "1px solid var(--hk-border)"
+                                  ? "1px solid var(--sb-border)"
                                   : "none",
                               borderLeft: isExpected ? `4px solid ${AM}` : "none",
                               paddingLeft: isExpected ? 12 : 0,
@@ -547,7 +565,7 @@ export default function PaymentsListPage() {
                                 width: 44,
                                 height: 44,
                                 borderRadius: 12,
-                                background: dirColor + "18",
+                                background: isIncoming ? C.positiveSoft : C.negativeSoft,
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
@@ -590,7 +608,7 @@ export default function PaymentsListPage() {
                                     style={{
                                       fontSize: TYPE.bodyLarge,
                                       fontWeight: 700,
-                                      color: "var(--hk-text)",
+                                      color: "var(--sb-text)",
                                       marginBottom: 5,
                                       fontFamily: SG,
                                       overflow: "hidden",
@@ -627,7 +645,7 @@ export default function PaymentsListPage() {
                                           fontSize: TYPE.chip,
                                           fontWeight: 700,
                                           color: AM,
-                                          background: AM + "22",
+                                          background: C.warningSoft,
                                           padding: "3px 9px",
                                           borderRadius: 6,
                                           fontFamily: SG,
@@ -640,7 +658,7 @@ export default function PaymentsListPage() {
                                       style={{
                                         fontSize: TYPE.bodySmall,
                                         fontWeight: 500,
-                                        color: "var(--hk-sub)",
+                                        color: "var(--sb-sub)",
                                         fontFamily: SG,
                                       }}
                                     >
@@ -654,7 +672,7 @@ export default function PaymentsListPage() {
                                         style={{
                                           fontSize: TYPE.bodySmall,
                                           fontWeight: 500,
-                                          color: "var(--hk-sub)",
+                                          color: "var(--sb-sub)",
                                           fontFamily: IN,
                                         }}
                                       >
@@ -666,7 +684,7 @@ export default function PaymentsListPage() {
                                         style={{
                                           fontSize: TYPE.bodySmall,
                                           fontWeight: 500,
-                                          color: "var(--hk-sub)",
+                                          color: "var(--sb-sub)",
                                           fontFamily: SG,
                                           maxWidth: 200,
                                           overflow: "hidden",
@@ -708,7 +726,7 @@ export default function PaymentsListPage() {
                                         padding: "0 14px",
                                         borderRadius: 10,
                                         border: "none",
-                                        background: GR + "22",
+                                        background: C.positiveSoft,
                                         color: GR,
                                         fontSize: TYPE.bodySmall,
                                         fontWeight: 700,
@@ -723,17 +741,17 @@ export default function PaymentsListPage() {
                                   )}
                                   <button
                                     onClick={() => { setPaymentToEdit(p); setIsEditModalOpen(true); }}
-                                    style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid var(--hk-border)", background: "var(--hk-badge)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+                                    style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid var(--sb-border)", background: "var(--sb-surface-alt)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
                                     title="Edit"
                                   >
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--hk-text)" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--sb-text)" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
                                   </button>
                                   <button
                                     onClick={() => { setPaymentToDelete(p); setIsDeleteModalOpen(true); }}
-                                    style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${OR}33`, background: OR + "10", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+                                    style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${C.negative}33`, background: C.negativeSoft, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
                                     title="Delete"
                                   >
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={OR} strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.negative} strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
                                   </button>
                                 </div>
                               </div>
@@ -774,8 +792,8 @@ export default function PaymentsListPage() {
           </>
         }
       >
-        <p style={{ fontFamily: SG, fontSize: TYPE.body, color: "var(--hk-sub)", lineHeight: 1.6 }}>
-          Kya aap sure hain? <span style={{ fontWeight: 700, color: "var(--hk-text)" }}>{fmtFull(paymentToDelete?.amount || 0)}</span> ka payment permanently delete ho jayega aur balance reverse ho jayega.
+        <p style={{ fontFamily: SG, fontSize: TYPE.body, color: "var(--sb-sub)", lineHeight: 1.6 }}>
+          Kya aap sure hain? <span style={{ fontWeight: 700, color: "var(--sb-text)" }}>{fmtFull(paymentToDelete?.amount || 0)}</span> ka payment permanently delete ho jayega aur balance reverse ho jayega.
         </p>
       </HKModal>
     </div>

@@ -8,7 +8,7 @@
  *
  * Environment variable resolution order:
  *   resolveSeedTenantId:  SEED_TENANT_ID > DEFAULT_TENANT_ID > "default"
- *   resolveSeedTenantSlug: SEED_TENANT_SLUG > "hisaabkitaab"
+ *   resolveSeedTenantSlug: SEED_TENANT_SLUG > "solobooks"
  *   getSeedPassword:       process.env[key] > (prod: throw) > fallback
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -45,7 +45,7 @@ function resolveSeedTenantSlug(): string {
   if (fromSeed) {
     return fromSeed;
   }
-  return "hisaabkitaab";
+  return "solobooks";
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -98,9 +98,9 @@ describe("resolveSeedTenantId", () => {
 });
 
 describe("resolveSeedTenantSlug", () => {
-  it('returns "hisaabkitaab" when SEED_TENANT_SLUG is not set', () => {
+  it('returns "solobooks" when SEED_TENANT_SLUG is not set', () => {
     vi.stubEnv("SEED_TENANT_SLUG", "");
-    expect(resolveSeedTenantSlug()).toBe("hisaabkitaab");
+    expect(resolveSeedTenantSlug()).toBe("solobooks");
   });
 
   it("returns the value of SEED_TENANT_SLUG when it is set", () => {
@@ -115,7 +115,7 @@ describe("resolveSeedTenantSlug", () => {
 
   it("treats a whitespace-only SEED_TENANT_SLUG as absent", () => {
     vi.stubEnv("SEED_TENANT_SLUG", "   ");
-    expect(resolveSeedTenantSlug()).toBe("hisaabkitaab");
+    expect(resolveSeedTenantSlug()).toBe("solobooks");
   });
 });
 

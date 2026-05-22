@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
-import { HKModal, SG, OR, TYPE } from "@/components/ui/hk-design";
+import { HKSheet, SG, OR, TYPE } from "@/components/ui/hk-design";
 import { HKButton } from "@/components/ui/HKButton";
 import { HKInput } from "@/components/ui/HKInput";
 
@@ -63,7 +63,7 @@ export function AddBankAccountModal({ isOpen, onClose, onSuccess }: Props) {
     }
 
     return (
-        <HKModal
+        <HKSheet
             isOpen={isOpen}
             onClose={onClose}
             title="Account Jodo"
@@ -127,6 +127,6 @@ export function AddBankAccountModal({ isOpen, onClose, onSuccess }: Props) {
                     onValueChange={setOpeningBalance}
                 />
             </div>
-        </HKModal>
+        </HKSheet>
     );
 }

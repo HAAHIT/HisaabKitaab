@@ -33,7 +33,7 @@ function resolveSeedTenantSlug() {
   if (fromSeed) {
     return fromSeed;
   }
-  return "hisaabkitaab";
+  return "solobooks";
 }
 
 async function ensureSeedTenant() {
@@ -57,19 +57,19 @@ async function ensureSeedTenant() {
   return prisma.tenant.create({
     data: {
       id: explicitTenantId,
-      name: "HisaabKitaab",
+      name: "SoloBooks",
       slug,
       phone: "9999999999",
-      email: "info@hisaabkitaab.com",
+      email: "info@solobooks.com",
       address: "Industrial Area, India",
       gstin: null,
       settings: {
         billPrefix: "BILL",
         defaultTaxPercent: 18,
         defaultTerms: "1. Delivery within 2-3 weeks from order confirmation.\n2. 50% advance payment required.\n3. Warranty: 1 year on manufacturing defects.",
-        companyName: "HisaabKitaab",
+        companyName: "SoloBooks",
         companyPhone: "9999999999",
-        companyEmail: "info@hisaabkitaab.com",
+        companyEmail: "info@solobooks.com",
         companyAddress: "Industrial Area, India",
         companyGstin: "",
       },
@@ -93,7 +93,7 @@ async function main() {
     12
   );
   
-  const adminEmail = "admin@hisaabkitaab.com";
+  const adminEmail = "admin@solobooks.com";
   const admin = await prisma.user.upsert({
     where: {
       tenantId_email: {
@@ -159,7 +159,7 @@ async function main() {
   console.log(`✅ Template ready: ${template.name}`);
 
   // ── Sample Staff user ───────────────────────────────
-  const staffEmail = "staff@hisaabkitaab.com";
+  const staffEmail = "staff@solobooks.com";
   const staffPassword = await bcrypt.hash(
     getSeedPassword("SEED_STAFF_PASSWORD", "staff123"),
     12

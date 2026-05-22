@@ -523,7 +523,7 @@ function xmlResponse(xml: string, filename: string, hsnMissingCount = 0) {
   };
   if (hsnMissingCount > 0) {
     // Surface HSN gap count so the UI / CI pipeline can show a warning banner.
-    headers["X-HisaabKitaab-HSN-Missing"] = String(hsnMissingCount);
+    headers["X-SoloBooks-HSN-Missing"] = String(hsnMissingCount);
   }
   return new NextResponse(xml, { headers });
 }
@@ -540,6 +540,6 @@ function buildCombinedXml(
   const combinedXml = buildCombinedTallyXml(parties, items, units, vouchers, companyName);
   return combinedXml.replace(
     '<?xml version="1.0" encoding="UTF-8"?>\n<ENVELOPE>',
-    `<?xml version="1.0" encoding="UTF-8"?>\n<!-- HisaabKitaab Tally Export: ${from} to ${to} -->\n<ENVELOPE>`
+    `<?xml version="1.0" encoding="UTF-8"?>\n<!-- SoloBooks Tally Export: ${from} to ${to} -->\n<ENVELOPE>`
   );
 }

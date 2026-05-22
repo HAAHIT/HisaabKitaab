@@ -111,7 +111,7 @@ export default function TransactionsClient({ initialTransactions, page, totalPag
         <button
           onClick={() => handleTypeFilter(null)}
           className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-            !type ? "bg-[var(--hk-orange)] text-white" : "bg-default-100 text-default-600 hover:bg-default-200"
+            !type ? "bg-[var(--sb-orange)] text-white" : "bg-default-100 text-default-600 hover:bg-default-200"
           }`}
         >
           All
@@ -121,7 +121,7 @@ export default function TransactionsClient({ initialTransactions, page, totalPag
             key={vt}
             onClick={() => handleTypeFilter(vt)}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors ${
-              type === vt ? "bg-[var(--hk-orange)] text-white" : "bg-default-100 text-default-600 hover:bg-default-200"
+              type === vt ? "bg-[var(--sb-orange)] text-white" : "bg-default-100 text-default-600 hover:bg-default-200"
             }`}
           >
             {vt === "SALES" ? "BILL" : vt.replace("_", " ")}
@@ -129,11 +129,11 @@ export default function TransactionsClient({ initialTransactions, page, totalPag
         ))}
       </div>
 
-      <div className="rounded-2xl border border-[var(--hk-border)] bg-[var(--hk-card)] overflow-hidden shadow-sm">
+      <div className="rounded-2xl border border-[var(--sb-border)] bg-[var(--sb-card)] overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="min-w-full">
             <thead>
-              <tr className="border-b border-[var(--hk-border)] bg-[var(--hk-badge)]">
+              <tr className="border-b border-[var(--sb-border)] bg-[var(--sb-badge)]">
                 <th className="py-3 px-4 text-left text-xs font-bold text-default-500 uppercase tracking-wider w-24">DATE</th>
                 <th className="py-3 px-4 text-left text-xs font-bold text-default-500 uppercase tracking-wider w-40">VOUCHER</th>
                 <th className="py-3 px-4 text-left text-xs font-bold text-default-500 uppercase tracking-wider">PARTICULARS</th>
@@ -156,7 +156,7 @@ export default function TransactionsClient({ initialTransactions, page, totalPag
               ) : (
                 initialTransactions.flatMap((tx: any) =>
                   tx.lines.map((line: any, idx: number) => (
-                    <tr key={`${tx.id}-${idx}`} className="border-b border-[var(--hk-border)] hover:bg-default-50/50 transition-colors">
+                    <tr key={`${tx.id}-${idx}`} className="border-b border-[var(--sb-border)] hover:bg-default-50/50 transition-colors">
                       <td className="py-3 px-4 text-default-600 text-sm w-24">
                         {idx === 0 ? formatDate(tx.entryDate) : ""}
                       </td>

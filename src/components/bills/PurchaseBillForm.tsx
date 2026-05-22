@@ -12,8 +12,8 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { evaluateRow, type ColumnDef } from "@/lib/formula";
 import { GST_STATE_CODES } from "@/lib/gst-states";
 import {
-  OR, GR, AM, PU, SG, IN, TYPE, TOUCH,
-  HKCard, HKToast, PageHeader, fmtFull, useIsMobile,
+  OR, GR, AM, PU, SG, IN, TYPE, TOUCH, DISPLAY,
+  HKCard, HKToast, fmtFull, useIsMobile,
 } from "@/components/ui/hk-design";
 
 interface Template {
@@ -44,9 +44,9 @@ function Section({ title, action, children }: { title?: string; action?: React.R
       {(title || action) && (
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "16px 20px 12px", borderBottom: "1px solid var(--hk-border)",
+          padding: "16px 20px 12px", borderBottom: "1px solid var(--sb-border)",
         }}>
-          {title && <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, margin: 0 }}>{title}</p>}
+          {title && <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>{title}</p>}
           {action}
         </div>
       )}
@@ -210,48 +210,50 @@ export function PurchaseBillForm() {
     <>
       {toast && <HKToast message={toast.message} type={toast.type} />}
 
-      <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG }}>
-        <PageHeader
-          title="New Purchase Bill"
-          subtitle="Record an incoming purchase from a supplier"
-          isMobile={isMobile}
-          action={
+      <div style={{ background: "var(--sb-bg)", minHeight: "100%", fontFamily: SG }}>
+        <div style={{ padding: isMobile ? "18px 14px 100px" : "24px 28px 60px", maxWidth: 1100, margin: "0 auto" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 18 }}>
             <button
               onClick={() => router.back()}
               style={{
-                height: TOUCH.secondary, padding: "0 16px",
-                borderRadius: 12, border: "1.5px solid var(--hk-border)",
-                background: "var(--hk-card)", color: "var(--hk-sub)",
-                fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG,
-                cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+                width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+                border: "1.5px solid var(--sb-border)",
+                background: "var(--sb-card)", color: "var(--sb-text)",
+                boxShadow: "var(--sb-shadow-card)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: "pointer",
               }}
             >
-              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M19 12H5M12 5l-7 7 7 7" />
+              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 18l-6-6 6-6" />
               </svg>
-              Back
             </button>
-          }
-        />
-
-        <div style={{ padding: isMobile ? "0 14px 100px" : "0 28px 60px", maxWidth: 1100, margin: "0 auto" }}>
+            <div>
+              <h1 style={{ fontFamily: DISPLAY, fontSize: isMobile ? 24 : 30, fontWeight: 600, color: "var(--sb-text)", margin: 0, letterSpacing: "-0.01em", lineHeight: 1.2 }}>
+                New Purchase Bill
+              </h1>
+              <p style={{ fontSize: 14, fontWeight: 500, color: "var(--sb-sub)", marginTop: 4 }}>
+                Record an incoming purchase from a supplier
+              </p>
+            </div>
+          </div>
 
           {/* Template picker */}
           {(templatePickerOpen || (!loading && !selectedTemplate && templates.length === 0)) && (
             <HKCard style={{ marginBottom: 16 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-                <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG }}>Choose Template</p>
+                <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG }}>Choose Template</p>
                 {templatePickerOpen && (
-                  <button onClick={() => setTemplatePickerOpen(false)} style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", background: "none", border: "none", cursor: "pointer", fontFamily: SG }}>
+                  <button onClick={() => setTemplatePickerOpen(false)} style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", background: "none", border: "none", cursor: "pointer", fontFamily: SG }}>
                     Cancel
                   </button>
                 )}
               </div>
               {loading ? (
-                <p style={{ color: "var(--hk-sub)", fontSize: TYPE.body }}>Loading templates...</p>
+                <p style={{ color: "var(--sb-sub)", fontSize: TYPE.body }}>Loading templates...</p>
               ) : templates.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "32px 0" }}>
-                  <p style={{ color: "var(--hk-sub)", marginBottom: 12, fontSize: TYPE.body }}>No templates found</p>
+                  <p style={{ color: "var(--sb-sub)", marginBottom: 12, fontSize: TYPE.body }}>No templates found</p>
                   <HKButton onClick={() => router.push("/settings/templates/new")}>Create Template</HKButton>
                 </div>
               ) : (
@@ -263,13 +265,13 @@ export function PurchaseBillForm() {
                       onClick={() => selectTemplate(template.id)}
                       style={{
                         padding: 16, borderRadius: 14,
-                        border: "1.5px solid var(--hk-border)",
-                        background: "var(--hk-card)", textAlign: "left",
+                        border: "1.5px solid var(--sb-border)",
+                        background: "var(--sb-card)", textAlign: "left",
                         cursor: "pointer",
                       }}
                     >
-                      <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG }}>{template.name}</p>
-                      <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", marginTop: 4 }}>{template.columns.length} columns</p>
+                      <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG }}>{template.name}</p>
+                      <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", marginTop: 4 }}>{template.columns.length} columns</p>
                     </button>
                   ))}
                 </div>
@@ -290,7 +292,7 @@ export function PurchaseBillForm() {
                 </span>
                 <button
                   onClick={() => setTemplatePickerOpen(true)}
-                  style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", background: "none", border: "none", cursor: "pointer", fontFamily: SG, fontWeight: 600 }}
+                  style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", background: "none", border: "none", cursor: "pointer", fontFamily: SG, fontWeight: 600 }}
                 >
                   Change
                 </button>
@@ -314,21 +316,21 @@ export function PurchaseBillForm() {
                     isInvalid={Boolean(errors.partyId)}
                   />
                   {selectedParty && (
-                    <div style={{ marginTop: 14, padding: "14px 16px", borderRadius: 12, background: "var(--hk-badge)", border: "1px solid var(--hk-border)" }}>
+                    <div style={{ marginTop: 14, padding: "14px 16px", borderRadius: 12, background: "var(--sb-badge)", border: "1px solid var(--sb-border)" }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                        <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG }}>{selectedParty.name}</p>
-                        <button onClick={() => setSelectedParty(null)} style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", background: "none", border: "none", cursor: "pointer", fontFamily: SG, fontWeight: 600 }}>
+                        <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG }}>{selectedParty.name}</p>
+                        <button onClick={() => setSelectedParty(null)} style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", background: "none", border: "none", cursor: "pointer", fontFamily: SG, fontWeight: 600 }}>
                           Change
                         </button>
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                        {selectedParty.phone && <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG }}>📱 {selectedParty.phone}</p>}
-                        {selectedParty.address && <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG }}>📍 {selectedParty.address}</p>}
-                        {selectedParty.gstin && <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: IN }}>GST: {selectedParty.gstin}</p>}
+                        {selectedParty.phone && <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG }}>📱 {selectedParty.phone}</p>}
+                        {selectedParty.address && <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG }}>📍 {selectedParty.address}</p>}
+                        {selectedParty.gstin && <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: IN }}>GST: {selectedParty.gstin}</p>}
                       </div>
                       {selectedParty.currentBalance !== 0 && (
                         <div style={{
-                          marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--hk-border)",
+                          marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--sb-border)",
                           fontSize: TYPE.bodySmall, fontWeight: 700, fontFamily: SG,
                           color: selectedParty.currentBalance > 0 ? OR : GR,
                         }}>
@@ -353,12 +355,12 @@ export function PurchaseBillForm() {
               <HKCard style={{ marginBottom: 16, padding: 0 }}>
                 <div style={{
                   display: "flex", alignItems: "center", justifyContent: "space-between",
-                  padding: "16px 20px 12px", borderBottom: "1px solid var(--hk-border)", flexWrap: "wrap", gap: 8,
+                  padding: "16px 20px 12px", borderBottom: "1px solid var(--sb-border)", flexWrap: "wrap", gap: 8,
                 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, margin: 0 }}>Line Items</p>
-                    <span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG }}>
-                      Subtotal: <span style={{ fontFamily: IN, fontWeight: 700, color: "var(--hk-text)" }}>{fmtFull(subtotal)}</span>
+                    <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>Line Items</p>
+                    <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG }}>
+                      Subtotal: <span style={{ fontFamily: IN, fontWeight: 700, color: "var(--sb-text)" }}>{fmtFull(subtotal)}</span>
                     </span>
                   </div>
                   <button
@@ -380,10 +382,10 @@ export function PurchaseBillForm() {
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: TYPE.bodySmall, fontFamily: SG }}>
                     <thead>
-                      <tr style={{ borderBottom: "1px solid var(--hk-border)", background: "var(--hk-badge)" }}>
-                        <th style={{ padding: "10px 12px", textAlign: "center", fontWeight: 600, color: "var(--hk-sub)", width: 40 }}>#</th>
+                      <tr style={{ borderBottom: "1px solid var(--sb-border)", background: "var(--sb-badge)" }}>
+                        <th style={{ padding: "10px 12px", textAlign: "center", fontWeight: 600, color: "var(--sb-sub)", width: 40 }}>#</th>
                         {selectedTemplate.columns.map((col) => (
-                          <th key={col.id} style={{ padding: "10px 12px", textAlign: "left", fontWeight: 600, color: "var(--hk-sub)", whiteSpace: "nowrap" }}>
+                          <th key={col.id} style={{ padding: "10px 12px", textAlign: "left", fontWeight: 600, color: "var(--sb-sub)", whiteSpace: "nowrap" }}>
                             {col.name}
                             {col.type === "formula" && <span style={{ color: AM, marginLeft: 4, fontSize: 10 }}>fx</span>}
                           </th>
@@ -393,8 +395,8 @@ export function PurchaseBillForm() {
                     </thead>
                     <tbody>
                       {rows.map((row, rIdx) => (
-                        <tr key={rIdx} style={{ borderBottom: "1px solid var(--hk-border)" }}>
-                          <td style={{ padding: "8px 12px", textAlign: "center", color: "var(--hk-sub)", fontSize: TYPE.bodySmall }}>{rIdx + 1}</td>
+                        <tr key={rIdx} style={{ borderBottom: "1px solid var(--sb-border)" }}>
+                          <td style={{ padding: "8px 12px", textAlign: "center", color: "var(--sb-sub)", fontSize: TYPE.bodySmall }}>{rIdx + 1}</td>
                           {selectedTemplate.columns.map((col) => (
                             <td key={col.id} style={{ padding: "8px 8px" }}>
                               {col.type === "formula" ? (
@@ -407,7 +409,7 @@ export function PurchaseBillForm() {
                                   aria-label={`Row ${rIdx + 1} ${col.name}`}
                                   value={String(row[col.id] || "")}
                                   onChange={(e) => updateCell(rIdx, col.id, e.target.value)}
-                                  style={{ minWidth: 80, background: "transparent", color: "var(--hk-text)", fontSize: TYPE.bodySmall, fontFamily: IN, outline: "none", border: "none", borderBottom: "1.5px solid var(--hk-border)", padding: "2px 0" }}
+                                  style={{ minWidth: 80, background: "transparent", color: "var(--sb-text)", fontSize: TYPE.bodySmall, fontFamily: IN, outline: "none", border: "none", borderBottom: "1.5px solid var(--sb-border)", padding: "2px 0" }}
                                 />
                               ) : (
                                 <input
@@ -415,7 +417,7 @@ export function PurchaseBillForm() {
                                   aria-label={`Row ${rIdx + 1} ${col.name}`}
                                   value={String(row[col.id] || "")}
                                   onChange={(e) => updateCell(rIdx, col.id, e.target.value)}
-                                  style={{ minWidth: 120, background: "transparent", color: "var(--hk-text)", fontSize: TYPE.bodySmall, fontFamily: SG, outline: "none", border: "none", borderBottom: "1.5px solid var(--hk-border)", padding: "2px 0" }}
+                                  style={{ minWidth: 120, background: "transparent", color: "var(--sb-text)", fontSize: TYPE.bodySmall, fontFamily: SG, outline: "none", border: "none", borderBottom: "1.5px solid var(--sb-border)", padding: "2px 0" }}
                                 />
                               )}
                             </td>
@@ -428,7 +430,7 @@ export function PurchaseBillForm() {
                               style={{
                                 width: 28, height: 28, borderRadius: 8, border: "none",
                                 background: "transparent",
-                                color: rows.length <= 1 ? "var(--hk-border)" : OR,
+                                color: rows.length <= 1 ? "var(--sb-border)" : OR,
                                 cursor: rows.length <= 1 ? "default" : "pointer",
                                 display: "flex", alignItems: "center", justifyContent: "center",
                               }}
@@ -462,17 +464,17 @@ export function PurchaseBillForm() {
 
                 {/* Summary */}
                 <HKCard style={{ background: AM + "08", border: `1px solid ${AM}20` }}>
-                  <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, marginBottom: 16 }}>Summary</p>
+                  <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, marginBottom: 16 }}>Summary</p>
 
                   <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ color: "var(--hk-sub)", fontSize: TYPE.body, fontFamily: SG }}>Subtotal</span>
-                      <span style={{ fontFamily: IN, fontWeight: 600, color: "var(--hk-text)" }}>{fmtFull(subtotal)}</span>
+                      <span style={{ color: "var(--sb-sub)", fontSize: TYPE.body, fontFamily: SG }}>Subtotal</span>
+                      <span style={{ fontFamily: IN, fontWeight: 600, color: "var(--sb-text)" }}>{fmtFull(subtotal)}</span>
                     </div>
 
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ color: "var(--hk-sub)", fontSize: TYPE.body, fontFamily: SG }}>{taxLabelText}</span>
+                        <span style={{ color: "var(--sb-sub)", fontSize: TYPE.body, fontFamily: SG }}>{taxLabelText}</span>
                         <HKInput
                           type="number"
                           aria-label="Tax percentage"
@@ -480,14 +482,14 @@ export function PurchaseBillForm() {
                           onValueChange={(v) => setTaxPercent(Number.parseFloat(v) || 0)}
                           size="sm"
                           className="w-20"
-                          endContent={<span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)" }}>%</span>}
+                          endContent={<span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)" }}>%</span>}
                         />
                       </div>
-                      <span style={{ fontFamily: IN, fontWeight: 600, color: "var(--hk-text)" }}>{fmtFull(taxAmount)}</span>
+                      <span style={{ fontFamily: IN, fontWeight: 600, color: "var(--sb-text)" }}>{fmtFull(taxAmount)}</span>
                     </div>
 
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                      <span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG, flexShrink: 0 }}>Place of Supply</span>
+                      <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG, flexShrink: 0 }}>Place of Supply</span>
                       <HKSelect
                         aria-label="Place of supply"
                         placeholder="Select state"
@@ -512,7 +514,7 @@ export function PurchaseBillForm() {
                           disabled={grandTotal === 0}
                           style={{ accentColor: AM }}
                         />
-                        <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>Round off to nearest ₹</span>
+                        <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}>Round off to nearest ₹</span>
                       </label>
                       {enableRoundOff && roundOff !== 0 && (
                         <span style={{ fontSize: TYPE.bodySmall, fontFamily: IN, fontWeight: 600, color: roundOff > 0 ? GR : OR }}>
@@ -521,8 +523,8 @@ export function PurchaseBillForm() {
                       )}
                     </div>
 
-                    <div style={{ borderTop: "1px solid var(--hk-border)", paddingTop: 12, marginTop: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ fontSize: TYPE.h2, fontWeight: 800, color: "var(--hk-text)", fontFamily: SG }}>Grand Total</span>
+                    <div style={{ borderTop: "1px solid var(--sb-border)", paddingTop: 12, marginTop: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: TYPE.h2, fontWeight: 800, color: "var(--sb-text)", fontFamily: SG }}>Grand Total</span>
                       <span style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: AM, fontFamily: IN }}>{fmtFull(roundedGrandTotal)}</span>
                     </div>
                   </div>

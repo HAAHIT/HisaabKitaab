@@ -1,8 +1,8 @@
 param(
   [string]$ProjectId,
   [string]$Region = "asia-south1",
-  [string]$Repository = "hisaabkitaab",
-  [string]$ServiceAccount = "hisaabkitaab-runner",
+  [string]$Repository = "solobooks",
+  [string]$ServiceAccount = "solobooks-runner",
   [string]$BucketName
 )
 
@@ -31,11 +31,11 @@ gcloud artifacts repositories create $Repository `
   --project=$ProjectId `
   --location=$Region `
   --repository-format=docker `
-  --description="HisaabKitaab application images" 2>$null
+  --description="SoloBooks application images" 2>$null
 
 gcloud iam service-accounts create $ServiceAccount `
   --project=$ProjectId `
-  --display-name="HisaabKitaab runtime" 2>$null
+  --display-name="SoloBooks runtime" 2>$null
 
 gcloud projects add-iam-policy-binding $ProjectId `
   --member="serviceAccount:$serviceAccountEmail" `

@@ -127,7 +127,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
 
   useEffect(() => {
     const el = document.createElement("style");
-    el.setAttribute("data-hk-print", "1");
+    el.setAttribute("data-sb-print", "1");
     el.textContent = PRINT_CSS;
     document.head.appendChild(el);
     return () => { document.head.removeChild(el); };
@@ -186,8 +186,8 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
   // ── Loading ───────────────────────────────────────────────────────────────
 
   if (loading) return (
-    <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG }}>
-      <div style={{ height: 57, borderBottom: "1px solid var(--hk-border)", background: "var(--hk-nav)" }} />
+    <div style={{ background: "var(--sb-bg)", minHeight: "100%", fontFamily: SG }}>
+      <div style={{ height: 57, borderBottom: "1px solid var(--sb-border)", background: "var(--sb-nav)" }} />
       <div style={{ padding: "24px 20px", maxWidth: 860, margin: "0 auto" }}>
         <HKSkeleton className="h-[700px] w-full rounded-2xl" />
       </div>
@@ -195,11 +195,11 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
   );
 
   if (!bill) return (
-    <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG, display: "flex", alignItems: "center", justifyContent: "center", padding: 40 }}>
+    <div style={{ background: "var(--sb-bg)", minHeight: "100%", fontFamily: SG, display: "flex", alignItems: "center", justifyContent: "center", padding: 40 }}>
       <div style={{ textAlign: "center" }}>
         <div style={{ fontSize: 52, marginBottom: 16 }}>📋</div>
-        <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", marginBottom: 8 }}>Bill nahi mila</p>
-        <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", marginBottom: 24 }}>Yeh bill exist nahi karta ya delete ho gaya</p>
+        <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", marginBottom: 8 }}>Bill nahi mila</p>
+        <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", marginBottom: 24 }}>Yeh bill exist nahi karta ya delete ho gaya</p>
         <HKButton onClick={() => router.push("/bills")}>Bills par wapas jao</HKButton>
       </div>
     </div>
@@ -244,8 +244,8 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
           position: "sticky",
           top: 0,
           zIndex: 20,
-          borderBottom: "1px solid var(--hk-border)",
-          background: "var(--hk-nav)",
+          borderBottom: "1px solid var(--sb-border)",
+          background: "var(--sb-nav)",
           backdropFilter: "blur(12px)",
         }}
       >
@@ -256,8 +256,8 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
               onClick={() => router.push(isVendor ? "/purchases" : "/bills")}
               style={{
                 width: TOUCH.secondary, height: TOUCH.secondary,
-                borderRadius: 10, border: "1.5px solid var(--hk-border)",
-                background: "var(--hk-card)", color: "var(--hk-sub)",
+                borderRadius: 10, border: "1.5px solid var(--sb-border)",
+                background: "var(--sb-card)", color: "var(--sb-sub)",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 cursor: "pointer", flexShrink: 0,
               }}
@@ -266,11 +266,11 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
                 <path d="M19 12H5M12 5l-7 7 7 7" />
               </svg>
             </button>
-            <span style={{ fontSize: TYPE.body, fontWeight: 800, color: "var(--hk-text)", fontFamily: IN, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <span style={{ fontSize: TYPE.body, fontWeight: 800, color: "var(--sb-text)", fontFamily: IN, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {bill.billNumber}
             </span>
             <StatusChip status={bill.status} />
-            <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG, whiteSpace: "nowrap", display: "none" }} className="sm-visible">
+            <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG, whiteSpace: "nowrap", display: "none" }} className="sm-visible">
               {fmtDate(bill.date ?? bill.createdAt)} · {bill.creator.name}
             </span>
           </div>
@@ -281,8 +281,8 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
               onClick={() => window.print()}
               style={{
                 height: TOUCH.secondary, padding: "0 14px",
-                borderRadius: 10, border: "1.5px solid var(--hk-border)",
-                background: "var(--hk-card)", color: "var(--hk-text)",
+                borderRadius: 10, border: "1.5px solid var(--sb-border)",
+                background: "var(--sb-card)", color: "var(--sb-text)",
                 fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG,
                 cursor: "pointer", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
               }}
@@ -299,8 +299,8 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
                   onClick={() => router.push(`/bills/${id}/edit`)}
                   style={{
                     height: TOUCH.secondary, padding: "0 14px",
-                    borderRadius: 10, border: "1.5px solid var(--hk-border)",
-                    background: "var(--hk-card)", color: "var(--hk-text)",
+                    borderRadius: 10, border: "1.5px solid var(--sb-border)",
+                    background: "var(--sb-card)", color: "var(--sb-text)",
                     fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG,
                     cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
                   }}
@@ -334,7 +334,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
                 onClick={() => setConfirmAction("CANCELLED")}
                 style={{
                   height: TOUCH.secondary, padding: "0 14px",
-                  borderRadius: 10, border: "1.5px solid var(--hk-border)",
+                  borderRadius: 10, border: "1.5px solid var(--sb-border)",
                   background: "transparent", color: OR,
                   fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG,
                   cursor: "pointer", whiteSpace: "nowrap",
@@ -348,7 +348,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
       </div>
 
       {/* ── Invoice document ──────────────────────────────────────────────────── */}
-      <div className="bill-bg" style={{ minHeight: "100vh", padding: "24px 12px 120px", background: "var(--hk-bg)" }}>
+      <div className="bill-bg" style={{ minHeight: "100vh", padding: "24px 12px 120px", background: "var(--sb-bg)" }}>
         <div
           className="bill-paper"
           style={{
@@ -615,7 +615,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
             <span>E &amp; O.E.</span>
             <span>
               This is a computer-generated invoice by{" "}
-              <strong style={{ color:"#777" }}>HisaabKitaab</strong>
+              <strong style={{ color:"#777" }}>SoloBooks</strong>
               {" "}· No physical signature required
             </span>
           </div>
@@ -649,7 +649,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
           </>
         }
       >
-        <p style={{ fontFamily: SG, fontSize: TYPE.body, color: "var(--hk-sub)", lineHeight: 1.6 }}>
+        <p style={{ fontFamily: SG, fontSize: TYPE.body, color: "var(--sb-sub)", lineHeight: 1.6 }}>
           {confirmAction === "FINAL"
             ? "Bill lock ho jayega aur books mein record ho jayega. Finalize karne ke baad edit nahi kar sakte."
             : "Bill permanently cancel ho jayega aur balance changes reverse ho jayenge."}

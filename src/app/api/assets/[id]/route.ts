@@ -121,7 +121,7 @@ export async function GET(
       for (let attempt = 0; attempt < 2; attempt++) {
         proxyResponse = await fetch(asset.storageKey, {
           method: "GET",
-          headers: { "User-Agent": "HisaabKitaab/1.0 AssetProxy" },
+          headers: { "User-Agent": "SoloBooks/1.0 AssetProxy" },
           signal: AbortSignal.timeout(5000),
         });
         // Only retry on server-side errors — 4xx means the resource is

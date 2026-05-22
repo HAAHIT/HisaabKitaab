@@ -6,9 +6,9 @@ import { HKPagination } from "@/components/ui/HKPagination";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
-  OR, GR, AM, SG, IN, TYPE,
+  C, OR, GR, AM, SG, IN, TYPE,
   fmtFull, useIsMobile,
-  HKCard, StatusChip, HKToast, SearchBox, PillFilter,
+  HKCard, StatusChip, HKAvatar, HKToast, SearchBox, PillFilter,
   PageHeader,
 } from "@/components/ui/hk-design";
 import { HKButton } from "@/components/ui/HKButton";
@@ -161,7 +161,7 @@ export default function BillsListPage() {
   return (
     <div
       style={{
-        background: "var(--hk-bg)",
+        background: "var(--sb-bg)",
         minHeight: "100%",
         paddingBottom: 0,
         fontFamily: SG,
@@ -169,20 +169,19 @@ export default function BillsListPage() {
     >
       {toast && <HKToast message={toast.message} type={toast.type} />}
 
-      <PageHeader
-        title="Mere Bills"
-        subtitle="Apne sab bills yahaan"
-        isMobile={isMobile}
-        action={
-          !isMobile && (
-            <HKButton onClick={() => router.push("/bills/new")}>
-              + Naya Bill Banao
-            </HKButton>
-          )
-        }
-      />
-
-      <div style={{ padding: isMobile ? "0 14px" : "0 28px", maxWidth: 1440, margin: "0 auto" }}>
+      <div style={{ padding: isMobile ? "18px 14px 100px" : "24px 28px", maxWidth: 1440, margin: "0 auto" }}>
+        <PageHeader
+          title="Mere Bills"
+          subtitle="Apne sab bills yahaan"
+          isMobile={isMobile}
+          action={
+            !isMobile && (
+              <HKButton onClick={() => router.push("/bills/new")}>
+                + Naya Bill Banao
+              </HKButton>
+            )
+          }
+        />
         {/* Overdue banner */}
         <OverdueBanner
           overdueCount={overdue.overdueCount}
@@ -200,9 +199,9 @@ export default function BillsListPage() {
           }}
         >
           {[
-            { l: "Kul Billed", v: fmtFull(billSummary.kulBilled), sub: "is mahine", c: "var(--hk-text)", bg: "var(--hk-card)" },
-            { l: "Mila", v: fmtFull(billSummary.mila), sub: "collected", c: GR, bg: GR + "10" },
-            { l: "Baaki", v: fmtFull(billSummary.baaki), sub: "outstanding", c: OR, bg: OR + "10" },
+            { l: "Kul Billed", v: fmtFull(billSummary.kulBilled), sub: "is mahine", c: "var(--sb-text)", bg: "var(--sb-card)" },
+            { l: "Mila", v: fmtFull(billSummary.mila), sub: "wapas mila", c: GR, bg: C.positiveSoft },
+            { l: "Baaki", v: fmtFull(billSummary.baaki), sub: "abhi tak", c: C.primary, bg: C.primarySoft },
           ].map((item, i) => (
             <div
               key={i}
@@ -210,14 +209,15 @@ export default function BillsListPage() {
                 padding: "16px 16px",
                 borderRadius: 14,
                 background: item.bg,
-                border: "1px solid var(--hk-border)",
+                border: "1px solid var(--sb-border)",
+                boxShadow: "var(--sb-shadow-card)",
               }}
             >
               <p
                 style={{
                   fontSize: TYPE.caption,
                   fontWeight: 700,
-                  color: "var(--hk-sub)",
+                  color: "var(--sb-sub)",
                   textTransform: "uppercase",
                   letterSpacing: "0.5px",
                   marginBottom: 6,
@@ -229,7 +229,7 @@ export default function BillsListPage() {
               <p style={{ fontSize: isMobile ? TYPE.numSmall : TYPE.numLarge, fontWeight: 800, color: item.c, fontFamily: IN, lineHeight: 1 }}>
                 {item.v}
               </p>
-              <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--hk-sub)", marginTop: 4, fontFamily: SG }}>{item.sub}</p>
+              <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--sb-sub)", marginTop: 4, fontFamily: SG }}>{item.sub}</p>
             </div>
           ))}
         </div>
@@ -253,9 +253,9 @@ export default function BillsListPage() {
                   padding: "6px 14px",
                   borderRadius: 20,
                   border: "1.5px solid",
-                  borderColor: datePreset === opt.key ? "var(--hk-primary)" : "var(--hk-border)",
-                  background: datePreset === opt.key ? "var(--hk-primary)" : "var(--hk-card)",
-                  color: datePreset === opt.key ? "#fff" : "var(--hk-sub)",
+                  borderColor: datePreset === opt.key ? "var(--sb-primary)" : "var(--sb-border)",
+                  background: datePreset === opt.key ? "var(--sb-primary)" : "var(--sb-card)",
+                  color: datePreset === opt.key ? "#fff" : "var(--sb-sub)",
                   fontSize: TYPE.bodySmall,
                   fontWeight: 600,
                   fontFamily: SG,
@@ -277,16 +277,16 @@ export default function BillsListPage() {
                 style={{
                   padding: "6px 12px",
                   borderRadius: 10,
-                  border: "1.5px solid var(--hk-border)",
-                  background: "var(--hk-card)",
-                  color: "var(--hk-text)",
+                  border: "1.5px solid var(--sb-border)",
+                  background: "var(--sb-card)",
+                  color: "var(--sb-text)",
                   fontSize: TYPE.bodySmall,
                   fontFamily: SG,
                   cursor: "pointer",
                   outline: "none",
                 }}
               />
-              <span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG }}>se</span>
+              <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG }}>se</span>
               <input
                 type="date"
                 value={customTo}
@@ -294,9 +294,9 @@ export default function BillsListPage() {
                 style={{
                   padding: "6px 12px",
                   borderRadius: 10,
-                  border: "1.5px solid var(--hk-border)",
-                  background: "var(--hk-card)",
-                  color: "var(--hk-text)",
+                  border: "1.5px solid var(--sb-border)",
+                  background: "var(--sb-card)",
+                  color: "var(--sb-text)",
                   fontSize: TYPE.bodySmall,
                   fontFamily: SG,
                   cursor: "pointer",
@@ -309,9 +309,9 @@ export default function BillsListPage() {
                   style={{
                     padding: "5px 12px",
                     borderRadius: 10,
-                    border: "1.5px solid var(--hk-border)",
+                    border: "1.5px solid var(--sb-border)",
                     background: "transparent",
-                    color: "var(--hk-sub)",
+                    color: "var(--sb-sub)",
                     fontSize: TYPE.bodySmall,
                     fontFamily: SG,
                     cursor: "pointer",
@@ -345,7 +345,7 @@ export default function BillsListPage() {
             style={{
               textAlign: "center",
               padding: "60px 20px",
-              color: "var(--hk-sub)",
+              color: "var(--sb-sub)",
             }}
           >
             <div style={{ fontSize: 52, marginBottom: 16 }}>📋</div>
@@ -353,7 +353,7 @@ export default function BillsListPage() {
               style={{
                 fontWeight: 700,
                 fontSize: TYPE.h2,
-                color: "var(--hk-text)",
+                color: "var(--sb-text)",
                 marginBottom: 8,
                 fontFamily: SG,
               }}
@@ -388,14 +388,14 @@ export default function BillsListPage() {
                       alignItems: "center",
                       padding: "10px 16px",
                       borderRadius: 12,
-                      background: "var(--hk-badge)",
-                      border: "1px solid var(--hk-border)",
+                      background: "var(--sb-surface-alt)",
+                      border: "1px solid var(--sb-border)",
                       marginBottom: 10,
                       cursor: "pointer",
                       fontFamily: SG,
                     }}
                   >
-                    <span style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)" }}>
+                    <span style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)" }}>
                       {group.label}
                     </span>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -403,13 +403,13 @@ export default function BillsListPage() {
                         style={{
                           fontSize: TYPE.numSmall,
                           fontWeight: 700,
-                          color: "var(--hk-sub)",
+                          color: "var(--sb-sub)",
                           fontFamily: IN,
                         }}
                       >
                         {fmtFull(group.total)}
                       </span>
-                      <span style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--hk-sub)" }}>
+                      <span style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--sb-sub)" }}>
                         · {group.bills.length} bills
                       </span>
                       <svg
@@ -417,7 +417,7 @@ export default function BillsListPage() {
                         height="16"
                         viewBox="0 0 24 24"
                         fill="none"
-                        stroke="var(--hk-sub)"
+                        stroke="var(--sb-sub)"
                         strokeWidth="1.8"
                         strokeLinecap="round"
                         style={{
@@ -431,140 +431,52 @@ export default function BillsListPage() {
                   </button>
 
                   {!isCollapsed && (
-                    <HKCard style={{ padding: "0 16px" }}>
-                      {group.bills.map((bill, i) => (
-                        <div
-                          key={bill.id}
-                          onClick={() => router.push(`/bills/${bill.id}`)}
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            padding: "16px 0",
-                            borderBottom:
-                              i < group.bills.length - 1
-                                ? "1px solid var(--hk-border)"
-                                : "none",
-                            cursor: "pointer",
-                            minHeight: 64,
-                          }}
-                        >
-                          <div style={{ display: "flex", gap: 14, alignItems: "center", flex: 1, minWidth: 0 }}>
-                            <div
-                              style={{
-                                width: 44,
-                                height: 44,
-                                borderRadius: 11,
-                                background:
-                                  bill.status === "FINAL"
-                                    ? GR + "18"
-                                    : bill.status === "DRAFT"
-                                    ? AM + "18"
-                                    : OR + "18",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                flexShrink: 0,
-                              }}
-                            >
-                              <svg
-                                width="20"
-                                height="20"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke={
-                                  bill.status === "FINAL"
-                                    ? GR
-                                    : bill.status === "DRAFT"
-                                    ? AM
-                                    : OR
-                                }
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                              >
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                <polyline points="14 2 14 8 20 8" />
-                              </svg>
-                            </div>
-                            <div style={{ minWidth: 0, flex: 1 }}>
-                              <div
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 8,
-                                  marginBottom: 4,
-                                  flexWrap: "wrap",
-                                }}
-                              >
-                                <span
-                                  style={{
-                                    fontSize: TYPE.bodySmall,
-                                    fontWeight: 700,
-                                    color: "var(--hk-sub)",
-                                    fontFamily: IN,
-                                  }}
-                                >
-                                  {bill.billNumber}
-                                </span>
+                    <HKCard style={{ padding: 0 }}>
+                      {group.bills.map((bill, i) => {
+                        const partyName = bill.party?.name || bill.customerName;
+                        return (
+                          <button
+                            key={bill.id}
+                            onClick={() => router.push(`/bills/${bill.id}`)}
+                            style={{
+                              width: "100%",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 12,
+                              padding: "14px 18px",
+                              border: "none",
+                              background: "transparent",
+                              cursor: "pointer",
+                              borderBottom: i < group.bills.length - 1 ? "1px solid var(--sb-divider)" : "none",
+                              textAlign: "left",
+                              color: "var(--sb-text)",
+                              transition: "background 0.15s",
+                              fontFamily: SG,
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.background = "var(--sb-hover)")}
+                            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                          >
+                            <HKAvatar name={partyName || "—"} size={40} />
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2, flexWrap: "wrap" }}>
+                                <span style={{ fontSize: TYPE.body, fontWeight: 600, color: "var(--sb-text)", fontFamily: SG }}>{partyName}</span>
                                 <StatusChip status={bill.status} />
                               </div>
-                              <p
-                                style={{
-                                  fontSize: TYPE.body,
-                                  fontWeight: 700,
-                                  color: "var(--hk-text)",
-                                  marginBottom: 3,
-                                  fontFamily: SG,
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                  whiteSpace: "nowrap",
-                                }}
-                              >
-                                {bill.party?.name || bill.customerName}
-                              </p>
-                              <p
-                                style={{
-                                  fontSize: TYPE.bodySmall,
-                                  fontWeight: 500,
-                                  color: "var(--hk-sub)",
-                                  fontFamily: SG,
-                                }}
-                              >
-                                {new Date(bill.date ?? bill.createdAt).toLocaleDateString("en-IN", {
-                                  day: "numeric",
-                                  month: "short",
-                                  year: "numeric",
-                                })}
+                              <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", margin: 0, fontFamily: SG }}>
+                                {bill.billNumber} · {new Date(bill.date ?? bill.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
                               </p>
                             </div>
-                          </div>
-                          <div style={{ textAlign: "right", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                            <p
-                              style={{
-                                fontSize: TYPE.numMedium,
-                                fontWeight: 800,
-                                color: "var(--hk-text)",
-                                fontFamily: IN,
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              {fmtFull(bill.grandTotal)}
-                            </p>
-                            <svg
-                              style={{ color: "var(--hk-sub)" }}
-                              width="18"
-                              height="18"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                            >
-                              <path d="m9 18 6-6-6-6" />
+                            <div style={{ textAlign: "right", flexShrink: 0 }}>
+                              <p style={{ fontSize: TYPE.numSm, fontWeight: 700, color: "var(--sb-text)", margin: 0, fontFamily: IN, fontVariantNumeric: "tabular-nums" }}>
+                                {fmtFull(bill.grandTotal)}
+                              </p>
+                            </div>
+                            <svg style={{ color: "var(--sb-muted)", flexShrink: 0 }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="m9 18 6-6-6-6"/>
                             </svg>
-                          </div>
-                        </div>
-                      ))}
+                          </button>
+                        );
+                      })}
                     </HKCard>
                   )}
                 </div>

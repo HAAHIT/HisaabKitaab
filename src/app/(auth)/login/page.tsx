@@ -55,17 +55,17 @@ export default async function LoginPage({
 
   return (
     <div
-      className="hk-auth-shell"
+      className="sb-auth-shell"
       style={{
         minHeight: "100vh",
         display: "flex",
-        background: "var(--hk-bg)",
+        background: "var(--sb-bg)",
         fontFamily: "var(--font-space-grotesk), sans-serif",
       }}
     >
       {/* Marketing side — 60% */}
       <aside
-        className="hk-auth-marketing"
+        className="sb-auth-marketing"
         style={{
           flex: "0 0 60%",
           position: "relative",
@@ -126,7 +126,7 @@ export default async function LoginPage({
             </svg>
           </div>
           <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.2px" }}>
-            HisaabKitaab
+            SoloBooks
           </div>
         </div>
 
@@ -199,13 +199,13 @@ export default async function LoginPage({
             color: "rgba(255, 255, 255, 0.48)",
           }}
         >
-          © {new Date().getFullYear()} HisaabKitaab
+          © {new Date().getFullYear()} SoloBooks
         </div>
       </aside>
 
       {/* Form side — 40% */}
       <main
-        className="hk-auth-form-panel"
+        className="sb-auth-form-panel"
         style={{
           flex: "0 0 40%",
           display: "flex",
@@ -232,7 +232,7 @@ export default async function LoginPage({
                 fontSize: 28,
                 fontWeight: 700,
                 letterSpacing: "-0.5px",
-                color: "var(--hk-text)",
+                color: "var(--sb-text)",
                 lineHeight: 1.2,
                 margin: 0,
               }}
@@ -243,7 +243,7 @@ export default async function LoginPage({
               style={{
                 fontSize: 14,
                 fontWeight: 400,
-                color: "var(--hk-sub)",
+                color: "var(--sb-sub)",
                 marginTop: 8,
               }}
             >
@@ -287,14 +287,14 @@ export default async function LoginPage({
                   display: "block",
                   fontSize: 13,
                   fontWeight: 600,
-                  color: "var(--hk-text)",
+                  color: "var(--sb-text)",
                   marginBottom: 8,
                 }}
               >
                 {t("login.credentialLabel")}
               </span>
               <div
-                className="hk-login-input-group"
+                className="sb-login-input-group"
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -302,8 +302,8 @@ export default async function LoginPage({
                   padding: "0 14px",
                   height: 48,
                   borderRadius: 10,
-                  border: "1.5px solid var(--hk-border)",
-                  background: "var(--hk-input)",
+                  border: "1.5px solid var(--sb-border)",
+                  background: "var(--sb-input)",
                   transition: "border-color 0.15s, box-shadow 0.15s",
                 }}
               >
@@ -311,7 +311,7 @@ export default async function LoginPage({
                   width="18"
                   height="18"
                   fill="none"
-                  stroke="var(--hk-sub)"
+                  stroke="var(--sb-sub)"
                   viewBox="0 0 24 24"
                   strokeWidth="1.8"
                   strokeLinecap="round"
@@ -332,7 +332,7 @@ export default async function LoginPage({
                     outline: "none",
                     fontSize: 15,
                     fontWeight: 500,
-                    color: "var(--hk-text)",
+                    color: "var(--sb-text)",
                   }}
                 />
               </div>
@@ -348,7 +348,7 @@ export default async function LoginPage({
                   marginBottom: 8,
                 }}
               >
-                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--hk-text)" }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--sb-text)" }}>
                   {t("login.passwordLabel")}
                 </span>
                 <button
@@ -369,7 +369,7 @@ export default async function LoginPage({
                 </button>
               </div>
               <div
-                className="hk-login-input-group"
+                className="sb-login-input-group"
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -377,8 +377,8 @@ export default async function LoginPage({
                   padding: "0 14px",
                   height: 48,
                   borderRadius: 10,
-                  border: "1.5px solid var(--hk-border)",
-                  background: "var(--hk-input)",
+                  border: "1.5px solid var(--sb-border)",
+                  background: "var(--sb-input)",
                   transition: "border-color 0.15s, box-shadow 0.15s",
                 }}
               >
@@ -386,7 +386,7 @@ export default async function LoginPage({
                   width="18"
                   height="18"
                   fill="none"
-                  stroke="var(--hk-sub)"
+                  stroke="var(--sb-sub)"
                   viewBox="0 0 24 24"
                   strokeWidth="1.8"
                   strokeLinecap="round"
@@ -407,7 +407,7 @@ export default async function LoginPage({
                     outline: "none",
                     fontSize: 15,
                     fontWeight: 500,
-                    color: "var(--hk-text)",
+                    color: "var(--sb-text)",
                   }}
                 />
                 <button
@@ -424,7 +424,7 @@ export default async function LoginPage({
                     borderRadius: 8,
                     border: "none",
                     background: "transparent",
-                    color: "var(--hk-sub)",
+                    color: "var(--sb-sub)",
                     cursor: "pointer",
                     display: "flex",
                     alignItems: "center",
@@ -517,7 +517,7 @@ export default async function LoginPage({
                     borderRadius: "50%",
                     border: "2.5px solid transparent",
                     borderBottomColor: "currentColor",
-                    animation: "hk-spin 0.7s linear infinite",
+                    animation: "sb-spin 0.7s linear infinite",
                   }}
                 />
               </div>
@@ -532,7 +532,7 @@ export default async function LoginPage({
               textAlign: "center",
               fontSize: 13,
               fontWeight: 500,
-              color: "var(--hk-sub)",
+              color: "var(--sb-sub)",
             }}
           >
             {t("login.noAccount")}{" "}
@@ -562,21 +562,21 @@ export default async function LoginPage({
           width: "calc(100vw - 2rem)",
           maxWidth: 420,
           borderRadius: 20,
-          border: "1px solid var(--hk-border)",
-          background: "var(--hk-card)",
+          border: "1px solid var(--sb-border)",
+          background: "var(--sb-card)",
           padding: 0,
-          color: "var(--hk-text)",
+          color: "var(--sb-text)",
           boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
           fontFamily: "var(--font-space-grotesk), sans-serif",
         }}
       >
-        <div style={{ borderBottom: "1px solid var(--hk-border)", padding: "18px 24px" }}>
-          <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--hk-text)" }}>
+        <div style={{ borderBottom: "1px solid var(--sb-border)", padding: "18px 24px" }}>
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--sb-text)" }}>
             {t("login.forgotPasswordTitle")}
           </h2>
         </div>
         <div style={{ padding: "20px 24px" }}>
-          <p style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.6, color: "var(--hk-sub)" }}>
+          <p style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.6, color: "var(--sb-sub)" }}>
             {t("login.forgotPasswordBody")}
           </p>
         </div>
@@ -584,7 +584,7 @@ export default async function LoginPage({
           style={{
             display: "flex",
             justifyContent: "flex-end",
-            borderTop: "1px solid var(--hk-border)",
+            borderTop: "1px solid var(--sb-border)",
             padding: "14px 24px",
           }}
         >
@@ -612,11 +612,11 @@ export default async function LoginPage({
       <style
         dangerouslySetInnerHTML={{
           __html: `
-            @keyframes hk-spin {
+            @keyframes sb-spin {
               from { transform: rotate(0deg); }
               to { transform: rotate(360deg); }
             }
-            .hk-login-input-group:focus-within {
+            .sb-login-input-group:focus-within {
               border-color: #f76000 !important;
               box-shadow: 0 0 0 3px rgba(247, 96, 0, 0.12);
             }
@@ -625,8 +625,8 @@ export default async function LoginPage({
               backdrop-filter: blur(4px);
             }
             @media (max-width: 1023px) {
-              .hk-auth-marketing { display: none !important; }
-              .hk-auth-form-panel { flex: 1 1 100% !important; }
+              .sb-auth-marketing { display: none !important; }
+              .sb-auth-form-panel { flex: 1 1 100% !important; }
             }
           `,
         }}

@@ -5,7 +5,7 @@ import { SG } from "@/components/ui/hk-design";
 
 export default function BillsLoading() {
   return (
-    <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG }}>
+    <div style={{ background: "var(--sb-bg)", minHeight: "100%", fontFamily: SG }}>
       <div style={{ padding: "20px 28px 0", maxWidth: 1440, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
           <HKSkeleton className="h-8 w-36 rounded-xl" />

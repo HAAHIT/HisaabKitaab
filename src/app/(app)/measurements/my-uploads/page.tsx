@@ -126,16 +126,16 @@ export default function MyUploadsPage() {
           ))}
         </div>
       ) : uploads.length === 0 && drafts.length === 0 ? (
-        <div className="rounded-2xl border border-[var(--hk-border)] bg-[var(--hk-card)] shadow-sm">
+        <div className="rounded-2xl border border-[var(--sb-border)] bg-[var(--sb-card)] shadow-sm">
           <div className="flex flex-col items-center justify-center py-16">
-            <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-[var(--hk-purple)]/10">
-              <svg className="h-10 w-10 text-[var(--hk-purple)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-[var(--sb-purple)]/10">
+              <svg className="h-10 w-10 text-[var(--sb-purple)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} />
                 <path d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} />
               </svg>
             </div>
-            <p className="text-lg font-medium text-[var(--hk-text)]">{t("measurements.noUploads")}</p>
-            <p className="mt-1 max-w-sm text-center text-sm text-[var(--hk-sub)]">{t("measurements.noUploadsSubtitle")}</p>
+            <p className="text-lg font-medium text-[var(--sb-text)]">{t("measurements.noUploads")}</p>
+            <p className="mt-1 max-w-sm text-center text-sm text-[var(--sb-sub)]">{t("measurements.noUploadsSubtitle")}</p>
             <HKButton size="sm" variant="ghost" className="mt-4" onClick={() => router.push("/measurements/upload")}>
               {t("measurements.firstUpload")}
             </HKButton>
@@ -147,8 +147,8 @@ export default function MyUploadsPage() {
             <section className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-lg font-semibold text-[var(--hk-text)]">{t("measurements.pendingDeviceTitle")}</h2>
-                  <p className="text-sm text-[var(--hk-sub)]">{t("measurements.pendingDeviceSubtitle")}</p>
+                  <h2 className="text-lg font-semibold text-[var(--sb-text)]">{t("measurements.pendingDeviceTitle")}</h2>
+                  <p className="text-sm text-[var(--sb-sub)]">{t("measurements.pendingDeviceSubtitle")}</p>
                 </div>
                 <HKChip size="sm" variant="flat" color={isOnline ? "secondary" : "warning"}>
                   {isOnline ? t("measurements.readyToSync") : t("measurements.waitingConnection")}
@@ -157,23 +157,23 @@ export default function MyUploadsPage() {
 
               <div className="space-y-4">
                 {drafts.map((draft) => (
-                  <div key={draft.id} className="rounded-2xl border border-[var(--hk-amber)]/30 bg-[var(--hk-amber)]/5 shadow-sm">
+                  <div key={draft.id} className="rounded-2xl border border-[var(--sb-amber)]/30 bg-[var(--sb-amber)]/5 shadow-sm">
                     <div className="p-5">
                       <div className="flex flex-col gap-3">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
-                              <h3 className="text-lg font-semibold text-[var(--hk-text)]">{draft.label}</h3>
+                              <h3 className="text-lg font-semibold text-[var(--sb-text)]">{draft.label}</h3>
                               <HKChip size="sm" variant="flat" color="warning">{t("measurements.pendingUpload")}</HKChip>
                             </div>
                             <div className="mt-1 flex flex-wrap gap-2">
                               {draft.roomName && (
-                                <span className="rounded-full bg-[var(--hk-badge)] px-2 py-0.5 text-xs text-[var(--hk-sub)]">{draft.roomName}</span>
+                                <span className="rounded-full bg-[var(--sb-badge)] px-2 py-0.5 text-xs text-[var(--sb-sub)]">{draft.roomName}</span>
                               )}
                               {draft.itemType && (
-                                <span className="rounded-full bg-[var(--hk-badge)] px-2 py-0.5 text-xs text-[var(--hk-sub)]">{draft.itemType}</span>
+                                <span className="rounded-full bg-[var(--sb-badge)] px-2 py-0.5 text-xs text-[var(--sb-sub)]">{draft.itemType}</span>
                               )}
-                              <span className="text-xs text-[var(--hk-sub)]">{formatDate(draft.createdAt)}</span>
+                              <span className="text-xs text-[var(--sb-sub)]">{formatDate(draft.createdAt)}</span>
                             </div>
                           </div>
                         </div>
@@ -181,7 +181,7 @@ export default function MyUploadsPage() {
                         {draft.photos.length > 0 && (
                           <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
                             {draft.photos.map((photo, index) => (
-                              <div key={`${draft.id}-${index}`} className="relative aspect-square overflow-hidden rounded-lg bg-[var(--hk-badge)]">
+                              <div key={`${draft.id}-${index}`} className="relative aspect-square overflow-hidden rounded-lg bg-[var(--sb-badge)]">
                                 <Image src={photo} alt={`${draft.label} draft ${index + 1}`} fill unoptimized className="object-cover" />
                               </div>
                             ))}
@@ -189,7 +189,7 @@ export default function MyUploadsPage() {
                         )}
 
                         {draft.notes && (
-                          <p className="rounded-lg bg-[var(--hk-badge)] p-3 text-sm text-[var(--hk-sub)]">{draft.notes}</p>
+                          <p className="rounded-lg bg-[var(--sb-badge)] p-3 text-sm text-[var(--sb-sub)]">{draft.notes}</p>
                         )}
                       </div>
                     </div>
@@ -213,20 +213,20 @@ export default function MyUploadsPage() {
                   const status = STATUS_CONFIG[upload.status] || STATUS_CONFIG.UPLOADED;
 
                   return (
-                    <div key={upload.id} className="rounded-2xl border border-[var(--hk-border)] bg-[var(--hk-card)] shadow-sm transition hover:shadow-md">
+                    <div key={upload.id} className="rounded-2xl border border-[var(--sb-border)] bg-[var(--sb-card)] shadow-sm transition hover:shadow-md">
                       <div className="p-5">
                         <div className="flex flex-col gap-3">
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
-                              <h3 className="text-lg font-semibold text-[var(--hk-text)]">{upload.label}</h3>
+                              <h3 className="text-lg font-semibold text-[var(--sb-text)]">{upload.label}</h3>
                               <div className="mt-1 flex flex-wrap gap-2">
                                 {upload.roomName && (
-                                  <span className="rounded-full bg-[var(--hk-badge)] px-2 py-0.5 text-xs text-[var(--hk-sub)]">{upload.roomName}</span>
+                                  <span className="rounded-full bg-[var(--sb-badge)] px-2 py-0.5 text-xs text-[var(--sb-sub)]">{upload.roomName}</span>
                                 )}
                                 {upload.itemType && (
-                                  <span className="rounded-full bg-[var(--hk-badge)] px-2 py-0.5 text-xs text-[var(--hk-sub)]">{upload.itemType}</span>
+                                  <span className="rounded-full bg-[var(--sb-badge)] px-2 py-0.5 text-xs text-[var(--sb-sub)]">{upload.itemType}</span>
                                 )}
-                                <span className="text-xs text-[var(--hk-sub)]">{formatDate(upload.createdAt)}</span>
+                                <span className="text-xs text-[var(--sb-sub)]">{formatDate(upload.createdAt)}</span>
                               </div>
                             </div>
                             <HKChip size="sm" variant="flat" color={status.color}>{status.label}</HKChip>
@@ -235,7 +235,7 @@ export default function MyUploadsPage() {
                           {upload.photos.length > 0 && (
                             <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
                               {upload.photos.map((photo, index) => (
-                                <div key={`${upload.id}-${index}`} className="relative aspect-square overflow-hidden rounded-lg bg-[var(--hk-badge)]">
+                                <div key={`${upload.id}-${index}`} className="relative aspect-square overflow-hidden rounded-lg bg-[var(--sb-badge)]">
                                   <Image src={photo.thumbnailUrl || photo.url} alt={`${upload.label} ${index + 1}`} fill unoptimized className="object-cover" />
                                 </div>
                               ))}
@@ -243,13 +243,13 @@ export default function MyUploadsPage() {
                           )}
 
                           {upload.notes && (
-                            <p className="rounded-lg bg-[var(--hk-badge)] p-3 text-sm text-[var(--hk-sub)]">{upload.notes}</p>
+                            <p className="rounded-lg bg-[var(--sb-badge)] p-3 text-sm text-[var(--sb-sub)]">{upload.notes}</p>
                           )}
 
                           {upload.reviewNotes && (
-                            <div className="rounded-lg border border-[var(--hk-purple)]/20 bg-[var(--hk-purple)]/5 p-3">
-                              <p className="mb-1 text-xs font-semibold text-[var(--hk-purple)]">{t("measurements.reviewNotes")}</p>
-                              <p className="text-sm text-[var(--hk-text)]">{upload.reviewNotes}</p>
+                            <div className="rounded-lg border border-[var(--sb-purple)]/20 bg-[var(--sb-purple)]/5 p-3">
+                              <p className="mb-1 text-xs font-semibold text-[var(--sb-purple)]">{t("measurements.reviewNotes")}</p>
+                              <p className="text-sm text-[var(--sb-text)]">{upload.reviewNotes}</p>
                             </div>
                           )}
                         </div>

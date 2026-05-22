@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { HKModal } from "@/components/ui/hk-design";
+import { HKSheet } from "@/components/ui/hk-design";
 import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
 import { HKButton } from "@/components/ui/HKButton";
 import { HKInput } from "@/components/ui/HKInput";
@@ -82,7 +82,7 @@ export function QuickAddPartyModal({
   }
 
   return (
-    <HKModal
+    <HKSheet
       isOpen={isOpen}
       onClose={onClose}
       title="Quick Add Party"
@@ -137,6 +137,6 @@ export function QuickAddPartyModal({
           })}
         </HKSelect>
       </motion.div>
-    </HKModal>
+    </HKSheet>
   );
 }

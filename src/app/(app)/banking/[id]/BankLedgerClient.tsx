@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { HKModal } from "@/components/ui/hk-design";
 import { HKButton } from "@/components/ui/HKButton";
 import {
-  OR, PU, GR, AM, SG, IN, TYPE, TOUCH,
+  C, OR, PU, GR, AM, SG, IN, TYPE, TOUCH, DISPLAY,
   fmtFull, useIsMobile, HKCard, HKToast,
 } from "@/components/ui/hk-design";
 
@@ -148,70 +148,68 @@ export default function BankLedgerClient({
     mode.split("_").map((w) => w.charAt(0) + w.slice(1).toLowerCase()).join(" ");
 
   return (
-    <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG }}>
+    <div style={{ background: "var(--sb-bg)", minHeight: "100%", fontFamily: SG }}>
       {toast && <HKToast message={toast.message} type={toast.type} />}
 
-      {/* Header */}
-      <div style={{
-        padding: isMobile ? "18px 14px 14px" : "26px 28px 18px",
-        display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap",
-      }}>
-        <Link
-          href="/banking"
-          style={{
-            width: TOUCH.secondary, height: TOUCH.secondary,
-            borderRadius: 12, border: "1.5px solid var(--hk-border)",
-            background: "var(--hk-card)", color: "var(--hk-sub)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            flexShrink: 0, textDecoration: "none",
-          }}
-        >
-          <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-        </Link>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <h1 style={{ fontSize: isMobile ? TYPE.h1Mobile : TYPE.h1, fontWeight: 700, color: "var(--hk-text)", letterSpacing: "-0.5px", fontFamily: SG, lineHeight: 1.2 }}>
-              {account.name}
-            </h1>
-            <span style={{
-              fontSize: TYPE.chip, fontWeight: 700,
-              color: accountColor, background: accountColor + "18",
-              padding: "4px 10px", borderRadius: 7, fontFamily: SG,
-            }}>
-              {account.type === "BANK" ? "Bank" : "Cash"}
-            </span>
+      <div style={{ padding: isMobile ? "18px 14px 80px" : "24px 28px 40px", maxWidth: 1200, margin: "0 auto" }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20, flexWrap: "wrap" }}>
+          <Link
+            href="/banking"
+            style={{
+              width: TOUCH.secondary, height: TOUCH.secondary,
+              borderRadius: 12, border: "1.5px solid var(--sb-border)",
+              background: "var(--sb-card)", color: "var(--sb-sub)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0, textDecoration: "none",
+              boxShadow: "var(--sb-shadow-card)",
+            }}
+          >
+            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </Link>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <h1 style={{ fontFamily: DISPLAY, fontSize: isMobile ? 22 : 28, fontWeight: 600, color: "var(--sb-text)", letterSpacing: "-0.01em", lineHeight: 1.2, margin: 0 }}>
+                {account.name}
+              </h1>
+              <span style={{
+                fontSize: TYPE.chip, fontWeight: 700,
+                color: accountColor, background: accountColor === AM ? C.warningSoft : accountColor === GR ? C.positiveSoft : C.primarySoft,
+                padding: "4px 10px", borderRadius: 7, fontFamily: SG,
+              }}>
+                {account.type === "BANK" ? "Bank" : "Cash"}
+              </span>
+            </div>
+            {account.accountNumber && (
+              <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontWeight: 500, marginTop: 4, fontFamily: "monospace" }}>
+                A/c: {account.accountNumber}
+              </p>
+            )}
           </div>
-          {account.accountNumber && (
-            <p style={{ fontSize: TYPE.label, color: "var(--hk-sub)", fontWeight: 500, marginTop: 3, fontFamily: "monospace" }}>
-              A/c: {account.accountNumber}
-            </p>
-          )}
         </div>
-      </div>
-
-      <div style={{ padding: isMobile ? "0 14px 80px" : "0 28px 40px", maxWidth: 1200, margin: "0 auto" }}>
 
         {/* Balance cards */}
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
-          {((): { label: string; value: number; color: string; isCount?: boolean }[] => [
-            { label: "Opening Balance", value: account.openingBalance, color: AM },
-            { label: "Current Balance", value: account.currentBalance, color: account.currentBalance >= 0 ? GR : OR },
-            ...(!isMobile ? [{ label: "Transactions", value: ledger.length, color: PU, isCount: true }] : []),
+          {((): { label: string; value: number; color: string; bg: string; isCount?: boolean }[] => [
+            { label: "Opening Balance", value: account.openingBalance, color: AM, bg: C.warningSoft },
+            { label: "Current Balance", value: account.currentBalance, color: account.currentBalance >= 0 ? GR : C.negative, bg: account.currentBalance >= 0 ? C.positiveSoft : C.negativeSoft },
+            ...(!isMobile ? [{ label: "Transactions", value: ledger.length, color: PU, bg: C.infoSoft, isCount: true }] : []),
           ])().map((item) => (
             <div
               key={item.label}
               style={{
                 padding: "16px 18px", borderRadius: 16,
-                background: item.color + "12",
-                border: `1px solid ${item.color}28`,
+                background: item.bg,
+                border: "1px solid var(--sb-border)",
+                boxShadow: "var(--sb-shadow-card)",
               }}
             >
               <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: item.color, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6, fontFamily: SG }}>
                 {item.label}
               </p>
-              <p style={{ fontSize: isMobile ? TYPE.numMedium : TYPE.numMedium + 2, fontWeight: 800, color: "var(--hk-text)", fontFamily: IN, lineHeight: 1.1 }}>
+              <p style={{ fontSize: isMobile ? TYPE.numMedium : TYPE.numMedium + 2, fontWeight: 800, color: "var(--sb-text)", fontFamily: IN, lineHeight: 1.1 }}>
                 {item.isCount ? item.value : fmtFull(Number(item.value))}
               </p>
             </div>
@@ -227,11 +225,11 @@ export default function BankLedgerClient({
               gridTemplateColumns: "90px 1fr 110px 110px 120px 44px",
               gap: 0,
               padding: "12px 20px",
-              borderBottom: "1px solid var(--hk-border)",
-              background: "var(--hk-badge)",
+              borderBottom: "1px solid var(--sb-border)",
+              background: "var(--sb-badge)",
             }}>
               {["Date", "Particulars", "In (+)", "Out (−)", "Balance", ""].map((h) => (
-                <p key={h} style={{ fontSize: TYPE.caption, fontWeight: 700, color: "var(--hk-sub)", textAlign: h === "In (+)" || h === "Out (−)" || h === "Balance" ? "right" : "left", fontFamily: SG, textTransform: "uppercase", letterSpacing: "0.5px" }}>{h}</p>
+                <p key={h} style={{ fontSize: TYPE.caption, fontWeight: 700, color: "var(--sb-sub)", textAlign: h === "In (+)" || h === "Out (−)" || h === "Balance" ? "right" : "left", fontFamily: SG, textTransform: "uppercase", letterSpacing: "0.5px" }}>{h}</p>
               ))}
             </div>
           )}
@@ -242,18 +240,18 @@ export default function BankLedgerClient({
               display: "grid",
               gridTemplateColumns: "90px 1fr 110px 110px 120px 44px",
               padding: "12px 20px",
-              borderBottom: "1px solid var(--hk-border)",
+              borderBottom: "1px solid var(--sb-border)",
               background: AM + "08",
             }}>
-              <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: IN }}>—</p>
-              <p style={{ fontSize: TYPE.bodySmall, fontStyle: "italic", color: "var(--hk-sub)", fontFamily: SG }}>Opening Balance</p>
+              <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: IN }}>—</p>
+              <p style={{ fontSize: TYPE.bodySmall, fontStyle: "italic", color: "var(--sb-sub)", fontFamily: SG }}>Opening Balance</p>
               <p style={{ fontSize: TYPE.bodySmall, fontWeight: 600, color: GR, textAlign: "right", fontFamily: IN }}>
                 {account.openingBalance > 0 ? fmtFull(account.openingBalance) : "—"}
               </p>
               <p style={{ fontSize: TYPE.bodySmall, fontWeight: 600, color: OR, textAlign: "right", fontFamily: IN }}>
                 {account.openingBalance < 0 ? fmtFull(Math.abs(account.openingBalance)) : "—"}
               </p>
-              <p style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--hk-text)", textAlign: "right", fontFamily: IN }}>
+              <p style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--sb-text)", textAlign: "right", fontFamily: IN }}>
                 {fmtFull(account.openingBalance)}
               </p>
               <div />
@@ -261,9 +259,9 @@ export default function BankLedgerClient({
           )}
 
           {ledger.length === 0 && (
-            <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--hk-sub)" }}>
+            <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--sb-sub)" }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>📒</div>
-              <p style={{ fontSize: TYPE.body, fontWeight: 600, color: "var(--hk-sub)", fontFamily: SG }}>
+              <p style={{ fontSize: TYPE.body, fontWeight: 600, color: "var(--sb-sub)", fontFamily: SG }}>
                 Koi transaction nahi
               </p>
             </div>
@@ -285,15 +283,15 @@ export default function BankLedgerClient({
                   style={{
                     display: "flex", alignItems: "center", justifyContent: "space-between",
                     padding: "12px 20px",
-                    borderBottom: "1px solid var(--hk-border)",
-                    background: "var(--hk-badge)",
+                    borderBottom: "1px solid var(--sb-border)",
+                    background: "var(--sb-badge)",
                     cursor: "pointer",
                     userSelect: "none",
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <span style={{ color: "var(--hk-sub)" }}><ChevronIcon expanded={isExpanded} /></span>
-                    <span style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG }}>
+                    <span style={{ color: "var(--sb-sub)" }}><ChevronIcon expanded={isExpanded} /></span>
+                    <span style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG }}>
                       {formatMonthLabel(monthKey)}
                     </span>
                     {isCurrent && (
@@ -302,7 +300,7 @@ export default function BankLedgerClient({
                         background: PU + "18", padding: "3px 8px", borderRadius: 6, fontFamily: SG,
                       }}>Current</span>
                     )}
-                    <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>
+                    <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}>
                       {entries.length} txn{entries.length !== 1 ? "s" : ""}
                     </span>
                   </div>
@@ -317,7 +315,7 @@ export default function BankLedgerClient({
                         −{fmtFull(totalOut)}
                       </span>
                     )}
-                    <span style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--hk-text)", fontFamily: IN }}>
+                    <span style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--sb-text)", fontFamily: IN }}>
                       {fmtFull(closing)}
                     </span>
                   </div>
@@ -332,7 +330,7 @@ export default function BankLedgerClient({
                       key={entry.id}
                       style={{
                         padding: "14px 20px",
-                        borderBottom: i < entries.length - 1 ? "1px solid var(--hk-border)" : undefined,
+                        borderBottom: i < entries.length - 1 ? "1px solid var(--sb-border)" : undefined,
                         display: "flex", alignItems: "center", gap: 12,
                       }}
                     >
@@ -346,10 +344,10 @@ export default function BankLedgerClient({
                         {isIn ? "↓" : "↑"}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, lineHeight: 1.3 }}>
+                        <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, lineHeight: 1.3 }}>
                           {entry.partyName}
                         </p>
-                        <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG, marginTop: 2 }}>
+                        <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG, marginTop: 2 }}>
                           {formatDate(entry.date)} · {modeLabel(entry.mode)}
                         </p>
                       </div>
@@ -357,7 +355,7 @@ export default function BankLedgerClient({
                         <p style={{ fontSize: TYPE.numSmall, fontWeight: 800, color: isIn ? GR : OR, fontFamily: IN }}>
                           {isIn ? "+" : "−"}{fmtFull(entry.amount)}
                         </p>
-                        <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: IN, marginTop: 2 }}>
+                        <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: IN, marginTop: 2 }}>
                           Bal: {fmtFull(entry.runningBalance)}
                         </p>
                       </div>
@@ -365,7 +363,7 @@ export default function BankLedgerClient({
                         onClick={() => { setPaymentToDelete(entry); onOpen(); }}
                         style={{
                           width: 36, height: 36, borderRadius: 9, border: "none",
-                          background: "transparent", color: "var(--hk-sub)",
+                          background: "transparent", color: "var(--sb-sub)",
                           display: "flex", alignItems: "center", justifyContent: "center",
                           cursor: "pointer", flexShrink: 0,
                         }}
@@ -381,20 +379,20 @@ export default function BankLedgerClient({
                         display: "grid",
                         gridTemplateColumns: "90px 1fr 110px 110px 120px 44px",
                         padding: "12px 20px",
-                        borderBottom: "1px solid var(--hk-border)",
+                        borderBottom: "1px solid var(--sb-border)",
                         alignItems: "center",
                       }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hk-badge)")}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--sb-badge)")}
                       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                     >
-                      <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: IN }}>
+                      <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: IN }}>
                         {formatDate(entry.date)}
                       </p>
                       <div>
-                        <p style={{ fontSize: TYPE.body, fontWeight: 600, color: "var(--hk-text)", fontFamily: SG }}>
+                        <p style={{ fontSize: TYPE.body, fontWeight: 600, color: "var(--sb-text)", fontFamily: SG }}>
                           {entry.partyName}
                         </p>
-                        <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG, marginTop: 2 }}>
+                        <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG, marginTop: 2 }}>
                           {modeLabel(entry.mode)}
                           {entry.notes && ` · ${entry.notes}`}
                         </p>
@@ -405,7 +403,7 @@ export default function BankLedgerClient({
                       <p style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: OR, textAlign: "right", fontFamily: IN }}>
                         {entry.decrease > 0 ? fmtFull(entry.decrease) : "—"}
                       </p>
-                      <p style={{ fontSize: TYPE.numSmall, fontWeight: 800, color: "var(--hk-text)", textAlign: "right", fontFamily: IN }}>
+                      <p style={{ fontSize: TYPE.numSmall, fontWeight: 800, color: "var(--sb-text)", textAlign: "right", fontFamily: IN }}>
                         {fmtFull(entry.runningBalance)}
                       </p>
                       <div style={{ display: "flex", justifyContent: "flex-end" }}>
@@ -413,12 +411,12 @@ export default function BankLedgerClient({
                           onClick={() => { setPaymentToDelete(entry); onOpen(); }}
                           style={{
                             width: 32, height: 32, borderRadius: 8, border: "none",
-                            background: "transparent", color: "var(--hk-sub)",
+                            background: "transparent", color: "var(--sb-sub)",
                             display: "flex", alignItems: "center", justifyContent: "center",
                             cursor: "pointer",
                           }}
                           onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = OR + "15"; (e.currentTarget as HTMLButtonElement).style.color = OR; }}
-                          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "var(--hk-sub)"; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "var(--sb-sub)"; }}
                         >
                           <TrashIcon />
                         </button>
@@ -446,7 +444,7 @@ export default function BankLedgerClient({
           </>
         }
       >
-        <p style={{ fontFamily: SG, fontSize: TYPE.body, color: "var(--hk-sub)" }}>
+        <p style={{ fontFamily: SG, fontSize: TYPE.body, color: "var(--sb-sub)" }}>
           {paymentToDelete && (
             <>
               <span style={{ fontWeight: 700, color: OR }}>

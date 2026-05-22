@@ -6,7 +6,7 @@ import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
 import { getSettlementDirectionForParty, type SupportedPartyType } from "@/lib/accounting";
 import {
   OR, GR, AM, SG, IN, TYPE,
-  HKModal,
+  HKSheet,
 } from "@/components/ui/hk-design";
 import { HKButton } from "@/components/ui/HKButton";
 import { HKInput } from "@/components/ui/HKInput";
@@ -169,7 +169,7 @@ export function EditPaymentModal({
     new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
 
   return (
-    <HKModal
+    <HKSheet
       isOpen={isOpen}
       onClose={onClose}
       title="Payment Edit Karo"
@@ -183,7 +183,7 @@ export function EditPaymentModal({
       <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
 
         {/* Payment type tabs */}
-        <div style={{ display: "flex", gap: 6, background: "var(--hk-badge)", padding: 4, borderRadius: 12 }}>
+        <div style={{ display: "flex", gap: 6, background: "var(--sb-badge)", padding: 4, borderRadius: 12 }}>
           {TABS.map((tab) => {
             const active = paymentType === tab.key;
             return (
@@ -192,9 +192,9 @@ export function EditPaymentModal({
                 onClick={() => setPaymentType(tab.key)}
                 style={{
                   flex: 1, padding: "8px 10px", borderRadius: 9, border: "none",
-                  background: active ? "var(--hk-card)" : "transparent",
+                  background: active ? "var(--sb-card)" : "transparent",
                   boxShadow: active ? "0 1px 4px rgba(0,0,0,0.10)" : "none",
-                  color: active ? "var(--hk-text)" : "var(--hk-sub)",
+                  color: active ? "var(--sb-text)" : "var(--sb-sub)",
                   fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: active ? 700 : 500,
                   cursor: "pointer", transition: "all 0.15s",
                 }}
@@ -246,7 +246,7 @@ export function EditPaymentModal({
           value={amount}
           onValueChange={(v) => setAmount(sanitizeAmount(v))}
           inputMode="decimal"
-          startContent={<span style={{ color: "var(--hk-sub)", fontFamily: IN }}>₹</span>}
+          startContent={<span style={{ color: "var(--sb-sub)", fontFamily: IN }}>₹</span>}
           classNames={{ label: "font-semibold" }}
         />
 
@@ -355,6 +355,6 @@ export function EditPaymentModal({
           </div>
         )}
       </div>
-    </HKModal>
+    </HKSheet>
   );
 }

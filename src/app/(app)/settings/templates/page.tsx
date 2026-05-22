@@ -23,7 +23,7 @@ const COL_TYPE_COLOR: Record<string, string> = {
   number: PU,
   dropdown: GR,
   date: OR,
-  text: "var(--hk-sub)",
+  text: "var(--sb-sub)",
 };
 
 export default function TemplatesPage() {
@@ -96,9 +96,8 @@ export default function TemplatesPage() {
   }
 
   return (
-    <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG }}>
+    <div style={{ fontFamily: SG }}>
       {toast && <HKToast message={toast.message} type={toast.type} />}
-
       <PageHeader
         title={t("templates.title")}
         subtitle={t("templates.subtitle")}
@@ -109,8 +108,7 @@ export default function TemplatesPage() {
           </HKButton>
         }
       />
-
-      <div style={{ padding: isMobile ? "0 14px 80px" : "0 28px 80px", maxWidth: 1200, margin: "0 auto" }}>
+      <div>
         {loading ? (
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 16 }}>
             {[1, 2, 3].map((i) => <HKSkeleton key={i} className="h-44 rounded-2xl" />)}
@@ -118,10 +116,10 @@ export default function TemplatesPage() {
         ) : templates.length === 0 ? (
           <HKCard style={{ textAlign: "center", padding: "60px 20px" }}>
             <div style={{ fontSize: 52, marginBottom: 16 }}>📋</div>
-            <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, marginBottom: 8 }}>
+            <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, marginBottom: 8 }}>
               {t("templates.empty")}
             </p>
-            <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", fontFamily: SG, marginBottom: 20 }}>
+            <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", fontFamily: SG, marginBottom: 20 }}>
               {t("templates.emptySubtitle")}
             </p>
             <HKButton onClick={() => router.push("/settings/templates/new")}>
@@ -136,9 +134,9 @@ export default function TemplatesPage() {
                 <div
                   key={template.id}
                   style={{
-                    background: "var(--hk-card)",
+                    background: "var(--sb-card)",
                     borderRadius: 20,
-                    border: `1.5px solid ${isDefault ? PU + "60" : "var(--hk-border)"}`,
+                    border: `1.5px solid ${isDefault ? PU + "60" : "var(--sb-border)"}`,
                     padding: "20px 20px 16px",
                     display: "flex",
                     flexDirection: "column",
@@ -147,7 +145,7 @@ export default function TemplatesPage() {
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                    <p style={{ fontSize: TYPE.bodyLarge, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, margin: 0 }}>
+                    <p style={{ fontSize: TYPE.bodyLarge, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>
                       {template.name}
                     </p>
                     {isDefault && (
@@ -169,8 +167,8 @@ export default function TemplatesPage() {
                         key={i}
                         style={{
                           fontSize: TYPE.caption, fontWeight: 700,
-                          color: COL_TYPE_COLOR[col.type] || "var(--hk-sub)",
-                          background: (COL_TYPE_COLOR[col.type] || "var(--hk-sub)") + "18",
+                          color: COL_TYPE_COLOR[col.type] || "var(--sb-sub)",
+                          background: (COL_TYPE_COLOR[col.type] || "var(--sb-sub)") + "18",
                           padding: "3px 8px", borderRadius: 6, fontFamily: SG,
                         }}
                       >
@@ -179,7 +177,7 @@ export default function TemplatesPage() {
                     ))}
                   </div>
 
-                  <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG, margin: 0 }}>
+                  <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG, margin: 0 }}>
                     {template._count.bills} bill(s) · {new Date(template.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                   </p>
 
@@ -203,8 +201,8 @@ export default function TemplatesPage() {
                       onClick={() => router.push(`/settings/templates/${template.id}`)}
                       style={{
                         padding: "8px 14px", borderRadius: 10,
-                        background: "var(--hk-badge)", border: "1px solid var(--hk-border)",
-                        color: "var(--hk-text)", fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: 600, cursor: "pointer",
+                        background: "var(--sb-badge)", border: "1px solid var(--sb-border)",
+                        color: "var(--sb-text)", fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: 600, cursor: "pointer",
                       }}
                     >
                       {t("templates.edit")}

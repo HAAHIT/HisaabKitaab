@@ -139,14 +139,14 @@ function TallyImportContent() {
 
   const statCardStyle: React.CSSProperties = {
     padding: "14px 16px", borderRadius: 12,
-    background: "var(--hk-bg)", border: "1px solid var(--hk-border)",
+    background: "var(--sb-bg)", border: "1px solid var(--sb-border)",
   };
 
   const navBtnStyle = (primary?: boolean): React.CSSProperties => ({
     minHeight: 44, padding: "0 20px", borderRadius: 12,
-    background: primary ? undefined : "var(--hk-badge)",
-    border: primary ? undefined : "1px solid var(--hk-border)",
-    color: primary ? undefined : "var(--hk-text)",
+    background: primary ? undefined : "var(--sb-badge)",
+    border: primary ? undefined : "1px solid var(--sb-border)",
+    color: primary ? undefined : "var(--sb-text)",
     fontFamily: SG, fontSize: TYPE.body, fontWeight: 600, cursor: "pointer",
     display: "flex", alignItems: "center", gap: 6,
   });
@@ -155,40 +155,27 @@ function TallyImportContent() {
     <>
       {toast && <HKToast message={toast.message} type={toast.type} />}
 
-      <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG }}>
-        <PageHeader
-          title="Tally se Laao"
-          subtitle="Import historical vouchers and masters from Tally into HisaabKitaab."
-          isMobile={isMobile}
-          action={
-            <button
-              onClick={() => router.push(returnTo)}
-              style={navBtnStyle()}
-            >
-              ← Back
-            </button>
-          }
-        />
-
-        <div style={{ padding: isMobile ? "0 14px 80px" : "0 28px 80px", maxWidth: 760, margin: "0 auto" }}>
+      <div style={{ fontFamily: SG }}>
+        <PageHeader title="Tally se Laao" subtitle="Import historical vouchers and masters from Tally." isMobile={isMobile} />
+        <div>
           {/* Step progress */}
           <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
             {[1, 2, 3, 4].map((i) => (
-              <div key={i} style={{ height: 8, flex: 1, borderRadius: 999, background: step >= i ? PU : "var(--hk-border)", transition: "background 0.3s" }} />
+              <div key={i} style={{ height: 8, flex: 1, borderRadius: 999, background: step >= i ? PU : "var(--sb-border)", transition: "background 0.3s" }} />
             ))}
           </div>
 
           <HKCard>
             {step === 1 && (
               <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, margin: 0 }}>
+                <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>
                   XML file choose karo
                 </p>
 
                 <div style={{
                   display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                  border: "2px dashed var(--hk-border)", borderRadius: 16, padding: "40px 20px",
-                  background: "var(--hk-bg)",
+                  border: "2px dashed var(--sb-border)", borderRadius: 16, padding: "40px 20px",
+                  background: "var(--sb-bg)",
                 }}>
                   <span style={{ fontSize: 48, marginBottom: 16 }}>📄</span>
                   <label style={{ cursor: "pointer" }}>
@@ -215,7 +202,7 @@ function TallyImportContent() {
                       ✓ {importFile.name}
                     </p>
                   ) : (
-                    <p style={{ marginTop: 12, fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG }}>
+                    <p style={{ marginTop: 12, fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG }}>
                       Only Tally XML files up to 5MB.
                     </p>
                   )}
@@ -229,7 +216,7 @@ function TallyImportContent() {
 
             {step === 2 && preview && (
               <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, margin: 0 }}>
+                <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>
                   Import Preview
                 </p>
 
@@ -243,10 +230,10 @@ function TallyImportContent() {
                     { label: "Journals", value: preview.journalsCount },
                   ].map(({ label, value }) => (
                     <div key={label} style={statCardStyle}>
-                      <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: "var(--hk-sub)", textTransform: "uppercase", letterSpacing: "0.5px", fontFamily: SG, marginBottom: 4 }}>
+                      <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: "var(--sb-sub)", textTransform: "uppercase", letterSpacing: "0.5px", fontFamily: SG, marginBottom: 4 }}>
                         {label}
                       </p>
-                      <p style={{ fontSize: TYPE.numMedium, fontWeight: 700, color: "var(--hk-text)", fontFamily: IN, margin: 0 }}>
+                      <p style={{ fontSize: TYPE.numMedium, fontWeight: 700, color: "var(--sb-text)", fontFamily: IN, margin: 0 }}>
                         {value}
                       </p>
                     </div>
@@ -282,14 +269,14 @@ function TallyImportContent() {
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, padding: "32px 0", textAlign: "center" }}>
                 <div style={{
                   width: 64, height: 64,
-                  border: `4px solid var(--hk-border)`,
+                  border: `4px solid var(--sb-border)`,
                   borderTopColor: PU,
                   borderRadius: "50%",
                 }} className="animate-spin" />
-                <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, margin: 0 }}>
+                <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>
                   Import chal raha hai...
                 </p>
-                <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG, margin: 0 }}>
+                <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG, margin: 0 }}>
                   Yeh process server pe background mein chal raha hai.<br />
                   Page band karo ya kahi bhi jao — import rukega nahi.
                 </p>
@@ -297,10 +284,10 @@ function TallyImportContent() {
                 {importJobId && (
                   <div style={{ width: "100%", maxWidth: 320, marginTop: 8 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                      <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>{jobProgress.processed} processed</span>
-                      <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>{jobProgress.total} total</span>
+                      <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}>{jobProgress.processed} processed</span>
+                      <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}>{jobProgress.total} total</span>
                     </div>
-                    <div style={{ height: 8, borderRadius: 999, background: "var(--hk-border)", overflow: "hidden" }}>
+                    <div style={{ height: 8, borderRadius: 999, background: "var(--sb-border)", overflow: "hidden" }}>
                       <div style={{
                         height: "100%", borderRadius: 999, background: PU,
                         width: `${Math.max(5, (jobProgress.processed / (jobProgress.total || 1)) * 100)}%`,
@@ -321,10 +308,10 @@ function TallyImportContent() {
             {step === 4 && importResult && (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, padding: "24px 0", textAlign: "center" }}>
                 <span style={{ fontSize: 52 }}>🎉</span>
-                <p style={{ fontSize: TYPE.h1, fontWeight: 800, color: "var(--hk-text)", fontFamily: SG, margin: 0 }}>
+                <p style={{ fontSize: TYPE.h1, fontWeight: 800, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>
                   Ho gaya!
                 </p>
-                <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", fontFamily: SG, margin: 0 }}>
+                <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", fontFamily: SG, margin: 0 }}>
                   Tally data has been imported successfully.
                 </p>
 
@@ -342,9 +329,9 @@ function TallyImportContent() {
                     </div>
                   )}
                   {importResult.skipped > 0 && (
-                    <div style={{ padding: "14px 16px", borderRadius: 12, background: "var(--hk-badge)", border: "1px solid var(--hk-border)", minWidth: 130 }}>
-                      <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: "var(--hk-sub)", textTransform: "uppercase", fontFamily: SG, marginBottom: 4 }}>Skipped</p>
-                      <p style={{ fontSize: TYPE.numMedium, fontWeight: 700, color: "var(--hk-sub)", fontFamily: IN, margin: 0 }}>{importResult.skipped}</p>
+                    <div style={{ padding: "14px 16px", borderRadius: 12, background: "var(--sb-badge)", border: "1px solid var(--sb-border)", minWidth: 130 }}>
+                      <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: "var(--sb-sub)", textTransform: "uppercase", fontFamily: SG, marginBottom: 4 }}>Skipped</p>
+                      <p style={{ fontSize: TYPE.numMedium, fontWeight: 700, color: "var(--sb-sub)", fontFamily: IN, margin: 0 }}>{importResult.skipped}</p>
                     </div>
                   )}
                   {importResult.failed > 0 && (
@@ -381,14 +368,14 @@ function TallyImportContent() {
                       {showRoundOff ? "Hide" : "Show"} round-off detail
                     </button>
                     {showRoundOff && (
-                      <div style={{ marginTop: 8, maxHeight: 240, overflowY: "auto", textAlign: "left", border: "1px solid var(--hk-border)", borderRadius: 8 }}>
+                      <div style={{ marginTop: 8, maxHeight: 240, overflowY: "auto", textAlign: "left", border: "1px solid var(--sb-border)", borderRadius: 8 }}>
                         {importResult.roundOffAdjustments.map((a, idx) => (
-                          <div key={idx} style={{ padding: "10px 12px", borderBottom: idx === importResult.roundOffAdjustments.length - 1 ? "none" : "1px solid var(--hk-border)", fontSize: TYPE.caption, fontFamily: SG, display: "flex", justifyContent: "space-between", gap: 12 }}>
+                          <div key={idx} style={{ padding: "10px 12px", borderBottom: idx === importResult.roundOffAdjustments.length - 1 ? "none" : "1px solid var(--sb-border)", fontSize: TYPE.caption, fontFamily: SG, display: "flex", justifyContent: "space-between", gap: 12 }}>
                             <div style={{ minWidth: 0, flex: 1 }}>
                               <div style={{ color: AM, fontWeight: 600 }}>{a.voucherType} · {new Date(a.entryDate).toLocaleDateString("en-IN")}</div>
-                              {a.narration && <div style={{ color: "var(--hk-sub)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.narration}</div>}
+                              {a.narration && <div style={{ color: "var(--sb-sub)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.narration}</div>}
                             </div>
-                            <div style={{ color: "var(--hk-text)", fontFamily: IN, fontWeight: 600, whiteSpace: "nowrap" }}>
+                            <div style={{ color: "var(--sb-text)", fontFamily: IN, fontWeight: 600, whiteSpace: "nowrap" }}>
                               {a.imbalance > 0 ? "+" : ""}₹{a.imbalance.toFixed(2)}
                             </div>
                           </div>
@@ -412,12 +399,12 @@ function TallyImportContent() {
                       {showFailures ? "Hide" : "Show"} {importResult.failures.length} failure{importResult.failures.length === 1 ? "" : "s"}
                     </button>
                     {showFailures && (
-                      <div style={{ marginTop: 8, maxHeight: 240, overflowY: "auto", textAlign: "left", border: "1px solid var(--hk-border)", borderRadius: 8 }}>
+                      <div style={{ marginTop: 8, maxHeight: 240, overflowY: "auto", textAlign: "left", border: "1px solid var(--sb-border)", borderRadius: 8 }}>
                         {importResult.failures.map((f, idx) => (
-                          <div key={idx} style={{ padding: "10px 12px", borderBottom: idx === importResult.failures.length - 1 ? "none" : "1px solid var(--hk-border)", fontSize: TYPE.caption, fontFamily: SG }}>
+                          <div key={idx} style={{ padding: "10px 12px", borderBottom: idx === importResult.failures.length - 1 ? "none" : "1px solid var(--sb-border)", fontSize: TYPE.caption, fontFamily: SG }}>
                             <div style={{ color: OR, fontWeight: 600 }}>{f.voucherType} · {new Date(f.entryDate).toLocaleDateString("en-IN")}</div>
-                            {f.narration && <div style={{ color: "var(--hk-sub)", marginTop: 2 }}>{f.narration}</div>}
-                            <div style={{ color: "var(--hk-text)", marginTop: 4 }}>{f.reason}</div>
+                            {f.narration && <div style={{ color: "var(--sb-sub)", marginTop: 2 }}>{f.narration}</div>}
+                            <div style={{ color: "var(--sb-text)", marginTop: 4 }}>{f.reason}</div>
                           </div>
                         ))}
                       </div>

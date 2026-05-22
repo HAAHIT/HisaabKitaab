@@ -343,7 +343,7 @@ export default function ReportsClient({
         <p className="mt-1 text-sm text-default-500">{t("reports.subtitle")}</p>
       </div>
 
-      <div className="rounded-2xl border border-[var(--hk-border)] bg-[var(--hk-card)] shadow-sm">
+      <div className="rounded-2xl border border-[var(--sb-border)] bg-[var(--sb-card)] shadow-sm">
         <div className="space-y-4 p-6">
           <div>
             <h2 className="text-lg font-semibold">{t("reports.dateRange")}</h2>
@@ -393,7 +393,7 @@ export default function ReportsClient({
       </div>
 
       {/* ── GST Summary Report ──────────────────────────────────────────────── */}
-      <div className="rounded-2xl border border-[var(--hk-border)] bg-[var(--hk-card)] shadow-sm">
+      <div className="rounded-2xl border border-[var(--sb-border)] bg-[var(--sb-card)] shadow-sm">
         <div className="p-6 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
@@ -569,7 +569,7 @@ export default function ReportsClient({
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="rounded-2xl border border-[var(--hk-border)] bg-[var(--hk-card)] shadow-sm">
+        <div className="rounded-2xl border border-[var(--sb-border)] bg-[var(--sb-card)] shadow-sm">
           <div className="space-y-3 p-6">
             <div>
               <h3 className="text-lg font-semibold">{t("reports.transactionRegister")}</h3>
@@ -584,7 +584,7 @@ export default function ReportsClient({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-[var(--hk-border)] bg-[var(--hk-card)] shadow-sm">
+        <div className="rounded-2xl border border-[var(--sb-border)] bg-[var(--sb-card)] shadow-sm">
           <div className="space-y-3 p-6">
             <div>
               <h3 className="text-lg font-semibold">{t("reports.trialBalance")}</h3>
@@ -599,7 +599,7 @@ export default function ReportsClient({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-[var(--hk-border)] bg-[var(--hk-card)] shadow-sm">
+        <div className="rounded-2xl border border-[var(--sb-border)] bg-[var(--sb-card)] shadow-sm">
           <div className="space-y-3 p-6">
             <div>
               <h3 className="text-lg font-semibold">{t("reports.partyLedger")}</h3>
@@ -627,7 +627,7 @@ export default function ReportsClient({
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-2xl border border-amber-500/20 bg-[var(--hk-card)] shadow-sm">
+        <div className="rounded-2xl border border-amber-500/20 bg-[var(--sb-card)] shadow-sm">
           <div className="p-6 flex flex-col justify-between items-start gap-4">
             <div className="flex items-start gap-3 w-full">
               <div className="flex-1">
@@ -647,7 +647,7 @@ export default function ReportsClient({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-amber-500/20 bg-[var(--hk-card)] shadow-sm">
+        <div className="rounded-2xl border border-amber-500/20 bg-[var(--sb-card)] shadow-sm">
           <div className="p-6 flex flex-col justify-between items-start gap-4">
             <div className="flex items-start gap-3 w-full">
               <div className="flex-1">
@@ -669,7 +669,7 @@ export default function ReportsClient({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-[var(--hk-border)] bg-[var(--hk-card)] shadow-sm">
+      <div className="rounded-2xl border border-[var(--sb-border)] bg-[var(--sb-card)] shadow-sm">
         <div className="space-y-4 p-6">
           <div className="flex flex-col gap-1">
             <h2 className="text-lg font-semibold">{t("reports.systemCheck")}</h2>

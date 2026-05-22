@@ -7,7 +7,7 @@ import { useInstallPrompt } from "@/hooks/useInstallPrompt";
 import { SetupWizard } from "@/components/onboarding/SetupWizard";
 import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { HKButton } from "@/components/ui/HKButton";
-import { OR, PU, GR, AM, SG, IN, TYPE } from "@/components/ui/hk-design";
+import { C, OR, PU, GR, AM, SG, IN, TYPE, DISPLAY, BRAND, fmtFull } from "@/components/ui/hk-design";
 import { OverdueBanner } from "@/components/ui/OverdueBanner";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -55,19 +55,6 @@ interface DashboardData {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function fmt(n: number): string {
-  const abs = Math.abs(n);
-  if (abs >= 100000) return "₹" + (abs / 100000).toFixed(1) + "L";
-  if (abs >= 1000) return "₹" + Math.round(abs / 1000) + "K";
-  return "₹" + abs;
-}
-
-function fmtFull(n: number): string {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency", currency: "INR", maximumFractionDigits: 0,
-  }).format(n);
-}
-
 function useIsMobile() {
   const [m, setM] = useState(
     typeof window !== "undefined" ? window.innerWidth < 768 : false
@@ -80,50 +67,11 @@ function useIsMobile() {
   return m;
 }
 
-// ── Shared primitives ─────────────────────────────────────────────────────────
-
-function HKCard({ children, style = {} }: { children: React.ReactNode; style?: React.CSSProperties }) {
-  return (
-    <div style={{
-      background: "var(--hk-card)", borderRadius: 20,
-      border: "1px solid var(--hk-border)", padding: "20px",
-      transition: "background 0.25s", ...style,
-    }}>
-      {children}
-    </div>
-  );
-}
-
-function CardHead({ label, title, right }: { label: string; title: string; right?: React.ReactNode }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
-      <div>
-        <p style={{ color: "var(--hk-sub)", fontSize: TYPE.caption, fontWeight: 700, letterSpacing: "0.6px", textTransform: "uppercase", fontFamily: SG, marginBottom: 4 }}>
-          {label}
-        </p>
-        <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, letterSpacing: "-0.3px" }}>
-          {title}
-        </p>
-      </div>
-      {right}
-    </div>
-  );
-}
-
-function DeltaBadge({ val, color }: { val: number; color?: string }) {
-  const c = color ?? (val >= 0 ? GR : OR);
-  return (
-    <span style={{ fontSize: TYPE.chip, fontWeight: 700, color: c, background: c + "22", padding: "3px 9px", borderRadius: 7, fontFamily: IN, whiteSpace: "nowrap" }}>
-      {val >= 0 ? "+" : ""}{val}%
-    </span>
-  );
-}
-
-// ── SVG chart math ────────────────────────────────────────────────────────────
+// ── SVG chart helpers ─────────────────────────────────────────────────────────
 
 function makePts(data: { [key: string]: unknown }[], key: string, W: number, H: number, max: number) {
   return data.map((d, i) => ({
-    x: (i / (data.length - 1)) * W,
+    x: (i / Math.max(data.length - 1, 1)) * W,
     y: H - ((d[key] as number) / max) * (H - 12) - 6,
   }));
 }
@@ -142,120 +90,131 @@ function areaPath(P: { x: number; y: number }[], H: number): string {
   return bezier(P) + ` L${P[P.length - 1].x.toFixed(1)},${H} L${P[0].x.toFixed(1)},${H} Z`;
 }
 
-// ── Overview Card ─────────────────────────────────────────────────────────────
+// ── Metric Card ───────────────────────────────────────────────────────────────
 
-function momDelta(current: number, last: number): number | null {
-  if (!last) return null;
-  return Math.round(((current - last) / last) * 100);
+function MetricCard({
+  label, value, color, onClick, isMobile,
+}: {
+  label: string;
+  value: number;
+  color: string;
+  onClick: () => void;
+  isMobile: boolean;
+}) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background: "var(--sb-card)",
+        borderRadius: 16,
+        border: `1px solid ${hovered ? "var(--sb-border-strong)" : "var(--sb-border)"}`,
+        boxShadow: hovered ? "var(--sb-shadow-card-hover)" : "var(--sb-shadow-card)",
+        padding: isMobile ? "14px" : "18px",
+        textAlign: "left",
+        cursor: "pointer",
+        transition: "border-color 0.15s, box-shadow 0.15s, transform 0.15s",
+        transform: hovered ? "translateY(-1px)" : "none",
+        width: "100%",
+        fontFamily: SG,
+      }}
+    >
+      <p style={{
+        fontSize: 12, fontWeight: 600, color: "var(--sb-muted)",
+        letterSpacing: "0.1px",
+        marginBottom: 6, margin: "0 0 6px",
+      }}>
+        {label}
+      </p>
+      <p style={{
+        fontFamily: DISPLAY,
+        fontWeight: 600,
+        color,
+        fontSize: isMobile ? 22 : 28,
+        letterSpacing: "-0.02em",
+        lineHeight: 1.1,
+        fontVariantNumeric: "tabular-nums",
+        margin: 0,
+      }}>
+        {fmtFull(value)}
+      </p>
+    </button>
+  );
 }
 
-function OverviewCard({ data, isMobile }: { data: DashboardData; isMobile: boolean }) {
-  const { t } = useLanguage();
-  const allCashFlow = data.cashFlow ?? [];
-  const [chartMonths, setChartMonths] = useState(6);
-  const cashFlow = chartMonths >= allCashFlow.length ? allCashFlow : allCashFlow.slice(allCashFlow.length - chartMonths);
-  const [activeIdx, setActiveIdx] = useState(Math.max(cashFlow.length - 1, 0));
-  // Reset active index when chart window changes
-  useEffect(() => { setActiveIdx(Math.max(cashFlow.length - 1, 0)); }, [cashFlow.length]);
+// ── Cash Flow Chart ───────────────────────────────────────────────────────────
 
-  const W = 560, H = isMobile ? 110 : 148;
-  const maxVal = Math.max(...cashFlow.flatMap((d) => [d.received, d.paid]), 1);
-  const bPts = makePts(cashFlow as { [key: string]: unknown }[], "received", W, H, maxVal);
-  const cPts = makePts(cashFlow as { [key: string]: unknown }[], "paid", W, H, maxVal);
+function CashFlowCard({ data, isMobile }: { data: DashboardData; isMobile: boolean }) {
+  const cashFlow = data.cashFlow ?? [];
 
-  const s = data.summary;
-  const thisMonthBilled = s.thisMonthBilledTotal ?? 0;
-  const lastMonthBilled = s.lastMonthBilledTotal ?? 0;
-  const collectedDelta = momDelta(s.collectedThisMonth, s.collectedLastMonth ?? 0);
-  const billedDelta = momDelta(thisMonthBilled, lastMonthBilled);
-
-  const metrics = [
-    { label: t("dash.kulBilled"), sub: t("dash.kulBilledSub"), value: thisMonthBilled, color: PU, delta: billedDelta },
-    { label: t("dash.milaLabel"), sub: t("dash.milaSub"), value: s.collectedThisMonth, color: OR, delta: collectedDelta },
-    { label: t("dash.receivable"), sub: t("dash.baakiSub"), value: Math.abs(s.receivable), color: GR, delta: null },
-  ];
-
-  const timeFilters: { label: string; months: number }[] = [
-    { label: "1M", months: 1 },
-    { label: "3M", months: 3 },
-    { label: "6M", months: 6 },
-  ];
+  const W = 560, H = isMobile ? 120 : 140;
+  const maxVal = Math.max(...cashFlow.flatMap(d => [d.received, d.paid]), 1);
+  const recPts = makePts(cashFlow as { [key: string]: unknown }[], "received", W, H, maxVal);
+  const paidPts = makePts(cashFlow as { [key: string]: unknown }[], "paid", W, H, maxVal);
 
   return (
-    <HKCard>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", flex: 1 }}>
-          {metrics.map((m, i) => (
-            <div key={i} style={{
-              paddingRight: isMobile ? 10 : 22,
-              borderRight: i < 2 ? "1px solid var(--hk-border)" : "none",
-              paddingLeft: i > 0 ? (isMobile ? 10 : 22) : 0,
-            }}>
-              <p style={{ color: "var(--hk-sub)", fontSize: TYPE.label, fontWeight: 600, fontFamily: SG, marginBottom: 2 }}>{m.label}</p>
-              <p style={{ color: "var(--hk-sub)", fontSize: TYPE.caption, fontWeight: 500, fontFamily: SG, marginBottom: 4 }}>{m.sub}</p>
-              <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
-                <span style={{ fontSize: isMobile ? TYPE.numMedium + 4 : TYPE.numLarge, fontWeight: 800, color: "var(--hk-text)", fontFamily: IN, letterSpacing: "-1px", lineHeight: 1 }}>
-                  {fmt(m.value)}
-                </span>
-                {m.delta !== null && <DeltaBadge val={m.delta} color={m.color} />}
-              </div>
-            </div>
-          ))}
+    <div style={{
+      background: "var(--sb-card)", borderRadius: 16,
+      border: "1px solid var(--sb-border)",
+      boxShadow: "var(--sb-shadow-card)",
+      padding: isMobile ? "18px" : "22px",
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+        <div>
+          <h2 style={{ fontFamily: DISPLAY, fontSize: 17, fontWeight: 600, color: "var(--sb-text)", margin: "0 0 2px" }}>
+            Cash Flow
+          </h2>
+          <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", margin: 0, fontFamily: SG }}>
+            Last {cashFlow.length} months
+          </p>
         </div>
-        {!isMobile && (
-          <div style={{ display: "flex", gap: 5, flexShrink: 0, marginLeft: 16 }}>
-            {timeFilters.map((f) => (
-              <button key={f.label} onClick={() => setChartMonths(f.months)} style={{
-                minHeight: 36, padding: "0 14px", borderRadius: 9,
-                border: `1px solid ${chartMonths === f.months ? OR : "var(--hk-border)"}`,
-                background: chartMonths === f.months ? OR : "var(--hk-badge)",
-                color: chartMonths === f.months ? "#fff" : "var(--hk-sub)",
-                fontSize: TYPE.bodySmall, fontWeight: 700, fontFamily: SG, cursor: "pointer",
-              }}>{f.label}</button>
-            ))}
+        <div style={{ display: "flex", gap: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <span style={{ width: 8, height: 8, borderRadius: 2, background: GR, display: "inline-block" }}/>
+            <span style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", fontFamily: SG }}>Mila</span>
           </div>
-        )}
+          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <span style={{ width: 8, height: 8, borderRadius: 2, background: "var(--sb-border-strong)", display: "inline-block" }}/>
+            <span style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", fontFamily: SG }}>Billed</span>
+          </div>
+        </div>
       </div>
-
-      <div style={{ height: 1, background: "var(--hk-border)", marginBottom: 16 }} />
 
       {cashFlow.length >= 2 ? (
         <>
-          <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", overflow: "visible", display: "block" }}>
+          <svg
+            viewBox={`0 0 ${W} ${H}`}
+            role="img"
+            aria-label={`Cash flow chart: ${cashFlow.length} months. Most recent: received ${cashFlow[cashFlow.length-1]?.received ?? 0}, paid ${cashFlow[cashFlow.length-1]?.paid ?? 0}`}
+            style={{ width: "100%", height: "auto", overflow: "visible", display: "block" }}
+          >
             <defs>
-              <linearGradient id="hkgPU" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={PU} stopOpacity="0.28"/><stop offset="100%" stopColor={PU} stopOpacity="0"/>
-              </linearGradient>
-              <linearGradient id="hkgOR" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={OR} stopOpacity="0.28"/><stop offset="100%" stopColor={OR} stopOpacity="0"/>
+              <linearGradient id="hkgGR" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={GR} stopOpacity="0.16"/>
+                <stop offset="100%" stopColor={GR} stopOpacity="0"/>
               </linearGradient>
             </defs>
-            {[0.25, 0.5, 0.75].map((v) => (
-              <line key={v} x1="0" y1={H - v * (H - 12) - 6} x2={W} y2={H - v * (H - 12) - 6} stroke="var(--hk-line)" strokeWidth="1"/>
+            {[0.25, 0.5, 0.75, 1].map((v, i) => (
+              <line key={i}
+                x1="0" y1={H - v * (H - 16) - 8}
+                x2={W} y2={H - v * (H - 16) - 8}
+                stroke="var(--sb-divider)" strokeWidth="1" strokeDasharray="2 4"
+              />
             ))}
-            <path d={areaPath(bPts, H)} fill="url(#hkgPU)"/>
-            <path d={areaPath(cPts, H)} fill="url(#hkgOR)"/>
-            <path d={bezier(bPts)} fill="none" stroke={PU} strokeWidth="2.2" strokeLinecap="round"/>
-            <path d={bezier(cPts)} fill="none" stroke={OR} strokeWidth="2.2" strokeLinecap="round"/>
-            {bPts[activeIdx] && (
-              <>
-                <line x1={bPts[activeIdx].x} y1="0" x2={bPts[activeIdx].x} y2={H} stroke="var(--hk-border)" strokeWidth="1.5" strokeDasharray="4 3"/>
-                <circle cx={bPts[activeIdx].x} cy={bPts[activeIdx].y} r="10" fill={PU} fillOpacity="0.18"/>
-                <circle cx={bPts[activeIdx].x} cy={bPts[activeIdx].y} r="5" fill={PU}/>
-                <circle cx={cPts[activeIdx].x} cy={cPts[activeIdx].y} r="10" fill={OR} fillOpacity="0.18"/>
-                <circle cx={cPts[activeIdx].x} cy={cPts[activeIdx].y} r="5" fill={OR}/>
-              </>
+            <path d={areaPath(recPts, H)} fill="url(#hkgGR)"/>
+            <path d={bezier(paidPts)} fill="none" stroke="var(--sb-border-strong)" strokeWidth="1.6" strokeLinecap="round" strokeDasharray="5 4"/>
+            <path d={bezier(recPts)} fill="none" stroke={GR} strokeWidth="2.4" strokeLinecap="round"/>
+            {recPts.length > 0 && (
+              <circle cx={recPts[recPts.length - 1].x} cy={recPts[recPts.length - 1].y} r="5" fill={GR}/>
             )}
           </svg>
           <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
             {cashFlow.map((d, i) => (
-              <span key={i} onClick={() => setActiveIdx(i)} style={{
-                fontSize: TYPE.caption, fontFamily: SG, cursor: "pointer",
-                padding: "4px 8px", borderRadius: 6,
-                fontWeight: i === activeIdx ? 700 : 600,
-                color: i === activeIdx ? "var(--hk-text)" : "var(--hk-sub)",
-                background: i === activeIdx ? "var(--hk-badge)" : "transparent",
-                transition: "all 0.15s",
+              <span key={i} style={{
+                fontSize: TYPE.caption, fontFamily: SG,
+                fontWeight: 600, color: "var(--sb-muted)",
               }}>
                 {d.month.slice(0, 3)}
               </span>
@@ -263,312 +222,145 @@ function OverviewCard({ data, isMobile }: { data: DashboardData; isMobile: boole
           </div>
         </>
       ) : (
-        <div style={{ height: H, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--hk-sub)", fontSize: 13 }}>
-          {t("dash.noChartData")}
+        <div style={{ height: H, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--sb-muted)", fontSize: 13, fontFamily: SG }}>
+          Abhi koi data nahi
         </div>
       )}
-
-      <div style={{ display: "flex", gap: 20, marginTop: 14 }}>
-        {[{ c: PU, l: t("dash.kulBilled") }, { c: OR, l: t("dash.milaLabel") }].map((item) => (
-          <div key={item.l} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 22, height: 3, borderRadius: 2, background: item.c }}/>
-            <span style={{ fontSize: TYPE.bodySmall, fontWeight: 600, color: "var(--hk-sub)", fontFamily: SG }}>{item.l}</span>
-          </div>
-        ))}
-      </div>
-    </HKCard>
+    </div>
   );
 }
 
-// ── Bills Bar Card ────────────────────────────────────────────────────────────
+// ── Recent Activity Card ──────────────────────────────────────────────────────
 
-function BillsBarCard({ data, onNavigate }: { data: DashboardData; onNavigate: () => void }) {
-  const { t } = useLanguage();
-  // Use this-month stats for the card; fall back to all-time if API is older
-  const stats = data.thisMonthBillStats ?? data.billStats ?? [];
-  const finalCount = stats.find((s) => s.status === "FINAL")?._count ?? 0;
-  const draftCount = stats.find((s) => s.status === "DRAFT")?._count ?? 0;
-  const cancelCount = stats.find((s) => s.status === "CANCELLED")?._count ?? 0;
-  const totalBills = finalCount + draftCount + cancelCount;
-  const maxCount = Math.max(finalCount, draftCount, cancelCount, 1);
-  const bars = [
-    { label: t("bills.filter.final") + " ✓", count: finalCount, color: GR },
-    { label: t("bills.filter.draft"), count: draftCount, color: AM },
-    { label: t("bills.filter.cancelled"), count: cancelCount, color: OR },
-  ];
+function RecentActivityCard({ data, onNavigate }: { data: DashboardData; onNavigate: () => void }) {
+  const payments = (data.recentPayments ?? []).filter(p => p.party);
 
   return (
-    <HKCard>
-      <CardHead label={t("nav.bills")} title={t("dash.billsThisMonth")} />
-      <div style={{ display: "flex", gap: 14, marginBottom: 16, flexWrap: "wrap" }}>
-        {bars.map((b) => (
-          <div key={b.label} style={{ display: "flex", alignItems: "center", gap: 7 }}>
-            <div style={{ width: 12, height: 12, borderRadius: 3, background: b.color }}/>
-            <span style={{ fontSize: TYPE.bodySmall, fontWeight: 600, color: "var(--hk-sub)", fontFamily: SG }}>{b.label}</span>
-          </div>
-        ))}
-      </div>
-      {totalBills > 0 ? (
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 140 }}>
-          {bars.map((bar) => (
-            <div key={bar.label} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: "var(--hk-text)", fontFamily: IN, lineHeight: 1 }}>{bar.count}</span>
-              <div style={{ width: "100%", display: "flex", alignItems: "flex-end", height: 90 }}>
-                <div style={{
-                  width: "100%",
-                  background: `linear-gradient(to top, ${bar.color}, ${bar.color}cc)`,
-                  borderRadius: "6px 6px 0 0",
-                  height: `${(bar.count / maxCount) * 100}%`,
-                  minHeight: bar.count > 0 ? 4 : 0,
-                }}/>
-              </div>
-              <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontWeight: 700, fontFamily: SG }}>{bar.label}</span>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div style={{ height: 140, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--hk-sub)", fontSize: TYPE.body, fontWeight: 500 }}>
-          {t("dash.noBillsYet")}
-        </div>
-      )}
-      <div style={{ marginTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "11px 14px", borderRadius: 12, background: "var(--hk-badge)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 32, height: 32, borderRadius: 9, background: OR + "22", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={OR} strokeWidth="2.2" strokeLinecap="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-            </svg>
-          </div>
-          <span style={{ color: "var(--hk-sub)", fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG }}>{totalBills} {t("dash.billsTotal")}</span>
-        </div>
-        <button onClick={onNavigate} style={{ color: OR, fontSize: TYPE.bodySmall, fontWeight: 700, fontFamily: SG, cursor: "pointer", background: "none", border: "none", padding: "6px 4px" }}>
-          {t("dash.viewBills")}
+    <div style={{
+      background: "var(--sb-card)", borderRadius: 16,
+      border: "1px solid var(--sb-border)",
+      boxShadow: "var(--sb-shadow-card)",
+      padding: "22px",
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <h2 style={{ fontFamily: DISPLAY, fontSize: 17, fontWeight: 600, color: "var(--sb-text)", margin: 0 }}>
+          Recent Activity
+        </h2>
+        <button onClick={onNavigate} style={{
+          fontSize: 13, color: "var(--sb-primary)", fontWeight: 700,
+          fontFamily: SG, cursor: "pointer", background: "none", border: "none", padding: "4px 0",
+        }}>
+          Sab dekho →
         </button>
       </div>
-    </HKCard>
-  );
-}
 
-// ── Payments Flow Card ────────────────────────────────────────────────────────
-
-function PaymentsFlowCard({ data }: { data: DashboardData }) {
-  const { t } = useLanguage();
-  const cashFlow = data.cashFlow ?? [];
-  const max = Math.max(...cashFlow.flatMap((d) => [d.received, d.paid]), 1);
-  const totalIn = cashFlow.reduce((s, d) => s + d.received, 0);
-  const totalOut = cashFlow.reduce((s, d) => s + d.paid, 0);
-  const delta = totalOut > 0 ? Math.round(((totalIn - totalOut) / totalOut) * 100) : 0;
-
-  return (
-    <HKCard>
-      <CardHead label={t("nav.payments")} title={t("dash.paymentsMonths")} right={<DeltaBadge val={delta} color={delta >= 0 ? GR : OR} />} />
-      {cashFlow.length >= 2 ? (
-        <>
-          <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 130 }}>
-            {cashFlow.map((d, i) => {
-              const pct = Math.round((d.received / Math.max(d.received + d.paid, 1)) * 100);
-              return (
-                <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 5 }}>
-                  <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontWeight: 700, fontFamily: SG }}>{pct}%</span>
-                  <div style={{ width: "100%", display: "flex", gap: 2, alignItems: "flex-end", height: 90 }}>
-                    <div style={{ flex: 1, background: `linear-gradient(to top, ${GR}, ${GR}cc)`, borderRadius: "5px 5px 0 0", height: `${(d.received / max) * 100}%`, minHeight: d.received > 0 ? 4 : 0 }}/>
-                    <div style={{ flex: 1, background: `linear-gradient(to top, ${OR}88, ${OR}44)`, borderRadius: "5px 5px 0 0", height: `${(d.paid / max) * 100}%`, minHeight: d.paid > 0 ? 4 : 0 }}/>
-                  </div>
-                  <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontWeight: 600, fontFamily: SG }}>{d.month.slice(0, 3)}</span>
-                </div>
-              );
-            })}
-          </div>
-          <div style={{ display: "flex", gap: 18, marginTop: 14 }}>
-            {[{ c: GR, l: t("dash.milaLabel") }, { c: OR + "88", l: t("dash.spent") }].map((item) => (
-              <div key={item.l} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ width: 12, height: 12, borderRadius: 3, background: item.c }}/>
-                <span style={{ fontSize: TYPE.bodySmall, fontWeight: 600, color: "var(--hk-sub)", fontFamily: SG }}>{item.l}</span>
-              </div>
-            ))}
-          </div>
-        </>
-      ) : (
-        <div style={{ height: 130, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--hk-sub)", fontSize: TYPE.body, fontWeight: 500, textAlign: "center" }}>
-          {t("dash.noPaymentsChart")}
-        </div>
-      )}
-    </HKCard>
-  );
-}
-
-// ── Party Ledger Card ─────────────────────────────────────────────────────────
-
-function LedgerCard({ data, onNavigate }: { data: DashboardData; onNavigate: () => void }) {
-  const { t } = useLanguage();
-  const parties = data.topParties ?? [];
-  const maxBal = Math.max(...parties.map((p) => Math.abs(p.currentBalance)), 1);
-  const s = data.summary;
-  const recAmt = Math.abs(s.receivable);
-  const payAmt = Math.abs(s.payable);
-
-  return (
-    <HKCard>
-      <CardHead label={t("nav.khata")} title={t("dash.partyLedger")} right={
-        <button onClick={onNavigate} style={{ fontSize: TYPE.bodySmall, color: OR, fontWeight: 700, fontFamily: SG, cursor: "pointer", background: "none", border: "none", padding: "6px 4px" }}>
-          {t("dash.viewAllParties")}
-        </button>
-      }/>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 18 }}>
-        {[
-          { l: t("dash.receivableLabel"), v: recAmt, c: GR, i: "↑" },
-          { l: t("dash.payableLabel"), v: payAmt, c: OR, i: "↓" },
-        ].map((item) => (
-          <div key={item.l} style={{ padding: "12px 14px", borderRadius: 12, background: item.c + "14", border: `1px solid ${item.c}22` }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4 }}>
-              <span style={{ fontSize: TYPE.body, fontWeight: 700, color: item.c }}>{item.i}</span>
-              <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: item.c, textTransform: "uppercase", letterSpacing: "0.5px", fontFamily: SG }}>{item.l}</p>
-            </div>
-            <p style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: "var(--hk-text)", fontFamily: IN }}>{fmt(item.v)}</p>
-          </div>
-        ))}
-      </div>
-      {parties.slice(0, 4).map((p, i) => {
-        const isLena = p.currentBalance < 0;
-        const color = isLena ? GR : OR;
-        const initials = p.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
-        return (
-          <div key={p.id} style={{ marginBottom: i < 3 ? 14 : 0 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 34, height: 34, borderRadius: 10, background: color + "22", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <span style={{ fontSize: TYPE.bodySmall, fontWeight: 800, color, fontFamily: IN }}>{initials}</span>
-                </div>
-                <span style={{ fontSize: TYPE.body, fontWeight: 600, color: "var(--hk-text)", fontFamily: SG }}>
-                  {p.name.split(" ").slice(0, 2).join(" ")}
-                </span>
-              </div>
-              <span style={{ fontSize: TYPE.numSmall, fontWeight: 800, color: "var(--hk-text)", fontFamily: IN }}>{fmt(Math.abs(p.currentBalance))}</span>
-            </div>
-            <div style={{ height: 5, borderRadius: 3, background: "var(--hk-badge)", overflow: "hidden" }}>
-              <div style={{ height: "100%", borderRadius: 3, background: color, width: `${(Math.abs(p.currentBalance) / maxBal) * 100}%`, transition: "width 0.4s ease" }}/>
-            </div>
-          </div>
-        );
-      })}
-      {parties.length === 0 && (
-        <div style={{ textAlign: "center", padding: "24px 0", color: "var(--hk-sub)", fontSize: TYPE.body, fontWeight: 500 }}>
-          {t("dash.noParties")}
-        </div>
-      )}
-    </HKCard>
-  );
-}
-
-// ── Collections Donut Card ────────────────────────────────────────────────────
-
-function DonutCard({ data }: { data: DashboardData }) {
-  const { t } = useLanguage();
-  const stats = data.billStats ?? [];
-  const finalAmt = Number(stats.find((s) => s.status === "FINAL")?._sum.grandTotal ?? 0);
-  const draftAmt = Number(stats.find((s) => s.status === "DRAFT")?._sum.grandTotal ?? 0);
-  const total = Math.max(finalAmt + draftAmt, 1);
-  const finalPct = finalAmt / total;
-  const draftPct = draftAmt / total;
-  const restPct = Math.max(1 - finalPct - draftPct, 0);
-
-  const r = 60, cx = 93, cy = 93;
-  const circ = 2 * Math.PI * r;
-  const segs = [
-    { pct: finalPct, color: GR, label: t("dash.collectLabel"), val: `${Math.round(finalPct * 100)}%` },
-    { pct: draftPct, color: PU, label: t("dash.pendingLabel"), val: `${Math.round(draftPct * 100)}%` },
-    { pct: restPct, color: OR, label: t("dash.overdueLabel"), val: `${Math.round(restPct * 100)}%` },
-  ];
-  let cum = -0.25;
-  const arcs = segs.map((s) => {
-    const off = -(cum * circ);
-    const dash = s.pct * circ;
-    cum += s.pct;
-    return { ...s, dash: `${dash.toFixed(1)} ${(circ - dash).toFixed(1)}`, off };
-  });
-
-  return (
-    <HKCard>
-      <CardHead label={t("dash.collections")} title={t("dash.breakdown")} />
-      <div style={{ display: "flex", justifyContent: "center", margin: "0 0 14px" }}>
-        <svg width="186" height="186" viewBox="0 0 186 186">
-          <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--hk-badge)" strokeWidth="18"/>
-          {arcs.map((s, i) => (
-            <circle key={i} cx={cx} cy={cy} r={r} fill="none" stroke={s.color} strokeWidth="18"
-              strokeLinecap="round" strokeDasharray={s.dash} strokeDashoffset={s.off}/>
-          ))}
-          <text x={cx} y={cy - 6} textAnchor="middle" fontSize="26" fontWeight="800" fill="var(--hk-text)" fontFamily={IN}>
-            {Math.round(finalPct * 100)}%
-          </text>
-          <text x={cx} y={cy + 16} textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--hk-sub)" fontFamily={SG}>
-            {t("dash.collectLabel")}
-          </text>
-        </svg>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
-        {segs.map((s) => (
-          <div key={s.label} style={{ textAlign: "center", padding: "10px 4px", borderRadius: 10, background: "var(--hk-badge)" }}>
-            <div style={{ width: 28, height: 3, borderRadius: 2, background: s.color, margin: "0 auto 6px" }}/>
-            <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontWeight: 600, fontFamily: SG, marginBottom: 3 }}>{s.label}</p>
-            <p style={{ fontSize: TYPE.body, fontWeight: 800, color: s.color, fontFamily: IN }}>{s.val}</p>
-          </div>
-        ))}
-      </div>
-    </HKCard>
-  );
-}
-
-// ── Recent Payments Card ──────────────────────────────────────────────────────
-
-function RecentPaymentsCard({ data, onNavigate }: { data: DashboardData; onNavigate: () => void }) {
-  const { t } = useLanguage();
-  const payments = data.recentPayments ?? [];
-  return (
-    <HKCard>
-      <CardHead label={t("nav.payments")} title={t("dash.recentLabel")} right={
-        <button onClick={onNavigate} style={{ fontSize: TYPE.bodySmall, color: OR, fontWeight: 700, fontFamily: SG, cursor: "pointer", background: "none", border: "none", padding: "6px 4px" }}>
-          {t("dash.viewAllParties")}
-        </button>
-      }/>
       {payments.length > 0 ? (
         <div>
-          {payments.filter(p => p.party).map((p, i) => (
-            <div key={p.id} style={{
-              display: "flex", justifyContent: "space-between", alignItems: "center",
-              padding: "14px 0",
-              borderBottom: i < payments.length - 1 ? "1px solid var(--hk-border)" : "none",
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {payments.slice(0, 6).map((p, i) => {
+            const isIn = p.direction === "INCOMING";
+            const color = isIn ? GR : C.negative;
+            return (
+              <div key={p.id} style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "10px 0",
+                borderBottom: i < Math.min(payments.length, 6) - 1 ? "1px solid var(--sb-divider)" : "none",
+              }}>
                 <div style={{
-                  width: 40, height: 40, borderRadius: 11,
-                  background: (p.direction === "INCOMING" ? GR : OR) + "18",
-                  display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                  width: 36, height: 36, borderRadius: 12, flexShrink: 0,
+                  background: isIn ? C.positiveSoft : C.negativeSoft,
+                  color,
+                  display: "flex", alignItems: "center", justifyContent: "center",
                 }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={p.direction === "INCOMING" ? GR : OR} strokeWidth="2.5" strokeLinecap="round">
-                    {p.direction === "INCOMING"
-                      ? <><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></>
-                      : <><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                    {isIn
+                      ? <><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></>
+                      : <><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></>
                     }
                   </svg>
                 </div>
-                <div>
-                  <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, marginBottom: 3 }}>{p.party.name}</p>
-                  <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--hk-sub)" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: TYPE.bodySm, fontWeight: 600, color: "var(--sb-text)", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: SG }}>
+                    {p.party.name}
+                  </p>
+                  <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", margin: "2px 0 0", fontFamily: SG }}>
                     {new Date(p.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })} · {p.mode.toLowerCase().replace("_", " ")}
                   </p>
                 </div>
+                <span style={{ fontSize: 14, fontWeight: 700, color, fontFamily: IN, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+                  {isIn ? "+" : "-"}{fmtFull(p.amount)}
+                </span>
               </div>
-              <span style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: p.direction === "INCOMING" ? GR : OR, fontFamily: IN, whiteSpace: "nowrap" }}>
-                {p.direction === "INCOMING" ? "+" : "-"}{fmtFull(p.amount)}
-              </span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
-        <div style={{ textAlign: "center", padding: "36px 0", color: "var(--hk-sub)", fontSize: TYPE.body, fontWeight: 500 }}>
-          {t("dash.noPaymentsYet")}
+        <div style={{ textAlign: "center", padding: "36px 0", color: "var(--sb-muted)", fontSize: TYPE.body, fontFamily: SG }}>
+          Koi payment nahi abhi
         </div>
       )}
-    </HKCard>
+    </div>
+  );
+}
+
+// ── Quick Links ───────────────────────────────────────────────────────────────
+
+function QuickLinks({ isMobile, onNavigate }: { isMobile: boolean; onNavigate: (href: string) => void }) {
+  const links = [
+    { label: "Tally Bhejo",    sub: "CA ko file",       href: "/settings/tally-export",
+      icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> },
+    { label: "Bank Reconcile", sub: "Statement upload",  href: "/settings/reconcile",
+      icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="22" x2="21" y2="22"/><line x1="6" y1="18" x2="6" y2="11"/><line x1="10" y1="18" x2="10" y2="11"/><line x1="14" y1="18" x2="14" y2="11"/><line x1="18" y1="18" x2="18" y2="11"/><polygon points="12 2 20 7 4 7"/></svg> },
+    { label: "Reports",        sub: "GST, P&L",          href: "/reports",
+      icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="m7 14 4-4 4 4 5-5"/></svg> },
+    { label: "Settings",       sub: "Business profile",  href: "/settings/company",
+      icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33 1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> },
+  ];
+  return (
+    <div style={{
+      display: "grid",
+      gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)",
+      gap: 10,
+    }}>
+      {links.map(q => {
+        const [hovered, setHovered] = useState(false);
+        return (
+          <button key={q.label}
+            onClick={() => onNavigate(q.href)}
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
+            style={{
+              background: "var(--sb-card)",
+              borderRadius: 14,
+              border: `1px solid ${hovered ? "var(--sb-border-strong)" : "var(--sb-border)"}`,
+              boxShadow: hovered ? "var(--sb-shadow-card-hover)" : "var(--sb-shadow-card)",
+              padding: "14px",
+              textAlign: "left",
+              cursor: "pointer",
+              transition: "border-color 0.15s, box-shadow 0.15s, transform 0.15s",
+              transform: hovered ? "translateY(-1px)" : "none",
+              display: "flex", gap: 10, alignItems: "center",
+              fontFamily: SG,
+            }}
+          >
+            <div style={{
+              width: 36, height: 36, borderRadius: 10,
+              background: "var(--sb-surface-alt)",
+              color: "var(--sb-sub)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0,
+            }}>{q.icon}</div>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <p style={{ fontSize: TYPE.bodySm, fontWeight: 700, color: "var(--sb-text)", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {q.label}
+              </p>
+              <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", margin: "3px 0 0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {q.sub}
+              </p>
+            </div>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -585,6 +377,10 @@ export default function DashboardPage() {
   const [onboardingReady, setOnboardingReady] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string>("");
+  const [businessName, setBusinessName] = useState<string>("");
+  const [hasGstin, setHasGstin] = useState<boolean | null>(null);
+  const [hasBankAccount, setHasBankAccount] = useState<boolean | null>(null);
   const isMobile = useIsMobile();
 
   const fetchDashboard = useCallback(async () => {
@@ -593,15 +389,36 @@ export default function DashboardPage() {
     abortControllerRef.current = controller;
     setError(null);
     try {
-      const [dashRes, partiesRes] = await Promise.all([
+      const [dashRes, partiesRes, meRes, settingsRes] = await Promise.all([
         fetch("/api/dashboard", { signal: controller.signal }),
         fetch("/api/parties?limit=5", { signal: controller.signal }),
+        fetch("/api/auth/me", { signal: controller.signal }),
+        fetch("/api/settings", { signal: controller.signal }),
       ]);
       if (!dashRes.ok) throw new Error("Failed to load dashboard data");
       const d = await dashRes.json() as DashboardData;
       if (partiesRes.ok) {
         const pd = await partiesRes.json();
         d.topParties = pd.parties ?? [];
+      }
+      if (meRes.ok) {
+        const me = await meRes.json();
+        const fullName: string = me?.user?.name ?? me?.name ?? "";
+        setUserName(fullName.split(" ")[0] || "");
+      }
+      if (settingsRes.ok) {
+        const settingsData = await settingsRes.json();
+        setBusinessName(settingsData?.settings?.companyName ?? "");
+        setHasGstin(!!settingsData?.settings?.companyGstin);
+      } else {
+        setHasGstin(false);
+      }
+      const bankRes = await fetch("/api/bank-accounts?limit=1", { signal: controller.signal });
+      if (bankRes.ok) {
+        const bd = await bankRes.json();
+        setHasBankAccount((bd.accounts ?? bd.bankAccounts ?? []).length > 0);
+      } else {
+        setHasBankAccount(false);
       }
       setData(d);
       setShowOnboarding(!d.isOnboardingComplete);
@@ -620,16 +437,23 @@ export default function DashboardPage() {
     return () => { abortControllerRef.current?.abort(); };
   }, [fetchDashboard]);
 
-
-
   if (loading || !onboardingReady) {
     return (
       <div style={{ padding: isMobile ? "16px 14px" : "24px 28px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr", gap: 16, marginBottom: 16 }}>
-          <HKSkeleton className="h-64 rounded-2xl"/><HKSkeleton className="h-64 rounded-2xl"/>
+        <div style={{ marginBottom: 18 }}>
+          <HKSkeleton className="h-3 w-16 rounded mb-2"/>
+          <HKSkeleton className="h-8 w-48 rounded-xl mb-2"/>
+          <HKSkeleton className="h-3 w-64 rounded"/>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: 16 }}>
-          <HKSkeleton className="h-56 rounded-2xl"/><HKSkeleton className="h-56 rounded-2xl"/><HKSkeleton className="h-56 rounded-2xl"/>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: 12, marginBottom: 16 }}>
+          {[1,2,3,4].map(i => <HKSkeleton key={i} className="h-24 rounded-2xl"/>)}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr", gap: 16, marginBottom: 16 }}>
+          <HKSkeleton className="h-64 rounded-2xl"/>
+          <HKSkeleton className="h-64 rounded-2xl"/>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: 10 }}>
+          {[1,2,3,4].map(i => <HKSkeleton key={i} className="h-16 rounded-xl"/>)}
         </div>
       </div>
     );
@@ -638,14 +462,14 @@ export default function DashboardPage() {
   if (error) {
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "64px 32px", textAlign: "center", gap: 16 }}>
-        <div style={{ width: 56, height: 56, borderRadius: "50%", background: OR + "18", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <svg width="28" height="28" fill="none" stroke={OR} viewBox="0 0 24 24">
+        <div style={{ width: 56, height: 56, borderRadius: "50%", background: C.negativeSoft, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <svg width="28" height="28" fill="none" stroke={C.negative} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
           </svg>
         </div>
         <div>
-          <h2 style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", marginBottom: 8, fontFamily: SG }}>{error}</h2>
-          <p style={{ fontSize: TYPE.body, fontWeight: 500, color: "var(--hk-sub)", fontFamily: SG }}>{t("dash.errorRetry")}</p>
+          <h2 style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", marginBottom: 8, fontFamily: SG }}>{error}</h2>
+          <p style={{ fontSize: TYPE.body, fontWeight: 500, color: "var(--sb-sub)", fontFamily: SG }}>{t("dash.errorRetry")}</p>
         </div>
         <HKButton onClick={() => { setLoading(true); fetchDashboard(); }}>Try Again</HKButton>
       </div>
@@ -659,132 +483,174 @@ export default function DashboardPage() {
   if (!data) return null;
 
   const now = new Date();
-  const today = now.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-  
-  const m = now.getMonth();
-  const d = now.getDate();
-  const showTallyNudge = (m % 3 === 2 && d >= 15) || (m % 3 === 0 && d <= 15);
+  const today = now.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" });
+  const mo = now.getMonth();
+  const dy = now.getDate();
+  const showTallyNudge = (mo % 3 === 2 && dy >= 15) || (mo % 3 === 0 && dy <= 15);
+  const s = data.summary;
+
+  const metrics = [
+    { label: "Lena Baki",        value: Math.abs(s.receivable),           color: C.positive, onClick: () => router.push("/parties?filter=overdue") },
+    { label: "Dena Baki",        value: Math.abs(s.payable),              color: C.negative, onClick: () => router.push("/parties") },
+    { label: "Is Mahine Mila",   value: s.collectedThisMonth,             color: C.positive, onClick: () => router.push("/payments") },
+    { label: "Is Mahine Billed", value: s.thisMonthBilledTotal ?? 0,      color: "var(--sb-text)", onClick: () => router.push("/bills") },
+  ];
 
   return (
     <div style={{
-      padding: isMobile ? "16px 14px" : "24px 28px",
-      paddingBottom: 24,
+      padding: isMobile ? "18px 14px 100px" : "24px 28px",
       maxWidth: 1440, margin: "0 auto",
     }}>
       {/* Install banner */}
       {canInstall && !bannerDismissed && (
         <div style={{
-          marginBottom: 20, padding: "10px 14px", borderRadius: 14,
-          background: PU + "14", border: `1px solid ${PU}28`,
+          marginBottom: 20, padding: "12px 16px", borderRadius: 14,
+          background: C.infoSoft, border: `1px solid ${PU}28`,
           display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <span style={{ fontSize: 22 }}>📲</span>
             <div>
-              <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG }}>{t("install.banner")}</p>
-              <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--hk-sub)", marginTop: 2 }}>{t("install.message")}</p>
+              <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>{t("install.banner")}</p>
+              <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--sb-sub)", marginTop: 2, fontFamily: SG, margin: "2px 0 0" }}>{t("install.message")}</p>
             </div>
           </div>
-          <div style={{ display: "flex", gap: 6 }}>
+          <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
             <HKButton size="sm" variant="ghost" onClick={() => setBannerDismissed(true)}>✕</HKButton>
             <HKButton size="sm" onClick={promptInstall}>Install</HKButton>
           </div>
         </div>
       )}
 
-      {/* Tally Quarterly Nudge */}
+      {/* Tally quarterly nudge */}
       {showTallyNudge && (
-        <div style={{
-          marginBottom: 16, padding: isMobile ? "10px 14px" : "12px 16px", borderRadius: 14,
-          background: "linear-gradient(135deg, rgba(247,96,0,0.1) 0%, rgba(123,94,246,0.1) 100%)", 
-          border: `1px solid var(--hk-border)`,
-          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
-          cursor: "pointer",
-        }} onClick={() => router.push("/settings/tally-export")}>
+        <div
+          onClick={() => router.push("/settings/tally-export")}
+          style={{
+            marginBottom: 16, padding: isMobile ? "10px 14px" : "12px 16px", borderRadius: 14,
+            background: "var(--sb-primary-soft)",
+            border: "1px solid var(--sb-border)",
+            display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+            cursor: "pointer",
+          }}
+        >
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <span style={{ fontSize: 20 }}>📁</span>
             <div>
-              <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG }}>
-                {t("dash.tallyNudgeTitle")}
-              </p>
-              <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--hk-sub)", marginTop: 2 }}>
-                {t("dash.tallyNudgeSubtitle")}
-              </p>
+              <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>{t("dash.tallyNudgeTitle")}</p>
+              <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--sb-sub)", fontFamily: SG, margin: "2px 0 0" }}>{t("dash.tallyNudgeSubtitle")}</p>
             </div>
           </div>
-          <span style={{ color: "var(--hk-text)", fontWeight: 700, fontSize: 14 }}>
+          <span style={{ color: "var(--sb-primary)", fontWeight: 700, fontSize: 13, fontFamily: SG, whiteSpace: "nowrap" }}>
             {t("dash.tallyNudgeAction")}
           </span>
         </div>
       )}
 
-      {/* Overdue banner */}
-      <OverdueBanner
-        overdueCount={data.summary.overdueCount}
-        overdueAmount={data.summary.overdueAmount}
-        overdueParty={data.summary.overdueParty}
-      />
-
-      {/* Page header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22, gap: 12, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <h1 style={{ fontSize: isMobile ? TYPE.h1Mobile : TYPE.h1, fontWeight: 700, color: "var(--hk-text)", letterSpacing: "-0.5px", fontFamily: SG, lineHeight: 1.2 }}>
-            {t("dash.pageTitle")}
-          </h1>
-          <div style={{
-            display: "flex", alignItems: "center", gap: 7,
-            padding: "6px 12px", borderRadius: 9,
-            background: "var(--hk-badge)", border: "1px solid var(--hk-border)",
-          }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--hk-sub)" strokeWidth="2" strokeLinecap="round">
-              <rect x="3" y="4" width="18" height="18" rx="2"/>
-              <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-            </svg>
-            <span style={{ fontSize: TYPE.bodySmall, fontWeight: 600, color: "var(--hk-sub)", fontFamily: SG }}>{today}</span>
-          </div>
-        </div>
-        {!isMobile && (
-          <button
-            onClick={() => router.push("/bills")}
-            style={{
-              display: "flex", alignItems: "center", gap: 8,
-              minHeight: 44, padding: "0 16px", borderRadius: 11,
-              border: "1px solid var(--hk-border)", background: "var(--hk-badge)",
-              color: "var(--hk-sub)", fontSize: TYPE.body, fontWeight: 600, fontFamily: SG, cursor: "pointer",
-            }}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
-            </svg>
-            Filter
-          </button>
-        )}
+      {/* Hero header */}
+      <div style={{ marginBottom: 18, position: "relative", paddingLeft: 16 }}>
+        <span style={{ position: "absolute", left: 0, top: 6, bottom: 6, width: 3, borderRadius: 2, background: "var(--sb-primary)", opacity: 0.55 }}/>
+        <p style={{ fontFamily: BRAND, fontSize: 14, fontWeight: 500, color: "var(--sb-muted)", marginBottom: 2, fontStyle: "italic", margin: "0 0 2px" }}>
+          Namaste,
+        </p>
+        <h1 style={{ fontFamily: DISPLAY, fontSize: isMobile ? TYPE.h1Mobile : 32, fontWeight: 600, color: "var(--sb-text)", letterSpacing: "-0.01em", lineHeight: 1.15, margin: 0 }}>
+          {userName ? `${userName} 👋` : t("dash.pageTitle")}
+        </h1>
+        <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-muted)", margin: "5px 0 0", fontFamily: SG }}>
+          {businessName ? `${businessName} · ${today}` : today}
+        </p>
       </div>
 
-      {/* Cards grid */}
-      {isMobile ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <OverviewCard data={data} isMobile={true}/>
-          <BillsBarCard data={data} onNavigate={() => router.push("/bills")}/>
-          <PaymentsFlowCard data={data}/>
-          <LedgerCard data={data} onNavigate={() => router.push("/parties")}/>
-          <DonutCard data={data}/>
-          <RecentPaymentsCard data={data} onNavigate={() => router.push("/payments")}/>
+      {/* Setup nudge cards */}
+      {(hasGstin === false || hasBankAccount === false) && (
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(260px, 1fr))",
+          gap: 10,
+          marginBottom: 16,
+        }}>
+          {hasGstin === false && (
+            <button
+              onClick={() => router.push("/settings/company")}
+              style={{
+                display: "flex", alignItems: "center", gap: 12,
+                padding: "13px 16px", borderRadius: 14,
+                background: "var(--sb-surface-alt)",
+                border: "1.5px dashed var(--sb-border-strong)",
+                cursor: "pointer", textAlign: "left", width: "100%",
+                fontFamily: SG,
+              }}
+            >
+              <span style={{ fontSize: 22 }}>🧾</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: TYPE.bodySm, fontWeight: 700, color: "var(--sb-text)", margin: 0 }}>GSTIN add karo</p>
+                <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", margin: "2px 0 0" }}>GST bills ke liye zaroori</p>
+              </div>
+              <span style={{ color: "var(--sb-muted)", fontSize: 13 }}>→</span>
+            </button>
+          )}
+          {hasBankAccount === false && (
+            <button
+              onClick={() => router.push("/banking")}
+              style={{
+                display: "flex", alignItems: "center", gap: 12,
+                padding: "13px 16px", borderRadius: 14,
+                background: "var(--sb-surface-alt)",
+                border: "1.5px dashed var(--sb-border-strong)",
+                cursor: "pointer", textAlign: "left", width: "100%",
+                fontFamily: SG,
+              }}
+            >
+              <span style={{ fontSize: 22 }}>🏦</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: TYPE.bodySm, fontWeight: 700, color: "var(--sb-text)", margin: 0 }}>Bank account jodo</p>
+                <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", margin: "2px 0 0" }}>Reconciliation ke liye</p>
+              </div>
+              <span style={{ color: "var(--sb-muted)", fontSize: 13 }}>→</span>
+            </button>
+          )}
         </div>
-      ) : (
-        <>
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16, marginBottom: 16 }}>
-            <OverviewCard data={data} isMobile={false}/>
-            <BillsBarCard data={data} onNavigate={() => router.push("/bills")}/>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: 16 }}>
-            <PaymentsFlowCard data={data}/>
-            <LedgerCard data={data} onNavigate={() => router.push("/parties")}/>
-            <DonutCard data={data}/>
-          </div>
-          <RecentPaymentsCard data={data} onNavigate={() => router.push("/payments")}/>
-        </>
       )}
+
+      {/* Overdue banner */}
+      <OverdueBanner
+        overdueCount={s.overdueCount}
+        overdueAmount={s.overdueAmount}
+        overdueParty={s.overdueParty}
+      />
+
+      {/* 4 Metric cards */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)",
+        gap: 12,
+        marginBottom: 16,
+      }}>
+        {metrics.map(m => (
+          <MetricCard
+            key={m.label}
+            label={m.label}
+            value={m.value}
+            color={m.color}
+            onClick={m.onClick}
+            isMobile={isMobile}
+          />
+        ))}
+      </div>
+
+      {/* Chart + Recent Activity */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr",
+        gap: 16,
+        marginBottom: 16,
+      }}>
+        <CashFlowCard data={data} isMobile={isMobile} />
+        <RecentActivityCard data={data} onNavigate={() => router.push("/payments")} />
+      </div>
+
+      {/* Quick links */}
+      <QuickLinks isMobile={isMobile} onNavigate={href => router.push(href)} />
     </div>
   );
 }

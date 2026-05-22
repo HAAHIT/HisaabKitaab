@@ -149,42 +149,41 @@ export default function BankingPage() {
   const totalCash = cashAccounts.reduce((s, a) => s + Number(a.currentBalance), 0);
 
   return (
-    <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG }}>
+    <div style={{ background: "var(--sb-bg)", minHeight: "100%", fontFamily: SG }}>
       {toast && <HKToast message={toast.message} type={toast.type} />}
 
-      <PageHeader
-        title="Banking"
-        subtitle="Bank aur cash accounts"
-        isMobile={isMobile}
-        action={
-          <div style={{ display: "flex", gap: 10 }}>
-            <Link href="/payments/new?tab=contra">
-              <button
-                style={{
-                  height: TOUCH.secondary,
-                  padding: "0 18px",
-                  borderRadius: 12,
-                  border: "1.5px solid var(--hk-border)",
-                  background: "var(--hk-card)",
-                  color: "var(--hk-text)",
-                  fontSize: TYPE.bodySmall,
-                  fontWeight: 600,
-                  fontFamily: SG,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 7,
-                }}
-              >
-                <ArrowsIcon /> Contra
-              </button>
-            </Link>
-            <HKButton onClick={() => setIsAddOpen(true)}>+ Account Jodo</HKButton>
-          </div>
-        }
-      />
-
-      <div style={{ padding: isMobile ? "0 14px 80px" : "0 28px 40px", maxWidth: 1200, margin: "0 auto" }}>
+      <div style={{ padding: isMobile ? "18px 14px 80px" : "24px 28px 40px", maxWidth: 1200, margin: "0 auto" }}>
+        <PageHeader
+          title="Banking"
+          subtitle="Bank aur cash accounts"
+          isMobile={isMobile}
+          action={
+            <div style={{ display: "flex", gap: 10 }}>
+              <Link href="/payments/new?tab=contra">
+                <button
+                  style={{
+                    height: TOUCH.secondary,
+                    padding: "0 18px",
+                    borderRadius: 12,
+                    border: "1.5px solid var(--sb-border)",
+                    background: "var(--sb-card)",
+                    color: "var(--sb-text)",
+                    fontSize: TYPE.bodySmall,
+                    fontWeight: 600,
+                    fontFamily: SG,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 7,
+                  }}
+                >
+                  <ArrowsIcon /> Contra
+                </button>
+              </Link>
+              <HKButton onClick={() => setIsAddOpen(true)}>+ Account Jodo</HKButton>
+            </div>
+          }
+        />
 
         {/* Summary cards */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
@@ -205,7 +204,7 @@ export default function BankingPage() {
                 {item.icon}
                 <span style={{ fontSize: TYPE.label, fontWeight: 600, color: item.color }}>{item.label}</span>
               </div>
-              <p style={{ fontSize: isMobile ? TYPE.numMedium : TYPE.numLarge - 2, fontWeight: 800, color: "var(--hk-text)", fontFamily: IN, lineHeight: 1.1 }}>
+              <p style={{ fontSize: isMobile ? TYPE.numMedium : TYPE.numLarge - 2, fontWeight: 800, color: "var(--sb-text)", fontFamily: IN, lineHeight: 1.1 }}>
                 {loading ? "..." : fmtFull(item.value)}
               </p>
             </div>
@@ -218,9 +217,9 @@ export default function BankingPage() {
             {[1, 2, 3].map((i) => <HKSkeleton key={i} className="h-20 rounded-2xl" />)}
           </div>
         ) : accounts.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--hk-sub)" }}>
+          <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--sb-sub)" }}>
             <div style={{ fontSize: 52, marginBottom: 16 }}>🏦</div>
-            <p style={{ fontWeight: 700, fontSize: TYPE.h2, color: "var(--hk-text)", marginBottom: 8, fontFamily: SG }}>
+            <p style={{ fontWeight: 700, fontSize: TYPE.h2, color: "var(--sb-text)", marginBottom: 8, fontFamily: SG }}>
               Koi account nahi
             </p>
             <p style={{ fontSize: TYPE.body, fontWeight: 500, fontFamily: SG, marginBottom: 20 }}>
@@ -240,7 +239,7 @@ export default function BankingPage() {
                   key={account.id}
                   style={{
                     padding: isMobile ? "14px 16px" : "16px 20px",
-                    borderBottom: i < accounts.length - 1 ? "1px solid var(--hk-border)" : undefined,
+                    borderBottom: i < accounts.length - 1 ? "1px solid var(--sb-border)" : undefined,
                     display: "flex",
                     alignItems: "center",
                     gap: 12,
@@ -270,7 +269,7 @@ export default function BankingPage() {
                   {/* Name + account number */}
                   <Link href={`/banking/${account.id}`} style={{ flex: 1, minWidth: 0, textDecoration: "none" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, lineHeight: 1.3 }}>
+                      <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, lineHeight: 1.3 }}>
                         {account.name}
                       </p>
                       {account.isDefault && (
@@ -285,7 +284,7 @@ export default function BankingPage() {
                         </span>
                       )}
                     </div>
-                    <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--hk-sub)", fontFamily: SG, marginTop: 2 }}>
+                    <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--sb-sub)", fontFamily: SG, marginTop: 2 }}>
                       {account.type === "BANK" ? "Bank Account" : "Cash Register"}
                       {account.accountNumber && ` • ${account.accountNumber}`}
                     </p>
@@ -296,12 +295,12 @@ export default function BankingPage() {
                     <p style={{
                       fontSize: TYPE.numSmall,
                       fontWeight: 800,
-                      color: bal >= 0 ? "var(--hk-text)" : OR,
+                      color: bal >= 0 ? "var(--sb-text)" : OR,
                       fontFamily: IN,
                     }}>
                       {fmtFull(bal)}
                     </p>
-                    <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontWeight: 500, marginTop: 2, fontFamily: SG }}>Balance</p>
+                    <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontWeight: 500, marginTop: 2, fontFamily: SG }}>Balance</p>
                   </div>
 
                   {/* Set as default (bank accounts only, not already default) */}
@@ -313,13 +312,13 @@ export default function BankingPage() {
                       style={{
                         width: TOUCH.secondary, height: TOUCH.secondary,
                         borderRadius: 10, border: "none",
-                        background: "transparent", color: "var(--hk-sub)",
+                        background: "transparent", color: "var(--sb-sub)",
                         display: "flex", alignItems: "center", justifyContent: "center",
                         cursor: isSettingDefault ? "default" : "pointer",
                         flexShrink: 0, opacity: isSettingDefault ? 0.5 : 1,
                       }}
                       onMouseEnter={(e) => { if (!isSettingDefault) { (e.currentTarget as HTMLButtonElement).style.background = AM + "15"; (e.currentTarget as HTMLButtonElement).style.color = AM; } }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "var(--hk-sub)"; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "var(--sb-sub)"; }}
                     >
                       <StarIcon />
                     </button>
@@ -331,18 +330,18 @@ export default function BankingPage() {
                     style={{
                       width: TOUCH.secondary, height: TOUCH.secondary,
                       borderRadius: 10, border: "none",
-                      background: "transparent", color: "var(--hk-sub)",
+                      background: "transparent", color: "var(--sb-sub)",
                       display: "flex", alignItems: "center", justifyContent: "center",
                       cursor: "pointer", flexShrink: 0,
                     }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = OR + "15"; (e.currentTarget as HTMLButtonElement).style.color = OR; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "var(--hk-sub)"; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "var(--sb-sub)"; }}
                   >
                     <TrashIcon />
                   </button>
 
                   {/* Chevron */}
-                  <Link href={`/banking/${account.id}`} style={{ color: "var(--hk-sub)", flexShrink: 0, display: "flex" }}>
+                  <Link href={`/banking/${account.id}`} style={{ color: "var(--sb-sub)", flexShrink: 0, display: "flex" }}>
                     <ChevronRight />
                   </Link>
                 </div>
@@ -366,8 +365,8 @@ export default function BankingPage() {
           </>
         }
       >
-        <p style={{ fontFamily: SG, fontSize: TYPE.body, color: "var(--hk-sub)", lineHeight: 1.6 }}>
-          <span style={{ fontWeight: 700, color: "var(--hk-text)" }}>{accountToDelete?.name}</span> delete ho jayega.
+        <p style={{ fontFamily: SG, fontSize: TYPE.body, color: "var(--sb-sub)", lineHeight: 1.6 }}>
+          <span style={{ fontWeight: 700, color: "var(--sb-text)" }}>{accountToDelete?.name}</span> delete ho jayega.
           Purana history safe rahega, sirf future payments mein nahi dikhega.
         </p>
       </HKModal>

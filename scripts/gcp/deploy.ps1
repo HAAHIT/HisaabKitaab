@@ -1,13 +1,13 @@
 param(
   [string]$ProjectId,
   [string]$Region = "asia-south1",
-  [string]$Repository = "hisaabkitaab",
-  [string]$ServiceName = "hisaabkitaab-web",
-  [string]$MigratorJobName = "hisaabkitaab-migrate",
-  [string]$ServiceAccount = "hisaabkitaab-runner",
+  [string]$Repository = "solobooks",
+  [string]$ServiceName = "solobooks-web",
+  [string]$MigratorJobName = "solobooks-migrate",
+  [string]$ServiceAccount = "solobooks-runner",
   [string]$CloudSqlInstance,
-  [string]$DatabaseUrlSecret = "hisaabkitaab-database-url",
-  [string]$JwtSecretSecret = "hisaabkitaab-jwt-secret",
+  [string]$DatabaseUrlSecret = "solobooks-database-url",
+  [string]$JwtSecretSecret = "solobooks-jwt-secret",
   [string]$GcsBucketName,
   [string]$Cpu = "1",
   [string]$Memory = "1Gi",
@@ -21,7 +21,7 @@ if (-not $ProjectId) {
 }
 
 if (-not $CloudSqlInstance) {
-  throw "CloudSqlInstance is required. Example: my-project:asia-south1:hisaabkitaab-db"
+  throw "CloudSqlInstance is required. Example: my-project:asia-south1:solobooks-db"
 }
 
 if (-not $GcsBucketName) {

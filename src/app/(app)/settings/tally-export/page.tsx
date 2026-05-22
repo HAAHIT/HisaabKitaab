@@ -119,21 +119,21 @@ export default function TallyExportPage() {
       const url = window.URL.createObjectURL(blob);
       if (method === "download") {
         const a = document.createElement("a");
-        a.href = url; a.download = `HisaabKitaab-${from}-to-${to}.xml`;
+        a.href = url; a.download = `SoloBooks-${from}-to-${to}.xml`;
         document.body.appendChild(a); a.click();
         window.URL.revokeObjectURL(url); document.body.removeChild(a);
         showToast("Ho gaya ✓ — File CA ko bhej do", "success");
       } else if (method === "whatsapp") {
         const a = document.createElement("a");
-        a.href = url; a.download = `HisaabKitaab-${from}-to-${to}.xml`; a.click();
-        const msg = encodeURIComponent(`Namaste — yeh HisaabKitaab ka Tally file hai for ${from} to ${to}.`);
+        a.href = url; a.download = `SoloBooks-${from}-to-${to}.xml`; a.click();
+        const msg = encodeURIComponent(`Namaste — yeh SoloBooks ka Tally file hai for ${from} to ${to}.`);
         window.open(`https://wa.me/?text=${msg}`, "_blank");
         showToast("Downloaded for WhatsApp", "success");
       } else if (method === "email") {
         const a = document.createElement("a");
-        a.href = url; a.download = `HisaabKitaab-${from}-to-${to}.xml`; a.click();
-        const subject = encodeURIComponent(`HisaabKitaab Tally file for ${from} to ${to}`);
-        const body = encodeURIComponent(`Namaste,\nHisaabKitaab ka ${from} se ${to} ka Tally file ready hai.\nDownload karke Tally mein import kar lo.\n\n— HisaabKitaab`);
+        a.href = url; a.download = `SoloBooks-${from}-to-${to}.xml`; a.click();
+        const subject = encodeURIComponent(`SoloBooks Tally file for ${from} to ${to}`);
+        const body = encodeURIComponent(`Namaste,\nSoloBooks ka ${from} se ${to} ka Tally file ready hai.\nDownload karke Tally mein import kar lo.\n\n— SoloBooks`);
         window.open(`mailto:${caEmail}?subject=${subject}&body=${body}`);
         showToast("Downloaded for Email", "success");
       }
@@ -146,8 +146,8 @@ export default function TallyExportPage() {
 
   const navBtnStyle: React.CSSProperties = {
     minHeight: 44, padding: "0 18px", borderRadius: 12,
-    background: "var(--hk-badge)", border: "1px solid var(--hk-border)",
-    color: "var(--hk-text)", fontFamily: SG, fontSize: TYPE.body, fontWeight: 600, cursor: "pointer",
+    background: "var(--sb-badge)", border: "1px solid var(--sb-border)",
+    color: "var(--sb-text)", fontFamily: SG, fontSize: TYPE.body, fontWeight: 600, cursor: "pointer",
     display: "flex", alignItems: "center", gap: 6,
   };
 
@@ -163,30 +163,20 @@ export default function TallyExportPage() {
     <>
       {toast && <HKToast message={toast.message} type={toast.type} />}
 
-      <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG }}>
-        <PageHeader
-          title="Tally ko Bhejo"
-          subtitle="Send your books directly to your CA in Tally format."
-          isMobile={isMobile}
-          action={
-            <button onClick={() => router.push("/settings/company")} style={navBtnStyle}>
-              ← Back
-            </button>
-          }
-        />
-
-        <div style={{ padding: isMobile ? "0 14px 80px" : "0 28px 80px", maxWidth: 760, margin: "0 auto" }}>
+      <div style={{ fontFamily: SG }}>
+        <PageHeader title="Tally ko Bhejo" subtitle="Send your books directly to your CA in Tally format." isMobile={isMobile} />
+        <div>
           {/* Step progress */}
           <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
             {[1, 2, 3].map((i) => (
-              <div key={i} style={{ height: 8, flex: 1, borderRadius: 999, background: step >= i ? PU : "var(--hk-border)", transition: "background 0.3s" }} />
+              <div key={i} style={{ height: 8, flex: 1, borderRadius: 999, background: step >= i ? PU : "var(--sb-border)", transition: "background 0.3s" }} />
             ))}
           </div>
 
           <HKCard>
             {step === 1 && (
               <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, margin: 0 }}>
+                <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>
                   Kaunsa period?
                 </p>
 
@@ -212,44 +202,44 @@ export default function TallyExportPage() {
 
             {step === 2 && preview && (
               <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, margin: 0 }}>
+                <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>
                   Kya kya include karna hai?
                 </p>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                   <HKCheckbox isSelected={include.sales} onValueChange={(v) => setInclude({ ...include, sales: v })}>
                     Sales bills{" "}
-                    <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>
+                    <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}>
                       ({preview.salesCount} bills, {fmtFull(preview.salesAmount)})
                     </span>
                   </HKCheckbox>
                   <HKCheckbox isSelected={include.purchases} onValueChange={(v) => setInclude({ ...include, purchases: v })}>
                     Purchase bills{" "}
-                    <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>
+                    <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}>
                       ({preview.purchasesCount} bills, {fmtFull(preview.purchasesAmount)})
                     </span>
                   </HKCheckbox>
                   <HKCheckbox isSelected={include.receipts} onValueChange={(v) => setInclude({ ...include, receipts: v })}>
                     Receipts (Mila){" "}
-                    <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>
+                    <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}>
                       ({preview.receiptsCount} payments, {fmtFull(preview.receiptsAmount)})
                     </span>
                   </HKCheckbox>
                   <HKCheckbox isSelected={include.payments} onValueChange={(v) => setInclude({ ...include, payments: v })}>
                     Payments out (Diya){" "}
-                    <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>
+                    <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}>
                       ({preview.paymentsCount} payments, {fmtFull(preview.paymentsAmount)})
                     </span>
                   </HKCheckbox>
                   <HKCheckbox isSelected={include.ledgers} onValueChange={(v) => setInclude({ ...include, ledgers: v })}>
                     Party balances{" "}
-                    <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>
+                    <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}>
                       ({preview.partiesCount} parties)
                     </span>
                   </HKCheckbox>
                   <HKCheckbox isSelected={include.journals} onValueChange={(v) => setInclude({ ...include, journals: v })}>
                     Manual journal entries{" "}
-                    <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>
+                    <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}>
                       ({preview.journalsCount} entries)
                     </span>
                   </HKCheckbox>
@@ -264,7 +254,7 @@ export default function TallyExportPage() {
 
             {step === 3 && (
               <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, margin: 0 }}>
+                <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>
                   Kaise bhejna hai?
                 </p>
 
@@ -274,7 +264,7 @@ export default function TallyExportPage() {
                   </button>
                   <button onClick={() => handleExport("email")} disabled={exporting} style={exportBtnStyle(PU)}>
                     📧 Email to CA{caEmail && (
-                      <span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG, fontWeight: 400 }}>
+                      <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG, fontWeight: 400 }}>
                         ({caEmail})
                       </span>
                     )}
@@ -295,3 +285,4 @@ export default function TallyExportPage() {
     </>
   );
 }
+

@@ -7,9 +7,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
 import { GST_STATE_CODES } from "@/lib/gst-states";
 import {
-  GR, AM, PU, SG, IN, TYPE,
+  GR, AM, PU, SG, IN, TYPE, DISPLAY,
   fmtFull,
-  HKCard, HKToast, PageHeader, useIsMobile,
+  HKCard, HKToast, useIsMobile,
 } from "@/components/ui/hk-design";
 import { HKButton } from "@/components/ui/HKButton";
 import { HKInput } from "@/components/ui/HKInput";
@@ -118,34 +118,36 @@ export default function NewNotePage() {
   const accentColor = isCredit ? GR : AM;
 
   return (
-    <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG }}>
+    <div style={{ background: "var(--sb-bg)", minHeight: "100%", fontFamily: SG }}>
       {toast && <HKToast message={toast.message} type={toast.type} />}
 
-      <PageHeader
-        title={isCredit ? "Naya Credit Note" : "Naya Debit Note"}
-        subtitle={isCredit ? "Sales return ya discount jo diya" : "Purchase return ya discount jo mila"}
-        isMobile={isMobile}
-        action={
+      <div style={{ padding: isMobile ? "18px 14px 120px" : "24px 28px 80px", maxWidth: 800, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 18 }}>
           <button
             onClick={() => router.push("/notes")}
             style={{
-              display: "flex", alignItems: "center", gap: 6,
-              background: "none", border: "none", color: "var(--hk-sub)",
-              fontSize: TYPE.body, fontFamily: SG, fontWeight: 600, cursor: "pointer",
+              width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+              border: "1.5px solid var(--sb-border)", background: "var(--sb-card)",
+              boxShadow: "var(--sb-shadow-card)", color: "var(--sb-text)",
+              display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
             }}
           >
-            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round">
-              <path d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M15 18l-6-6 6-6" />
             </svg>
-            Wapas
           </button>
-        }
-      />
-
-      <div style={{ padding: isMobile ? "0 14px 120px" : "0 28px 80px", maxWidth: 800, margin: "0 auto" }}>
+          <div>
+            <h1 style={{ fontFamily: DISPLAY, fontSize: isMobile ? 24 : 30, fontWeight: 600, color: "var(--sb-text)", margin: 0, letterSpacing: "-0.01em", lineHeight: 1.2 }}>
+              {isCredit ? "Naya Credit Note" : "Naya Debit Note"}
+            </h1>
+            <p style={{ fontSize: 14, fontWeight: 500, color: "var(--sb-sub)", marginTop: 4 }}>
+              {isCredit ? "Sales return ya discount jo diya" : "Purchase return ya discount jo mila"}
+            </p>
+          </div>
+        </div>
         {/* Party Section */}
         <HKCard style={{ marginBottom: 16 }}>
-          <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, marginBottom: 16 }}>
+          <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, marginBottom: 16 }}>
             {isCredit ? "Bill To (Customer)" : "Bill From (Vendor)"}
           </p>
           <PartySearch
@@ -170,11 +172,11 @@ export default function NewNotePage() {
             <div
               style={{
                 marginTop: 16, padding: "14px 16px", borderRadius: 12,
-                background: "var(--hk-bg)", border: "1px solid var(--hk-border)",
+                background: "var(--sb-bg)", border: "1px solid var(--sb-border)",
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <p style={{ fontSize: TYPE.bodyLarge, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, margin: 0 }}>
+                <p style={{ fontSize: TYPE.bodyLarge, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>
                   {selectedParty.name}
                 </p>
                 <button
@@ -185,15 +187,15 @@ export default function NewNotePage() {
                 </button>
               </div>
               {selectedParty.phone && (
-                <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG, margin: "2px 0" }}>📱 {selectedParty.phone}</p>
+                <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG, margin: "2px 0" }}>📱 {selectedParty.phone}</p>
               )}
               {selectedParty.gstin && (
-                <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG, margin: "2px 0" }}>GST: {selectedParty.gstin}</p>
+                <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG, margin: "2px 0" }}>GST: {selectedParty.gstin}</p>
               )}
               {selectedParty.currentBalance !== 0 && (
                 <p
                   style={{
-                    marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--hk-border)",
+                    marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--sb-border)",
                     fontSize: TYPE.bodySmall, fontWeight: 700,
                     color: selectedParty.currentBalance < 0 ? GR : AM,
                     fontFamily: SG,
@@ -210,7 +212,7 @@ export default function NewNotePage() {
 
         {/* Note Details */}
         <HKCard style={{ marginBottom: 16 }}>
-          <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, marginBottom: 16 }}>Note Details</p>
+          <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, marginBottom: 16 }}>Note Details</p>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16 }}>
             <HKInput
               label="Original Invoice / Bill Reference *"
@@ -248,10 +250,10 @@ export default function NewNotePage() {
           </HKCard>
 
           <HKCard style={{ background: accentColor + "08", borderColor: accentColor + "33" }}>
-            <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, marginBottom: 16 }}>Summary</p>
+            <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, marginBottom: 16 }}>Summary</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: TYPE.body, color: "var(--hk-sub)", fontFamily: SG }}>Subtotal (Taxable)</span>
+                <span style={{ fontSize: TYPE.body, color: "var(--sb-sub)", fontFamily: SG }}>Subtotal (Taxable)</span>
                 <HKInput
                   type="number"
                   aria-label="Subtotal"
@@ -259,13 +261,13 @@ export default function NewNotePage() {
                   onValueChange={(v) => setSubtotal(Number(v) || 0)}
                   size="sm"
                   className="w-36"
-                  startContent={<span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)" }}>₹</span>}
+                  startContent={<span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)" }}>₹</span>}
                 />
               </div>
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: TYPE.body, color: "var(--hk-sub)", fontFamily: SG }}>Tax</span>
+                  <span style={{ fontSize: TYPE.body, color: "var(--sb-sub)", fontFamily: SG }}>Tax</span>
                   <HKInput
                     type="number"
                     aria-label="Tax percentage"
@@ -273,10 +275,10 @@ export default function NewNotePage() {
                     onValueChange={(v) => setTaxPercent(parseFloat(v) || 0)}
                     size="sm"
                     className="w-20"
-                    endContent={<span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)" }}>%</span>}
+                    endContent={<span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)" }}>%</span>}
                   />
                 </div>
-                <span style={{ fontSize: TYPE.body, fontWeight: 600, color: "var(--hk-text)", fontFamily: IN }}>
+                <span style={{ fontSize: TYPE.body, fontWeight: 600, color: "var(--sb-text)", fontFamily: IN }}>
                   {fmtFull(taxAmount)}
                 </span>
               </div>
@@ -289,12 +291,12 @@ export default function NewNotePage() {
                     onChange={(e) => setIsInterState(e.target.checked)}
                     style={{ accentColor: PU, width: 16, height: 16 }}
                   />
-                  <span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG }}>Inter-state (IGST)</span>
+                  <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG }}>Inter-state (IGST)</span>
                 </label>
               </div>
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-                <span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG, flexShrink: 0 }}>Place of Supply</span>
+                <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG, flexShrink: 0 }}>Place of Supply</span>
                 <HKSelect
                   aria-label="Place of supply"
                   placeholder="Select state"
@@ -312,10 +314,10 @@ export default function NewNotePage() {
                 </HKSelect>
               </div>
 
-              <div style={{ height: 1, background: "var(--hk-border)", margin: "4px 0" }} />
+              <div style={{ height: 1, background: "var(--sb-border)", margin: "4px 0" }} />
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: TYPE.bodyLarge, fontWeight: 800, color: "var(--hk-text)", fontFamily: SG }}>Grand Total</span>
+                <span style={{ fontSize: TYPE.bodyLarge, fontWeight: 800, color: "var(--sb-text)", fontFamily: SG }}>Grand Total</span>
                 <span style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: accentColor, fontFamily: IN }}>
                   {fmtFull(grandTotal)}
                 </span>

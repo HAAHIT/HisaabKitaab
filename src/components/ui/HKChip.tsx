@@ -17,30 +17,30 @@ interface HKChipProps {
 }
 
 const COLOR_FLAT: Record<HKChipColor, string> = {
-  default:   "bg-[var(--surface-100)] text-[var(--hk-sub)]",
-  primary:   "bg-[var(--hk-orange)]/10 text-[var(--hk-orange)]",
-  success:   "bg-[var(--hk-green)]/10 text-[var(--hk-green)]",
+  default:   "bg-[var(--surface-100)] text-[var(--sb-sub)]",
+  primary:   "bg-[var(--sb-orange)]/10 text-[var(--sb-orange)]",
+  success:   "bg-[var(--sb-green)]/10 text-[var(--sb-green)]",
   danger:    "bg-[#ef4444]/10 text-[#ef4444]",
-  warning:   "bg-[var(--hk-amber)]/10 text-[var(--hk-amber)]",
-  secondary: "bg-[var(--hk-purple)]/10 text-[var(--hk-purple)]",
+  warning:   "bg-[var(--sb-amber)]/10 text-[var(--sb-amber)]",
+  secondary: "bg-[var(--sb-purple)]/10 text-[var(--sb-purple)]",
 };
 
 const COLOR_SOLID: Record<HKChipColor, string> = {
-  default:   "bg-[var(--surface-200)] text-[var(--hk-text)]",
-  primary:   "bg-[var(--hk-orange)] text-white",
-  success:   "bg-[var(--hk-green)] text-white",
+  default:   "bg-[var(--surface-200)] text-[var(--sb-text)]",
+  primary:   "bg-[var(--sb-orange)] text-white",
+  success:   "bg-[var(--sb-green)] text-white",
   danger:    "bg-[#ef4444] text-white",
-  warning:   "bg-[var(--hk-amber)] text-white",
-  secondary: "bg-[var(--hk-purple)] text-white",
+  warning:   "bg-[var(--sb-amber)] text-white",
+  secondary: "bg-[var(--sb-purple)] text-white",
 };
 
 const COLOR_BORDERED: Record<HKChipColor, string> = {
-  default:   "border-[var(--hk-border)] text-[var(--hk-sub)]",
-  primary:   "border-[var(--hk-orange)] text-[var(--hk-orange)]",
-  success:   "border-[var(--hk-green)] text-[var(--hk-green)]",
+  default:   "border-[var(--sb-border)] text-[var(--sb-sub)]",
+  primary:   "border-[var(--sb-orange)] text-[var(--sb-orange)]",
+  success:   "border-[var(--sb-green)] text-[var(--sb-green)]",
   danger:    "border-[#ef4444] text-[#ef4444]",
-  warning:   "border-[var(--hk-amber)] text-[var(--hk-amber)]",
-  secondary: "border-[var(--hk-purple)] text-[var(--hk-purple)]",
+  warning:   "border-[var(--sb-amber)] text-[var(--sb-amber)]",
+  secondary: "border-[var(--sb-purple)] text-[var(--sb-purple)]",
 };
 
 const SIZE_CLASS: Record<string, string> = {

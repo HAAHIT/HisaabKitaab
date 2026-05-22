@@ -36,7 +36,7 @@ export function HKRadioGroup({
     <RadioGroupContext.Provider value={{ name, value, onValueChange, isDisabled }}>
       <fieldset className={`border-0 p-0 m-0 ${className || ""}`}>
         {label && (
-          <legend className="mb-2 text-xs font-semibold text-[var(--hk-sub)]">
+          <legend className="mb-2 text-xs font-semibold text-[var(--sb-sub)]">
             {label}
           </legend>
         )}
@@ -82,15 +82,15 @@ export function HKRadio({ value, isDisabled, children, className }: HKRadioProps
         <div
           className={`h-5 w-5 rounded-full border-2 transition-colors ${
             checked
-              ? "border-[var(--hk-orange)]"
-              : "border-[var(--hk-border)] bg-[var(--hk-input)] peer-hover:border-[var(--hk-orange)]/50"
+              ? "border-[var(--sb-orange)]"
+              : "border-[var(--sb-border)] bg-[var(--sb-input)] peer-hover:border-[var(--sb-orange)]/50"
           }`}
         />
         {checked && (
-          <div className="pointer-events-none absolute h-2.5 w-2.5 rounded-full bg-[var(--hk-orange)]" />
+          <div className="pointer-events-none absolute h-2.5 w-2.5 rounded-full bg-[var(--sb-orange)]" />
         )}
       </div>
-      <span className="text-sm font-medium text-[var(--hk-text)]">{children}</span>
+      <span className="text-sm font-medium text-[var(--sb-text)]">{children}</span>
     </label>
   );
 }

@@ -11,8 +11,8 @@ import { evaluateRow, type ColumnDef } from "@/lib/formula";
 import { GST_STATE_CODES } from "@/lib/gst-states";
 import { deriveIsInterState, extractGstinStateCode } from "@/lib/gst-helpers";
 import {
-  OR, GR, AM, PU, SG, IN, TYPE, TOUCH,
-  HKCard, HKToast, PageHeader,
+  OR, GR, AM, PU, SG, IN, TYPE, TOUCH, DISPLAY,
+  HKCard, HKToast,
   fmtFull, useIsMobile,
 } from "@/components/ui/hk-design";
 import { HKButton } from "@/components/ui/HKButton";
@@ -65,9 +65,9 @@ function Section({ title, action, children }: { title?: string; action?: React.R
       {(title || action) && (
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "16px 20px 12px", borderBottom: "1px solid var(--hk-border)",
+          padding: "16px 20px 12px", borderBottom: "1px solid var(--sb-border)",
         }}>
-          {title && <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG }}>{title}</p>}
+          {title && <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG }}>{title}</p>}
           {action}
         </div>
       )}
@@ -395,53 +395,55 @@ export default function NewBillPage() {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG }}>
+    <div style={{ background: "var(--sb-bg)", minHeight: "100%", fontFamily: SG }}>
       {toast && <HKToast message={toast.message} type={toast.type} />}
 
-      <PageHeader
-        title="Naya Bill"
-        subtitle="Customer select karo, items bharo"
-        isMobile={isMobile}
-        action={
+      <div style={{ padding: isMobile ? "18px 14px 100px" : "24px 28px 60px", maxWidth: 1100, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 18 }}>
           <button
             onClick={() => router.push("/bills")}
             style={{
-              height: TOUCH.secondary, padding: "0 16px",
-              borderRadius: 12, border: "1.5px solid var(--hk-border)",
-              background: "var(--hk-card)", color: "var(--hk-sub)",
-              fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG,
-              cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+              width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+              border: "1.5px solid var(--sb-border)",
+              background: "var(--sb-card)", color: "var(--sb-text)",
+              boxShadow: "var(--sb-shadow-card)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              cursor: "pointer",
             }}
           >
-            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M19 12H5M12 5l-7 7 7 7" />
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 18l-6-6 6-6" />
             </svg>
-            Bills
           </button>
-        }
-      />
-
-      <div style={{ padding: isMobile ? "0 14px 100px" : "0 28px 60px", maxWidth: 1100, margin: "0 auto" }}>
+          <div>
+            <h1 style={{ fontFamily: DISPLAY, fontSize: isMobile ? 24 : 30, fontWeight: 600, color: "var(--sb-text)", margin: 0, letterSpacing: "-0.01em", lineHeight: 1.2 }}>
+              Naya Bill
+            </h1>
+            <p style={{ fontSize: 14, fontWeight: 500, color: "var(--sb-sub)", marginTop: 4 }}>
+              Customer select karo, items bharo
+            </p>
+          </div>
+        </div>
 
         {/* ── Template picker ──────────────────────────────────────────────── */}
         {(templatePickerOpen || (!loading && !selectedTemplate && templates.length === 0)) && (
           <HKCard style={{ marginBottom: 16 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-              <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG }}>Template Choose Karo</p>
+              <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG }}>Template Choose Karo</p>
               {templatePickerOpen && (
                 <button
                   onClick={() => setTemplatePickerOpen(false)}
-                  style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", background: "none", border: "none", cursor: "pointer", fontFamily: SG }}
+                  style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", background: "none", border: "none", cursor: "pointer", fontFamily: SG }}
                 >
                   Cancel
                 </button>
               )}
             </div>
             {loading ? (
-              <p style={{ color: "var(--hk-sub)", fontSize: TYPE.body }}>Templates load ho rahe hain...</p>
+              <p style={{ color: "var(--sb-sub)", fontSize: TYPE.body }}>Templates load ho rahe hain...</p>
             ) : templates.length === 0 ? (
               <div style={{ textAlign: "center", padding: "32px 0" }}>
-                <p style={{ color: "var(--hk-sub)", marginBottom: 12, fontSize: TYPE.body }}>Koi template nahi mila</p>
+                <p style={{ color: "var(--sb-sub)", marginBottom: 12, fontSize: TYPE.body }}>Koi template nahi mila</p>
                 <HKButton onClick={() => router.push("/settings/templates/new")}>Template Banao</HKButton>
               </div>
             ) : (
@@ -453,12 +455,12 @@ export default function NewBillPage() {
                     onClick={() => selectTemplate(template.id)}
                     style={{
                       padding: "16px", borderRadius: 14,
-                      border: "1.5px solid var(--hk-border)",
-                      background: "var(--hk-card)", textAlign: "left",
+                      border: "1.5px solid var(--sb-border)",
+                      background: "var(--sb-card)", textAlign: "left",
                       cursor: "pointer", transition: "border-color 0.15s",
                     }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = PU; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--hk-border)"; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--sb-border)"; }}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                       <div style={{ width: 36, height: 36, borderRadius: 10, background: PU + "18", display: "flex", alignItems: "center", justifyContent: "center", color: PU }}>
@@ -467,8 +469,8 @@ export default function NewBillPage() {
                         </svg>
                       </div>
                       <div>
-                        <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG }}>{template.name}</p>
-                        <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", marginTop: 2 }}>{template.columns.length} columns</p>
+                        <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG }}>{template.name}</p>
+                        <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", marginTop: 2 }}>{template.columns.length} columns</p>
                       </div>
                     </div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
@@ -476,9 +478,9 @@ export default function NewBillPage() {
                         <span key={col.id} style={{
                           fontSize: 10, fontWeight: 600, fontFamily: SG,
                           padding: "2px 7px", borderRadius: 6,
-                          background: col.type === "formula" ? AM + "18" : col.type === "number" ? PU + "18" : "var(--hk-badge)",
-                          color: col.type === "formula" ? AM : col.type === "number" ? PU : "var(--hk-sub)",
-                          border: `1px solid ${col.type === "formula" ? AM + "30" : col.type === "number" ? PU + "30" : "var(--hk-border)"}`,
+                          background: col.type === "formula" ? AM + "18" : col.type === "number" ? PU + "18" : "var(--sb-badge)",
+                          color: col.type === "formula" ? AM : col.type === "number" ? PU : "var(--sb-sub)",
+                          border: `1px solid ${col.type === "formula" ? AM + "30" : col.type === "number" ? PU + "30" : "var(--sb-border)"}`,
                         }}>
                           {col.name}
                         </span>
@@ -505,7 +507,7 @@ export default function NewBillPage() {
               </span>
               <button
                 onClick={() => setTemplatePickerOpen(true)}
-                style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", background: "none", border: "none", cursor: "pointer", fontFamily: SG, fontWeight: 600 }}
+                style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", background: "none", border: "none", cursor: "pointer", fontFamily: SG, fontWeight: 600 }}
               >
                 Change Template
               </button>
@@ -541,31 +543,31 @@ export default function NewBillPage() {
               {selectedParty && (
                 <div style={{
                   marginTop: 14, padding: "14px 16px", borderRadius: 12,
-                  background: "var(--hk-badge)", border: "1px solid var(--hk-border)",
+                  background: "var(--sb-badge)", border: "1px solid var(--sb-border)",
                 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                    <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG }}>{selectedParty.name}</p>
+                    <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG }}>{selectedParty.name}</p>
                     <button
                       onClick={() => setSelectedParty(null)}
-                      style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", background: "none", border: "none", cursor: "pointer", fontFamily: SG, fontWeight: 600 }}
+                      style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", background: "none", border: "none", cursor: "pointer", fontFamily: SG, fontWeight: 600 }}
                     >
                       {t("common.change")}
                     </button>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                     {selectedParty.phone && (
-                      <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG }}>📱 {selectedParty.phone}</p>
+                      <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG }}>📱 {selectedParty.phone}</p>
                     )}
                     {selectedParty.address && (
-                      <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG }}>📍 {selectedParty.address}</p>
+                      <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG }}>📍 {selectedParty.address}</p>
                     )}
                     {selectedParty.gstin && (
-                      <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: IN }}>GST: {selectedParty.gstin}</p>
+                      <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: IN }}>GST: {selectedParty.gstin}</p>
                     )}
                   </div>
                   {selectedParty.currentBalance !== 0 && (
                     <div style={{
-                      marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--hk-border)",
+                      marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--sb-border)",
                       fontSize: TYPE.bodySmall, fontWeight: 700, fontFamily: SG,
                       color: selectedParty.currentBalance < 0 ? GR : OR,
                       display: "flex", alignItems: "center", gap: 6,
@@ -584,12 +586,12 @@ export default function NewBillPage() {
             <HKCard style={{ marginBottom: 16, padding: 0 }}>
               <div style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
-                padding: "16px 20px 12px", borderBottom: "1px solid var(--hk-border)", flexWrap: "wrap", gap: 8,
+                padding: "16px 20px 12px", borderBottom: "1px solid var(--sb-border)", flexWrap: "wrap", gap: 8,
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                  <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG }}>Line Items</p>
-                  <span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG }}>
-                    Subtotal: <span style={{ fontFamily: IN, fontWeight: 700, color: "var(--hk-text)" }}>{formatCurrency(subtotal)}</span>
+                  <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG }}>Line Items</p>
+                  <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG }}>
+                    Subtotal: <span style={{ fontFamily: IN, fontWeight: 700, color: "var(--sb-text)" }}>{formatCurrency(subtotal)}</span>
                   </span>
                   <span style={{ fontSize: TYPE.bodySmall, color: PU, fontFamily: SG }}>
                     Total: <span style={{ fontFamily: IN, fontWeight: 800 }}>{formatCurrency(grandTotal)}</span>
@@ -602,9 +604,9 @@ export default function NewBillPage() {
                       style={{
                         height: TOUCH.secondary, padding: "0 12px",
                         borderRadius: 10, fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG,
-                        border: `1.5px solid ${hsnPerRow ? PU : "var(--hk-border)"}`,
+                        border: `1.5px solid ${hsnPerRow ? PU : "var(--sb-border)"}`,
                         background: hsnPerRow ? PU + "18" : "transparent",
-                        color: hsnPerRow ? PU : "var(--hk-sub)",
+                        color: hsnPerRow ? PU : "var(--sb-sub)",
                         cursor: "pointer",
                       }}
                       title="Add HSN/SAC code per line item for GSTR-1 Table 12"
@@ -633,13 +635,13 @@ export default function NewBillPage() {
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: TYPE.bodySmall, fontFamily: SG }}>
                   <thead>
-                    <tr style={{ borderBottom: "1px solid var(--hk-border)", background: "var(--hk-badge)" }}>
-                      <th style={{ padding: "10px 12px", textAlign: "center", fontWeight: 600, color: "var(--hk-sub)", width: 40 }}>#</th>
+                    <tr style={{ borderBottom: "1px solid var(--sb-border)", background: "var(--sb-badge)" }}>
+                      <th style={{ padding: "10px 12px", textAlign: "center", fontWeight: 600, color: "var(--sb-sub)", width: 40 }}>#</th>
                       {hsnPerRow && taxPercent > 0 && (
-                        <th style={{ padding: "10px 12px", textAlign: "left", fontWeight: 600, color: "var(--hk-sub)", whiteSpace: "nowrap" }}>HSN/SAC</th>
+                        <th style={{ padding: "10px 12px", textAlign: "left", fontWeight: 600, color: "var(--sb-sub)", whiteSpace: "nowrap" }}>HSN/SAC</th>
                       )}
                       {selectedTemplate.columns.map((column) => (
-                        <th key={column.id} style={{ padding: "10px 12px", textAlign: "left", fontWeight: 600, color: "var(--hk-sub)", whiteSpace: "nowrap" }}>
+                        <th key={column.id} style={{ padding: "10px 12px", textAlign: "left", fontWeight: 600, color: "var(--sb-sub)", whiteSpace: "nowrap" }}>
                           {column.name}
                           {column.type === "formula" && <span style={{ color: AM, marginLeft: 4, fontSize: 10 }}>fx</span>}
                         </th>
@@ -649,8 +651,8 @@ export default function NewBillPage() {
                   </thead>
                   <tbody>
                     {rows.map((row, rowIndex) => (
-                      <tr key={rowIndex} style={{ borderBottom: "1px solid var(--hk-border)" }}>
-                        <td style={{ padding: "8px 12px", textAlign: "center", color: "var(--hk-sub)", fontSize: TYPE.bodySmall }}>{rowIndex + 1}</td>
+                      <tr key={rowIndex} style={{ borderBottom: "1px solid var(--sb-border)" }}>
+                        <td style={{ padding: "8px 12px", textAlign: "center", color: "var(--sb-sub)", fontSize: TYPE.bodySmall }}>{rowIndex + 1}</td>
                         {hsnPerRow && taxPercent > 0 && (
                           <td style={{ padding: "8px 8px" }}>
                             <input
@@ -659,7 +661,7 @@ export default function NewBillPage() {
                               placeholder="e.g. 9983"
                               value={String(row._hsnCode || "")}
                               onChange={(e) => updateRowHsn(rowIndex, e.target.value)}
-                              style={{ minWidth: 80, maxWidth: 100, background: "transparent", color: "var(--hk-text)", fontSize: TYPE.bodySmall, fontFamily: SG, outline: "none", border: "none", borderBottom: "1.5px solid var(--hk-border)", padding: "2px 0" }}
+                              style={{ minWidth: 80, maxWidth: 100, background: "transparent", color: "var(--sb-text)", fontSize: TYPE.bodySmall, fontFamily: SG, outline: "none", border: "none", borderBottom: "1.5px solid var(--sb-border)", padding: "2px 0" }}
                             />
                           </td>
                         )}
@@ -679,7 +681,7 @@ export default function NewBillPage() {
                                 aria-label={`Row ${rowIndex + 1} ${column.name}`}
                                 value={String(row[column.id] || "")}
                                 onChange={(e) => updateCell(rowIndex, column.id, e.target.value)}
-                                style={{ minWidth: 80, background: "transparent", color: "var(--hk-text)", fontSize: TYPE.bodySmall, fontFamily: IN, outline: "none", border: "none", borderBottom: "1.5px solid var(--hk-border)", padding: "2px 0" }}
+                                style={{ minWidth: 80, background: "transparent", color: "var(--sb-text)", fontSize: TYPE.bodySmall, fontFamily: IN, outline: "none", border: "none", borderBottom: "1.5px solid var(--sb-border)", padding: "2px 0" }}
                               />
                             ) : column.type === "dropdown" && column.options ? (
                               <HKSelect
@@ -699,7 +701,7 @@ export default function NewBillPage() {
                                 aria-label={`Row ${rowIndex + 1} ${column.name}`}
                                 value={String(row[column.id] || "")}
                                 onChange={(e) => updateCell(rowIndex, column.id, e.target.value)}
-                                style={{ minWidth: 130, background: "transparent", color: "var(--hk-text)", fontSize: TYPE.bodySmall, fontFamily: SG, outline: "none", border: "none", borderBottom: "1.5px solid var(--hk-border)", padding: "2px 0" }}
+                                style={{ minWidth: 130, background: "transparent", color: "var(--sb-text)", fontSize: TYPE.bodySmall, fontFamily: SG, outline: "none", border: "none", borderBottom: "1.5px solid var(--sb-border)", padding: "2px 0" }}
                               />
                             ) : column.id === nameColId && catalogItems.length > 0 ? (
                               <div
@@ -724,7 +726,7 @@ export default function NewBillPage() {
                                   }}
                                   onBlur={() => window.setTimeout(() => setAutoFocusedRow((prev) => (prev === rowIndex ? null : prev)), 150)}
                                   placeholder={column.name}
-                                  style={{ minWidth: 120, background: "transparent", color: "var(--hk-text)", fontSize: TYPE.bodySmall, fontFamily: SG, outline: "none", border: "none", borderBottom: "1.5px solid var(--hk-border)", padding: "2px 0" }}
+                                  style={{ minWidth: 120, background: "transparent", color: "var(--sb-text)", fontSize: TYPE.bodySmall, fontFamily: SG, outline: "none", border: "none", borderBottom: "1.5px solid var(--sb-border)", padding: "2px 0" }}
                                 />
                                 {autoFocusedRow === rowIndex && autoFilteredItems.length > 0 && dropdownRect &&
                                   createPortal(
@@ -735,8 +737,8 @@ export default function NewBillPage() {
                                       width: dropdownRect.width,
                                       zIndex: 9999,
                                       borderRadius: 12,
-                                      border: "1px solid var(--hk-border)",
-                                      background: "var(--hk-card)",
+                                      border: "1px solid var(--sb-border)",
+                                      background: "var(--sb-card)",
                                       boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
                                       overflow: "hidden",
                                     }}>
@@ -754,15 +756,15 @@ export default function NewBillPage() {
                                             justifyContent: "space-between", gap: 8,
                                             padding: "10px 14px", textAlign: "left",
                                             background: "none", border: "none",
-                                            borderBottom: "1px solid var(--hk-border)",
+                                            borderBottom: "1px solid var(--sb-border)",
                                             cursor: "pointer", fontFamily: SG,
                                           }}
-                                          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--hk-badge)"; }}
+                                          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--sb-badge)"; }}
                                           onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "none"; }}
                                         >
                                           <div style={{ minWidth: 0 }}>
-                                            <p style={{ fontSize: TYPE.bodySmall, fontWeight: 600, color: "var(--hk-text)", fontFamily: SG, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</p>
-                                            {item.hsnCode && <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)" }}>HSN {item.hsnCode}</p>}
+                                            <p style={{ fontSize: TYPE.bodySmall, fontWeight: 600, color: "var(--sb-text)", fontFamily: SG, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</p>
+                                            {item.hsnCode && <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)" }}>HSN {item.hsnCode}</p>}
                                           </div>
                                           <span style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: PU, fontFamily: IN, flexShrink: 0 }}>
                                             ₹{Number(item.rate).toLocaleString("en-IN", { maximumFractionDigits: 2 })}
@@ -780,7 +782,7 @@ export default function NewBillPage() {
                                 aria-label={`Row ${rowIndex + 1} ${column.name}`}
                                 value={String(row[column.id] || "")}
                                 onChange={(e) => updateCell(rowIndex, column.id, e.target.value)}
-                                style={{ minWidth: 120, background: "transparent", color: "var(--hk-text)", fontSize: TYPE.bodySmall, fontFamily: SG, outline: "none", border: "none", borderBottom: "1.5px solid var(--hk-border)", padding: "2px 0" }}
+                                style={{ minWidth: 120, background: "transparent", color: "var(--sb-text)", fontSize: TYPE.bodySmall, fontFamily: SG, outline: "none", border: "none", borderBottom: "1.5px solid var(--sb-border)", padding: "2px 0" }}
                               />
                             )}
                           </td>
@@ -792,7 +794,7 @@ export default function NewBillPage() {
                             aria-label={`Remove row ${rowIndex + 1}`}
                             style={{
                               width: 28, height: 28, borderRadius: 8, border: "none",
-                              background: "transparent", color: rows.length <= 1 ? "var(--hk-border)" : OR,
+                              background: "transparent", color: rows.length <= 1 ? "var(--sb-border)" : OR,
                               cursor: rows.length <= 1 ? "default" : "pointer",
                               display: "flex", alignItems: "center", justifyContent: "center",
                             }}
@@ -831,11 +833,11 @@ export default function NewBillPage() {
 
               {/* Summary */}
               <HKCard style={{ background: PU + "08", border: `1px solid ${PU}20` }}>
-                <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, marginBottom: 16 }}>Summary</p>
+                <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, marginBottom: 16 }}>Summary</p>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                    <span style={{ color: "var(--hk-sub)", fontSize: TYPE.body, fontFamily: SG, flexShrink: 0 }}>Bill Date</span>
+                    <span style={{ color: "var(--sb-sub)", fontSize: TYPE.body, fontFamily: SG, flexShrink: 0 }}>Bill Date</span>
                     <HKInput
                       type="date"
                       aria-label="Bill date"
@@ -847,13 +849,13 @@ export default function NewBillPage() {
                   </div>
 
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ color: "var(--hk-sub)", fontSize: TYPE.body, fontFamily: SG }}>Subtotal</span>
-                    <span style={{ fontFamily: IN, fontWeight: 600, color: "var(--hk-text)" }}>{formatCurrency(subtotal)}</span>
+                    <span style={{ color: "var(--sb-sub)", fontSize: TYPE.body, fontFamily: SG }}>Subtotal</span>
+                    <span style={{ fontFamily: IN, fontWeight: 600, color: "var(--sb-text)" }}>{formatCurrency(subtotal)}</span>
                   </div>
 
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ color: "var(--hk-sub)", fontSize: TYPE.body, fontFamily: SG }}>{taxLabelText}</span>
+                      <span style={{ color: "var(--sb-sub)", fontSize: TYPE.body, fontFamily: SG }}>{taxLabelText}</span>
                       {taxRateColId === null && (
                         <HKInput
                           type="number"
@@ -862,15 +864,15 @@ export default function NewBillPage() {
                           onValueChange={(value) => setTaxPercent(Number.parseFloat(value) || 0)}
                           size="sm"
                           className="w-20"
-                          endContent={<span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)" }}>%</span>}
+                          endContent={<span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)" }}>%</span>}
                         />
                       )}
                     </div>
-                    <span style={{ fontFamily: IN, fontWeight: 600, color: "var(--hk-text)" }}>{formatCurrency(taxAmount)}</span>
+                    <span style={{ fontFamily: IN, fontWeight: 600, color: "var(--sb-text)" }}>{formatCurrency(taxAmount)}</span>
                   </div>
 
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-                    <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG, flex: 1, margin: 0, paddingTop: 2 }}>{t("bills.autoTaxNote")}</p>
+                    <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG, flex: 1, margin: 0, paddingTop: 2 }}>{t("bills.autoTaxNote")}</p>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                       {gstIsLocked && (
                         <span style={{
@@ -892,16 +894,16 @@ export default function NewBillPage() {
                           disabled={gstIsLocked}
                           style={{ accentColor: PU }}
                         />
-                        <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>Inter-state (IGST)</span>
+                        <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}>Inter-state (IGST)</span>
                       </label>
                     </div>
                   </div>
 
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                      <span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG }}>Place of Supply</span>
+                      <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG }}>Place of Supply</span>
                       {gstIsLocked && (
-                        <svg width="13" height="13" fill="none" stroke="var(--hk-sub)" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg width="13" height="13" fill="none" stroke="var(--sb-sub)" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                         </svg>
                       )}
@@ -931,7 +933,7 @@ export default function NewBillPage() {
                         disabled={grandTotal === 0}
                         style={{ accentColor: PU }}
                       />
-                      <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>Round off to nearest ₹</span>
+                      <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}>Round off to nearest ₹</span>
                     </label>
                     {enableRoundOff && roundOff !== 0 && (
                       <span style={{ fontSize: TYPE.bodySmall, fontFamily: IN, fontWeight: 600, color: roundOff > 0 ? GR : OR }}>
@@ -940,8 +942,8 @@ export default function NewBillPage() {
                     )}
                   </div>
 
-                  <div style={{ borderTop: "1px solid var(--hk-border)", paddingTop: 12, marginTop: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: TYPE.h2, fontWeight: 800, color: "var(--hk-text)", fontFamily: SG }}>Grand Total</span>
+                  <div style={{ borderTop: "1px solid var(--sb-border)", paddingTop: 12, marginTop: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: TYPE.h2, fontWeight: 800, color: "var(--sb-text)", fontFamily: SG }}>Grand Total</span>
                     <span style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: PU, fontFamily: IN }}>{formatCurrency(roundedGrandTotal)}</span>
                   </div>
                 </div>
@@ -954,8 +956,8 @@ export default function NewBillPage() {
                 onClick={() => router.push("/bills")}
                 style={{
                   height: TOUCH.primary, padding: "0 20px",
-                  borderRadius: 12, border: "1.5px solid var(--hk-border)",
-                  background: "var(--hk-card)", color: "var(--hk-sub)",
+                  borderRadius: 12, border: "1.5px solid var(--sb-border)",
+                  background: "var(--sb-card)", color: "var(--sb-sub)",
                   fontSize: TYPE.body, fontWeight: 600, fontFamily: SG,
                   cursor: "pointer",
                 }}
@@ -967,9 +969,9 @@ export default function NewBillPage() {
                 disabled={savingAs === "FINAL"}
                 style={{
                   height: TOUCH.primary, padding: "0 20px",
-                  borderRadius: 12, border: "1.5px solid var(--hk-border)",
-                  background: savingAs === "DRAFT" ? "var(--hk-badge)" : "var(--hk-card)",
-                  color: "var(--hk-text)",
+                  borderRadius: 12, border: "1.5px solid var(--sb-border)",
+                  background: savingAs === "DRAFT" ? "var(--sb-badge)" : "var(--sb-card)",
+                  color: "var(--sb-text)",
                   fontSize: TYPE.body, fontWeight: 600, fontFamily: SG,
                   cursor: savingAs === "FINAL" ? "not-allowed" : "pointer",
                   opacity: savingAs === "FINAL" ? 0.5 : 1,

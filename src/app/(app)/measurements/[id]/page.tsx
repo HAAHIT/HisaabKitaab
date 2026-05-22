@@ -108,7 +108,7 @@ export default function MeasurementDetailPage({
   }
 
   if (!data) {
-    return <div className="p-8 text-center text-[var(--hk-sub)]">Not found</div>;
+    return <div className="p-8 text-center text-[var(--sb-sub)]">Not found</div>;
   }
 
   return (
@@ -158,7 +158,7 @@ export default function MeasurementDetailPage({
           type="button"
           aria-label="Back to measurements"
           onClick={() => router.push("/measurements")}
-          className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--hk-border)] bg-[var(--hk-card)] text-[var(--hk-sub)] hover:bg-[var(--hk-badge)]"
+          className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--sb-border)] bg-[var(--sb-card)] text-[var(--sb-sub)] hover:bg-[var(--sb-badge)]"
         >
           <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path d="M10 19l-7-7m0 0l7-7m-7 7h18" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} />
@@ -166,12 +166,12 @@ export default function MeasurementDetailPage({
         </button>
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-[var(--hk-text)]">{data.label}</h1>
+            <h1 className="text-2xl font-bold text-[var(--sb-text)]">{data.label}</h1>
             <HKChip size="sm" variant="flat" color={statusColorMap[data.status] || "default"} className="capitalize">
               {data.status.toLowerCase().replace("_", " ")}
             </HKChip>
           </div>
-          <p className="mt-1 text-sm text-[var(--hk-sub)]">
+          <p className="mt-1 text-sm text-[var(--sb-sub)]">
             Submitted{" "}
             {new Date(data.createdAt).toLocaleDateString("en-IN", {
               day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit",
@@ -182,14 +182,14 @@ export default function MeasurementDetailPage({
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          <div className="rounded-2xl border border-[var(--hk-border)] bg-[var(--hk-card)] shadow-sm">
+          <div className="rounded-2xl border border-[var(--sb-border)] bg-[var(--sb-card)] shadow-sm">
             <div className="p-6">
-              <h2 className="mb-4 font-semibold text-[var(--hk-text)]">Photos</h2>
+              <h2 className="mb-4 font-semibold text-[var(--sb-text)]">Photos</h2>
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                 {data.photos.map((photo, index) => (
                   <div
                     key={index}
-                    className="group relative aspect-[4/3] cursor-pointer overflow-hidden rounded-xl border border-[var(--hk-border)]"
+                    className="group relative aspect-[4/3] cursor-pointer overflow-hidden rounded-xl border border-[var(--sb-border)]"
                     onClick={() => setSelectedImage(photo.url)}
                   >
                     <Image src={photo.url} alt={`Photo ${index + 1}`} fill unoptimized className="object-cover" />
@@ -204,22 +204,22 @@ export default function MeasurementDetailPage({
             </div>
           </div>
 
-          <div className="rounded-2xl border border-[var(--hk-border)] bg-[var(--hk-card)] shadow-sm">
+          <div className="rounded-2xl border border-[var(--sb-border)] bg-[var(--sb-card)] shadow-sm">
             <div className="p-6">
-              <h2 className="mb-4 font-semibold text-[var(--hk-text)]">Details</h2>
+              <h2 className="mb-4 font-semibold text-[var(--sb-text)]">Details</h2>
               <div className="mb-4 grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <span className="text-[var(--hk-sub)]">Room Name</span>
-                  <p className="font-medium text-[var(--hk-text)]">{data.roomName || "-"}</p>
+                  <span className="text-[var(--sb-sub)]">Room Name</span>
+                  <p className="font-medium text-[var(--sb-text)]">{data.roomName || "-"}</p>
                 </div>
                 <div>
-                  <span className="text-[var(--hk-sub)]">Item Type</span>
-                  <p className="font-medium text-[var(--hk-text)]">{data.itemType || "-"}</p>
+                  <span className="text-[var(--sb-sub)]">Item Type</span>
+                  <p className="font-medium text-[var(--sb-text)]">{data.itemType || "-"}</p>
                 </div>
               </div>
               <div>
-                <span className="text-sm text-[var(--hk-sub)]">Customer Notes</span>
-                <p className="mt-1 rounded-lg bg-[var(--hk-badge)] p-3 text-sm text-[var(--hk-text)]">
+                <span className="text-sm text-[var(--sb-sub)]">Customer Notes</span>
+                <p className="mt-1 rounded-lg bg-[var(--sb-badge)] p-3 text-sm text-[var(--sb-text)]">
                   {data.notes || "No notes provided."}
                 </p>
               </div>
@@ -228,43 +228,43 @@ export default function MeasurementDetailPage({
         </div>
 
         <div className="space-y-6">
-          <div className="rounded-2xl border border-[var(--hk-border)] bg-[var(--hk-card)] shadow-sm">
+          <div className="rounded-2xl border border-[var(--sb-border)] bg-[var(--sb-card)] shadow-sm">
             <div className="space-y-4 p-6">
               <div>
-                <h2 className="mb-4 font-semibold text-[var(--hk-text)]">Customer Info</h2>
+                <h2 className="mb-4 font-semibold text-[var(--sb-text)]">Customer Info</h2>
                 <div className="space-y-3 text-sm">
                   <div>
-                    <span className="block text-[var(--hk-sub)]">Name</span>
-                    <span className="font-medium text-[var(--hk-text)]">{data.customer.name}</span>
+                    <span className="block text-[var(--sb-sub)]">Name</span>
+                    <span className="font-medium text-[var(--sb-text)]">{data.customer.name}</span>
                   </div>
                   {data.customer.phone && (
                     <div>
-                      <span className="block text-[var(--hk-sub)]">Phone</span>
-                      <span className="font-medium text-[var(--hk-text)]">{data.customer.phone}</span>
+                      <span className="block text-[var(--sb-sub)]">Phone</span>
+                      <span className="font-medium text-[var(--sb-text)]">{data.customer.phone}</span>
                     </div>
                   )}
                   {data.customer.email && (
                     <div>
-                      <span className="block text-[var(--hk-sub)]">Email</span>
-                      <span className="font-medium text-[var(--hk-text)]">{data.customer.email}</span>
+                      <span className="block text-[var(--sb-sub)]">Email</span>
+                      <span className="font-medium text-[var(--sb-text)]">{data.customer.email}</span>
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="border-t border-[var(--hk-border)] pt-4">
-                <h3 className="mb-2 font-semibold text-[var(--hk-text)]">Linked Party</h3>
+              <div className="border-t border-[var(--sb-border)] pt-4">
+                <h3 className="mb-2 font-semibold text-[var(--sb-text)]">Linked Party</h3>
                 {data.party ? (
                   <button
                     type="button"
-                    className="w-full rounded-xl border border-[var(--hk-border)] bg-[var(--hk-badge)] p-3 text-left transition hover:bg-[var(--hk-card)]"
+                    className="w-full rounded-xl border border-[var(--sb-border)] bg-[var(--sb-badge)] p-3 text-left transition hover:bg-[var(--sb-card)]"
                     onClick={() => router.push(`/parties/${data.party?.id}`)}
                   >
-                    <p className="font-medium text-[var(--hk-text)]">{data.party.name}</p>
-                    <p className="text-xs capitalize text-[var(--hk-sub)]">{data.party.type.toLowerCase()}</p>
+                    <p className="font-medium text-[var(--sb-text)]">{data.party.name}</p>
+                    <p className="text-xs capitalize text-[var(--sb-sub)]">{data.party.type.toLowerCase()}</p>
                   </button>
                 ) : (
-                  <div className="rounded-xl border border-[var(--hk-border)] bg-[var(--hk-badge)] p-3 text-sm text-[var(--hk-sub)]">
+                  <div className="rounded-xl border border-[var(--sb-border)] bg-[var(--sb-badge)] p-3 text-sm text-[var(--sb-sub)]">
                     No party record linked.
                   </div>
                 )}
@@ -272,9 +272,9 @@ export default function MeasurementDetailPage({
             </div>
           </div>
 
-          <div className="rounded-2xl border border-[var(--hk-border)] bg-[var(--hk-card)] shadow-sm">
+          <div className="rounded-2xl border border-[var(--sb-border)] bg-[var(--sb-card)] shadow-sm">
             <div className="space-y-4 p-6">
-              <h2 className="font-semibold text-[var(--hk-purple)]">Workflow Status</h2>
+              <h2 className="font-semibold text-[var(--sb-purple)]">Workflow Status</h2>
               <HKSelect
                 label="Current Status"
                 placeholder="Select status"

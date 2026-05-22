@@ -108,23 +108,22 @@ export default function PurchasesListPage() {
   ];
 
   return (
-    <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG }}>
+    <div style={{ background: "var(--sb-bg)", minHeight: "100%", fontFamily: SG }}>
       {toast && <HKToast message={toast.message} type={toast.type} />}
 
-      <PageHeader
-        title="Purchase Bills"
-        subtitle="Vendor se aayi bills"
-        isMobile={isMobile}
-        action={
-          !isMobile && (
-            <HKButton onClick={() => router.push("/purchases/new")}>
-              + Record Purchase
-            </HKButton>
-          )
-        }
-      />
-
-      <div style={{ padding: isMobile ? "0 14px" : "0 28px", maxWidth: 1440, margin: "0 auto" }}>
+      <div style={{ padding: isMobile ? "18px 14px 100px" : "24px 28px", maxWidth: 1440, margin: "0 auto" }}>
+        <PageHeader
+          title="Purchase Bills"
+          subtitle="Vendor se aayi bills"
+          isMobile={isMobile}
+          action={
+            !isMobile && (
+              <HKButton onClick={() => router.push("/purchases/new")}>
+                + Record Purchase
+              </HKButton>
+            )
+          }
+        />
         {/* Search + filter */}
         <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
           <SearchBox value={search} onChange={setSearch} placeholder={t("bills.searchPlaceholder")} />
@@ -142,9 +141,9 @@ export default function PurchasesListPage() {
             ))}
           </div>
         ) : bills.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--hk-sub)" }}>
+          <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--sb-sub)" }}>
             <div style={{ fontSize: 52, marginBottom: 16 }}>🛒</div>
-            <p style={{ fontWeight: 700, fontSize: TYPE.h2, color: "var(--hk-text)", marginBottom: 8, fontFamily: SG }}>
+            <p style={{ fontWeight: 700, fontSize: TYPE.h2, color: "var(--sb-text)", marginBottom: 8, fontFamily: SG }}>
               {search || statusFilter !== "ALL" ? "Koi purchase nahi mila" : "Abhi tak koi purchase nahi"}
             </p>
             <p style={{ fontSize: TYPE.body, fontWeight: 500, fontFamily: SG, marginBottom: 20 }}>
@@ -173,26 +172,26 @@ export default function PurchasesListPage() {
                       alignItems: "center",
                       padding: "10px 16px",
                       borderRadius: 12,
-                      background: "var(--hk-badge)",
-                      border: "1px solid var(--hk-border)",
+                      background: "var(--sb-badge)",
+                      border: "1px solid var(--sb-border)",
                       marginBottom: 10,
                       cursor: "pointer",
                       fontFamily: SG,
                     }}
                   >
-                    <span style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)" }}>
+                    <span style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)" }}>
                       {group.label}
                     </span>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ fontSize: TYPE.numSmall, fontWeight: 700, color: "var(--hk-sub)", fontFamily: IN }}>
+                      <span style={{ fontSize: TYPE.numSmall, fontWeight: 700, color: "var(--sb-sub)", fontFamily: IN }}>
                         {fmtFull(group.total)}
                       </span>
-                      <span style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--hk-sub)" }}>
+                      <span style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--sb-sub)" }}>
                         · {group.bills.length} bills
                       </span>
                       <svg
                         width="16" height="16" viewBox="0 0 24 24" fill="none"
-                        stroke="var(--hk-sub)" strokeWidth="1.8" strokeLinecap="round"
+                        stroke="var(--sb-sub)" strokeWidth="1.8" strokeLinecap="round"
                         style={{ transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)", transition: "transform 0.2s" }}
                       >
                         <path d="m6 9 6 6 6-6" />
@@ -211,7 +210,7 @@ export default function PurchasesListPage() {
                             justifyContent: "space-between",
                             alignItems: "center",
                             padding: "16px 0",
-                            borderBottom: i < group.bills.length - 1 ? "1px solid var(--hk-border)" : "none",
+                            borderBottom: i < group.bills.length - 1 ? "1px solid var(--sb-border)" : "none",
                             cursor: "pointer",
                             minHeight: 64,
                           }}
@@ -235,24 +234,24 @@ export default function PurchasesListPage() {
                             </div>
                             <div style={{ minWidth: 0, flex: 1 }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
-                                <span style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--hk-sub)", fontFamily: IN }}>
+                                <span style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--sb-sub)", fontFamily: IN }}>
                                   {bill.billNumber}
                                 </span>
                                 <StatusChip status={bill.status} />
                               </div>
-                              <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", marginBottom: 3, fontFamily: SG, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)", marginBottom: 3, fontFamily: SG, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                 {bill.party?.name || bill.customerName}
                               </p>
-                              <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--hk-sub)", fontFamily: SG }}>
+                              <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--sb-sub)", fontFamily: SG }}>
                                 {new Date(bill.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                               </p>
                             </div>
                           </div>
                           <div style={{ textAlign: "right", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                            <p style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: "var(--hk-text)", fontFamily: IN, whiteSpace: "nowrap" }}>
+                            <p style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: "var(--sb-text)", fontFamily: IN, whiteSpace: "nowrap" }}>
                               {fmtFull(bill.grandTotal)}
                             </p>
-                            <svg style={{ color: "var(--hk-sub)" }} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                            <svg style={{ color: "var(--sb-sub)" }} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                               <path d="m9 18 6-6-6-6" />
                             </svg>
                           </div>

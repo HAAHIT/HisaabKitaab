@@ -29,7 +29,7 @@ interface JournalEntryParams {
   paymentId?: string;
   isReverseCharge?: boolean;
   /**
-   * Tally REMOTEID (with "HisaabKitaab-" prefix already stripped).
+   * Tally REMOTEID (with "SoloBooks-" prefix already stripped).
    * Stored in JournalEntry.remoteId for idempotent Tally re-imports.
    * Null / undefined for natively-created entries.
    */

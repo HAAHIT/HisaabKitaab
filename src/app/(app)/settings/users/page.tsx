@@ -117,29 +117,22 @@ export default function UserManagementPage() {
 
   return (
     <>
-      <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG }}>
+      <div style={{ fontFamily: SG }}>
         {toast && <HKToast message={toast.message} type={toast.type} />}
-
         <PageHeader
           title={t("users.title")}
           subtitle={t("users.subtitle")}
           isMobile={isMobile}
-          action={
-            <HKButton onClick={openCreatePanel}>
-              + {t("users.add")}
-            </HKButton>
-          }
+          action={<HKButton onClick={openCreatePanel}>+ {t("users.add")}</HKButton>}
         />
-
-        <div style={{ padding: isMobile ? "0 14px 80px" : "0 28px 80px", maxWidth: 1200, margin: "0 auto" }}>
-          <HKCard style={{ padding: 0, overflow: "hidden" }}>
+        <HKCard style={{ padding: 0, overflow: "hidden" }}>
             {loading ? (
               <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 12 }}>
                 {[1, 2, 3, 4].map((i) => <HKSkeleton key={i} className="h-16 w-full rounded-2xl" />)}
               </div>
             ) : users.length === 0 ? (
               <div style={{ textAlign: "center", padding: "60px 20px" }}>
-                <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", fontFamily: SG, marginBottom: 16 }}>No users found</p>
+                <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", fontFamily: SG, marginBottom: 16 }}>No users found</p>
                 <HKButton onClick={openCreatePanel}>{t("users.createFirst")}</HKButton>
               </div>
             ) : (
@@ -150,12 +143,12 @@ export default function UserManagementPage() {
                     display: "grid",
                     gridTemplateColumns: isMobile ? "1fr auto" : "2fr 2fr 1fr 1fr 1fr auto",
                     gap: 12, padding: "12px 20px",
-                    borderBottom: "1px solid var(--hk-border)",
-                    background: "var(--hk-badge)",
+                    borderBottom: "1px solid var(--sb-border)",
+                    background: "var(--sb-badge)",
                   }}
                 >
                   {[t("users.name"), ...(isMobile ? [] : [t("users.contact"), t("users.role"), t("users.status"), t("users.created")]), t("users.actions")].map((h) => (
-                    <p key={h} style={{ fontSize: TYPE.caption, fontWeight: 700, color: "var(--hk-sub)", textTransform: "uppercase", letterSpacing: "0.5px", fontFamily: SG, margin: 0 }}>
+                    <p key={h} style={{ fontSize: TYPE.caption, fontWeight: 700, color: "var(--sb-sub)", textTransform: "uppercase", letterSpacing: "0.5px", fontFamily: SG, margin: 0 }}>
                       {h}
                     </p>
                   ))}
@@ -170,16 +163,16 @@ export default function UserManagementPage() {
                         display: "grid",
                         gridTemplateColumns: isMobile ? "1fr auto" : "2fr 2fr 1fr 1fr 1fr auto",
                         gap: 12, padding: "14px 20px", alignItems: "center",
-                        borderBottom: "1px solid var(--hk-border)",
+                        borderBottom: "1px solid var(--sb-border)",
                       }}
                     >
-                      <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, margin: 0 }}>
+                      <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>
                         {user.name}
                       </p>
                       {!isMobile && (
                         <div>
-                          {user.email && <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-text)", fontFamily: SG, margin: 0 }}>{user.email}</p>}
-                          {user.phone && <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG, margin: 0 }}>{user.phone}</p>}
+                          {user.email && <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>{user.email}</p>}
+                          {user.phone && <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG, margin: 0 }}>{user.phone}</p>}
                         </div>
                       )}
                       {!isMobile && (
@@ -190,15 +183,15 @@ export default function UserManagementPage() {
                       {!isMobile && (
                         <span style={{
                           fontSize: TYPE.chip, fontWeight: 700,
-                          color: user.isActive ? GR : "var(--hk-sub)",
-                          background: user.isActive ? GR + "18" : "var(--hk-badge)",
+                          color: user.isActive ? GR : "var(--sb-sub)",
+                          background: user.isActive ? GR + "18" : "var(--sb-badge)",
                           padding: "4px 10px", borderRadius: 8, fontFamily: SG,
                         }}>
                           {user.isActive ? t("users.active") : t("users.inactive")}
                         </span>
                       )}
                       {!isMobile && (
-                        <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: IN, margin: 0 }}>
+                        <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: IN, margin: 0 }}>
                           {new Date(user.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                         </p>
                       )}
@@ -208,8 +201,8 @@ export default function UserManagementPage() {
                           aria-label={`Edit ${user.name}`}
                           style={{
                             width: 36, height: 36, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center",
-                            background: "var(--hk-badge)", border: "1px solid var(--hk-border)", cursor: "pointer",
-                            color: "var(--hk-text)",
+                            background: "var(--sb-badge)", border: "1px solid var(--sb-border)", cursor: "pointer",
+                            color: "var(--sb-text)",
                           }}
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -236,7 +229,6 @@ export default function UserManagementPage() {
               </div>
             )}
           </HKCard>
-        </div>
       </div>
 
       {/* Slide-over panel */}
@@ -249,21 +241,21 @@ export default function UserManagementPage() {
           <div
             style={{
               position: "fixed", right: 0, top: 0, bottom: 0, width: "100%", maxWidth: 440,
-              background: "var(--hk-card)", boxShadow: "0 0 60px rgba(0,0,0,0.25)",
+              background: "var(--sb-card)", boxShadow: "0 0 60px rgba(0,0,0,0.25)",
               zIndex: 51, overflowY: "auto", animation: "slide-in-right 0.28s ease-out",
               fontFamily: SG,
             }}
           >
             <div style={{ padding: "24px 24px 40px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-                <p style={{ fontSize: TYPE.h2, fontWeight: 800, color: "var(--hk-text)", fontFamily: SG, margin: 0 }}>
+                <p style={{ fontSize: TYPE.h2, fontWeight: 800, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>
                   {editingUser ? t("users.edit") : t("users.createTitle")}
                 </p>
                 <button
                   onClick={() => setShowPanel(false)}
                   style={{
                     width: 36, height: 36, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center",
-                    background: "var(--hk-badge)", border: "1px solid var(--hk-border)", cursor: "pointer", color: "var(--hk-text)",
+                    background: "var(--sb-badge)", border: "1px solid var(--sb-border)", cursor: "pointer", color: "var(--sb-text)",
                   }}
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -288,14 +280,14 @@ export default function UserManagementPage() {
                       <button
                         type="button"
                         onClick={() => setShowPassword((v) => !v)}
-                        style={{ padding: "4px 8px", borderRadius: 8, background: "var(--hk-badge)", border: "none", cursor: "pointer", fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}
+                        style={{ padding: "4px 8px", borderRadius: 8, background: "var(--sb-badge)", border: "none", cursor: "pointer", fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}
                       >
                         {showPassword ? t("common.hide") : t("common.show")}
                       </button>
                       <button
                         type="button"
                         onClick={generatePassword}
-                        style={{ padding: "4px 8px", borderRadius: 8, background: "var(--hk-badge)", border: "none", cursor: "pointer", fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}
+                        style={{ padding: "4px 8px", borderRadius: 8, background: "var(--sb-badge)", border: "none", cursor: "pointer", fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}
                       >
                         {t("common.generate")}
                       </button>

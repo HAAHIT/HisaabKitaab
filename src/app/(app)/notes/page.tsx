@@ -5,7 +5,7 @@ import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { HKPagination } from "@/components/ui/HKPagination";
 import { useRouter } from "next/navigation";
 import {
-  GR, AM, PU, OR, SG, IN, TYPE,
+  C, GR, AM, PU, OR, SG, IN, TYPE,
   fmtFull, useIsMobile,
   HKCard, HKToast, SearchBox, PillFilter,
   PageHeader,
@@ -102,37 +102,36 @@ export default function NotesListPage() {
   ];
 
   return (
-    <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG }}>
+    <div style={{ background: "var(--sb-bg)", minHeight: "100%", fontFamily: SG }}>
       {toast && <HKToast message={toast.message} type={toast.type} />}
 
-      <PageHeader
-        title="Credit & Debit Notes"
-        subtitle="Sales returns aur purchase returns"
-        isMobile={isMobile}
-        action={
-          !isMobile && (
-            <div style={{ display: "flex", gap: 8 }}>
-              <HKButton onClick={() => router.push("/notes/new?type=CREDIT_NOTE")}>
-                + Credit Note
-              </HKButton>
-              <button
-                onClick={() => router.push("/notes/new?type=DEBIT_NOTE")}
-                style={{
-                  display: "inline-flex", alignItems: "center", justifyContent: "center",
-                  gap: 8, minHeight: 48, padding: "0 22px", borderRadius: 14,
-                  background: AM + "18", border: `1.5px solid ${AM}44`,
-                  color: AM, fontFamily: SG, fontSize: TYPE.body, fontWeight: 700,
-                  cursor: "pointer",
-                }}
-              >
-                + Debit Note
-              </button>
-            </div>
-          )
-        }
-      />
-
-      <div style={{ padding: isMobile ? "0 14px" : "0 28px", maxWidth: 1440, margin: "0 auto" }}>
+      <div style={{ padding: isMobile ? "18px 14px 100px" : "24px 28px", maxWidth: 1440, margin: "0 auto" }}>
+        <PageHeader
+          title="Credit & Debit Notes"
+          subtitle="Sales returns aur purchase returns"
+          isMobile={isMobile}
+          action={
+            !isMobile && (
+              <div style={{ display: "flex", gap: 8 }}>
+                <HKButton onClick={() => router.push("/notes/new?type=CREDIT_NOTE")}>
+                  + Credit Note
+                </HKButton>
+                <button
+                  onClick={() => router.push("/notes/new?type=DEBIT_NOTE")}
+                  style={{
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    gap: 8, minHeight: 48, padding: "0 22px", borderRadius: 14,
+                    background: C.warningSoft, border: `1.5px solid ${AM}44`,
+                    color: AM, fontFamily: SG, fontSize: TYPE.body, fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  + Debit Note
+                </button>
+              </div>
+            )
+          }
+        />
         <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
           <SearchBox value={search} onChange={setSearch} placeholder="Note dhundho..." />
           <PillFilter
@@ -147,9 +146,9 @@ export default function NotesListPage() {
             {[1, 2, 3, 4].map((i) => <HKSkeleton key={i} className="h-20 rounded-2xl" />)}
           </div>
         ) : notes.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--hk-sub)" }}>
+          <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--sb-sub)" }}>
             <div style={{ fontSize: 52, marginBottom: 16 }}>📝</div>
-            <p style={{ fontWeight: 700, fontSize: TYPE.h2, color: "var(--hk-text)", marginBottom: 8, fontFamily: SG }}>
+            <p style={{ fontWeight: 700, fontSize: TYPE.h2, color: "var(--sb-text)", marginBottom: 8, fontFamily: SG }}>
               {search || typeFilter !== "ALL" ? "Koi note nahi mila" : "Abhi tak koi note nahi"}
             </p>
             <p style={{ fontSize: TYPE.body, fontWeight: 500, fontFamily: SG, marginBottom: 20 }}>
@@ -174,23 +173,23 @@ export default function NotesListPage() {
                       width: "100%", minHeight: 48, display: "flex",
                       justifyContent: "space-between", alignItems: "center",
                       padding: "10px 16px", borderRadius: 12,
-                      background: "var(--hk-badge)", border: "1px solid var(--hk-border)",
+                      background: "var(--sb-badge)", border: "1px solid var(--sb-border)",
                       marginBottom: 10, cursor: "pointer", fontFamily: SG,
                     }}
                   >
-                    <span style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)" }}>
+                    <span style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)" }}>
                       {group.label}
                     </span>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ fontSize: TYPE.numSmall, fontWeight: 700, color: "var(--hk-sub)", fontFamily: IN }}>
+                      <span style={{ fontSize: TYPE.numSmall, fontWeight: 700, color: "var(--sb-sub)", fontFamily: IN }}>
                         {fmtFull(group.total)}
                       </span>
-                      <span style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--hk-sub)" }}>
+                      <span style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--sb-sub)" }}>
                         · {group.notes.length} notes
                       </span>
                       <svg
                         width="16" height="16" viewBox="0 0 24 24" fill="none"
-                        stroke="var(--hk-sub)" strokeWidth="1.8" strokeLinecap="round"
+                        stroke="var(--sb-sub)" strokeWidth="1.8" strokeLinecap="round"
                         style={{ transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)", transition: "transform 0.2s" }}
                       >
                         <path d="m6 9 6 6 6-6" />
@@ -209,7 +208,7 @@ export default function NotesListPage() {
                             style={{
                               display: "flex", justifyContent: "space-between",
                               alignItems: "center", padding: "16px 0",
-                              borderBottom: i < group.notes.length - 1 ? "1px solid var(--hk-border)" : "none",
+                              borderBottom: i < group.notes.length - 1 ? "1px solid var(--sb-border)" : "none",
                               minHeight: 64, cursor: "pointer",
                             }}
                           >
@@ -240,15 +239,15 @@ export default function NotesListPage() {
                                     {isCredit ? "Credit" : "Debit"}
                                   </span>
                                   {note.partyName && (
-                                    <span style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--hk-sub)", fontFamily: SG, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    <span style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--sb-sub)", fontFamily: SG, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                       {note.partyName}
                                     </span>
                                   )}
                                 </div>
-                                <p style={{ fontSize: TYPE.body, fontWeight: 600, color: "var(--hk-text)", marginBottom: 3, fontFamily: SG, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                <p style={{ fontSize: TYPE.body, fontWeight: 600, color: "var(--sb-text)", marginBottom: 3, fontFamily: SG, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                   {note.narration || "—"}
                                 </p>
-                                <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--hk-sub)", fontFamily: SG }}>
+                                <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--sb-sub)", fontFamily: SG }}>
                                   {new Date(note.entryDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                                 </p>
                               </div>

@@ -11,8 +11,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { PartySearch, type PartyOption } from "@/components/ui/PartySearch";
 import { BillSearch, type BillOption } from "@/components/ui/BillSearch";
 import {
-  GR, AM, PU, OR, SG, TYPE,
-  HKCard, HKToast, PageHeader, useIsMobile,
+  GR, AM, PU, OR, SG, TYPE, DISPLAY,
+  HKCard, HKToast, useIsMobile,
 } from "@/components/ui/hk-design";
 import { HKButton } from "@/components/ui/HKButton";
 import { HKInput } from "@/components/ui/HKInput";
@@ -34,7 +34,7 @@ function formatSignedBalance(value: number) {
 
 function getBalanceBannerStyle(partyType: SupportedPartyType, balance: number) {
   const v = Math.round(balance * 100) / 100;
-  if (v === 0) return { background: "var(--hk-badge)", color: "var(--hk-sub)" };
+  if (v === 0) return { background: "var(--sb-badge)", color: "var(--sb-sub)" };
   if (v > 0) return { background: AM + "15", color: AM };
   return partyType === "CUSTOMER"
     ? { background: GR + "15", color: GR }
@@ -183,32 +183,35 @@ export default function RecordPaymentPage() {
   const partySearchReady = initialParty !== undefined;
 
   return (
-    <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG }}>
+    <div style={{ background: "var(--sb-bg)", minHeight: "100%", fontFamily: SG }}>
       {toast && <HKToast message={toast.message} type={toast.type} />}
 
-      <PageHeader
-        title="Record Payment"
-        subtitle="Payment ledger mein save karo"
-        isMobile={isMobile}
-        action={
+      <div style={{ padding: isMobile ? "18px 14px 100px" : "24px 28px 80px", maxWidth: 680, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 18 }}>
           <button
             onClick={() => router.push("/payments")}
             style={{
-              display: "flex", alignItems: "center", gap: 6, background: "none", border: "none",
-              color: "var(--hk-sub)", fontSize: TYPE.body, fontFamily: SG, fontWeight: 600, cursor: "pointer",
+              width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+              border: "1.5px solid var(--sb-border)", background: "var(--sb-card)",
+              boxShadow: "var(--sb-shadow-card)", color: "var(--sb-text)",
+              display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
             }}
           >
-            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round">
-              <path d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M15 18l-6-6 6-6" />
             </svg>
-            Wapas
           </button>
-        }
-      />
-
-      <div style={{ padding: isMobile ? "0 14px 100px" : "0 28px 80px", maxWidth: 680, margin: "0 auto" }}>
+          <div>
+            <h1 style={{ fontFamily: DISPLAY, fontSize: isMobile ? 24 : 30, fontWeight: 600, color: "var(--sb-text)", margin: 0, letterSpacing: "-0.01em", lineHeight: 1.2 }}>
+              Record Payment
+            </h1>
+            <p style={{ fontSize: 14, fontWeight: 500, color: "var(--sb-sub)", marginTop: 4 }}>
+              Payment ledger mein save karo
+            </p>
+          </div>
+        </div>
         {/* Payment type tabs */}
-        <div style={{ marginBottom: 20, display: "flex", gap: 4, background: "var(--hk-badge)", borderRadius: 14, padding: 4 }}>
+        <div style={{ marginBottom: 20, display: "flex", gap: 4, background: "var(--sb-badge)", borderRadius: 14, padding: 4 }}>
           {(["party", "ledger", "contra"] as const).map((key) => {
             const labels = { party: "Party Payment", ledger: "Expense / Income", contra: "Bank Transfer (Contra)" };
             return (
@@ -218,9 +221,9 @@ export default function RecordPaymentPage() {
                 onClick={() => setPaymentFlowType(key)}
                 style={{
                   flex: 1, padding: "8px 12px", borderRadius: 10, cursor: "pointer",
-                  background: paymentFlowType === key ? "var(--hk-card)" : "transparent",
-                  border: paymentFlowType === key ? "1px solid var(--hk-border)" : "1px solid transparent",
-                  color: paymentFlowType === key ? "var(--hk-text)" : "var(--hk-sub)",
+                  background: paymentFlowType === key ? "var(--sb-card)" : "transparent",
+                  border: paymentFlowType === key ? "1px solid var(--sb-border)" : "1px solid transparent",
+                  color: paymentFlowType === key ? "var(--sb-text)" : "var(--sb-sub)",
                   fontWeight: paymentFlowType === key ? 700 : 500,
                   fontSize: TYPE.bodySmall, fontFamily: SG,
                   boxShadow: paymentFlowType === key ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
@@ -260,8 +263,8 @@ export default function RecordPaymentPage() {
                 style={{
                   display: "flex", alignItems: "center", gap: 14,
                   padding: 16, borderRadius: 16, cursor: "pointer", textAlign: "left",
-                  border: `1.5px solid ${active ? color + "70" : "var(--hk-border)"}`,
-                  background: active ? color + "12" : "var(--hk-card)",
+                  border: `1.5px solid ${active ? color + "70" : "var(--sb-border)"}`,
+                  background: active ? color + "12" : "var(--sb-card)",
                   boxShadow: active ? `0 8px 24px -12px ${color}80` : "none",
                   transition: "all 0.15s",
                 }}
@@ -270,8 +273,8 @@ export default function RecordPaymentPage() {
                   <svg width={24} height={24} fill="none" stroke="currentColor" viewBox="0 0 24 24">{icon}</svg>
                 </div>
                 <div>
-                  <p style={{ fontSize: TYPE.body, fontWeight: 700, color: active ? color : "var(--hk-text)", fontFamily: SG }}>{label}</p>
-                  <p style={{ fontSize: TYPE.caption, color: active ? color + "cc" : "var(--hk-sub)", fontFamily: SG, marginTop: 2 }}>{sub}</p>
+                  <p style={{ fontSize: TYPE.body, fontWeight: 700, color: active ? color : "var(--sb-text)", fontFamily: SG }}>{label}</p>
+                  <p style={{ fontSize: TYPE.caption, color: active ? color + "cc" : "var(--sb-sub)", fontFamily: SG, marginTop: 2 }}>{sub}</p>
                 </div>
               </button>
             );
@@ -280,7 +283,7 @@ export default function RecordPaymentPage() {
 
         {/* Payment details */}
         <HKCard style={{ marginBottom: 20 }}>
-          <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, marginBottom: 20 }}>
+          <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, marginBottom: 20 }}>
             {paymentFlowType === "contra" ? "Transfer Details" : "Payment Details"}
           </p>
 

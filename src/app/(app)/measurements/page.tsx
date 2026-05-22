@@ -124,10 +124,10 @@ export default function MeasurementsListPage() {
           ))}
         </div>
       ) : measurements.length === 0 ? (
-        <div className="rounded-2xl border border-[var(--hk-border)] bg-[var(--hk-card)] shadow-sm">
+        <div className="rounded-2xl border border-[var(--sb-border)] bg-[var(--sb-card)] shadow-sm">
           <div className="flex flex-col items-center justify-center py-16">
-            <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-[var(--hk-purple)]/10">
-              <svg className="h-10 w-10 text-[var(--hk-purple)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-[var(--sb-purple)]/10">
+              <svg className="h-10 w-10 text-[var(--sb-purple)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                   strokeLinecap="round"
@@ -136,12 +136,12 @@ export default function MeasurementsListPage() {
                 />
               </svg>
             </div>
-            <p className="text-lg font-medium text-[var(--hk-text)]">
+            <p className="text-lg font-medium text-[var(--sb-text)]">
               {search || statusFilter !== "ALL"
                 ? t("measurements.emptyFiltered")
                 : t("measurements.empty")}
             </p>
-            <p className="mt-1 text-sm text-[var(--hk-sub)]">{t("measurements.emptyHint")}</p>
+            <p className="mt-1 text-sm text-[var(--sb-sub)]">{t("measurements.emptyHint")}</p>
           </div>
         </div>
       ) : (
@@ -153,10 +153,10 @@ export default function MeasurementsListPage() {
               tabIndex={0}
               onClick={() => router.push(`/measurements/${measurement.id}`)}
               onKeyDown={(e) => { if (e.key === "Enter") router.push(`/measurements/${measurement.id}`); }}
-              className="overflow-hidden rounded-2xl border border-[var(--hk-border)] bg-[var(--hk-card)] text-left shadow-sm transition hover:shadow-lg cursor-pointer"
+              className="overflow-hidden rounded-2xl border border-[var(--sb-border)] bg-[var(--sb-card)] text-left shadow-sm transition hover:shadow-lg cursor-pointer"
             >
               {measurement.photos.length > 0 ? (
-                <div className="relative h-48 bg-[var(--hk-badge)]">
+                <div className="relative h-48 bg-[var(--sb-badge)]">
                   <Image
                     src={measurement.photos[0].thumbnailUrl || measurement.photos[0].url}
                     alt={measurement.label}
@@ -170,8 +170,8 @@ export default function MeasurementsListPage() {
                   </div>
                 </div>
               ) : (
-                <div className="flex h-32 items-center justify-center bg-[var(--hk-badge)]">
-                  <svg className="h-12 w-12 text-[var(--hk-border)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="flex h-32 items-center justify-center bg-[var(--sb-badge)]">
+                  <svg className="h-12 w-12 text-[var(--sb-border)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                       strokeLinecap="round"
@@ -184,7 +184,7 @@ export default function MeasurementsListPage() {
 
               <div className="p-4">
                 <div className="mb-2 flex items-start justify-between">
-                  <h3 className="line-clamp-1 text-base font-semibold text-[var(--hk-text)]" title={measurement.label}>
+                  <h3 className="line-clamp-1 text-base font-semibold text-[var(--sb-text)]" title={measurement.label}>
                     {measurement.label}
                   </h3>
                   <HKChip
@@ -199,20 +199,20 @@ export default function MeasurementsListPage() {
 
                 <div className="mb-2 flex flex-wrap gap-2">
                   {measurement.roomName && (
-                    <span className="rounded-full bg-[var(--hk-badge)] px-2 py-0.5 text-xs text-[var(--hk-sub)]">
+                    <span className="rounded-full bg-[var(--sb-badge)] px-2 py-0.5 text-xs text-[var(--sb-sub)]">
                       {measurement.roomName}
                     </span>
                   )}
                   {measurement.itemType && (
-                    <span className="rounded-full bg-[var(--hk-badge)] px-2 py-0.5 text-xs text-[var(--hk-sub)]">
+                    <span className="rounded-full bg-[var(--sb-badge)] px-2 py-0.5 text-xs text-[var(--sb-sub)]">
                       {measurement.itemType}
                     </span>
                   )}
                 </div>
 
-                <div className="flex items-center justify-between text-xs text-[var(--hk-sub)]">
+                <div className="flex items-center justify-between text-xs text-[var(--sb-sub)]">
                   <div className="flex flex-col">
-                    <span className="font-medium text-[var(--hk-text)]">
+                    <span className="font-medium text-[var(--sb-text)]">
                       {t("measurements.customerPrefix")}: {measurement.customer.name}
                     </span>
                     {measurement.party && <span>{t("bills.partyPrefix")}: {measurement.party.name}</span>}

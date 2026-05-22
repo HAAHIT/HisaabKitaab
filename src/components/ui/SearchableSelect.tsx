@@ -25,7 +25,7 @@ function ChevronDownIcon(props: React.SVGProps<SVGSVGElement>) {
 
 function Spinner() {
   return (
-    <div className="hk-spin h-4 w-4 rounded-full border-2 border-[var(--hk-border)] border-t-[var(--hk-orange)]" />
+    <div className="sb-spin h-4 w-4 rounded-full border-2 border-[var(--sb-border)] border-t-[var(--sb-orange)]" />
   );
 }
 
@@ -200,11 +200,11 @@ export function SearchableSelect<T extends object>({
           width: rect.width,
           zIndex: 9999,
         }}
-        className="overflow-hidden rounded-xl border border-[var(--hk-border)] bg-[var(--hk-card)] shadow-[var(--shadow-large)]"
+        className="overflow-hidden rounded-xl border border-[var(--sb-border)] bg-[var(--sb-card)] shadow-[var(--shadow-large)]"
       >
         <div ref={listRef} className="max-h-64 overflow-y-auto">
           {items.length === 0 && !isLoading ? (
-            <div className="p-4 text-center text-sm text-[var(--hk-sub)]">
+            <div className="p-4 text-center text-sm text-[var(--sb-sub)]">
               {emptyContent}
             </div>
           ) : (
@@ -219,7 +219,7 @@ export function SearchableSelect<T extends object>({
                     e.preventDefault();
                     handleSelection(getKey(item));
                   }}
-                  className={`cursor-pointer rounded-lg px-3 py-2 text-sm text-[var(--hk-text)] transition-colors ${
+                  className={`cursor-pointer rounded-lg px-3 py-2 text-sm text-[var(--sb-text)] transition-colors ${
                     idx === focusedIndex
                       ? "bg-[var(--surface-100)]"
                       : "hover:bg-[var(--surface-50)]"
@@ -273,7 +273,7 @@ export function SearchableSelect<T extends object>({
               {isLoading ? (
                 <Spinner />
               ) : (
-                <ChevronDownIcon className="h-4 w-4 text-[var(--hk-muted)]" />
+                <ChevronDownIcon className="h-4 w-4 text-[var(--sb-muted)]" />
               )}
             </div>
           }

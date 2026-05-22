@@ -46,7 +46,7 @@ export const HKTextarea = forwardRef<HTMLTextAreaElement, HKTextareaProps>(
     const id = useId();
     const borderClass = isInvalid
       ? "border-[#ef4444]"
-      : "border-[var(--hk-border)] hover:border-[var(--hk-orange)]/50 focus-within:border-[var(--hk-orange)]";
+      : "border-[var(--sb-border)] hover:border-[var(--sb-orange)]/50 focus-within:border-[var(--sb-orange)]";
 
     function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
       onValueChange?.(e.target.value);
@@ -58,14 +58,14 @@ export const HKTextarea = forwardRef<HTMLTextAreaElement, HKTextareaProps>(
         {label && (
           <label
             htmlFor={id}
-            className="text-xs font-semibold text-[var(--hk-sub)]"
+            className="text-xs font-semibold text-[var(--sb-sub)]"
           >
             {label}
             {isRequired && <span className="ml-0.5 text-[#ef4444]">*</span>}
           </label>
         )}
         <div
-          className={`rounded-xl border bg-[var(--hk-input)] transition-colors ${borderClass} ${isDisabled ? "opacity-50" : ""}`}
+          className={`rounded-xl border bg-[var(--sb-input)] transition-colors ${borderClass} ${isDisabled ? "opacity-50" : ""}`}
         >
           <textarea
             ref={ref}
@@ -79,7 +79,7 @@ export const HKTextarea = forwardRef<HTMLTextAreaElement, HKTextareaProps>(
             required={isRequired}
             rows={minRows}
             onChange={handleChange}
-            className="w-full resize-none bg-transparent p-3 text-sm font-medium text-[var(--hk-text)] outline-none placeholder:text-[var(--hk-muted)] disabled:cursor-not-allowed"
+            className="w-full resize-none bg-transparent p-3 text-sm font-medium text-[var(--sb-text)] outline-none placeholder:text-[var(--sb-muted)] disabled:cursor-not-allowed"
             style={maxRows ? { maxHeight: `${maxRows * 1.5}rem`, overflowY: "auto" } : undefined}
           />
         </div>
@@ -87,7 +87,7 @@ export const HKTextarea = forwardRef<HTMLTextAreaElement, HKTextareaProps>(
           <p className="text-xs text-[#ef4444]">{errorMessage}</p>
         )}
         {!isInvalid && description && (
-          <p className="text-xs text-[var(--hk-muted)]">{description}</p>
+          <p className="text-xs text-[var(--sb-muted)]">{description}</p>
         )}
       </div>
     );

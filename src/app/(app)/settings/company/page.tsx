@@ -12,8 +12,8 @@ import {
   TAX_REGISTRATION_TYPES,
 } from "@/lib/tenant-settings";
 import {
-  OR, PU, GR, SG, TYPE,
-  HKCard, HKToast, PageHeader, useIsMobile,
+  C, SG, TYPE,
+  HKCard, HKToast, useIsMobile,
 } from "@/components/ui/hk-design";
 import { HKButton } from "@/components/ui/HKButton";
 import { HKInput } from "@/components/ui/HKInput";
@@ -197,21 +197,15 @@ export default function CompanySettingsPage() {
   }
 
   const sectionTitleStyle: React.CSSProperties = {
-    fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG,
-    marginBottom: 20, paddingBottom: 12, borderBottom: "1px solid var(--hk-border)",
+    fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG,
+    marginBottom: 20, paddingBottom: 12, borderBottom: "1px solid var(--sb-border)",
   };
 
   return (
-    <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG }}>
+    <div style={{ fontFamily: SG }}>
       {toast && <HKToast message={toast.message} type={toast.type} />}
 
-      <PageHeader
-        title={t("settings.businessProfile")}
-        subtitle={t("company.subtitle")}
-        isMobile={isMobile}
-      />
-
-      <div style={{ padding: isMobile ? "0 14px 80px" : "0 28px 80px", maxWidth: 900, margin: "0 auto" }}>
+      <div>
         {/* Business Details */}
         <HKCard style={{ marginBottom: 16 }}>
           <p style={sectionTitleStyle}>{t("company.businessDetails")}</p>
@@ -222,8 +216,8 @@ export default function CompanySettingsPage() {
               <div
                 style={{
                   width: 120, height: 120, borderRadius: 16,
-                  border: `2px dashed ${displayedCompanyLogo ? PU + "60" : "var(--hk-border)"}`,
-                  background: displayedCompanyLogo ? PU + "05" : "var(--hk-bg)",
+                  border: `2px dashed ${displayedCompanyLogo ? C.info : "var(--sb-border)"}`,
+                  background: displayedCompanyLogo ? C.infoSoft : "var(--sb-surface-alt)",
                   display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden",
                 }}
               >
@@ -232,10 +226,10 @@ export default function CompanySettingsPage() {
                   <img src={displayedCompanyLogo} alt="Logo" style={{ width: "100%", height: "100%", objectFit: "contain", padding: 8 }} />
                 ) : (
                   <div style={{ textAlign: "center", padding: 16 }}>
-                    <svg width="32" height="32" fill="none" stroke="var(--hk-border)" viewBox="0 0 24 24">
+                    <svg width="32" height="32" fill="none" stroke="var(--sb-border)" viewBox="0 0 24 24">
                       <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} />
                     </svg>
-                    <p style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: "var(--hk-sub)", marginTop: 6, fontFamily: SG }}>
+                    <p style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: "var(--sb-sub)", marginTop: 6, fontFamily: SG }}>
                       {t("company.businessLogo")}
                     </p>
                   </div>
@@ -245,8 +239,8 @@ export default function CompanySettingsPage() {
                 <button
                   onClick={() => document.getElementById("logo-input")?.click()}
                   style={{
-                    padding: "8px 14px", borderRadius: 10, background: PU + "12", border: `1px solid ${PU}33`,
-                    color: PU, fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: 600, cursor: "pointer",
+                    padding: "8px 14px", borderRadius: 10, background: C.infoSoft, border: `1px solid ${C.info}44`,
+                    color: C.info, fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: 600, cursor: "pointer",
                   }}
                 >
                   {displayedCompanyLogo ? t("common.change") : t("common.upload")}
@@ -257,7 +251,7 @@ export default function CompanySettingsPage() {
                     aria-label="Remove logo"
                     style={{
                       width: 34, height: 34, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center",
-                      background: OR + "12", border: `1px solid ${OR}33`, cursor: "pointer", color: OR,
+                      background: C.negativeSoft, border: `1px solid ${C.negative}33`, cursor: "pointer", color: C.negative,
                     }}
                   >
                     <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -296,11 +290,11 @@ export default function CompanySettingsPage() {
             <HKInput label={t("company.defaultTax")} placeholder="0" type="number" value={defaultTaxPercent} onValueChange={setDefaultTaxPercent} endContent={<span className="text-default-400">%</span>} description={t("bills.autoTaxNote")} />
             <div
               style={{
-                borderRadius: 12, border: "1px solid var(--hk-border)", background: "var(--hk-bg)",
-                padding: "14px 16px", fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG,
+                borderRadius: 12, border: "1px solid var(--sb-border)", background: "var(--sb-surface-alt)",
+                padding: "14px 16px", fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG,
               }}
             >
-              <p style={{ fontWeight: 700, color: "var(--hk-text)", marginBottom: 4 }}>{t("company.taxRegistrationType")}</p>
+              <p style={{ fontWeight: 700, color: "var(--sb-text)", marginBottom: 4 }}>{t("company.taxRegistrationType")}</p>
               {taxRegistrationType === "REGISTERED" ? t("company.taxRegistrationHelp.registered") : t("company.taxRegistrationHelp.unregistered")}
             </div>
           </div>
@@ -310,7 +304,7 @@ export default function CompanySettingsPage() {
         {/* Bank Account */}
         <HKCard style={{ marginBottom: 16 }}>
           <p style={sectionTitleStyle}>Bank Account Details</p>
-          <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG, marginBottom: 16, marginTop: -12 }}>
+          <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG, marginBottom: 16, marginTop: -12 }}>
             Shown on every invoice footer. Helps customers pay via NEFT / IMPS.
           </p>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 14 }}>
@@ -328,19 +322,19 @@ export default function CompanySettingsPage() {
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16 }}>
             <div
               style={{
-                borderRadius: 14, border: "1px solid var(--hk-border)", padding: "18px 20px",
+                borderRadius: 14, border: "1px solid var(--sb-border)", padding: "18px 20px",
                 display: "flex", flexDirection: "column", gap: 12,
               }}
             >
               <div>
-                <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, marginBottom: 6 }}>Tally ko Bhejo</p>
-                <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG }}>Export vouchers and party balances to a Tally XML file for your CA.</p>
+                <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, marginBottom: 6 }}>Tally ko Bhejo</p>
+                <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG }}>Export vouchers and party balances to a Tally XML file for your CA.</p>
               </div>
               <button
                 onClick={() => router.push("/settings/tally-export")}
                 style={{
-                  padding: "10px 18px", borderRadius: 10, background: PU + "12", border: `1px solid ${PU}33`,
-                  color: PU, fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: 700, cursor: "pointer", alignSelf: "flex-start",
+                  padding: "10px 18px", borderRadius: 10, background: C.infoSoft, border: `1px solid ${C.info}44`,
+                  color: C.info, fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: 700, cursor: "pointer", alignSelf: "flex-start",
                 }}
               >
                 Start Export
@@ -348,19 +342,19 @@ export default function CompanySettingsPage() {
             </div>
             <div
               style={{
-                borderRadius: 14, border: "1px solid var(--hk-border)", padding: "18px 20px",
+                borderRadius: 14, border: "1px solid var(--sb-border)", padding: "18px 20px",
                 display: "flex", flexDirection: "column", gap: 12,
               }}
             >
               <div>
-                <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, marginBottom: 6 }}>Tally se Laao</p>
-                <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG }}>Import historical vouchers and party balances from Tally into HisaabKitaab.</p>
+                <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, marginBottom: 6 }}>Tally se Laao</p>
+                <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG }}>Import historical vouchers and party balances from Tally into SoloBooks.</p>
               </div>
               <button
                 onClick={() => router.push("/settings/tally-import")}
                 style={{
-                  padding: "10px 18px", borderRadius: 10, background: "var(--hk-badge)", border: "1px solid var(--hk-border)",
-                  color: "var(--hk-text)", fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: 700, cursor: "pointer", alignSelf: "flex-start",
+                  padding: "10px 18px", borderRadius: 10, background: "var(--sb-surface-alt)", border: "1px solid var(--sb-border)",
+                  color: "var(--sb-text)", fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: 700, cursor: "pointer", alignSelf: "flex-start",
                 }}
               >
                 Start Import
@@ -377,24 +371,24 @@ export default function CompanySettingsPage() {
         {/* Danger Zone */}
         <div
           style={{
-            borderRadius: 20, border: `1px solid ${OR}33`, background: OR + "05",
+            borderRadius: 20, border: `1px solid ${C.negative}33`, background: C.negativeSoft,
             padding: "20px 24px", display: "flex", flexDirection: isMobile ? "column" : "row",
             justifyContent: "space-between", alignItems: isMobile ? "flex-start" : "center", gap: 16,
           }}
         >
           <div>
-            <p style={{ fontSize: TYPE.body, fontWeight: 700, color: OR, fontFamily: SG, display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <p style={{ fontSize: TYPE.body, fontWeight: 700, color: C.negative, fontFamily: SG, display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
               <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} /></svg>
               {t("company.dangerZone")}
             </p>
-            <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG }}>{t("company.dangerSubtitle")}</p>
+            <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG }}>{t("company.dangerSubtitle")}</p>
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
             <button
               onClick={handleResetLocalData}
               style={{
-                padding: "10px 18px", borderRadius: 12, background: OR + "12", border: `1px solid ${OR}44`,
-                color: OR, fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: 700, cursor: "pointer",
+                padding: "10px 18px", borderRadius: 12, background: C.negativeSoft, border: `1px solid ${C.negative}44`,
+                color: C.negative, fontFamily: SG, fontSize: TYPE.bodySmall, fontWeight: 700, cursor: "pointer",
               }}
             >
               {t("company.resetOfflineStorage")}

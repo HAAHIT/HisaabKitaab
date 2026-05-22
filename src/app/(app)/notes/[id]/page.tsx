@@ -74,7 +74,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
 
   useEffect(() => {
     const el = document.createElement("style");
-    el.setAttribute("data-hk-print", "1");
+    el.setAttribute("data-sb-print", "1");
     el.textContent = PRINT_CSS;
     document.head.appendChild(el);
     return () => { document.head.removeChild(el); };
@@ -90,8 +90,8 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
 
   if (loading) {
     return (
-      <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG }}>
-        <div style={{ height: 57, borderBottom: "1px solid var(--hk-border)", background: "var(--hk-nav)" }} />
+      <div style={{ background: "var(--sb-bg)", minHeight: "100%", fontFamily: SG }}>
+        <div style={{ height: 57, borderBottom: "1px solid var(--sb-border)", background: "var(--sb-nav)" }} />
         <div style={{ padding: "24px 20px", maxWidth: 860, margin: "0 auto" }}>
           <HKSkeleton className="h-[500px] w-full rounded-2xl" />
         </div>
@@ -101,10 +101,10 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
 
   if (!note) {
     return (
-      <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ background: "var(--sb-bg)", minHeight: "100%", fontFamily: SG, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ textAlign: "center", padding: 40 }}>
           <div style={{ fontSize: 48, marginBottom: 12 }}>📋</div>
-          <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", marginBottom: 8 }}>Note nahi mila</p>
+          <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", marginBottom: 8 }}>Note nahi mila</p>
           <button
             onClick={() => router.push("/notes")}
             style={{ marginTop: 16, padding: "10px 22px", borderRadius: 12, background: OR, color: "white", border: "none", fontFamily: SG, fontSize: TYPE.body, fontWeight: 700, cursor: "pointer" }}
@@ -131,7 +131,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
   const docTitle = note.narration?.split(" against ")[0] || `Note #${note.id.slice(0, 8)}`;
 
   return (
-    <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG }}>
+    <div style={{ background: "var(--sb-bg)", minHeight: "100%", fontFamily: SG }}>
       {toast && <HKToast message={toast.message} type={toast.type} />}
 
       {/* Top bar */}
@@ -139,7 +139,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
         className="no-print"
         style={{
           position: "sticky", top: 0, zIndex: 50,
-          background: "var(--hk-nav)", borderBottom: "1px solid var(--hk-border)",
+          background: "var(--sb-nav)", borderBottom: "1px solid var(--sb-border)",
           display: "flex", alignItems: "center", justifyContent: "space-between",
           padding: "0 20px", height: 57,
         }}
@@ -148,12 +148,12 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
           <button
             onClick={() => router.push("/notes")}
             style={{
-              width: 36, height: 36, borderRadius: 10, border: "1px solid var(--hk-border)",
-              background: "var(--hk-card)", display: "flex", alignItems: "center",
+              width: 36, height: 36, borderRadius: 10, border: "1px solid var(--sb-border)",
+              background: "var(--sb-card)", display: "flex", alignItems: "center",
               justifyContent: "center", cursor: "pointer",
             }}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--hk-text)" strokeWidth="2" strokeLinecap="round">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--sb-text)" strokeWidth="2" strokeLinecap="round">
               <path d="M19 12H5M12 5l-7 7 7 7" />
             </svg>
           </button>
@@ -164,7 +164,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
             }}>
               {docLabel}
             </span>
-            <span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: IN }}>
+            <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: IN }}>
               {fmtDate(note.entryDate)}
             </span>
           </div>
@@ -173,8 +173,8 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
           <button
             onClick={() => window.print()}
             style={{
-              padding: "7px 16px", borderRadius: 10, border: "1px solid var(--hk-border)",
-              background: "var(--hk-card)", color: "var(--hk-text)", fontFamily: SG,
+              padding: "7px 16px", borderRadius: 10, border: "1px solid var(--sb-border)",
+              background: "var(--sb-card)", color: "var(--sb-text)", fontFamily: SG,
               fontSize: TYPE.bodySmall, fontWeight: 600, cursor: "pointer",
             }}
           >
@@ -197,15 +197,15 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
                   {docLabel}
                 </span>
               </div>
-              <h1 style={{ fontSize: isMobile ? TYPE.h1Mobile : TYPE.h1, fontWeight: 800, color: "var(--hk-text)", marginBottom: 4, fontFamily: IN }}>
+              <h1 style={{ fontSize: isMobile ? TYPE.h1Mobile : TYPE.h1, fontWeight: 800, color: "var(--sb-text)", marginBottom: 4, fontFamily: IN }}>
                 {docTitle}
               </h1>
-              <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)" }}>
+              <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)" }}>
                 {fmtDate(note.entryDate)} · by {note.createdBy}
               </p>
             </div>
             <div style={{ textAlign: "right" }}>
-              <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", marginBottom: 4 }}>Grand Total</p>
+              <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", marginBottom: 4 }}>Grand Total</p>
               <p style={{ fontSize: TYPE.numLarge, fontWeight: 800, color: accentColor, fontFamily: IN }}>
                 {isCredit ? `(${fmtINR(note.grandTotal)})` : `+${fmtINR(note.grandTotal)}`}
               </p>
@@ -217,7 +217,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16, marginBottom: 16 }}>
           {/* Party */}
           <HKCard>
-            <p style={{ fontSize: TYPE.caption, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", color: "var(--hk-sub)", marginBottom: 10 }}>
+            <p style={{ fontSize: TYPE.caption, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", color: "var(--sb-sub)", marginBottom: 10 }}>
               {isCredit ? "Customer" : "Vendor"}
             </p>
             {note.partyName ? (
@@ -230,7 +230,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
                   {note.partyName[0].toUpperCase()}
                 </div>
                 <div>
-                  <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)" }}>{note.partyName}</p>
+                  <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)" }}>{note.partyName}</p>
                   {note.partyId && (
                     <button
                       className="no-print"
@@ -246,24 +246,24 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
                 </div>
               </div>
             ) : (
-              <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)" }}>—</p>
+              <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)" }}>—</p>
             )}
           </HKCard>
 
           {/* Reference */}
           <HKCard>
-            <p style={{ fontSize: TYPE.caption, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", color: "var(--hk-sub)", marginBottom: 10 }}>
+            <p style={{ fontSize: TYPE.caption, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", color: "var(--sb-sub)", marginBottom: 10 }}>
               Reference
             </p>
             {note.originalInvoiceNo && (
               <div style={{ marginBottom: 8 }}>
-                <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)" }}>Original Invoice</p>
-                <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", fontFamily: IN }}>{note.originalInvoiceNo}</p>
+                <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)" }}>Original Invoice</p>
+                <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)", fontFamily: IN }}>{note.originalInvoiceNo}</p>
               </div>
             )}
             {note.reasonForIssuance && (
               <div>
-                <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)" }}>Reason</p>
+                <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)" }}>Reason</p>
                 <span style={{
                   fontSize: TYPE.bodySmall, fontWeight: 600, color: accentColor,
                   background: accentBg, padding: "3px 9px", borderRadius: 7,
@@ -273,36 +273,36 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
               </div>
             )}
             {!note.originalInvoiceNo && !note.reasonForIssuance && (
-              <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)" }}>{note.narration}</p>
+              <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)" }}>{note.narration}</p>
             )}
           </HKCard>
         </div>
 
         {/* Journal lines */}
         <HKCard style={{ marginBottom: 16 }}>
-          <p style={{ fontSize: TYPE.label, fontWeight: 700, color: "var(--hk-text)", marginBottom: 16 }}>Journal Entries</p>
+          <p style={{ fontSize: TYPE.label, fontWeight: 700, color: "var(--sb-text)", marginBottom: 16 }}>Journal Entries</p>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  <th style={{ padding: "8px 10px", textAlign: "left", fontSize: TYPE.caption, fontWeight: 700, color: "var(--hk-sub)", borderBottom: "1px solid var(--hk-border)", textTransform: "uppercase", letterSpacing: "0.8px" }}>#</th>
-                  <th style={{ padding: "8px 10px", textAlign: "left", fontSize: TYPE.caption, fontWeight: 700, color: "var(--hk-sub)", borderBottom: "1px solid var(--hk-border)", textTransform: "uppercase", letterSpacing: "0.8px" }}>Account</th>
-                  <th style={{ padding: "8px 10px", textAlign: "right", fontSize: TYPE.caption, fontWeight: 700, color: "var(--hk-sub)", borderBottom: "1px solid var(--hk-border)", textTransform: "uppercase", letterSpacing: "0.8px" }}>Debit</th>
-                  <th style={{ padding: "8px 10px", textAlign: "right", fontSize: TYPE.caption, fontWeight: 700, color: "var(--hk-sub)", borderBottom: "1px solid var(--hk-border)", textTransform: "uppercase", letterSpacing: "0.8px" }}>Credit</th>
+                  <th style={{ padding: "8px 10px", textAlign: "left", fontSize: TYPE.caption, fontWeight: 700, color: "var(--sb-sub)", borderBottom: "1px solid var(--sb-border)", textTransform: "uppercase", letterSpacing: "0.8px" }}>#</th>
+                  <th style={{ padding: "8px 10px", textAlign: "left", fontSize: TYPE.caption, fontWeight: 700, color: "var(--sb-sub)", borderBottom: "1px solid var(--sb-border)", textTransform: "uppercase", letterSpacing: "0.8px" }}>Account</th>
+                  <th style={{ padding: "8px 10px", textAlign: "right", fontSize: TYPE.caption, fontWeight: 700, color: "var(--sb-sub)", borderBottom: "1px solid var(--sb-border)", textTransform: "uppercase", letterSpacing: "0.8px" }}>Debit</th>
+                  <th style={{ padding: "8px 10px", textAlign: "right", fontSize: TYPE.caption, fontWeight: 700, color: "var(--sb-sub)", borderBottom: "1px solid var(--sb-border)", textTransform: "uppercase", letterSpacing: "0.8px" }}>Credit</th>
                 </tr>
               </thead>
               <tbody>
                 {note.lines.map((line, i) => (
                   <tr key={line.id}>
-                    <td style={{ padding: "10px", fontSize: TYPE.bodySmall, color: "var(--hk-sub)", borderBottom: "1px solid var(--hk-border)", width: 36 }}>{i + 1}</td>
-                    <td style={{ padding: "10px", fontSize: TYPE.body, fontWeight: 600, color: "var(--hk-text)", borderBottom: "1px solid var(--hk-border)" }}>
+                    <td style={{ padding: "10px", fontSize: TYPE.bodySmall, color: "var(--sb-sub)", borderBottom: "1px solid var(--sb-border)", width: 36 }}>{i + 1}</td>
+                    <td style={{ padding: "10px", fontSize: TYPE.body, fontWeight: 600, color: "var(--sb-text)", borderBottom: "1px solid var(--sb-border)" }}>
                       {ACCOUNT_LABELS[line.accountCode] || line.accountCode}
-                      {line.partyName && <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", marginLeft: 8 }}>({line.partyName})</span>}
+                      {line.partyName && <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", marginLeft: 8 }}>({line.partyName})</span>}
                     </td>
-                    <td style={{ padding: "10px", textAlign: "right", fontFamily: IN, fontSize: TYPE.body, color: line.debit > 0 ? OR : "var(--hk-sub)", fontWeight: line.debit > 0 ? 700 : 400, borderBottom: "1px solid var(--hk-border)" }}>
+                    <td style={{ padding: "10px", textAlign: "right", fontFamily: IN, fontSize: TYPE.body, color: line.debit > 0 ? OR : "var(--sb-sub)", fontWeight: line.debit > 0 ? 700 : 400, borderBottom: "1px solid var(--sb-border)" }}>
                       {line.debit > 0 ? fmtINR(line.debit) : "—"}
                     </td>
-                    <td style={{ padding: "10px", textAlign: "right", fontFamily: IN, fontSize: TYPE.body, color: line.credit > 0 ? GR : "var(--hk-sub)", fontWeight: line.credit > 0 ? 700 : 400, borderBottom: "1px solid var(--hk-border)" }}>
+                    <td style={{ padding: "10px", textAlign: "right", fontFamily: IN, fontSize: TYPE.body, color: line.credit > 0 ? GR : "var(--sb-sub)", fontWeight: line.credit > 0 ? 700 : 400, borderBottom: "1px solid var(--sb-border)" }}>
                       {line.credit > 0 ? fmtINR(line.credit) : "—"}
                     </td>
                   </tr>
@@ -316,12 +316,12 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16, marginBottom: 24 }}>
           {/* Balance effect */}
           <HKCard>
-            <p style={{ fontSize: TYPE.label, fontWeight: 700, color: "var(--hk-text)", marginBottom: 12 }}>Balance Effect</p>
+            <p style={{ fontSize: TYPE.label, fontWeight: 700, color: "var(--sb-text)", marginBottom: 12 }}>Balance Effect</p>
             <div style={{ padding: "14px 16px", borderRadius: 12, background: accentBg, border: `1px solid ${accentColor}33` }}>
               <p style={{ fontSize: TYPE.body, fontWeight: 700, color: accentColor }}>
                 {isCredit ? "Balance kam hua by" : "Balance badhha by"} {fmtFull(note.grandTotal)}
               </p>
-              <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", marginTop: 4 }}>
+              <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", marginTop: 4 }}>
                 {isCredit
                   ? "Customer ka outstanding balance reduce ho gaya."
                   : "Vendor ka outstanding balance increase ho gaya."}
@@ -331,22 +331,22 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
 
           {/* Totals */}
           <HKCard>
-            <p style={{ fontSize: TYPE.label, fontWeight: 700, color: "var(--hk-text)", marginBottom: 12 }}>Summary</p>
+            <p style={{ fontSize: TYPE.label, fontWeight: 700, color: "var(--sb-text)", marginBottom: 12 }}>Summary</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {subtotal > 0 && (
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)" }}>Subtotal</span>
-                  <span style={{ fontSize: TYPE.bodySmall, fontFamily: IN, fontWeight: 600, color: "var(--hk-text)" }}>{fmtINR(subtotal)}</span>
+                  <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)" }}>Subtotal</span>
+                  <span style={{ fontSize: TYPE.bodySmall, fontFamily: IN, fontWeight: 600, color: "var(--sb-text)" }}>{fmtINR(subtotal)}</span>
                 </div>
               )}
               {taxLines.map((l, i) => (
                 <div key={i} style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)" }}>{ACCOUNT_LABELS[l.accountCode] || l.accountCode}</span>
-                  <span style={{ fontSize: TYPE.bodySmall, fontFamily: IN, fontWeight: 600, color: "var(--hk-text)" }}>{fmtINR(l.debit + l.credit)}</span>
+                  <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)" }}>{ACCOUNT_LABELS[l.accountCode] || l.accountCode}</span>
+                  <span style={{ fontSize: TYPE.bodySmall, fontFamily: IN, fontWeight: 600, color: "var(--sb-text)" }}>{fmtINR(l.debit + l.credit)}</span>
                 </div>
               ))}
-              <div style={{ borderTop: "1px solid var(--hk-border)", paddingTop: 10, marginTop: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)" }}>Grand Total</span>
+              <div style={{ borderTop: "1px solid var(--sb-border)", paddingTop: 10, marginTop: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)" }}>Grand Total</span>
                 <span style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: accentColor, fontFamily: IN }}>
                   {isCredit ? `(${fmtINR(note.grandTotal)})` : `+${fmtINR(note.grandTotal)}`}
                 </span>
@@ -436,7 +436,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
         </div>
 
         <div style={{ marginTop: 28, borderTop: "1px solid #ccc", paddingTop: 8, display: "flex", justifyContent: "space-between", fontSize: "7pt", color: "#aaa" }}>
-          <div>Generated by HisaabKitaab</div>
+          <div>Generated by SoloBooks</div>
           <div>Page 1 of 1</div>
         </div>
       </div>

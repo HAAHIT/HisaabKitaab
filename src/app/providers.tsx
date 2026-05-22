@@ -35,7 +35,7 @@ export function Providers({
 
   return (
     <LanguageProvider key={initialLanguage} initialLanguage={initialLanguage}>
-      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+      <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
         {children}
         <Toaster richColors position="bottom-right" />
       </ThemeProvider>

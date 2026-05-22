@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { SettingsShell } from "@/components/ui/SettingsShell";
 
 export default async function SettingsLayout({
   children,
@@ -16,5 +17,5 @@ export default async function SettingsLayout({
     redirect("/dashboard");
   }
 
-  return children;
+  return <SettingsShell>{children}</SettingsShell>;
 }

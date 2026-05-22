@@ -387,6 +387,11 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
   function goBack() { setError(null); setStep((s) => Math.max(s - 1, 0) as typeof s); }
   function skipAndNext() { setError(null); setStep((s) => Math.min(s + 1, TOTAL_STEPS - 1) as typeof s); }
 
+  async function skipAll() {
+    const ok = await saveStep1();
+    if (ok) setStep((TOTAL_STEPS - 1) as typeof step);
+  }
+
   // ── Inline add helpers ────────────────────────────────────────────────────
 
   function addParty() {
@@ -413,7 +418,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "var(--hk-bg)", display: "flex", fontFamily: SG }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "var(--sb-bg)", display: "flex", fontFamily: SG }}>
 
       {/* ═══════════════════════════════════════════════════════════
           LEFT SIDEBAR — step list (desktop only)
@@ -423,8 +428,8 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
           width: 288,
           flexShrink: 0,
           minHeight: "100vh",
-          background: "var(--hk-card)",
-          borderRight: "1.5px solid var(--hk-border)",
+          background: "var(--sb-card)",
+          borderRight: "1.5px solid var(--sb-border)",
           display: "flex",
           flexDirection: "column",
           position: "sticky",
@@ -443,7 +448,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
               fontSize: 10, fontWeight: 800, letterSpacing: "2.5px",
               textTransform: "uppercase", opacity: 0.9, fontFamily: SG, margin: 0,
             }}>
-              HisaabKitaab
+              SoloBooks
             </p>
             <h1 style={{
               marginTop: 10, fontSize: 22, fontWeight: 800,
@@ -481,7 +486,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                         : isActive
                         ? `linear-gradient(135deg, ${OR}, ${PU})`
                         : "transparent",
-                      border: `2px solid ${isComplete ? GR : isActive ? "transparent" : "var(--hk-border)"}`,
+                      border: `2px solid ${isComplete ? GR : isActive ? "transparent" : "var(--sb-border)"}`,
                       display: "flex", alignItems: "center", justifyContent: "center",
                       boxShadow: isActive ? `0 2px 10px ${OR}44` : "none",
                       transition: "all 0.25s",
@@ -489,7 +494,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                       {isComplete
                         ? <span style={{ color: "white", fontSize: 13, fontWeight: 800, lineHeight: 1 }}>✓</span>
                         : <span style={{
-                            color: isActive ? "white" : "var(--hk-muted)",
+                            color: isActive ? "white" : "var(--sb-muted)",
                             fontSize: 11, fontWeight: 800, fontFamily: IN,
                           }}>{i + 1}</span>
                       }
@@ -500,14 +505,14 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                       <p style={{
                         fontSize: TYPE.body,
                         fontWeight: isActive ? 700 : isComplete ? 600 : 500,
-                        color: isComplete ? GR : isActive ? "var(--hk-text)" : "var(--hk-sub)",
+                        color: isComplete ? GR : isActive ? "var(--sb-text)" : "var(--sb-sub)",
                         fontFamily: SG, margin: 0, lineHeight: 1.3,
                       }}>
                         {meta.label}
                       </p>
                       <p style={{
                         fontSize: TYPE.caption,
-                        color: isComplete ? GR + "bb" : isActive ? OR : "var(--hk-muted)",
+                        color: isComplete ? GR + "bb" : isActive ? OR : "var(--sb-muted)",
                         fontFamily: SG, marginTop: 2,
                       }}>
                         {isComplete ? "Ho gaya ✓" : isActive ? "Abhi yahan ho" : meta.desc}
@@ -520,7 +525,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                     <div style={{
                       width: 2, height: 10,
                       marginLeft: 26, marginTop: 1, marginBottom: 1,
-                      background: i < step ? GR + "55" : "var(--hk-border)",
+                      background: i < step ? GR + "55" : "var(--sb-border)",
                       borderRadius: 1,
                       transition: "background 0.3s",
                     }} />
@@ -531,8 +536,8 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
           </div>
 
           {/* Footer: note + theme toggle */}
-          <div style={{ padding: "14px 20px", borderTop: "1px solid var(--hk-border)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-            <p style={{ fontSize: TYPE.caption, color: "var(--hk-muted)", fontFamily: SG, lineHeight: 1.5, margin: 0 }}>
+          <div style={{ padding: "14px 20px", borderTop: "1px solid var(--sb-border)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", fontFamily: SG, lineHeight: 1.5, margin: 0 }}>
               Baad mein Settings mein<br />edit kar sakte ho.
             </p>
             {themeMounted && (
@@ -541,9 +546,9 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                 title={resolvedTheme === "dark" ? "Light mode" : "Dark mode"}
                 style={{
                   width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-                  border: "1px solid var(--hk-border)", background: "var(--hk-badge)",
+                  border: "1px solid var(--sb-border)", background: "var(--sb-badge)",
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  color: "var(--hk-sub)", cursor: "pointer",
+                  color: "var(--sb-sub)", cursor: "pointer",
                 }}
               >
                 {resolvedTheme === "dark" ? (
@@ -575,7 +580,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
             flexShrink: 0,
           }}>
             <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: "2px", textTransform: "uppercase", opacity: 0.85, fontFamily: SG, margin: 0 }}>
-              HisaabKitaab
+              SoloBooks
             </p>
             <h1 style={{ fontSize: 22, fontWeight: 800, fontFamily: SG, marginTop: 6, marginBottom: 0 }}>
               Apna Karobaar Shuru Karo
@@ -587,21 +592,21 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
         {isMobile && (
           <div style={{
             padding: "12px 20px 10px",
-            background: "var(--hk-card)",
-            borderBottom: "1px solid var(--hk-border)",
+            background: "var(--sb-card)",
+            borderBottom: "1px solid var(--sb-border)",
             flexShrink: 0,
           }}>
             <div style={{ display: "flex", gap: 3, marginBottom: 8 }}>
               {STEP_META.map((_, i) => (
                 <div key={i} style={{
                   flex: 1, height: 4, borderRadius: 2,
-                  background: i < step ? GR : i === step ? OR : "var(--hk-border)",
+                  background: i < step ? GR : i === step ? OR : "var(--sb-border)",
                   transition: "background 0.3s",
                 }} />
               ))}
             </div>
-            <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG, margin: 0 }}>
-              Step {step + 1} of {TOTAL_STEPS} · <strong style={{ color: "var(--hk-text)" }}>{STEP_META[step].label}</strong>
+            <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG, margin: 0 }}>
+              Step {step + 1} of {TOTAL_STEPS} · <strong style={{ color: "var(--sb-text)" }}>{STEP_META[step].label}</strong>
             </p>
           </div>
         )}
@@ -620,7 +625,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                 <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 6, marginTop: 0 }}>
                   Business ki Details
                 </h2>
-                <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", marginBottom: 28, fontFamily: SG }}>
+                <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", marginBottom: 28, fontFamily: SG }}>
                   Apna karobaar ka naam aur jagah batao.
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -642,7 +647,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                 <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 6, marginTop: 0 }}>
                   GSTIN hai?
                 </h2>
-                <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", marginBottom: 28, fontFamily: SG }}>
+                <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", marginBottom: 28, fontFamily: SG }}>
                   Optional, par bills mein zaroori hota hai. Baad mein bhi add kar sakte ho.
                 </p>
                 <HKInput
@@ -667,11 +672,11 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                 <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 6, marginTop: 0 }}>
                   Bank Account Jodo
                 </h2>
-                <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", marginBottom: 28, fontFamily: SG }}>
+                <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", marginBottom: 28, fontFamily: SG }}>
                   Month-end reconciliation ke liye helpful hoga. Skip kar sakte ho.
                 </p>
                 {banks.map((bank, i) => (
-                  <div key={i} style={{ marginBottom: 16, padding: "16px", borderRadius: 14, border: "1.5px solid var(--hk-border)", background: "var(--hk-card)" }}>
+                  <div key={i} style={{ marginBottom: 16, padding: "16px", borderRadius: 14, border: "1.5px solid var(--sb-border)", background: "var(--sb-card)" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
                       <p style={{ fontSize: TYPE.body, fontWeight: 700, fontFamily: SG, margin: 0 }}>Account {i + 1}</p>
                       {banks.length > 1 && (
@@ -687,7 +692,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                     </div>
                   </div>
                 ))}
-                <button onClick={addBankRow} style={{ width: "100%", padding: "13px", borderRadius: 12, border: `1.5px dashed var(--hk-border)`, background: "transparent", cursor: "pointer", color: PU, fontSize: TYPE.body, fontWeight: 700, fontFamily: SG }}>
+                <button onClick={addBankRow} style={{ width: "100%", padding: "13px", borderRadius: 12, border: `1.5px dashed var(--sb-border)`, background: "transparent", cursor: "pointer", color: PU, fontSize: TYPE.body, fontWeight: 700, fontFamily: SG }}>
                   + Aur Account Jodo
                 </button>
               </div>
@@ -699,26 +704,26 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                 <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 6, marginTop: 0 }}>
                   Customers / Suppliers
                 </h2>
-                <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", marginBottom: 28, fontFamily: SG }}>
+                <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", marginBottom: 28, fontFamily: SG }}>
                   Kuch logon ko add karo, ya baad mein Udhar Khata mein karo.
                 </p>
                 {parties.map((p, i) => (
                   <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10, padding: "12px 16px", borderRadius: 10, background: (p.type === "CUSTOMER" ? PU : OR) + "14", border: `1px solid ${(p.type === "CUSTOMER" ? PU : OR)}22` }}>
                     <div style={{ flex: 1 }}>
                       <p style={{ fontSize: TYPE.body, fontWeight: 700, fontFamily: SG, margin: 0 }}>{p.name}</p>
-                      <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG, marginTop: 2 }}>{p.type === "CUSTOMER" ? "Grahak" : "Supplier"}{p.phone ? ` · ${p.phone}` : ""}</p>
+                      <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG, marginTop: 2 }}>{p.type === "CUSTOMER" ? "Grahak" : "Supplier"}{p.phone ? ` · ${p.phone}` : ""}</p>
                     </div>
                     <button onClick={() => removeParty(i)} style={{ background: "none", border: "none", cursor: "pointer", color: OR, fontSize: 14 }}>✕</button>
                   </div>
                 ))}
-                <div style={{ padding: "16px", borderRadius: 14, border: "1.5px solid var(--hk-border)", background: "var(--hk-card)", marginTop: parties.length ? 12 : 0 }}>
-                  <p style={{ fontSize: TYPE.caption, fontWeight: 700, textTransform: "uppercase", color: "var(--hk-sub)", letterSpacing: "0.5px", marginBottom: 12, fontFamily: SG }}>Nayi party add karo</p>
+                <div style={{ padding: "16px", borderRadius: 14, border: "1.5px solid var(--sb-border)", background: "var(--sb-card)", marginTop: parties.length ? 12 : 0 }}>
+                  <p style={{ fontSize: TYPE.caption, fontWeight: 700, textTransform: "uppercase", color: "var(--sb-sub)", letterSpacing: "0.5px", marginBottom: 12, fontFamily: SG }}>Nayi party add karo</p>
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     <HKInput label="Naam *" value={addPartyName} onValueChange={setAddPartyName} />
                     <HKInput label="Phone (optional)" value={addPartyPhone} onValueChange={setAddPartyPhone} type="tel" />
                     <div style={{ display: "flex", gap: 8 }}>
                       {(["CUSTOMER", "VENDOR"] as const).map((t) => (
-                        <button key={t} onClick={() => setAddPartyType(t)} style={{ flex: 1, padding: "10px", borderRadius: 8, border: `1.5px solid ${addPartyType === t ? (t === "CUSTOMER" ? PU : OR) : "var(--hk-border)"}`, background: addPartyType === t ? (t === "CUSTOMER" ? PU + "18" : OR + "18") : "transparent", color: addPartyType === t ? (t === "CUSTOMER" ? PU : OR) : "var(--hk-sub)", fontSize: TYPE.bodySmall, fontWeight: 700, cursor: "pointer", fontFamily: SG }}>
+                        <button key={t} onClick={() => setAddPartyType(t)} style={{ flex: 1, padding: "10px", borderRadius: 8, border: `1.5px solid ${addPartyType === t ? (t === "CUSTOMER" ? PU : OR) : "var(--sb-border)"}`, background: addPartyType === t ? (t === "CUSTOMER" ? PU + "18" : OR + "18") : "transparent", color: addPartyType === t ? (t === "CUSTOMER" ? PU : OR) : "var(--sb-sub)", fontSize: TYPE.bodySmall, fontWeight: 700, cursor: "pointer", fontFamily: SG }}>
                           {t === "CUSTOMER" ? "Grahak" : "Supplier"}
                         </button>
                       ))}
@@ -738,20 +743,20 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                 <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 6, marginTop: 0 }}>
                   Items / Saman
                 </h2>
-                <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", marginBottom: 28, fontFamily: SG }}>
+                <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", marginBottom: 28, fontFamily: SG }}>
                   Jo cheezein tum bechte ho — bills mein fast pick ke liye.
                 </p>
                 {items.map((it, i) => (
                   <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10, padding: "12px 16px", borderRadius: 10, background: GR + "10", border: `1px solid ${GR}22` }}>
                     <div style={{ flex: 1 }}>
                       <p style={{ fontSize: TYPE.body, fontWeight: 700, fontFamily: SG, margin: 0 }}>{it.name}</p>
-                      <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG, marginTop: 2 }}>{it.unit} · ₹{it.rate || "0"}{it.hsnCode ? ` · HSN ${it.hsnCode}` : ""}</p>
+                      <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG, marginTop: 2 }}>{it.unit} · ₹{it.rate || "0"}{it.hsnCode ? ` · HSN ${it.hsnCode}` : ""}</p>
                     </div>
                     <button onClick={() => removeItem(i)} style={{ background: "none", border: "none", cursor: "pointer", color: OR, fontSize: 14 }}>✕</button>
                   </div>
                 ))}
-                <div style={{ padding: "16px", borderRadius: 14, border: "1.5px solid var(--hk-border)", background: "var(--hk-card)", marginTop: items.length ? 12 : 0 }}>
-                  <p style={{ fontSize: TYPE.caption, fontWeight: 700, textTransform: "uppercase", color: "var(--hk-sub)", letterSpacing: "0.5px", marginBottom: 12, fontFamily: SG }}>Naya item add karo</p>
+                <div style={{ padding: "16px", borderRadius: 14, border: "1.5px solid var(--sb-border)", background: "var(--sb-card)", marginTop: items.length ? 12 : 0 }}>
+                  <p style={{ fontSize: TYPE.caption, fontWeight: 700, textTransform: "uppercase", color: "var(--sb-sub)", letterSpacing: "0.5px", marginBottom: 12, fontFamily: SG }}>Naya item add karo</p>
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     <HKInput label="Item ka naam *" value={addItemName} onValueChange={setAddItemName} />
                     <div style={{ display: "flex", gap: 10 }}>
@@ -771,7 +776,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                 <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 6, marginTop: 0 }}>
                   Bill ka Format Chuno
                 </h2>
-                <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", marginBottom: 28, fontFamily: SG }}>
+                <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", marginBottom: 28, fontFamily: SG }}>
                   Ye default template har naye bill mein auto-select hoga. Baad mein Settings mein change kar sakte ho.
                 </p>
 
@@ -785,15 +790,15 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                         style={{
                           display: "flex", alignItems: "center", gap: 16,
                           padding: "16px 18px", borderRadius: 14, textAlign: "left",
-                          border: `2px solid ${active ? OR : "var(--hk-border)"}`,
-                          background: active ? OR + "0a" : "var(--hk-card)",
+                          border: `2px solid ${active ? OR : "var(--sb-border)"}`,
+                          background: active ? OR + "0a" : "var(--sb-card)",
                           cursor: "pointer", transition: "all 0.15s", width: "100%",
                         }}
                       >
                         {/* Selection indicator */}
                         <div style={{
                           width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
-                          border: `2px solid ${active ? OR : "var(--hk-border)"}`,
+                          border: `2px solid ${active ? OR : "var(--sb-border)"}`,
                           background: active ? OR : "transparent",
                           display: "flex", alignItems: "center", justifyContent: "center",
                           transition: "all 0.15s",
@@ -808,12 +813,12 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <p style={{
                             fontSize: TYPE.bodyLarge, fontWeight: active ? 700 : 600,
-                            color: active ? OR : "var(--hk-text)", fontFamily: SG, margin: 0,
+                            color: active ? OR : "var(--sb-text)", fontFamily: SG, margin: 0,
                           }}>
                             {preset.label}
                           </p>
                           <p style={{
-                            fontSize: TYPE.bodySmall, color: "var(--hk-sub)",
+                            fontSize: TYPE.bodySmall, color: "var(--sb-sub)",
                             fontFamily: SG, marginTop: 3,
                           }}>
                             {preset.desc}
@@ -824,7 +829,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                   })}
                 </div>
 
-                <p style={{ fontSize: TYPE.caption, color: "var(--hk-muted)", fontFamily: SG, marginTop: 16 }}>
+                <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", fontFamily: SG, marginTop: 16 }}>
                   Columns baad mein Settings → Templates mein edit ho sakta hai.
                 </p>
               </div>
@@ -836,7 +841,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                 <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 6, marginTop: 0 }}>
                   CA ka Contact
                 </h2>
-                <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", marginBottom: 28, fontFamily: SG }}>
+                <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", marginBottom: 28, fontFamily: SG }}>
                   Tally file bhejna hoga toh CA ka email auto-fill ho jayega.
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -853,14 +858,14 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                 <div style={{ textAlign: isMobile ? "center" : "left", marginBottom: 32 }}>
                   <p style={{ fontSize: 56, marginBottom: 16, lineHeight: 1 }}>🎉</p>
                   <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 8, marginTop: 0 }}>Sab Set Hai!</h2>
-                  <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", fontFamily: SG }}>
+                  <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", fontFamily: SG }}>
                     Business details, GSTIN, bank accounts — sab save ho gaya. Pehla bill banao aur shuru karo!
                   </p>
                 </div>
 
                 {/* Summary card */}
-                <div style={{ background: "var(--hk-card)", borderRadius: 16, border: "1.5px solid var(--hk-border)", overflow: "hidden" }}>
-                  <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--hk-border)", background: OR + "08" }}>
+                <div style={{ background: "var(--sb-card)", borderRadius: 16, border: "1.5px solid var(--sb-border)", overflow: "hidden" }}>
+                  <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--sb-border)", background: OR + "08" }}>
                     <p style={{ fontSize: TYPE.caption, fontWeight: 800, textTransform: "uppercase", color: OR, letterSpacing: "1px", fontFamily: SG, margin: 0 }}>Setup Summary</p>
                   </div>
                   <div style={{ padding: "4px 0" }}>
@@ -877,18 +882,34 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                       <div key={row.label} style={{
                         display: "flex", justifyContent: "space-between", alignItems: "center",
                         padding: "13px 20px",
-                        borderBottom: idx < arr.length - 1 ? "1px solid var(--hk-border)" : "none",
+                        borderBottom: idx < arr.length - 1 ? "1px solid var(--sb-border)" : "none",
                       }}>
-                        <p style={{ fontSize: TYPE.body, color: "var(--hk-sub)", fontFamily: SG, margin: 0 }}>{row.label}</p>
-                        <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, margin: 0, maxWidth: "55%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "right" }}>{row.value}</p>
+                        <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", fontFamily: SG, margin: 0 }}>{row.label}</p>
+                        <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0, maxWidth: "55%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "right" }}>{row.value}</p>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                <p style={{ fontSize: TYPE.bodySmall, color: "var(--hk-muted)", fontFamily: SG, marginTop: 16 }}>
+                <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-muted)", fontFamily: SG, marginTop: 16 }}>
                   Settings mein sab kuch baad mein edit kar sakte ho.
                 </p>
+              </div>
+            )}
+
+            {step === 0 && businessName.trim() && (
+              <div style={{ marginTop: 20, textAlign: "center" }}>
+                <button
+                  onClick={() => void skipAll()}
+                  disabled={saving}
+                  style={{
+                    background: "none", border: "none", cursor: "pointer",
+                    fontSize: TYPE.bodySmall, color: "var(--sb-muted)", fontFamily: SG,
+                    textDecoration: "underline", textUnderlineOffset: 3,
+                  }}
+                >
+                  Skip — Start using app
+                </button>
               </div>
             )}
 
@@ -909,8 +930,8 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
         {/* ── Bottom nav ─────────────────────────────────────── */}
         <div style={{
           flexShrink: 0,
-          background: "var(--hk-card)",
-          borderTop: "1.5px solid var(--hk-border)",
+          background: "var(--sb-card)",
+          borderTop: "1.5px solid var(--sb-border)",
           padding: isMobile ? "14px 20px" : "18px 48px",
           display: "flex",
           justifyContent: "space-between",
@@ -923,8 +944,8 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
             disabled={step === 0 || saving}
             style={{
               padding: "13px 22px", borderRadius: 12,
-              border: "1.5px solid var(--hk-border)",
-              background: "transparent", color: "var(--hk-text)",
+              border: "1.5px solid var(--sb-border)",
+              background: "transparent", color: "var(--sb-text)",
               fontSize: TYPE.body, fontWeight: 700, cursor: step === 0 ? "default" : "pointer",
               opacity: step === 0 ? 0 : 1, fontFamily: SG, minHeight: 48,
               transition: "opacity 0.2s",
@@ -941,8 +962,8 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                 disabled={saving}
                 style={{
                   padding: "13px 20px", borderRadius: 12,
-                  border: "1.5px solid var(--hk-border)",
-                  background: "transparent", color: "var(--hk-sub)",
+                  border: "1.5px solid var(--sb-border)",
+                  background: "transparent", color: "var(--sb-sub)",
                   fontSize: TYPE.body, fontWeight: 600, cursor: "pointer",
                   fontFamily: SG, minHeight: 48,
                 }}
@@ -957,7 +978,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                 disabled={saving}
                 style={{
                   padding: "13px 28px", borderRadius: 12, border: "none",
-                  background: saving ? "var(--hk-border)" : `linear-gradient(135deg, ${OR}, ${PU})`,
+                  background: saving ? "var(--sb-border)" : `linear-gradient(135deg, ${OR}, ${PU})`,
                   color: "white", fontSize: TYPE.body, fontWeight: 700,
                   cursor: saving ? "wait" : "pointer",
                   fontFamily: SG, minHeight: 48,
@@ -973,7 +994,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                 disabled={saving}
                 style={{
                   padding: "13px 28px", borderRadius: 12, border: "none",
-                  background: saving ? "var(--hk-border)" : `linear-gradient(135deg, ${GR}, ${PU})`,
+                  background: saving ? "var(--sb-border)" : `linear-gradient(135deg, ${GR}, ${PU})`,
                   color: "white", fontSize: TYPE.body, fontWeight: 700,
                   cursor: saving ? "wait" : "pointer",
                   fontFamily: SG, minHeight: 48,

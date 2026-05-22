@@ -4,7 +4,7 @@
  * Parses Tally ERP 9 / Tally Prime XML export format into
  * structured vouchers and party masters that can be committed to the DB.
  *
- * Handles both HisaabKitaab-exported XML (re-import) and native Tally exports.
+ * Handles both SoloBooks-exported XML (re-import) and native Tally exports.
  */
 
 import { XMLParser } from "fast-xml-parser";
@@ -12,7 +12,7 @@ import type { AccountCode } from "./chart-of-accounts";
 import { stateNameToGstCode } from "./gst-states";
 
 // ── Ledger name → AccountCode mapping ────────────────────────────────────────
-// Covers HisaabKitaab account names and common Tally short names.
+// Covers SoloBooks account names and common Tally short names.
 
 const LEDGER_TO_CODE: Record<string, AccountCode> = {
   // Income / Expense
@@ -20,7 +20,7 @@ const LEDGER_TO_CODE: Record<string, AccountCode> = {
   Sales: "SALES",
   "Purchase Account": "PURCHASE",
   Purchase: "PURCHASE",
-  // Party groups (used in HisaabKitaab exports)
+  // Party groups (used in SoloBooks exports)
   "Sundry Debtors": "SUNDRY_DEBTORS",
   "Sundry Creditors": "SUNDRY_CREDITORS",
   // Payment instruments
@@ -184,14 +184,14 @@ function resolveAccountCodeByPattern(ledgerName: string): AccountCode | null {
 }
 
 /**
- * Maps Tally's voucher type name strings (both HisaabKitaab exports and
+ * Maps Tally's voucher type name strings (both SoloBooks exports and
  * native TallyPrime exports) to our internal VoucherType enum values.
  */
 const VOUCHER_TYPE_MAP: Record<
   string,
   "SALES" | "PURCHASE" | "RECEIPT" | "PAYMENT" | "JOURNAL"
 > = {
-  // Standard types (HisaabKitaab exports + native Tally)
+  // Standard types (SoloBooks exports + native Tally)
   Sales: "SALES",
   Purchase: "PURCHASE",
   Receipt: "RECEIPT",
@@ -244,7 +244,7 @@ export type ParsedVoucher = {
   lines: ParsedLedgerLine[];
   totalDebit: number;
   /**
-   * Tally's <REMOTEID> or <GUID> tag value with "HisaabKitaab-" prefix stripped.
+   * Tally's <REMOTEID> or <GUID> tag value with "SoloBooks-" prefix stripped.
    * Used as the primary idempotency key on import (stored in JournalEntry.remoteId).
    * Null for native Tally XML that does not carry a REMOTEID.
    */
@@ -383,7 +383,7 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
   }
 
   // Navigate to TALLYMESSAGE array.
-  // HisaabKitaab XML uses BODY > IMPORTDATA > REQUESTDATA.
+  // SoloBooks XML uses BODY > IMPORTDATA > REQUESTDATA.
   // Native Tally exports use BODY > DATA > TALLYMESSAGE, and some exports
   // wrap LEDGER/VOUCHER nodes directly in BODY > DATA > COLLECTION.
   const messageCollections: unknown[][] = [];
@@ -523,7 +523,7 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
     const v = msg["VOUCHER"] as Record<string, unknown>;
 
     const typeName = String(v["VOUCHERTYPENAME"] ?? v["@_VCHTYPE"] ?? "").trim();
-    // Case-insensitive lookup (native Tally vs HisaabKitaab exports)
+    // Case-insensitive lookup (native Tally vs SoloBooks exports)
     const upperTypeName = typeName.toUpperCase();
     let voucherType: "SALES" | "PURCHASE" | "RECEIPT" | "PAYMENT" | "JOURNAL" | undefined = undefined;
 
@@ -573,16 +573,16 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       null;
 
     // Extract Tally's REMOTEID / GUID for idempotent re-import.
-    // HisaabKitaab exports prefix the journal entry ID with "HisaabKitaab-";
+    // SoloBooks exports prefix the journal entry ID with "SoloBooks-";
     // strip the prefix so we store only the raw UUID for DB lookup.
     // Native Tally exports may have a GUID without our prefix — store as-is.
     const rawRemoteId =
       String(v["REMOTEID"] ?? v["GUID"] ?? "").trim() || null;
     const remoteId = rawRemoteId
-      ? rawRemoteId.replace(/^HisaabKitaab-/i, "")
+      ? rawRemoteId.replace(/^SoloBooks-/i, "")
       : null;
 
-    // Support both ALLLEDGERENTRIES.LIST (HisaabKitaab exports) and
+    // Support both ALLLEDGERENTRIES.LIST (SoloBooks exports) and
     // LEDGERENTRIES.LIST (native Tally DayBook / daybook exports)
     const rawEntries = v["ALLLEDGERENTRIES.LIST"] ?? v["LEDGERENTRIES.LIST"];
     const entryList = asArray(rawEntries as Record<string, unknown> | Record<string, unknown>[] | undefined);
@@ -617,7 +617,7 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       //    Sales A/c" looks like a sales income account but Tally treats it
       //    as a party ledger). PARTYLEDGERNAME is authoritative — honor it
       //    over any pattern heuristic.
-      // 1. Exact match in LEDGER_TO_CODE (HisaabKitaab exports + common Tally names)
+      // 1. Exact match in LEDGER_TO_CODE (SoloBooks exports + common Tally names)
       // 2. Group-based: use PARENT from LEDGER records in the same XML
       // 3. Pattern-based: heuristic on the ledger name itself
       // 4. Fallback: infer from voucher type (assumes unknown name is a party)
@@ -648,7 +648,7 @@ export function parseTallyXml(xmlText: string): TallyParseResult {
       //   → the ledger name itself IS the party
       // - Unknown ledger (fell through to fallback) AND resolved to party account
       //   → the ledger name itself IS the party (native Tally naming convention)
-      // - Exact-match to a party account code (e.g. HisaabKitaab "Sundry Debtors")
+      // - Exact-match to a party account code (e.g. SoloBooks "Sundry Debtors")
       //   → use voucher-level PARTYLEDGERNAME or BILLALLOCATIONS
       // - Non-party account → null
       const partyName = isVoucherDeclaredParty

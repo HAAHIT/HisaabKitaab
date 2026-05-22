@@ -9,9 +9,9 @@ import { evaluateRow, type ColumnDef } from "@/lib/formula";
 import { GST_STATE_CODES } from "@/lib/gst-states";
 import ItemCatalogPicker from "@/components/bills/ItemCatalogPicker";
 import {
-  GR, AM, OR, PU, SG, IN, TYPE, TOUCH,
+  GR, AM, OR, PU, SG, IN, TYPE, TOUCH, DISPLAY,
   fmtFull,
-  HKCard, HKToast, PageHeader, useIsMobile,
+  HKCard, HKToast, useIsMobile,
 } from "@/components/ui/hk-design";
 import { HKButton } from "@/components/ui/HKButton";
 import { HKInput } from "@/components/ui/HKInput";
@@ -78,9 +78,9 @@ function Section({ title, action, children }: { title?: string; action?: React.R
       {(title || action) && (
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "16px 20px 12px", borderBottom: "1px solid var(--hk-border)",
+          padding: "16px 20px 12px", borderBottom: "1px solid var(--sb-border)",
         }}>
-          {title && <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, margin: 0 }}>{title}</p>}
+          {title && <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>{title}</p>}
           {action}
         </div>
       )}
@@ -319,16 +319,16 @@ export default function EditBillPage({
 
   if (loading) {
     return (
-      <div style={{ background: "var(--hk-bg)", minHeight: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: 40 }}>
-        <p style={{ color: "var(--hk-sub)", fontFamily: SG, fontSize: TYPE.body }}>Loading bill data...</p>
+      <div style={{ background: "var(--sb-bg)", minHeight: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: 40 }}>
+        <p style={{ color: "var(--sb-sub)", fontFamily: SG, fontSize: TYPE.body }}>Loading bill data...</p>
       </div>
     );
   }
 
   if (!bill || !selectedTemplate) {
     return (
-      <div style={{ background: "var(--hk-bg)", minHeight: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: 40 }}>
-        <p style={{ color: "var(--hk-sub)", fontFamily: SG, fontSize: TYPE.body }}>Bill not found</p>
+      <div style={{ background: "var(--sb-bg)", minHeight: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: 40 }}>
+        <p style={{ color: "var(--sb-sub)", fontFamily: SG, fontSize: TYPE.body }}>Bill not found</p>
       </div>
     );
   }
@@ -337,31 +337,31 @@ export default function EditBillPage({
     <>
       {toast && <HKToast message={toast.message} type={toast.type} />}
 
-      <div style={{ background: "var(--hk-bg)", minHeight: "100%", fontFamily: SG }}>
-        <PageHeader
-          title="Edit Bill"
-          subtitle="Update the linked party and the invoice snapshot."
-          isMobile={isMobile}
-          action={
+      <div style={{ background: "var(--sb-bg)", minHeight: "100%", fontFamily: SG }}>
+        <div style={{ padding: isMobile ? "18px 14px 100px" : "24px 28px 60px", maxWidth: 1100, margin: "0 auto" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 18 }}>
             <button
               onClick={() => router.push(`/bills/${id}`)}
               style={{
-                height: TOUCH.secondary, padding: "0 16px",
-                borderRadius: 12, border: "1.5px solid var(--hk-border)",
-                background: "var(--hk-card)", color: "var(--hk-sub)",
-                fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG,
-                cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+                width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+                border: "1.5px solid var(--sb-border)", background: "var(--sb-card)",
+                boxShadow: "var(--sb-shadow-card)", color: "var(--sb-text)",
+                display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
               }}
             >
-              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M19 12H5M12 5l-7 7 7 7" />
+              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M15 18l-6-6 6-6" />
               </svg>
-              Bills
             </button>
-          }
-        />
-
-        <div style={{ padding: isMobile ? "0 14px 100px" : "0 28px 60px", maxWidth: 1100, margin: "0 auto" }}>
+            <div>
+              <h1 style={{ fontFamily: DISPLAY, fontSize: isMobile ? 24 : 30, fontWeight: 600, color: "var(--sb-text)", margin: 0, letterSpacing: "-0.01em", lineHeight: 1.2 }}>
+                Edit Bill
+              </h1>
+              <p style={{ fontSize: 14, fontWeight: 500, color: "var(--sb-sub)", marginTop: 4 }}>
+                Update the linked party and the invoice snapshot.
+              </p>
+            </div>
+          </div>
           {/* Template badge */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
             <span style={{
@@ -410,12 +410,12 @@ export default function EditBillPage({
           <HKCard style={{ marginBottom: 16, padding: 0 }}>
             <div style={{
               display: "flex", alignItems: "center", justifyContent: "space-between",
-              padding: "16px 20px 12px", borderBottom: "1px solid var(--hk-border)", flexWrap: "wrap", gap: 8,
+              padding: "16px 20px 12px", borderBottom: "1px solid var(--sb-border)", flexWrap: "wrap", gap: 8,
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, margin: 0 }}>Line Items</p>
-                <span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG }}>
-                  Subtotal: <span style={{ fontFamily: IN, fontWeight: 700, color: "var(--hk-text)" }}>{fmtFull(subtotal)}</span>
+                <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>Line Items</p>
+                <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG }}>
+                  Subtotal: <span style={{ fontFamily: IN, fontWeight: 700, color: "var(--sb-text)" }}>{fmtFull(subtotal)}</span>
                 </span>
                 <span style={{ fontSize: TYPE.bodySmall, color: PU, fontFamily: SG }}>
                   Total: <span style={{ fontFamily: IN, fontWeight: 800 }}>{fmtFull(grandTotal)}</span>
@@ -428,9 +428,9 @@ export default function EditBillPage({
                     style={{
                       height: TOUCH.secondary, padding: "0 12px",
                       borderRadius: 10, fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG,
-                      border: `1.5px solid ${hsnPerRow ? PU : "var(--hk-border)"}`,
+                      border: `1.5px solid ${hsnPerRow ? PU : "var(--sb-border)"}`,
                       background: hsnPerRow ? PU + "18" : "transparent",
-                      color: hsnPerRow ? PU : "var(--hk-sub)",
+                      color: hsnPerRow ? PU : "var(--sb-sub)",
                       cursor: "pointer",
                     }}
                     title="Add HSN/SAC code per line item for GSTR-1 Table 12"
@@ -471,15 +471,15 @@ export default function EditBillPage({
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: TYPE.bodySmall, fontFamily: SG }}>
                 <thead>
-                  <tr style={{ borderBottom: "1px solid var(--hk-border)", background: "var(--hk-badge)" }}>
-                    <th style={{ padding: "10px 12px", textAlign: "center", fontWeight: 600, color: "var(--hk-sub)", width: 40 }}>#</th>
+                  <tr style={{ borderBottom: "1px solid var(--sb-border)", background: "var(--sb-badge)" }}>
+                    <th style={{ padding: "10px 12px", textAlign: "center", fontWeight: 600, color: "var(--sb-sub)", width: 40 }}>#</th>
                     {hsnPerRow && taxPercent > 0 && (
-                      <th style={{ padding: "10px 12px", textAlign: "left", fontWeight: 600, color: "var(--hk-sub)", whiteSpace: "nowrap" }}>
+                      <th style={{ padding: "10px 12px", textAlign: "left", fontWeight: 600, color: "var(--sb-sub)", whiteSpace: "nowrap" }}>
                         HSN/SAC
                       </th>
                     )}
                     {selectedTemplate.columns.map((column) => (
-                      <th key={column.id} style={{ padding: "10px 12px", textAlign: "left", fontWeight: 600, color: "var(--hk-sub)", whiteSpace: "nowrap" }}>
+                      <th key={column.id} style={{ padding: "10px 12px", textAlign: "left", fontWeight: 600, color: "var(--sb-sub)", whiteSpace: "nowrap" }}>
                         {column.name}
                         {column.type === "formula" && <span style={{ color: AM, marginLeft: 4, fontSize: 10 }}>fx</span>}
                       </th>
@@ -489,8 +489,8 @@ export default function EditBillPage({
                 </thead>
                 <tbody>
                   {rows.map((row, rowIndex) => (
-                    <tr key={rowIndex} style={{ borderBottom: "1px solid var(--hk-border)" }}>
-                      <td style={{ padding: "8px 12px", textAlign: "center", color: "var(--hk-sub)", fontSize: TYPE.bodySmall }}>{rowIndex + 1}</td>
+                    <tr key={rowIndex} style={{ borderBottom: "1px solid var(--sb-border)" }}>
+                      <td style={{ padding: "8px 12px", textAlign: "center", color: "var(--sb-sub)", fontSize: TYPE.bodySmall }}>{rowIndex + 1}</td>
                       {hsnPerRow && taxPercent > 0 && (
                         <td style={{ padding: "8px 8px" }}>
                           <input
@@ -499,7 +499,7 @@ export default function EditBillPage({
                             placeholder="e.g. 9983"
                             value={String(row._hsnCode || "")}
                             onChange={(e) => updateRowHsn(rowIndex, e.target.value)}
-                            style={{ minWidth: 80, maxWidth: 100, background: "transparent", color: "var(--hk-text)", fontSize: TYPE.bodySmall, fontFamily: SG, outline: "none", border: "none", borderBottom: "1.5px solid var(--hk-border)", padding: "2px 0" }}
+                            style={{ minWidth: 80, maxWidth: 100, background: "transparent", color: "var(--sb-text)", fontSize: TYPE.bodySmall, fontFamily: SG, outline: "none", border: "none", borderBottom: "1.5px solid var(--sb-border)", padding: "2px 0" }}
                           />
                         </td>
                       )}
@@ -517,7 +517,7 @@ export default function EditBillPage({
                               aria-label={`Row ${rowIndex + 1} ${column.name}`}
                               value={String(row[column.id] || "")}
                               onChange={(e) => updateCell(rowIndex, column.id, e.target.value)}
-                              style={{ minWidth: 80, background: "transparent", color: "var(--hk-text)", fontSize: TYPE.bodySmall, fontFamily: IN, outline: "none", border: "none", borderBottom: "1.5px solid var(--hk-border)", padding: "2px 0" }}
+                              style={{ minWidth: 80, background: "transparent", color: "var(--sb-text)", fontSize: TYPE.bodySmall, fontFamily: IN, outline: "none", border: "none", borderBottom: "1.5px solid var(--sb-border)", padding: "2px 0" }}
                             />
                           ) : column.type === "dropdown" && column.options ? (
                             <HKSelect
@@ -537,7 +537,7 @@ export default function EditBillPage({
                               aria-label={`Row ${rowIndex + 1} ${column.name}`}
                               value={String(row[column.id] || "")}
                               onChange={(e) => updateCell(rowIndex, column.id, e.target.value)}
-                              style={{ minWidth: 130, background: "transparent", color: "var(--hk-text)", fontSize: TYPE.bodySmall, fontFamily: SG, outline: "none", border: "none", borderBottom: "1.5px solid var(--hk-border)", padding: "2px 0" }}
+                              style={{ minWidth: 130, background: "transparent", color: "var(--sb-text)", fontSize: TYPE.bodySmall, fontFamily: SG, outline: "none", border: "none", borderBottom: "1.5px solid var(--sb-border)", padding: "2px 0" }}
                             />
                           ) : (
                             <input
@@ -545,7 +545,7 @@ export default function EditBillPage({
                               aria-label={`Row ${rowIndex + 1} ${column.name}`}
                               value={String(row[column.id] || "")}
                               onChange={(e) => updateCell(rowIndex, column.id, e.target.value)}
-                              style={{ minWidth: 120, background: "transparent", color: "var(--hk-text)", fontSize: TYPE.bodySmall, fontFamily: SG, outline: "none", border: "none", borderBottom: "1.5px solid var(--hk-border)", padding: "2px 0" }}
+                              style={{ minWidth: 120, background: "transparent", color: "var(--sb-text)", fontSize: TYPE.bodySmall, fontFamily: SG, outline: "none", border: "none", borderBottom: "1.5px solid var(--sb-border)", padding: "2px 0" }}
                             />
                           )}
                         </td>
@@ -558,7 +558,7 @@ export default function EditBillPage({
                           style={{
                             width: 28, height: 28, borderRadius: 8, border: "none",
                             background: "transparent",
-                            color: rows.length <= 1 ? "var(--hk-border)" : OR,
+                            color: rows.length <= 1 ? "var(--sb-border)" : OR,
                             cursor: rows.length <= 1 ? "default" : "pointer",
                             display: "flex", alignItems: "center", justifyContent: "center",
                           }}
@@ -585,11 +585,11 @@ export default function EditBillPage({
 
             {/* Summary */}
             <HKCard style={{ background: PU + "08", border: `1px solid ${PU}20` }}>
-              <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--hk-text)", fontFamily: SG, marginBottom: 16 }}>Summary</p>
+              <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, marginBottom: 16 }}>Summary</p>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                  <span style={{ color: "var(--hk-sub)", fontSize: TYPE.body, fontFamily: SG, flexShrink: 0 }}>Bill Date</span>
+                  <span style={{ color: "var(--sb-sub)", fontSize: TYPE.body, fontFamily: SG, flexShrink: 0 }}>Bill Date</span>
                   <HKInput
                     type="date"
                     aria-label="Bill date"
@@ -601,13 +601,13 @@ export default function EditBillPage({
                 </div>
 
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: "var(--hk-sub)", fontSize: TYPE.body, fontFamily: SG }}>Subtotal</span>
-                  <span style={{ fontFamily: IN, fontWeight: 600, color: "var(--hk-text)" }}>{fmtFull(subtotal)}</span>
+                  <span style={{ color: "var(--sb-sub)", fontSize: TYPE.body, fontFamily: SG }}>Subtotal</span>
+                  <span style={{ fontFamily: IN, fontWeight: 600, color: "var(--sb-text)" }}>{fmtFull(subtotal)}</span>
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ color: "var(--hk-sub)", fontSize: TYPE.body, fontFamily: SG }}>{taxLabelText}</span>
+                    <span style={{ color: "var(--sb-sub)", fontSize: TYPE.body, fontFamily: SG }}>{taxLabelText}</span>
                     <HKInput
                       type="number"
                       aria-label="Tax percentage"
@@ -615,14 +615,14 @@ export default function EditBillPage({
                       onValueChange={(value) => setTaxPercent(Number.parseFloat(value) || 0)}
                       size="sm"
                       className="w-20"
-                      endContent={<span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)" }}>%</span>}
+                      endContent={<span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)" }}>%</span>}
                     />
                   </div>
-                  <span style={{ fontFamily: IN, fontWeight: 600, color: "var(--hk-text)" }}>{fmtFull(taxAmount)}</span>
+                  <span style={{ fontFamily: IN, fontWeight: 600, color: "var(--sb-text)" }}>{fmtFull(taxAmount)}</span>
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG, margin: 0 }}>{t("bills.autoTaxNote")}</p>
+                  <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG, margin: 0 }}>{t("bills.autoTaxNote")}</p>
                   <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
                     <input
                       type="checkbox"
@@ -630,12 +630,12 @@ export default function EditBillPage({
                       onChange={(e) => setIsInterState(e.target.checked)}
                       style={{ accentColor: PU }}
                     />
-                    <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>Inter-state (IGST)</span>
+                    <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}>Inter-state (IGST)</span>
                   </label>
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                  <span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG, flexShrink: 0 }}>Place of Supply</span>
+                  <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG, flexShrink: 0 }}>Place of Supply</span>
                   <HKSelect
                     aria-label="Place of supply"
                     placeholder="State select karo"
@@ -653,7 +653,7 @@ export default function EditBillPage({
 
                 {!hsnPerRow && (
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-                    <span style={{ fontSize: TYPE.bodySmall, color: "var(--hk-sub)", fontFamily: SG, flexShrink: 0 }}>HSN/SAC Code</span>
+                    <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG, flexShrink: 0 }}>HSN/SAC Code</span>
                     <HKInput
                       aria-label="HSN/SAC Code"
                       placeholder="e.g. 9983"
@@ -665,7 +665,7 @@ export default function EditBillPage({
                   </div>
                 )}
                 {hsnPerRow && taxPercent > 0 && (
-                  <p style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG, margin: 0 }}>
+                  <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG, margin: 0 }}>
                     HSN/SAC entered per row above (GSTR-1 Table 12)
                   </p>
                 )}
@@ -679,7 +679,7 @@ export default function EditBillPage({
                       disabled={grandTotal === 0}
                       style={{ accentColor: PU }}
                     />
-                    <span style={{ fontSize: TYPE.caption, color: "var(--hk-sub)", fontFamily: SG }}>Round off to nearest ₹</span>
+                    <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}>Round off to nearest ₹</span>
                   </label>
                   {enableRoundOff && roundOff !== 0 && (
                     <span style={{ fontSize: TYPE.bodySmall, fontFamily: IN, fontWeight: 600, color: roundOff > 0 ? GR : OR }}>
@@ -688,8 +688,8 @@ export default function EditBillPage({
                   )}
                 </div>
 
-                <div style={{ borderTop: "1px solid var(--hk-border)", paddingTop: 12, marginTop: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: TYPE.h2, fontWeight: 800, color: "var(--hk-text)", fontFamily: SG }}>Grand Total</span>
+                <div style={{ borderTop: "1px solid var(--sb-border)", paddingTop: 12, marginTop: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: TYPE.h2, fontWeight: 800, color: "var(--sb-text)", fontFamily: SG }}>Grand Total</span>
                   <span style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: PU, fontFamily: IN }}>{fmtFull(roundedGrandTotal)}</span>
                 </div>
               </div>
@@ -702,8 +702,8 @@ export default function EditBillPage({
               onClick={() => router.push(`/bills/${id}`)}
               style={{
                 height: TOUCH.primary, padding: "0 20px",
-                borderRadius: 12, border: "1.5px solid var(--hk-border)",
-                background: "var(--hk-card)", color: "var(--hk-sub)",
+                borderRadius: 12, border: "1.5px solid var(--sb-border)",
+                background: "var(--sb-card)", color: "var(--sb-sub)",
                 fontSize: TYPE.body, fontWeight: 600, fontFamily: SG,
                 cursor: "pointer",
               }}
@@ -715,9 +715,9 @@ export default function EditBillPage({
               disabled={savingAs === "FINAL"}
               style={{
                 height: TOUCH.primary, padding: "0 20px",
-                borderRadius: 12, border: "1.5px solid var(--hk-border)",
-                background: savingAs === "DRAFT" ? "var(--hk-badge)" : "var(--hk-card)",
-                color: "var(--hk-text)",
+                borderRadius: 12, border: "1.5px solid var(--sb-border)",
+                background: savingAs === "DRAFT" ? "var(--sb-badge)" : "var(--sb-card)",
+                color: "var(--sb-text)",
                 fontSize: TYPE.body, fontWeight: 600, fontFamily: SG,
                 cursor: savingAs === "FINAL" ? "not-allowed" : "pointer",
                 opacity: savingAs === "FINAL" ? 0.5 : 1,
