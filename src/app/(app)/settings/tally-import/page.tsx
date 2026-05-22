@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { type TranslationKey } from "@/lib/i18n/translations";
@@ -45,6 +45,16 @@ function TallyImportContent() {
   const [showFailures, setShowFailures] = useState(false);
   const [showRoundOff, setShowRoundOff] = useState(false);
 
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    };
+  }, []);
+
   useEffect(() => {
     fetch("/api/import/active")
       .then((r) => r.json())
@@ -62,7 +72,8 @@ function TallyImportContent() {
 
   function showToast(message: string, type: "success" | "error") {
     setToast({ message, type });
-    window.setTimeout(() => setToast(null), 3000);
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    toastTimeoutRef.current = setTimeout(() => setToast(null), 3000);
   }
 
   const handleFetchPreview = async () => {
@@ -106,14 +117,16 @@ function TallyImportContent() {
   };
 
   const pollStatus = (jobId: string) => {
-    const interval = setInterval(async () => {
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    pollIntervalRef.current = setInterval(async () => {
       try {
         const res = await fetch(`/api/import/status/${jobId}`);
         if (!res.ok) throw new Error("Failed to fetch job status");
         const data = await res.json();
         setJobProgress({ processed: data.processed, total: data.totalItems, status: data.status, failed: data.failed });
         if (data.status === "COMPLETED" || data.status === "FAILED") {
-          clearInterval(interval);
+          if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
           setImporting(false);
           setImportJobId(null);
           if (data.status === "COMPLETED") {

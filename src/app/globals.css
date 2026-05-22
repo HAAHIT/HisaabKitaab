@@ -198,6 +198,10 @@ body > * {
 
 .sb-bg { background: var(--sb-bg); }
 
+/* Login & register: pure white right-side panel in light mode only */
+.sb-auth-shell { --sb-bg: #ffffff; }
+.dark .sb-auth-shell { --sb-bg: #0b0b14; }
+
 /* ── Animations ───────────────────────────────────────── */
 @keyframes sb-spin    { to { transform: rotate(360deg); } }
 @keyframes sb-fade    { from { opacity: 0 } to { opacity: 1 } }
