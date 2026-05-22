@@ -357,11 +357,12 @@ export default function PurchaseDetailPage({ params }: { params: Promise<{ id: s
         </div>
 
         {confirmAction && (
-          <HKModal isOpen onClose={() => setConfirmAction(null)}>
+          <HKModal
+            isOpen
+            onClose={() => setConfirmAction(null)}
+            title={confirmAction === "FINAL" ? t("bills.detail.finalizeConfirmTitle" as TranslationKey) : t("bills.detail.cancelConfirmTitle" as TranslationKey)}
+          >
             <div style={{ padding: 20, fontFamily: SG }}>
-              <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", margin: "0 0 8px" }}>
-                {confirmAction === "FINAL" ? t("bills.detail.finalizeConfirmTitle" as TranslationKey) : t("bills.detail.cancelConfirmTitle" as TranslationKey)}
-              </p>
               <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", margin: "0 0 16px" }}>
                 {confirmAction === "FINAL" ? t("bills.detail.finalizeConfirmDesc" as TranslationKey) : t("bills.detail.cancelConfirmDesc" as TranslationKey)}
               </p>

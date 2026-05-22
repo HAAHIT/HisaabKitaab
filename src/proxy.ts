@@ -92,6 +92,7 @@ export async function proxy(request: NextRequest) {
 
   if (
     isPublicPath(pathname) ||
+    pathname === "/" ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
     pathname.includes(".")

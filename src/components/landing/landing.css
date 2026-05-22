@@ -1,0 +1,154 @@
+/* Landing page — self-contained light theme with royal blue primary.
+   All custom utilities and tokens are scoped under .solobooks-landing
+   so they don't bleed into the rest of the app. */
+
+.solobooks-landing {
+  --color-ink-950: #f8fafc;
+  --color-ink-900: #f1f5f9;
+  --color-ink-800: #e2e8f0;
+  --color-ink-700: #cbd5e1;
+  --color-ink-600: #94a3b8;
+  --color-ink-500: #64748b;
+  --color-ink-400: #475569;
+  --color-ink-300: #334155;
+  --color-ink-200: #1e293b;
+  --color-ink-100: #0f172a;
+
+  --color-blue-600: #1d4ed8;
+  --color-blue-500: #2563eb;
+  --color-blue-400: #3b82f6;
+  --color-blue-300: #60a5fa;
+
+  --color-amber-500: #d97706;
+  --color-amber-400: #f59e0b;
+  --color-amber-600: #b45309;
+
+  background: var(--color-ink-950);
+  color: var(--color-ink-100);
+  font-family: var(--font-inter), "Inter", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  color-scheme: light;
+}
+
+.solobooks-landing *::selection {
+  background: color-mix(in oklab, var(--color-blue-500) 25%, transparent);
+  color: white;
+}
+
+.solobooks-landing .font-display {
+  font-family: var(--font-eczar), "Eczar", Georgia, serif;
+  font-feature-settings: "ss01", "ss02";
+  letter-spacing: -0.02em;
+  font-weight: 500;
+}
+.solobooks-landing .font-mono {
+  font-family: "JetBrains Mono", "Fira Code", ui-monospace, Menlo, monospace;
+}
+
+.solobooks-landing .bg-grid {
+  background-image:
+    linear-gradient(to right, color-mix(in oklab, var(--color-blue-500) 6%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklab, var(--color-blue-500) 6%, transparent) 1px, transparent 1px);
+  background-size: 56px 56px;
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, black 30%, transparent 80%);
+          mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, black 30%, transparent 80%);
+}
+
+.solobooks-landing .bg-noise {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.4 0'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.5'/></svg>");
+}
+
+.solobooks-landing .glow-blue {
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--color-blue-500) 15%, transparent),
+    0 30px 80px -30px color-mix(in oklab, var(--color-blue-500) 20%, transparent);
+}
+
+.solobooks-landing .btn-primary {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  background: linear-gradient(180deg, var(--color-blue-500), var(--color-blue-600));
+  color: #ffffff;
+  font-weight: 600;
+  padding: 0.875rem 1.25rem;
+  border-radius: 999px;
+  transition: transform 200ms ease, box-shadow 200ms ease;
+  box-shadow: 0 12px 32px -12px color-mix(in oklab, var(--color-blue-500) 45%, transparent);
+}
+.solobooks-landing .btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 20px 48px -16px color-mix(in oklab, var(--color-blue-500) 55%, transparent);
+}
+.solobooks-landing .btn-primary:active { transform: translateY(0); }
+
+.solobooks-landing .btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.875rem 1.25rem;
+  border-radius: 999px;
+  color: var(--color-ink-200);
+  border: 1px solid color-mix(in oklab, var(--color-ink-200) 18%, transparent);
+  background: color-mix(in oklab, var(--color-ink-200) 4%, transparent);
+  backdrop-filter: blur(8px);
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.solobooks-landing .btn-ghost:hover {
+  background: color-mix(in oklab, var(--color-ink-200) 8%, transparent);
+  border-color: color-mix(in oklab, var(--color-ink-200) 28%, transparent);
+}
+
+.solobooks-landing .divider-tick {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  color: var(--color-blue-500);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.solobooks-landing .divider-tick::before {
+  content: "";
+  width: 28px;
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--color-blue-500));
+}
+
+.solobooks-landing .card {
+  position: relative;
+  border-radius: 1.25rem;
+  background: white;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 8px 24px -8px rgba(0,0,0,0.04);
+}
+
+.solobooks-landing .shine::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 70% 50% at 0% 0%, color-mix(in oklab, var(--color-blue-500) 6%, transparent), transparent 50%),
+    radial-gradient(ellipse 60% 40% at 100% 100%, color-mix(in oklab, var(--color-amber-500) 5%, transparent), transparent 60%);
+  pointer-events: none;
+}
+
+@keyframes solobooksMarquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.solobooks-landing .marquee-track { animation: solobooksMarquee 40s linear infinite; }
+
+@keyframes solobooksGlowPulse {
+  0%, 100% { opacity: 0.6 }
+  50% { opacity: 1 }
+}
+.solobooks-landing .glow-pulse { animation: solobooksGlowPulse 3.6s ease-in-out infinite; }
+
+@media (max-width: 768px) {
+  .solobooks-landing .bg-grid { background-size: 32px 32px; }
+}

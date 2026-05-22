@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { resolveWriteSession } from "@/lib/api-tenant";
+import { resolveSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 import { FEATURE_FLAGS } from "@/lib/feature-flags";
 
@@ -10,7 +10,7 @@ export async function DELETE(request: NextRequest) {
             return NextResponse.json({ error: "Feature disabled" }, { status: 404 });
         }
 
-        const sessionResolution = await resolveWriteSession(request);
+        const sessionResolution = await resolveSession(request);
         if (!sessionResolution.ok) return sessionResolution.response;
         const { tenantId, role } = sessionResolution.session;
 
