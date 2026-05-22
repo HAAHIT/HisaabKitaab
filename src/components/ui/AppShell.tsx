@@ -408,6 +408,7 @@ function SidePanel({
 
 function ThemeToggleMenuBtn() {
   const { resolvedTheme, setTheme } = useTheme();
+  const { t } = useLanguage();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   if (!mounted) return null;
@@ -424,7 +425,7 @@ function ThemeToggleMenuBtn() {
       onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
     >
       <span style={{ color: "var(--sb-sub)" }}>{isDark ? <Icons.sun /> : <Icons.moon />}</span>
-      <span style={{ fontWeight: 600, fontSize: 15 }}>{isDark ? "Light Mode" : "Dark Mode"}</span>
+      <span style={{ fontWeight: 600, fontSize: 15 }}>{isDark ? t("shell.lightMode") : t("shell.darkMode")}</span>
     </button>
   );
 }
@@ -732,7 +733,7 @@ export default function AppShell({
       </nav>
 
       {/* ── More Menu Side Panel ────────────────────────────── */}
-      <SidePanel open={moreSheetOpen} onClose={() => setMoreSheetOpen(false)} title="Menu">
+      <SidePanel open={moreSheetOpen} onClose={() => setMoreSheetOpen(false)} title={t("shell.menu")}>
         {/* User profile card */}
         <div style={{
           display: "flex", alignItems: "center", gap: 12,
@@ -779,7 +780,7 @@ export default function AppShell({
 
         {/* Karobaar section */}
         <p style={{ fontSize: 11, fontWeight: 700, color: "var(--sb-muted)", textTransform: "uppercase", letterSpacing: "0.5px", padding: "0 14px 6px", margin: 0, fontFamily: "var(--font-sans)" }}>
-          Karobaar
+          {t("shell.karobaar")}
         </p>
         {[
           { label: t("nav.payments"),     href: "/payments",     icon: <>{Icons.payments(false)}</> },
@@ -800,7 +801,7 @@ export default function AppShell({
 
         {/* Tools section — role-gated */}
         <p style={{ fontSize: 11, fontWeight: 700, color: "var(--sb-muted)", textTransform: "uppercase", letterSpacing: "0.5px", padding: "10px 14px 6px", margin: 0, fontFamily: "var(--font-sans)" }}>
-          Tools
+          {t("shell.tools")}
         </p>
         {[
           { label: t("nav.reports"),       href: "/reports",               icon: <Icons.reports />,  roles: ["ADMIN","ACCOUNTANT"] },
@@ -870,7 +871,7 @@ export default function AppShell({
           onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
         >
           <Icons.logout />
-          <span style={{ fontWeight: 600, fontSize: 15 }}>Sign Out</span>
+          <span style={{ fontWeight: 600, fontSize: 15 }}>{t("shell.signOut")}</span>
         </button>
       </SidePanel>
 

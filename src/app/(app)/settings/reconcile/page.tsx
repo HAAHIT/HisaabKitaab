@@ -231,7 +231,7 @@ export default function ReconcilePage() {
           </div>
 
           {loading && (
-            <p style={{ color: "var(--sb-sub)", fontSize: TYPE.body, fontFamily: SG }}>Loading...</p>
+            <p style={{ color: "var(--sb-sub)", fontSize: TYPE.body, fontFamily: SG }}>{t("common.loading" as TranslationKey)}</p>
           )}
 
           {!loading && statements.length === 0 && (
@@ -270,14 +270,14 @@ export default function ReconcilePage() {
                     border: `1px solid ${s.isReconciled ? GR : AM}33`,
                     fontFamily: SG,
                   }}>
-                    {s.isReconciled ? "Reconciled" : "Pending"}
+                    {s.isReconciled ? t("reconcile.statusReconciled" as TranslationKey) : t("reconcile.statusPending" as TranslationKey)}
                   </span>
                 </div>
                 <div style={{ display: "flex", gap: 20, marginTop: 12 }}>
                   {[
-                    { l: "Total Rows", v: s.rowCount },
-                    { l: "Matched", v: s.matchedCount, c: GR },
-                    { l: "Unmatched", v: s.unmatchedCount, c: s.unmatchedCount > 0 ? AM : "var(--sb-sub)" },
+                    { l: t("reconcile.statTotalRows" as TranslationKey), v: s.rowCount },
+                    { l: t("reconcile.statMatched" as TranslationKey), v: s.matchedCount, c: GR },
+                    { l: t("reconcile.statUnmatched" as TranslationKey), v: s.unmatchedCount, c: s.unmatchedCount > 0 ? AM : "var(--sb-sub)" },
                   ].map((stat) => (
                     <div key={stat.l}>
                       <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG, margin: 0 }}>{stat.l}</p>

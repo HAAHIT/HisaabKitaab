@@ -800,19 +800,7 @@ export default function PaymentsListPage() {
         }
       >
         <p style={{ fontFamily: SG, fontSize: TYPE.body, color: "var(--sb-sub)", lineHeight: 1.6 }}>
-          {useLanguage().language === "en" ? (
-            <>
-              Are you sure? The payment of <span style={{ fontWeight: 700, color: "var(--sb-text)" }}>{fmtFull(paymentToDelete?.amount || 0)}</span> will be permanently deleted and the balance impact will be reversed.
-            </>
-          ) : useLanguage().language === "hi" ? (
-            <>
-              क्या आप निश्चित हैं? <span style={{ fontWeight: 700, color: "var(--sb-text)" }}>{fmtFull(paymentToDelete?.amount || 0)}</span> का भुगतान स्थायी रूप से हटा दिया जाएगा और बैलेंस का प्रभाव उलट दिया जाएगा।
-            </>
-          ) : (
-            <>
-              Kya aap sure hain? <span style={{ fontWeight: 700, color: "var(--sb-text)" }}>{fmtFull(paymentToDelete?.amount || 0)}</span> ka payment permanently delete ho jayega aur balance reverse ho jayega.
-            </>
-          )}
+          {t("payments.deleteBody" as TranslationKey)}
         </p>
       </HKModal>
     </div>

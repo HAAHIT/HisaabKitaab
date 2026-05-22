@@ -192,8 +192,8 @@ export default function TallyExportPage() {
 
                 {periodType === "custom" && (
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                    <HKInput type="date" label="From" value={customFrom} onValueChange={setCustomFrom} />
-                    <HKInput type="date" label="To" value={customTo} onValueChange={setCustomTo} />
+                    <HKInput type="date" label={t("tally.export.fromLabel" as TranslationKey)} value={customFrom} onValueChange={setCustomFrom} />
+                    <HKInput type="date" label={t("tally.export.toLabel" as TranslationKey)} value={customTo} onValueChange={setCustomTo} />
                   </div>
                 )}
 

@@ -610,7 +610,7 @@ export default function NewBillPage() {
                         color: hsnPerRow ? PU : "var(--sb-sub)",
                         cursor: "pointer",
                       }}
-                      title="Add HSN/SAC code per line item for GSTR-1 Table 12"
+                      title={t("bills.new.hsnTooltip" as TranslationKey)}
                     >
                       {t("bills.new.hsnPerRow" as TranslationKey)}
                     </button>
@@ -659,7 +659,7 @@ export default function NewBillPage() {
                             <input
                               type="text"
                               aria-label={`Row ${rowIndex + 1} HSN/SAC`}
-                              placeholder="e.g. 9983"
+                              placeholder={t("bills.new.hsnPlaceholder" as TranslationKey)}
                               value={String(row._hsnCode || "")}
                               onChange={(e) => updateRowHsn(rowIndex, e.target.value)}
                               style={{ minWidth: 80, maxWidth: 100, background: "transparent", color: "var(--sb-text)", fontSize: TYPE.bodySmall, fontFamily: SG, outline: "none", border: "none", borderBottom: "1.5px solid var(--sb-border)", padding: "2px 0" }}

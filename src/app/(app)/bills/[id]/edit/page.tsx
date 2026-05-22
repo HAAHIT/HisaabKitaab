@@ -374,10 +374,10 @@ export default function EditBillPage({
           </div>
 
           {/* Bill To */}
-          <Section title="Bill To">
+          <Section title={t("bills.new.billTo")}>
             <HKSelect
-              label="Party"
-              placeholder="Select customer or vendor"
+              label={t("bills.new.partyLabel")}
+              placeholder={t("bills.new.partyPlaceholder")}
               value={partyId}
               onValueChange={(v) => { if (v) applyPartySnapshot(v); }}
               isInvalid={Boolean(errors.partyId)}
@@ -400,9 +400,9 @@ export default function EditBillPage({
                 isInvalid={Boolean(errors.customerName)}
                 errorMessage={errors.customerName ? "Customer name is required" : undefined}
               />
-              <HKInput label="Phone" placeholder="Phone number" value={customerPhone} onValueChange={setCustomerPhone} type="tel" />
-              <HKInput label="Address" placeholder="Billing address" value={customerAddress} onValueChange={setCustomerAddress} />
-              <HKInput label="GSTIN" placeholder="GST Number (optional)" value={gstin} onValueChange={setGstin} />
+              <HKInput label={t("bills.new.phoneLabel")} placeholder={t("bills.new.phonePlaceholder")} value={customerPhone} onValueChange={setCustomerPhone} type="tel" />
+              <HKInput label={t("bills.new.addressLabel")} placeholder={t("bills.new.addressPlaceholder")} value={customerAddress} onValueChange={setCustomerAddress} />
+              <HKInput label={t("bills.new.gstinLabel")} placeholder={t("bills.new.gstinPlaceholder")} value={gstin} onValueChange={setGstin} />
             </div>
           </Section>
 
@@ -579,8 +579,8 @@ export default function EditBillPage({
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16, marginBottom: 24 }}>
             {/* Notes */}
             <HKCard style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <HKTextarea label="Notes" placeholder="Additional notes..." value={notes} onValueChange={setNotes} minRows={2} />
-              <HKTextarea label="Terms & Conditions" placeholder="Enter terms..." value={terms} onValueChange={setTerms} minRows={3} />
+              <HKTextarea label={t("bills.new.notes")} placeholder={t("bills.new.notesPlaceholder")} value={notes} onValueChange={setNotes} minRows={2} />
+              <HKTextarea label={t("bills.new.terms")} placeholder={t("bills.new.termsPlaceholder")} value={terms} onValueChange={setTerms} minRows={3} />
             </HKCard>
 
             {/* Summary */}

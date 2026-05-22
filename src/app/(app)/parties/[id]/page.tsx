@@ -27,7 +27,7 @@ export default async function PartyProfilePage({
     return notFound();
   }
 
-  const [payments, bills, measurements, journalLines] = await Promise.all([
+  const [payments, bills, allBills, measurements, journalLines] = await Promise.all([
     prisma.payment.findMany({
       where: {
         tenantId,
@@ -45,6 +45,16 @@ export default async function PartyProfilePage({
         status: "FINAL",
       },
       orderBy: { createdAt: "asc" },
+    }),
+    prisma.bill.findMany({
+      where: {
+        tenantId,
+        partyId: id,
+        isDeleted: false,
+      },
+      select: { id: true, billNumber: true, status: true, grandTotal: true, createdAt: true },
+      orderBy: { createdAt: "desc" },
+      take: 10,
     }),
     prisma.measurementUpload.findMany({
       where: {
@@ -117,6 +127,20 @@ export default async function PartyProfilePage({
       measurements={measurements}
       calculatedCurrent={calculatedCurrent}
       role={role}
+      billsList={allBills.map((b) => ({
+        id: b.id,
+        billNumber: b.billNumber,
+        status: b.status,
+        grandTotal: Number(b.grandTotal),
+        createdAt: b.createdAt,
+      }))}
+      paymentsList={payments.slice().reverse().slice(0, 10).map((p) => ({
+        id: p.id,
+        direction: p.direction,
+        mode: p.mode,
+        date: p.date,
+        amount: Number(p.amount),
+      }))}
     />
   );
 }

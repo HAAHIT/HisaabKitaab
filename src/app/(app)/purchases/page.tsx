@@ -101,10 +101,10 @@ export default function PurchasesListPage() {
   const totalCancel = bills.filter((b) => b.status === "CANCELLED").length;
 
   const filterOptions = [
-    { key: "ALL" as const, label: `Sab (${bills.length})` },
-    { key: "FINAL" as const, label: `Final (${totalFinal})` },
-    { key: "DRAFT" as const, label: `Draft (${totalDraft})` },
-    { key: "CANCELLED" as const, label: `Cancel (${totalCancel})` },
+    { key: "ALL" as const, label: `${t("purchases.filter.all")} (${bills.length})` },
+    { key: "FINAL" as const, label: `${t("purchases.filter.final")} (${totalFinal})` },
+    { key: "DRAFT" as const, label: `${t("purchases.filter.draft")} (${totalDraft})` },
+    { key: "CANCELLED" as const, label: `${t("purchases.filter.cancelled")} (${totalCancel})` },
   ];
 
   return (
@@ -113,13 +113,13 @@ export default function PurchasesListPage() {
 
       <div style={{ padding: isMobile ? "18px 14px 100px" : "24px 28px", maxWidth: 1440, margin: "0 auto" }}>
         <PageHeader
-          title="Purchase Bills"
-          subtitle="Vendor se aayi bills"
+          title={t("purchases.pageTitle")}
+          subtitle={t("purchases.pageSubtitle")}
           isMobile={isMobile}
           action={
             !isMobile && (
               <HKButton onClick={() => router.push("/purchases/new")}>
-                + Record Purchase
+                {t("purchases.recordBtn")}
               </HKButton>
             )
           }

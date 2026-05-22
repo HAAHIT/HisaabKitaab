@@ -246,7 +246,7 @@ function TallyImportContent() {
                 {preview.parseErrors?.length > 0 && (
                   <div style={{ padding: 14, borderRadius: 12, background: AM + "10", border: `1px solid ${AM}33` }}>
                     <p style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: AM, fontFamily: SG, marginBottom: 8 }}>
-                      ⚠ Warnings
+                      {t("tally.import.warnings" as TranslationKey)}
                     </p>
                     <ul style={{ paddingLeft: 16, margin: 0 }}>
                       {preview.parseErrors.slice(0, 5).map((e, i) => (
@@ -254,7 +254,7 @@ function TallyImportContent() {
                       ))}
                       {preview.parseErrors.length > 5 && (
                         <li style={{ fontSize: TYPE.caption, color: AM, fontFamily: SG }}>
-                          ... and {preview.parseErrors.length - 5} more
+                          {t("tally.import.andMore" as TranslationKey).replace("{count}", String(preview.parseErrors.length - 5))}
                         </li>
                       )}
                     </ul>
@@ -286,8 +286,8 @@ function TallyImportContent() {
                 {importJobId && (
                   <div style={{ width: "100%", maxWidth: 320, marginTop: 8 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                      <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}>{jobProgress.processed} processed</span>
-                      <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}>{jobProgress.total} total</span>
+                      <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}>{jobProgress.processed} {t("tally.import.processed" as TranslationKey)}</span>
+                      <span style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG }}>{jobProgress.total} {t("tally.import.total" as TranslationKey)}</span>
                     </div>
                     <div style={{ height: 8, borderRadius: 999, background: "var(--sb-border)", overflow: "hidden" }}>
                       <div style={{
@@ -350,7 +350,7 @@ function TallyImportContent() {
                       <div style={{ padding: "14px 16px", borderRadius: 12, background: AM + "10", border: `1px solid ${AM}33`, minWidth: 130 }}>
                         <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: AM, textTransform: "uppercase", fontFamily: SG, marginBottom: 4 }}>{t("tally.import.successRoundOff" as TranslationKey)}</p>
                         <p style={{ fontSize: TYPE.numMedium, fontWeight: 700, color: AM, fontFamily: IN, margin: 0 }}>₹{totalAbs.toFixed(2)}</p>
-                        <p style={{ fontSize: TYPE.caption, color: AM, fontFamily: SG, margin: "2px 0 0" }}>{importResult.roundOffAdjustments.length} voucher{importResult.roundOffAdjustments.length === 1 ? "" : "s"}</p>
+                        <p style={{ fontSize: TYPE.caption, color: AM, fontFamily: SG, margin: "2px 0 0" }}>{importResult.roundOffAdjustments.length} {importResult.roundOffAdjustments.length === 1 ? t("tally.import.voucher" as TranslationKey) : t("tally.import.vouchers" as TranslationKey)}</p>
                       </div>
                     );
                   })()}
