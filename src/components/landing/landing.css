@@ -75,14 +75,41 @@
   font-weight: 600;
   padding: 0.875rem 1.25rem;
   border-radius: 999px;
-  transition: transform 200ms ease, box-shadow 200ms ease;
-  box-shadow: 0 12px 32px -12px color-mix(in oklab, var(--color-blue-500) 45%, transparent);
+  overflow: hidden;
+  isolation: isolate;
+  transition: box-shadow 300ms ease;
+  box-shadow:
+    0 12px 32px -12px color-mix(in oklab, var(--color-blue-500) 45%, transparent),
+    inset 0 1px 0 rgba(255,255,255,0.18);
 }
+.solobooks-landing .btn-primary::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, #3b82f6, #1d4ed8);
+  opacity: 0;
+  transition: opacity 350ms ease;
+  z-index: -1;
+}
+.solobooks-landing .btn-primary::after {
+  content: "";
+  position: absolute;
+  top: 0; left: -120%;
+  height: 100%; width: 60%;
+  background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.35) 50%, transparent 70%);
+  transform: skewX(-18deg);
+  transition: left 750ms cubic-bezier(.22,.61,.36,1);
+  pointer-events: none;
+}
+.solobooks-landing .btn-primary:hover::before { opacity: 1; }
+.solobooks-landing .btn-primary:hover::after  { left: 130%; }
 .solobooks-landing .btn-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 20px 48px -16px color-mix(in oklab, var(--color-blue-500) 55%, transparent);
+  box-shadow:
+    0 22px 56px -18px color-mix(in oklab, var(--color-blue-500) 65%, transparent),
+    inset 0 1px 0 rgba(255,255,255,0.22);
 }
-.solobooks-landing .btn-primary:active { transform: translateY(0); }
+.solobooks-landing .btn-primary:active { transform: translateY(0.5px); }
 
 .solobooks-landing .btn-ghost {
   display: inline-flex;
@@ -151,4 +178,56 @@
 
 @media (max-width: 768px) {
   .solobooks-landing .bg-grid { background-size: 32px 32px; }
+}
+
+/* Subtle link underline draw — award-style micro interaction */
+.solobooks-landing nav a {
+  position: relative;
+}
+.solobooks-landing nav a::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 6px;
+  height: 1px;
+  background: currentColor;
+  opacity: 0;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 420ms cubic-bezier(.22,.61,.36,1), opacity 200ms ease;
+}
+.solobooks-landing nav a:hover::after {
+  opacity: 0.55;
+  transform: scaleX(1);
+}
+
+/* Card lift micro-interaction */
+.solobooks-landing .card {
+  transition: transform 500ms cubic-bezier(.22,.61,.36,1), box-shadow 500ms ease, border-color 300ms ease;
+}
+.solobooks-landing .card:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in oklab, var(--color-blue-500) 22%, #e2e8f0);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 24px 48px -20px rgba(15,23,42,0.18);
+}
+
+/* Smooth-scroll: html should not interfere with Lenis */
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
+.lenis.lenis-stopped { overflow: hidden; }
+
+/* Hide native cursor over interactive zones when our custom cursor is on (desktop only) */
+@media (hover: hover) and (pointer: fine) {
+  .solobooks-landing { cursor: none; }
+  .solobooks-landing a, .solobooks-landing button { cursor: none; }
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .solobooks-landing * {
+    animation: none !important;
+    transition: none !important;
+  }
 }

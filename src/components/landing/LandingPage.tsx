@@ -1,3 +1,4 @@
+"use client";
 import "./landing.css";
 import { Nav } from "./Nav";
 import { Hero } from "./Hero";
@@ -11,21 +12,26 @@ import { Testimonials } from "./sections/Testimonials";
 import { Pricing } from "./sections/Pricing";
 import { CTA } from "./sections/CTA";
 import { Footer } from "./Footer";
+import { SmoothScroll } from "./SmoothScroll";
+import { Cursor } from "./Cursor";
+import { Reveal } from "./Reveal";
 
 export function LandingPage() {
   return (
     <main className="solobooks-landing min-h-screen relative">
+      <SmoothScroll />
+      <Cursor />
       <Nav />
       <Hero />
-      <TrustStrip />
-      <FastBilling />
-      <UdharSection />
-      <TallySection />
-      <MoreSection />
-      <NumbersSection />
-      <Testimonials />
-      <Pricing />
-      <CTA />
+      <Reveal stagger={false}><TrustStrip /></Reveal>
+      <Reveal stagger={false}><FastBilling /></Reveal>
+      <Reveal stagger={false}><UdharSection /></Reveal>
+      <Reveal stagger={false}><TallySection /></Reveal>
+      <Reveal stagger={false}><MoreSection /></Reveal>
+      <Reveal stagger={false}><NumbersSection /></Reveal>
+      <Reveal stagger={false}><Testimonials /></Reveal>
+      <Reveal stagger={false}><Pricing /></Reveal>
+      <Reveal stagger={false}><CTA /></Reveal>
       <Footer />
     </main>
   );
