@@ -34,7 +34,7 @@ interface PartySearchProps {
 }
 
 function formatSignedBalance(value: number) {
-  const absolute = Math.abs(value).toLocaleString("en-IN");
+  const absolute = Math.abs(value).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   if (value === 0) return `INR ${absolute}`;
   return `${value > 0 ? "+" : "-"}INR ${absolute}`;
 }

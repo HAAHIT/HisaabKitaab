@@ -23,7 +23,7 @@ function numberToWords(amount: number): string {
   return "Indian Rupees "+[(cr?w(cr)+" Crore ":""),(lk?w(lk)+" Lakh ":""),(th?w(th)+" Thousand ":""),(rm?w(rm):"")].join("").trim()+" Only.";
 }
 function formatINR(n: number) {
-  return new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:2}).format(n);
+  return new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
 }
 function formatVal(colName: string, value: number) {
   const l = colName.toLowerCase();
@@ -154,7 +154,7 @@ export default async function PublicBillPage(
         <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
           {upiLink && (
             <a href={upiLink} style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"8px 18px", borderRadius:8, background:"#16a34a", color:"white", fontWeight:700, fontSize:13, textDecoration:"none" }}>
-              Pay ₹{total.toLocaleString("en-IN")} via UPI
+              Pay ₹{total.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} via UPI
             </a>
           )}
           <button
@@ -426,7 +426,7 @@ export default async function PublicBillPage(
         <div className="no-print" style={{ maxWidth:860, margin:"16px auto 0" }}>
           <a href={upiLink}
             style={{ display:"block", textAlign:"center", padding:"14px", borderRadius:10, background:"#16a34a", color:"white", fontWeight:800, fontSize:16, textDecoration:"none" }}>
-            💳 Pay ₹{total.toLocaleString("en-IN")} Now via UPI
+            💳 Pay ₹{total.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Now via UPI
           </a>
           <p style={{ textAlign:"center", fontSize:11, color:"#666", marginTop:8 }}>
             Opens your UPI app · Google Pay · PhonePe · Paytm

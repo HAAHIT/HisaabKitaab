@@ -93,7 +93,7 @@ function downloadFile(url: string) {
 
 function inr(n: number): string {
   return new Intl.NumberFormat("en-IN", {
-    style: "currency", currency: "INR", maximumFractionDigits: 0,
+    style: "currency", currency: "INR", minimumFractionDigits: 2, maximumFractionDigits: 2,
   }).format(n);
 }
 
@@ -731,7 +731,7 @@ export default function ReportsClient({
                     {t("reports.totalDebit")}
                   </p>
                   <p className="mt-1 text-2xl font-semibold">
-                    ₹{preview.totalDebit.toLocaleString("en-IN")}
+                    ₹{preview.totalDebit.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                 </div>
                 <div className="rounded-xl bg-background p-4">
@@ -739,7 +739,7 @@ export default function ReportsClient({
                     {t("reports.totalCredit")}
                   </p>
                   <p className="mt-1 text-2xl font-semibold">
-                    ₹{preview.totalCredit.toLocaleString("en-IN")}
+                    ₹{preview.totalCredit.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                 </div>
               </div>

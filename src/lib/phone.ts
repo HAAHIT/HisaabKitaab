@@ -36,7 +36,7 @@ export function buildWhatsAppReminderUrl(opts: {
   if (!normalised) return "";
 
   const firstName = opts.partyName.split(" ")[0];
-  const amt = `₹${opts.balanceAmount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+  const amt = `₹${opts.balanceAmount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   let message: string;
   if (opts.balanceAmount > 0) {

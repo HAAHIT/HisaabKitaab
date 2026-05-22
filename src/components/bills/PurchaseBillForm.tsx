@@ -14,8 +14,9 @@ import { evaluateRow, type ColumnDef } from "@/lib/formula";
 import { GST_STATE_CODES } from "@/lib/gst-states";
 import {
   OR, GR, AM, PU, SG, IN, TYPE, TOUCH, DISPLAY,
-  HKCard, HKToast, fmtFull, useIsMobile,
+  HKCard, HKToast, useIsMobile,
 } from "@/components/ui/hk-design";
+import { formatCurrency } from "@/lib/currency";
 
 interface Template {
   id: string;
@@ -35,7 +36,7 @@ function formatColumnValue(columnName: string, value: number) {
   const isCurrency =
     lower.includes("rate") || lower.includes("price") ||
     lower.includes("amount") || lower.includes("total") || lower.includes("rs");
-  if (isCurrency) return fmtFull(value);
+  if (isCurrency) return formatCurrency(value);
   return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(value);
 }
 
@@ -199,7 +200,7 @@ export function PurchaseBillForm() {
       }
       const data = await response.json();
       showToast(status === "FINAL" ? t("purchases.new.successFinal" as TranslationKey) : t("purchases.new.successDraft" as TranslationKey), "success");
-      window.setTimeout(() => router.push(`/bills/${data.bill.id}`), 700);
+      window.setTimeout(() => router.push(`/purchases/${data.bill.id}`), 700);
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("purchases.new.errorSave" as TranslationKey), "error");
     } finally {
@@ -336,8 +337,8 @@ export function PurchaseBillForm() {
                           color: selectedParty.currentBalance > 0 ? OR : GR,
                         }}>
                           {selectedParty.currentBalance > 0
-                            ? `${t("purchases.new.toPay" as TranslationKey)}: ${fmtFull(selectedParty.currentBalance)}`
-                            : `${t("purchases.new.advance" as TranslationKey)}: ${fmtFull(Math.abs(selectedParty.currentBalance))}`}
+                            ? `${t("purchases.new.toPay" as TranslationKey)}: ${formatCurrency(selectedParty.currentBalance)}`
+                            : `${t("purchases.new.advance" as TranslationKey)}: ${formatCurrency(Math.abs(selectedParty.currentBalance))}`}
                         </div>
                       )}
                     </div>
@@ -361,7 +362,7 @@ export function PurchaseBillForm() {
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>{t("bills.new.lineItems" as TranslationKey)}</p>
                     <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG }}>
-                      {t("bills.new.subtotal" as TranslationKey)}: <span style={{ fontFamily: IN, fontWeight: 700, color: "var(--sb-text)" }}>{fmtFull(subtotal)}</span>
+                      {t("bills.new.subtotal" as TranslationKey)}: <span style={{ fontFamily: IN, fontWeight: 700, color: "var(--sb-text)" }}>{formatCurrency(subtotal)}</span>
                     </span>
                   </div>
                   <button
@@ -470,7 +471,7 @@ export function PurchaseBillForm() {
                   <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <span style={{ color: "var(--sb-sub)", fontSize: TYPE.body, fontFamily: SG }}>{t("bills.new.subtotal" as TranslationKey)}</span>
-                      <span style={{ fontFamily: IN, fontWeight: 600, color: "var(--sb-text)" }}>{fmtFull(subtotal)}</span>
+                      <span style={{ fontFamily: IN, fontWeight: 600, color: "var(--sb-text)" }}>{formatCurrency(subtotal)}</span>
                     </div>
 
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -482,11 +483,11 @@ export function PurchaseBillForm() {
                           value={String(taxPercent)}
                           onValueChange={(v) => setTaxPercent(Number.parseFloat(v) || 0)}
                           size="sm"
-                          className="w-20"
-                          endContent={<span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)" }}>%</span>}
+                          style={{ width: 64 }}
                         />
+                        <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)" }}>%</span>
                       </div>
-                      <span style={{ fontFamily: IN, fontWeight: 600, color: "var(--sb-text)" }}>{fmtFull(taxAmount)}</span>
+                      <span style={{ fontFamily: IN, fontWeight: 600, color: "var(--sb-text)" }}>{formatCurrency(taxAmount)}</span>
                     </div>
 
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
@@ -519,14 +520,14 @@ export function PurchaseBillForm() {
                       </label>
                       {enableRoundOff && roundOff !== 0 && (
                         <span style={{ fontSize: TYPE.bodySmall, fontFamily: IN, fontWeight: 600, color: roundOff > 0 ? GR : OR }}>
-                          {roundOff > 0 ? "+" : ""}{fmtFull(roundOff)}
+                          {roundOff > 0 ? "+" : ""}{formatCurrency(roundOff)}
                         </span>
                       )}
                     </div>
 
                     <div style={{ borderTop: "1px solid var(--sb-border)", paddingTop: 12, marginTop: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <span style={{ fontSize: TYPE.h2, fontWeight: 800, color: "var(--sb-text)", fontFamily: SG }}>{t("bills.new.grandTotal" as TranslationKey)}</span>
-                      <span style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: AM, fontFamily: IN }}>{fmtFull(roundedGrandTotal)}</span>
+                      <span style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: AM, fontFamily: IN }}>{formatCurrency(roundedGrandTotal)}</span>
                     </div>
                   </div>
                 </HKCard>

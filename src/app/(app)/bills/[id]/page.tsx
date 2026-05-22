@@ -85,7 +85,7 @@ function numberToWords(amount: number): string {
 }
 
 function formatINR(n: number) {
-  return new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:2}).format(n);
+  return new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
 }
 function formatVal(colName: string, value: number): string {
   const l = colName.toLowerCase();
@@ -258,15 +258,16 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
             <button
               onClick={() => router.push(isVendor ? "/purchases" : "/bills")}
               style={{
-                width: TOUCH.secondary, height: TOUCH.secondary,
-                borderRadius: 10, border: "1.5px solid var(--sb-border)",
-                background: "var(--sb-card)", color: "var(--sb-sub)",
+                width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+                border: "1.5px solid var(--sb-border)",
+                background: "var(--sb-card)", color: "var(--sb-text)",
+                boxShadow: "var(--sb-shadow-card)",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                cursor: "pointer", flexShrink: 0,
+                cursor: "pointer",
               }}
             >
               <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M19 12H5M12 5l-7 7 7 7" />
+                <path d="M15 18l-6-6 6-6" />
               </svg>
             </button>
             <span style={{ fontSize: TYPE.body, fontWeight: 800, color: "var(--sb-text)", fontFamily: IN, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>

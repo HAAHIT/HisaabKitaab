@@ -199,12 +199,12 @@ export default function TransactionsClient({ initialTransactions, page, totalPag
                       </td>
                       <td className="py-3 px-4 text-right font-mono text-sm">
                         {Number(line.debit) > 0 ? (
-                          <span className="text-danger font-medium">{Number(line.debit).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                          <span className="text-danger font-medium">{Number(line.debit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         ) : ""}
                       </td>
                       <td className="py-3 px-4 text-right font-mono text-sm">
                         {Number(line.credit) > 0 ? (
-                          <span className="text-success font-medium">{Number(line.credit).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                          <span className="text-success font-medium">{Number(line.credit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         ) : ""}
                       </td>
                     </tr>

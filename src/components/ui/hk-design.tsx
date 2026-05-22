@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 // ── Semantic color constants (direct values for inline styles) ────────────────
 export const C = {
   primary:      "#2563eb",
-  primarySoft:  "#e8f0fe",
+  primarySoft:  "var(--sb-primary-soft)",
   primaryDark:  "#13224a",
   positive:     "#0a8754",
   positiveSoft: "var(--sb-positive-soft)",
@@ -95,7 +95,8 @@ export function fmtFull(n: number): string {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(n || 0);
 }
 

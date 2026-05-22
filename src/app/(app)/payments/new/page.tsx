@@ -29,7 +29,7 @@ type BankAccount = {
 
 function formatSignedBalance(value: number) {
   const v = Math.round(value * 100) / 100;
-  const absolute = Math.abs(v).toLocaleString("en-IN");
+  const absolute = Math.abs(v).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   if (v === 0) return `INR ${absolute}`;
   return `+INR ${absolute}`;
 }

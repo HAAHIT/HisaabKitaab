@@ -287,15 +287,22 @@ export async function GET(request: NextRequest) {
         },
       }),
       prisma.bill.count({ where }),
-      // Total billed (FINAL only, current month)
+      // Total billed (FINAL only, current month) — scoped by partyType so /purchases gets vendor totals
       prisma.bill.aggregate({
-        where: { tenantId, isDeleted: false, status: "FINAL", createdAt: { gte: summaryMonthStart, lt: summaryMonthEnd } },
+        where: {
+          tenantId, isDeleted: false, status: "FINAL",
+          createdAt: { gte: summaryMonthStart, lt: summaryMonthEnd },
+          ...(partyType === "VENDOR" ? { party: { type: "VENDOR" } } : {}),
+          ...(partyType === "CUSTOMER" ? { OR: [{ party: { type: "CUSTOMER" } }, { partyId: null }] } : {}),
+        },
         _sum: { grandTotal: true },
       }),
-      // Total collected (payments linked to FINAL bills, current month)
+      // Total collected / paid out — INCOMING for sales, OUTGOING for purchases
       prisma.payment.aggregate({
         where: {
-          tenantId, isDeleted: false, direction: "INCOMING", status: "COMPLETED",
+          tenantId, isDeleted: false,
+          direction: partyType === "VENDOR" ? "OUTGOING" : "INCOMING",
+          status: "COMPLETED",
           date: { gte: summaryMonthStart, lt: summaryMonthEnd },
         },
         _sum: { amount: true },

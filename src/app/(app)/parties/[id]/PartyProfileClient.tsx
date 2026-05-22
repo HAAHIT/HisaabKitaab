@@ -15,7 +15,7 @@ import {
 } from "@/lib/accounting";
 
 function fmtAbs(n: number) {
-  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Math.abs(n));
+  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(n));
 }
 
 type PartyProfile = {

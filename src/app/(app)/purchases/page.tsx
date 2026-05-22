@@ -6,10 +6,10 @@ import { HKPagination } from "@/components/ui/HKPagination";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
-  OR, GR, AM, SG, IN, TYPE,
+  C, GR, SG, IN, TYPE,
   fmtFull, useIsMobile,
   HKCard, StatusChip, HKToast, SearchBox, PillFilter,
-  PageHeader,
+  PageHeader, HKAvatar,
 } from "@/components/ui/hk-design";
 import { HKButton } from "@/components/ui/HKButton";
 
@@ -34,6 +34,7 @@ export default function PurchasesListPage() {
   const isMobile = useIsMobile();
 
   const [bills, setBills] = useState<Bill[]>([]);
+  const [summary, setSummary] = useState<{ kulBilled: number; mila: number; baaki: number }>({ kulBilled: 0, mila: 0, baaki: 0 });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "DRAFT" | "FINAL" | "CANCELLED">("ALL");
@@ -74,9 +75,11 @@ export default function PurchasesListPage() {
       const data = await response.json();
       setBills((data.bills || []) as Bill[]);
       setTotalPages(data.totalPages || 1);
+      if (data.summary) setSummary(data.summary);
     } catch (error) {
       setBills([]);
       setTotalPages(1);
+      setSummary({ kulBilled: 0, mila: 0, baaki: 0 });
       showToast(error instanceof Error ? error.message : "Load failed", "error");
     } finally {
       setLoading(false);
@@ -124,6 +127,35 @@ export default function PurchasesListPage() {
             )
           }
         />
+
+        {/* Month metrics */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 16 }}>
+          {[
+            { l: t("purchases.metric.purchased"), v: fmtFull(summary.kulBilled), sub: t("purchases.metric.thisMonth"), c: "var(--sb-text)", bg: "var(--sb-card)" },
+            { l: t("purchases.metric.paid"), v: fmtFull(summary.mila), sub: t("purchases.metric.paidOut"), c: GR, bg: C.positiveSoft },
+            { l: t("purchases.metric.due"), v: fmtFull(summary.baaki), sub: t("purchases.metric.toPay"), c: C.primary, bg: C.primarySoft },
+          ].map((item, i) => (
+            <div
+              key={i}
+              style={{
+                padding: "16px 16px",
+                borderRadius: 14,
+                background: item.bg,
+                border: "1px solid var(--sb-border)",
+                boxShadow: "var(--sb-shadow-card)",
+              }}
+            >
+              <p style={{ fontSize: TYPE.caption, fontWeight: 700, color: "var(--sb-sub)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6, fontFamily: SG }}>
+                {item.l}
+              </p>
+              <p style={{ fontSize: isMobile ? TYPE.numSmall : TYPE.numLarge, fontWeight: 800, color: item.c, fontFamily: IN, lineHeight: 1 }}>
+                {item.v}
+              </p>
+              <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--sb-sub)", marginTop: 4, fontFamily: SG }}>{item.sub}</p>
+            </div>
+          ))}
+        </div>
+
         {/* Search + filter */}
         <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
           <SearchBox value={search} onChange={setSearch} placeholder={t("bills.searchPlaceholder")} />
@@ -204,7 +236,7 @@ export default function PurchasesListPage() {
                       {group.bills.map((bill, i) => (
                         <div
                           key={bill.id}
-                          onClick={() => router.push(`/bills/${bill.id}`)}
+                          onClick={() => router.push(`/purchases/${bill.id}`)}
                           style={{
                             display: "flex",
                             justifyContent: "space-between",
@@ -215,35 +247,17 @@ export default function PurchasesListPage() {
                             minHeight: 64,
                           }}
                         >
-                          <div style={{ display: "flex", gap: 14, alignItems: "center", flex: 1, minWidth: 0 }}>
-                            <div
-                              style={{
-                                width: 44, height: 44, borderRadius: 11, flexShrink: 0,
-                                background: bill.status === "FINAL" ? GR + "18" : bill.status === "DRAFT" ? AM + "18" : OR + "18",
-                                display: "flex", alignItems: "center", justifyContent: "center",
-                              }}
-                            >
-                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
-                                stroke={bill.status === "FINAL" ? GR : bill.status === "DRAFT" ? AM : OR}
-                                strokeWidth="2" strokeLinecap="round"
-                              >
-                                <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
-                                <line x1="3" y1="6" x2="21" y2="6" />
-                                <path d="M16 10a4 4 0 0 1-8 0" />
-                              </svg>
-                            </div>
+                          <div style={{ display: "flex", gap: 12, alignItems: "center", flex: 1, minWidth: 0 }}>
+                            <HKAvatar name={bill.party?.name || bill.customerName || "—"} size={40} />
                             <div style={{ minWidth: 0, flex: 1 }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
-                                <span style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--sb-sub)", fontFamily: IN }}>
-                                  {bill.billNumber}
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2, flexWrap: "wrap" }}>
+                                <span style={{ fontSize: TYPE.body, fontWeight: 600, color: "var(--sb-text)", fontFamily: SG, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {bill.party?.name || bill.customerName}
                                 </span>
                                 <StatusChip status={bill.status} />
                               </div>
-                              <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)", marginBottom: 3, fontFamily: SG, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                {bill.party?.name || bill.customerName}
-                              </p>
-                              <p style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--sb-sub)", fontFamily: SG }}>
-                                {new Date(bill.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                              <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: IN, margin: 0 }}>
+                                {bill.billNumber} · {new Date(bill.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
                               </p>
                             </div>
                           </div>

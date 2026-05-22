@@ -53,7 +53,7 @@ function fmtDate(iso: string) {
 }
 
 function fmtINR(n: number) {
-  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(n);
+  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 }
 
 const PRINT_CSS = `

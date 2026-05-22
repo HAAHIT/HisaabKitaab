@@ -218,8 +218,8 @@ export default function NewNotePage() {
                   }}
                 >
                   {selectedParty.currentBalance < 0
-                    ? `${t("notes.new.toGet")}: ₹${Math.abs(selectedParty.currentBalance).toLocaleString("en-IN")}`
-                    : `${t("notes.new.toPay")}: ₹${selectedParty.currentBalance.toLocaleString("en-IN")}`}
+                    ? `${t("notes.new.toGet")}: ₹${Math.abs(selectedParty.currentBalance).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                    : `${t("notes.new.toPay")}: ₹${selectedParty.currentBalance.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                 </p>
               )}
             </div>

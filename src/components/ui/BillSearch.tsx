@@ -142,7 +142,7 @@ export function BillSearch({
               <span className="text-xs text-default-400">{bill.customerName}</span>
             </div>
             <span className="text-sm font-medium text-default-500">
-              ₹{bill.grandTotal.toLocaleString("en-IN")}
+              ₹{bill.grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>
         )}

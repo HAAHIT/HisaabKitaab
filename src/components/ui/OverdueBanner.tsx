@@ -40,7 +40,7 @@ export function OverdueBanner({
         gap: 12,
         padding: "12px 14px",
         borderRadius: 12,
-        background: C.primarySoft,
+        background: "#e8f0fe",
         border: `1px solid ${C.primary}33`,
         cursor: "pointer",
         marginBottom: 16,

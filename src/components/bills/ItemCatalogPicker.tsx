@@ -208,7 +208,7 @@ export default function ItemCatalogPicker({ columns, onSelect, onClose }: Props)
                   {/* Rate */}
                   <div className="shrink-0 text-right">
                     <p className="text-sm font-bold text-foreground">
-                      ₹{item.rate.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+                      ₹{item.rate.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
                     <p className="text-xs text-default-400">per {item.unit}</p>
                   </div>

@@ -3,7 +3,6 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useTheme } from "next-themes";
-import { QuickBillSheet } from "@/components/bills/QuickBillSheet";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { TranslationKey } from "@/lib/i18n/translations";
 import { FEATURE_FLAGS, type FeatureFlagKey } from "@/lib/feature-flags";
@@ -443,7 +442,6 @@ export default function AppShell({
   const router = useRouter();
   const { t, language, setLanguage } = useLanguage();
   const [moreSheetOpen, setMoreSheetOpen] = useState(false);
-  const [quickBillOpen, setQuickBillOpen] = useState(false);
   const [smartFabOpen, setSmartFabOpen] = useState(false);
 
   useEffect(() => {
@@ -475,12 +473,6 @@ export default function AppShell({
   function openSmartFab() {
     setMoreSheetOpen(false);
     setSmartFabOpen(true);
-  }
-
-  function openQuickBill() {
-    setSmartFabOpen(false);
-    setMoreSheetOpen(false);
-    setQuickBillOpen(true);
   }
 
   function isActive(href: string) {
@@ -883,7 +875,7 @@ export default function AppShell({
               { label: t("nav.paymentAction"), sub: t("nav.paymentActionSub"), emoji: "💸",
                 action: () => { setSmartFabOpen(false); router.push("/payments/new"); } },
               { label: t("nav.billAction"), sub: t("nav.billActionSub"), emoji: "🧾",
-                action: () => { setSmartFabOpen(false); openQuickBill(); } },
+                action: () => { setSmartFabOpen(false); router.push("/bills/new"); } },
               { label: t("nav.partyAction"), sub: t("nav.partyActionSub"), emoji: "👤",
                 action: () => { setSmartFabOpen(false); router.push("/parties?addNew=true"); } },
             ].map(item => (
@@ -916,13 +908,6 @@ export default function AppShell({
         </SidePanel>
       )}
 
-      {canQuickBill && (
-        <QuickBillSheet
-          isOpen={quickBillOpen}
-          onClose={() => setQuickBillOpen(false)}
-          onBillCreated={({ id }) => router.push(`/bills/${id}`)}
-        />
-      )}
     </div>
   );
 }

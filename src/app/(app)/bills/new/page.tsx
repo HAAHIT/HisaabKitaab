@@ -35,7 +35,7 @@ interface CatalogItem {
 }
 
 function formatCurrency(value: number) {
-  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(value);
+  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
 }
 
 function formatColumnValue(columnName: string, value: number) {
@@ -768,7 +768,7 @@ export default function NewBillPage() {
                                             {item.hsnCode && <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)" }}>HSN {item.hsnCode}</p>}
                                           </div>
                                           <span style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: PU, fontFamily: IN, flexShrink: 0 }}>
-                                            ₹{Number(item.rate).toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+                                            ₹{Number(item.rate).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                           </span>
                                         </button>
                                       ))}
@@ -858,15 +858,17 @@ export default function NewBillPage() {
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <span style={{ color: "var(--sb-sub)", fontSize: TYPE.body, fontFamily: SG }}>{taxLabelText}</span>
                       {taxRateColId === null && (
-                        <HKInput
-                          type="number"
-                          aria-label="Tax percentage"
-                          value={String(taxPercent)}
-                          onValueChange={(value) => setTaxPercent(Number.parseFloat(value) || 0)}
-                          size="sm"
-                          className="w-20"
-                          endContent={<span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)" }}>%</span>}
-                        />
+                        <>
+                          <HKInput
+                            type="number"
+                            aria-label="Tax percentage"
+                            value={String(taxPercent)}
+                            onValueChange={(value) => setTaxPercent(Number.parseFloat(value) || 0)}
+                            size="sm"
+                            style={{ width: 64 }}
+                          />
+                          <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)" }}>%</span>
+                        </>
                       )}
                     </div>
                     <span style={{ fontFamily: IN, fontWeight: 600, color: "var(--sb-text)" }}>{formatCurrency(taxAmount)}</span>
