@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/ui/AppShell";
 import { SetupWizard } from "@/components/onboarding/SetupWizard";
+import GlobalSearch from "@/components/search/GlobalSearch";
 
 interface UserSession {
   userId: string;
@@ -49,6 +50,7 @@ export default function AppShellWrapper({
 
   return (
     <AppShell user={user}>
+      <GlobalSearch />
       {wizardVisible && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-default-50 dark:bg-zinc-950">
           <SetupWizard onComplete={handleOnboardingComplete} initialBusinessName={initialBusinessName} />

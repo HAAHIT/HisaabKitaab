@@ -90,10 +90,10 @@ export async function GET(request: NextRequest) {
           partyId,
           isDeleted: false,
           status: "FINAL",
-          createdAt: { lte: toDate },
+          date: { lte: toDate },
         },
-        orderBy: { createdAt: "asc" },
-        select: { id: true, billNumber: true, grandTotal: true, createdAt: true },
+        orderBy: { date: "asc" },
+        select: { id: true, billNumber: true, grandTotal: true, date: true },
       }),
       prisma.payment.findMany({
         where: {
@@ -118,7 +118,12 @@ export async function GET(request: NextRequest) {
       partyType: asSupportedPartyType(party.type),
       openingBalance: party.openingBalance.toNumber(),
       createdAt: party.createdAt,
-      bills: bills.map((b) => ({ ...b, grandTotal: b.grandTotal.toNumber() })),
+      bills: bills.map((b) => ({
+        id: b.id,
+        billNumber: b.billNumber,
+        date: b.date,
+        grandTotal: b.grandTotal.toNumber(),
+      })),
       payments: payments.map((p) => ({ ...p, amount: p.amount.toNumber() })),
     });
 

@@ -12,6 +12,7 @@ import {
   getCurrentQuarterRange,
 } from "@/lib/journal-reporting";
 import FinancialReportsSection from "./FinancialReportsSection";
+import GstrReturnsSection from "./GstrReturnsSection";
 
 interface ReportsClientProps {
   initialFrom: string;
@@ -402,6 +403,8 @@ export default function ReportsClient({
         exportBlocked={exportBlocked}
         accountOptions={accountOptions}
       />
+
+      <GstrReturnsSection />
 
       {/* ── GST Summary Report ──────────────────────────────────────────────── */}
       <div className="rounded-2xl border border-[var(--sb-border)] bg-[var(--sb-card)] shadow-sm">

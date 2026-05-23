@@ -52,8 +52,8 @@ export default async function PartyProfilePage({
         partyId: id,
         isDeleted: false,
       },
-      select: { id: true, billNumber: true, status: true, grandTotal: true, createdAt: true },
-      orderBy: { createdAt: "desc" },
+      select: { id: true, billNumber: true, status: true, grandTotal: true, date: true, createdAt: true },
+      orderBy: { date: "desc" },
     }),
     prisma.measurementUpload.findMany({
       where: {
@@ -93,11 +93,11 @@ export default async function PartyProfilePage({
     partyType: asSupportedPartyType(party.type),
     openingBalance: party.openingBalance.toNumber(),
     createdAt: party.createdAt,
-    bills: bills.map((b: { id: string; billNumber: string; grandTotal: any; createdAt: Date }) => ({
+    bills: bills.map((b: { id: string; billNumber: string; grandTotal: any; date: Date }) => ({
       id: b.id,
       billNumber: b.billNumber,
       grandTotal: Number(b.grandTotal),
-      createdAt: b.createdAt
+      date: b.date,
     })),
     payments: payments.map((p: { id: string; amount: any; direction: string; mode: string; date: Date }) => ({
       id: p.id,

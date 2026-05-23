@@ -154,7 +154,7 @@ describe("buildPartyLedger", () => {
           id: "bill-1",
           billNumber: "PB-001",
           grandTotal: 5000,
-          createdAt: new Date("2026-03-22T01:00:00.000Z"),
+          date: new Date("2026-03-22T01:00:00.000Z"),
         },
       ],
       payments: [

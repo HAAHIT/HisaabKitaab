@@ -21,6 +21,7 @@ interface Bill {
   grandTotal: number;
   status: string;
   createdAt: string;
+  date?: string;
 }
 
 async function readError(response: Response) {
@@ -47,7 +48,7 @@ export default function PurchasesListPage() {
     const monthFormatter = new Intl.DateTimeFormat("en-IN", { month: "long", year: "numeric" });
     const groups = new Map<string, { label: string; bills: Bill[]; total: number }>();
     for (const bill of bills) {
-      const d = new Date(bill.createdAt);
+      const d = new Date(bill.date ?? bill.createdAt);
       const key = `${d.getFullYear()}-${d.getMonth()}`;
       const existing = groups.get(key);
       if (existing) {
@@ -257,7 +258,7 @@ export default function PurchasesListPage() {
                                 <StatusChip status={bill.status} />
                               </div>
                               <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: IN, margin: 0 }}>
-                                {bill.billNumber} · {new Date(bill.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                                {bill.billNumber} · {new Date(bill.date ?? bill.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
                               </p>
                             </div>
                           </div>

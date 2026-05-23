@@ -7,6 +7,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { TranslationKey } from "@/lib/i18n/translations";
 import { FEATURE_FLAGS, type FeatureFlagKey } from "@/lib/feature-flags";
 import { TOUCH } from "./hk-design";
+import NotificationBell from "@/components/notifications/NotificationBell";
 
 interface UserSession {
   userId: string;
@@ -222,29 +223,30 @@ function ThemeToggleBtn() {
 }
 
 // ── Logo ──────────────────────────────────────────────────────────────────────
-// Mark: bold S letterform built from two arcs — references the brand name,
-// reads clearly at 34 px, and is entirely original.
 
 function HKLogo({ size = 34 }: { size?: number }) {
   return (
     <div style={{
-      width: size, height: size, borderRadius: Math.round(size * 0.26),
-      background: "#1e1b4b",
+      width: size, height: size, borderRadius: Math.round(size * 0.3),
+      background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
       display: "flex", alignItems: "center", justifyContent: "center",
       flexShrink: 0,
-      boxShadow: "0 2px 8px rgba(30,27,75,0.45)",
+      boxShadow: "0 6px 20px rgba(37, 99, 235, 0.35)",
     }}>
       <svg
-        width={Math.round(size * 0.68)}
-        height={Math.round(size * 0.68)}
+        width={Math.round(size * 0.59)}
+        height={Math.round(size * 0.59)}
         viewBox="0 0 24 24"
         fill="none"
         stroke="white"
-        strokeWidth="2.3"
+        strokeWidth="2"
         strokeLinecap="round"
+        strokeLinejoin="round"
       >
-        {/* S: top arc CCW over the crown, diagonal cross, bottom arc CW under the base */}
-        <path d="M16.5 9 A4.5 4.5 0 1 0 7.5 9 L16.5 15 A4.5 4.5 0 1 1 7.5 15" />
+        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+        <line x1="9" y1="8" x2="15" y2="8" />
+        <line x1="9" y1="12" x2="12" y2="12" />
       </svg>
     </div>
   );
@@ -603,7 +605,8 @@ export default function AppShell({
           )}
           <ThemeToggleBtn />
           <button
-            aria-label="Notifications"
+            aria-label="Search (Ctrl/Cmd+K)"
+            onClick={() => window.dispatchEvent(new Event("open-global-search"))}
             style={{
               width: 40, height: 40, borderRadius: 10, border: "none",
               background: "transparent", color: "var(--sb-sub)",
@@ -613,8 +616,9 @@ export default function AppShell({
             onMouseEnter={e => (e.currentTarget.style.background = "var(--sb-hover)")}
             onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
           >
-            <Icons.bell />
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           </button>
+          <NotificationBell />
           <UserAvatar name={user.name} size={34} />
         </div>
 

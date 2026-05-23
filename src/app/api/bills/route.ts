@@ -25,6 +25,7 @@ import { checkRateLimit } from "@/lib/api-rate-limit";
 import { logError, getRequestId } from "@/lib/observability";
 import { generateLockKey } from "@/lib/locks";
 import { getIstCalendar, istMidnightUtc } from "@/lib/journal-reporting";
+import { resolveBillSeriesPrefix } from "@/lib/bill-series";
 import { z } from "zod";
 
 type SupportedPaymentMode = "CASH" | "UPI" | "BANK_TRANSFER" | "CHEQUE";
@@ -119,6 +120,7 @@ const CreateBillSchema = z.object({
   isInterState: z.boolean().optional(),
   paymentMode: z.string().optional(),
   hsnCode: z.string().nullish(),
+  billSeriesId: z.string().nullish(),
 }).superRefine((data, ctx) => {
   // [P0] FINAL bills must always declare place of supply for GSTR-1 compliance.
   // Not limited to B2B — even B2C inter-state supplies require placeOfSupply.
@@ -245,14 +247,14 @@ export async function GET(request: NextRequest) {
     }
 
     if (from || to) {
-      where.createdAt = {};
+      where.date = {};
       if (from) {
         const fromDate = new Date(from);
-        if (!Number.isNaN(fromDate.getTime())) where.createdAt.gte = fromDate;
+        if (!Number.isNaN(fromDate.getTime())) where.date.gte = fromDate;
       }
       if (to) {
         const toDate = new Date(to);
-        if (!Number.isNaN(toDate.getTime())) where.createdAt.lte = toDate;
+        if (!Number.isNaN(toDate.getTime())) where.date.lte = toDate;
       }
     }
 
@@ -291,7 +293,7 @@ export async function GET(request: NextRequest) {
       prisma.bill.aggregate({
         where: {
           tenantId, isDeleted: false, status: "FINAL",
-          createdAt: { gte: summaryMonthStart, lt: summaryMonthEnd },
+          date: { gte: summaryMonthStart, lt: summaryMonthEnd },
           ...(partyType === "VENDOR" ? { party: { type: "VENDOR" } } : {}),
           ...(partyType === "CUSTOMER" ? { OR: [{ party: { type: "CUSTOMER" } }, { partyId: null }] } : {}),
         },
@@ -468,7 +470,12 @@ export async function POST(request: NextRequest) {
     }
 
     const billingSettings = await loadBillingSettings(tenantId);
-    const prefix = billingSettings.billPrefix;
+    const billSeriesIdRaw =
+      typeof body.billSeriesId === "string" && body.billSeriesId.trim()
+        ? body.billSeriesId.trim()
+        : null;
+    const resolvedSeries = await resolveBillSeriesPrefix(tenantId, billSeriesIdRaw);
+    const prefix = resolvedSeries.prefix || billingSettings.billPrefix;
 
     // Load tenant GSTIN for inter-state auto-detection (G-C1)
     const tenant = await prisma.tenant.findUnique({

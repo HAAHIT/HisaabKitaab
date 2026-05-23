@@ -65,6 +65,16 @@ const NAV_ITEMS = [
     ),
   },
   {
+    id: "bill-series",
+    label: "Bill Numbering",
+    href: "/settings/bill-series",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 6h18M3 12h18M3 18h12"/>
+      </svg>
+    ),
+  },
+  {
     id: "templates",
     label: "Invoice Templates",
     href: "/settings/templates",

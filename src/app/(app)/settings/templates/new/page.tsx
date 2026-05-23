@@ -4,6 +4,7 @@ import { useState } from "react";
 import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
 import { useRouter } from "next/navigation";
 import { validateFormula, translateFormulaToIds, type ColumnDef } from "@/lib/formula";
+import { STARTER_TEMPLATES, applyStarter } from "@/lib/default-bill-templates";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
   C, GR, AM, OR, PU, SG, TYPE,
@@ -23,6 +24,17 @@ export default function CreateTemplatePage() {
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<number, string>>({});
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [starterPicked, setStarterPicked] = useState<string | null>(null);
+
+  function applyStarterTemplate(starterId: string) {
+    const starter = STARTER_TEMPLATES.find((s) => s.id === starterId);
+    if (!starter) return;
+    const filled = applyStarter(starter);
+    setName(filled.name);
+    setColumns(filled.columns);
+    setErrors({});
+    setStarterPicked(starterId);
+  }
 
   const columnTypeOptions = [
     { key: "text", label: t("templates.type.text") },
@@ -150,6 +162,54 @@ export default function CreateTemplatePage() {
           }
         />
         <div>
+          {/* Starter picker */}
+          <HKCard style={{ marginBottom: 20 }}>
+            <p style={{ fontSize: TYPE.h2, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: "0 0 4px" }}>
+              Start from a template
+            </p>
+            <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG, margin: "0 0 16px" }}>
+              Pick a starting point and edit before saving, or skip to design your own from scratch.
+            </p>
+            <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+              {STARTER_TEMPLATES.map((s) => {
+                const active = starterPicked === s.id;
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => applyStarterTemplate(s.id)}
+                    style={{
+                      textAlign: "left",
+                      padding: "14px 16px",
+                      borderRadius: 12,
+                      background: active ? "var(--sb-primary)" : "var(--sb-bg)",
+                      color: active ? "#fff" : "var(--sb-text)",
+                      border: `1.5px solid ${active ? "var(--sb-primary)" : "var(--sb-border)"}`,
+                      cursor: "pointer",
+                      fontFamily: SG,
+                      transition: "all 0.15s",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 6,
+                    }}
+                  >
+                    <span style={{ fontSize: TYPE.body, fontWeight: 700 }}>{s.name}</span>
+                    <span style={{ fontSize: 11, opacity: 0.85, lineHeight: 1.4 }}>{s.description}</span>
+                    <span style={{
+                      marginTop: 4,
+                      fontSize: 10,
+                      fontFamily: "ui-monospace, monospace",
+                      letterSpacing: 0.5,
+                      opacity: 0.75,
+                    }}>
+                      Prefix: {s.suggestedPrefix}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </HKCard>
+
           {/* Template name */}
           <HKCard style={{ marginBottom: 20 }}>
             <HKInput

@@ -62,6 +62,7 @@ async function getBill(id: string) {
       placeOfSupply: true,
       hsnCode: true,
       createdAt: true,
+      date: true,
       template: { select: { name: true, columns: true } },
       tenant: {
         select: {
@@ -228,7 +229,7 @@ export default async function PublicBillPage(
           <div style={{ padding:"10px 14px", fontSize:11 }}>
             {([
               ["Invoice No", bill.billNumber],
-              ["Date", fmtDate(bill.createdAt)],
+              ["Date", fmtDate(bill.date ?? bill.createdAt)],
               ...(bill.hsnCode ? [["HSN / SAC", bill.hsnCode]] : []),
               ...(bill.placeOfSupply ? [["Place of Supply", supplyFull]] : []),
               ...(bill.terms ? [["Payment Terms", bill.terms]] : []),
