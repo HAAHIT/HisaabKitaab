@@ -12,7 +12,13 @@ interface FinancialReportsSectionProps {
   accountOptions: { code: string; name: string; tallyGroup: string }[];
 }
 
-type FinTab = "profitLoss" | "balanceSheet" | "trialBalance" | "dayBook" | "generalLedger";
+type FinTab =
+  | "profitLoss"
+  | "balanceSheet"
+  | "trialBalance"
+  | "dayBook"
+  | "generalLedger"
+  | "aging";
 
 interface GroupNode {
   name: string;
@@ -81,6 +87,33 @@ interface DayBookData {
   totalCredit: number;
 }
 
+interface AgingPartyRow {
+  partyId: string;
+  partyName: string;
+  current: number;
+  days_31_60: number;
+  days_61_90: number;
+  days_90_plus: number;
+  total: number;
+}
+
+interface AgingSide {
+  buckets: {
+    current: number;
+    days_31_60: number;
+    days_61_90: number;
+    days_90_plus: number;
+    total: number;
+  };
+  parties: AgingPartyRow[];
+}
+
+interface AgingData {
+  asOf: string;
+  receivable: AgingSide;
+  payable: AgingSide;
+}
+
 interface GeneralLedgerData {
   accountCode: string;
   accountName: string;
@@ -133,6 +166,7 @@ export default function FinancialReportsSection({
   const [tb, setTb] = useState<TrialBalanceData | null>(null);
   const [db, setDb] = useState<DayBookData | null>(null);
   const [gl, setGl] = useState<GeneralLedgerData | null>(null);
+  const [aging, setAging] = useState<AgingData | null>(null);
   const [glAccount, setGlAccount] = useState<string>(accountOptions[0]?.code ?? "");
 
   const [loading, setLoading] = useState(false);
@@ -156,7 +190,7 @@ export default function FinancialReportsSection({
         return;
       }
       url = `/api/reports/general-ledger?from=${from}&to=${to}&accountCode=${glAccount}`;
-    }
+    } else if (tab === "aging") url = `/api/reports/aging?asOf=${to}`;
 
     fetch(url, { signal: controller.signal })
       .then(async (res) => {
@@ -170,6 +204,7 @@ export default function FinancialReportsSection({
         else if (tab === "trialBalance") setTb(data);
         else if (tab === "dayBook") setDb(data);
         else if (tab === "generalLedger") setGl(data);
+        else if (tab === "aging") setAging(data);
         setLoading(false);
       })
       .catch((err) => {
@@ -183,7 +218,7 @@ export default function FinancialReportsSection({
 
   function downloadExcel(path: string, filename: string) {
     const params = new URLSearchParams({ from, to });
-    if (tab === "balanceSheet") {
+    if (tab === "balanceSheet" || tab === "aging") {
       params.delete("from");
       params.set("asOf", to);
     }
@@ -207,6 +242,7 @@ export default function FinancialReportsSection({
     trialBalance: "Trial Balance",
     dayBook: "Day Book",
     generalLedger: "General Ledger",
+    aging: "Aging",
   };
 
   const EXPORT_PATH: Record<FinTab, string> = {
@@ -215,6 +251,7 @@ export default function FinancialReportsSection({
     trialBalance: "/api/export/trial-balance",
     dayBook: "/api/export/day-book",
     generalLedger: "/api/export/general-ledger",
+    aging: "/api/export/aging",
   };
 
   return (
@@ -293,6 +330,8 @@ export default function FinancialReportsSection({
               <DayBookView data={db} />
             ) : tab === "generalLedger" && gl ? (
               <GeneralLedgerView data={gl} />
+            ) : tab === "aging" && aging ? (
+              <AgingView data={aging} />
             ) : (
               <p className="text-sm text-default-500 py-4 text-center">
                 No data for this period.
@@ -526,6 +565,63 @@ function DayBookView({ data }: { data: DayBookData }) {
         <span>Period Total Debit: {inr(data.totalDebit)}</span>
         <span>Period Total Credit: {inr(data.totalCredit)}</span>
       </div>
+    </div>
+  );
+}
+
+function AgingSideTable({ title, side }: { title: string; side: AgingSide }) {
+  return (
+    <div>
+      <h3 className="text-sm font-semibold uppercase tracking-wide text-default-500 mb-2">
+        {title}
+      </h3>
+      {side.parties.length === 0 ? (
+        <p className="text-sm text-default-500 py-4 text-center">No outstanding balances.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-divider text-xs text-default-500 uppercase tracking-wide">
+                <th className="py-2 pr-3 text-left font-semibold">Party</th>
+                <th className="py-2 pr-3 text-right font-semibold">0-30</th>
+                <th className="py-2 pr-3 text-right font-semibold">31-60</th>
+                <th className="py-2 pr-3 text-right font-semibold">61-90</th>
+                <th className="py-2 pr-3 text-right font-semibold">90+</th>
+                <th className="py-2 text-right font-semibold">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {side.parties.map((p) => (
+                <tr key={p.partyId} className="border-b border-divider/40 hover:bg-default-50">
+                  <td className="py-2 pr-3 font-medium">{p.partyName}</td>
+                  <td className="py-2 pr-3 text-right">{p.current > 0 ? inr(p.current) : "—"}</td>
+                  <td className="py-2 pr-3 text-right">{p.days_31_60 > 0 ? inr(p.days_31_60) : "—"}</td>
+                  <td className="py-2 pr-3 text-right">{p.days_61_90 > 0 ? inr(p.days_61_90) : "—"}</td>
+                  <td className="py-2 pr-3 text-right text-danger">{p.days_90_plus > 0 ? inr(p.days_90_plus) : "—"}</td>
+                  <td className="py-2 text-right font-bold">{inr(p.total)}</td>
+                </tr>
+              ))}
+              <tr className="border-t-2 border-divider bg-default-50 font-bold">
+                <td className="py-2.5 pr-3">Total</td>
+                <td className="py-2.5 pr-3 text-right">{inr(side.buckets.current)}</td>
+                <td className="py-2.5 pr-3 text-right">{inr(side.buckets.days_31_60)}</td>
+                <td className="py-2.5 pr-3 text-right">{inr(side.buckets.days_61_90)}</td>
+                <td className="py-2.5 pr-3 text-right text-danger">{inr(side.buckets.days_90_plus)}</td>
+                <td className="py-2.5 text-right">{inr(side.buckets.total)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AgingView({ data }: { data: AgingData }) {
+  return (
+    <div className="space-y-8">
+      <AgingSideTable title="Receivable (A/R)" side={data.receivable} />
+      <AgingSideTable title="Payable (A/P)" side={data.payable} />
     </div>
   );
 }

@@ -341,7 +341,7 @@ export default function ReportsClient({
     : "";
 
   return (
-    <div className="animate-fade-in p-4 lg:p-8 space-y-6">
+    <div className="animate-fade-in p-4 lg:p-8 max-w-7xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold">{t("reports.title")}</h1>
         <p className="mt-1 text-sm text-default-500">{t("reports.subtitle")}</p>

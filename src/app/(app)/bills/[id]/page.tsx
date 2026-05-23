@@ -296,6 +296,37 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
               </svg>
               {t("common.print" as TranslationKey)}
             </button>
+            <button
+              onClick={async () => {
+                const el = document.querySelector(".bill-paper") as HTMLElement | null;
+                if (!el) return;
+                const { default: html2pdf } = await import("html2pdf.js");
+                await html2pdf()
+                  .set({
+                    margin: 8,
+                    filename: `invoice_${bill?.billNumber ?? "bill"}.pdf`,
+                    image: { type: "jpeg", quality: 0.98 },
+                    html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" },
+                    jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+                    pagebreak: { mode: ["css", "legacy"] },
+                  })
+                  .from(el)
+                  .save();
+              }}
+              className="no-print"
+              style={{
+                height: TOUCH.secondary, padding: "0 14px",
+                borderRadius: 10, border: "1.5px solid var(--sb-border)",
+                background: "var(--sb-card)", color: "var(--sb-text)",
+                fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG,
+                cursor: "pointer", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
+              }}
+            >
+              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/>
+              </svg>
+              PDF
+            </button>
 
             {bill.status === "DRAFT" && (
               <>
