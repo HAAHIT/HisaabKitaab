@@ -257,10 +257,10 @@ export default function BankLedgerClient({
               <p style={{ fontSize: TYPE.bodySmall, fontWeight: 600, color: GR, textAlign: "right", fontFamily: IN }}>
                 {account.openingBalance > 0 ? fmtFull(account.openingBalance) : "—"}
               </p>
-              <p style={{ fontSize: TYPE.bodySmall, fontWeight: 600, color: OR, textAlign: "right", fontFamily: IN }}>
+              <p style={{ fontSize: TYPE.bodySmall, fontWeight: 600, color: C.negative, textAlign: "right", fontFamily: IN }}>
                 {account.openingBalance < 0 ? fmtFull(Math.abs(account.openingBalance)) : "—"}
               </p>
-              <p style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--sb-text)", textAlign: "right", fontFamily: IN }}>
+              <p style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: account.openingBalance < 0 ? C.negative : "var(--sb-text)", textAlign: "right", fontFamily: IN }}>
                 {fmtFull(account.openingBalance)}
               </p>
               <div />
@@ -320,11 +320,11 @@ export default function BankLedgerClient({
                       </span>
                     )}
                     {totalOut > 0 && (
-                      <span style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: OR, fontFamily: IN }}>
+                      <span style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: C.negative, fontFamily: IN }}>
                         −{fmtFull(totalOut)}
                       </span>
                     )}
-                    <span style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--sb-text)", fontFamily: IN }}>
+                    <span style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: closing < 0 ? C.negative : "var(--sb-text)", fontFamily: IN }}>
                       {fmtFull(closing)}
                     </span>
                   </div>
@@ -345,9 +345,9 @@ export default function BankLedgerClient({
                     >
                       <div style={{
                         width: 40, height: 40, borderRadius: 11,
-                        background: (isIn ? GR : OR) + "18",
+                        background: (isIn ? GR : C.negative) + "18",
                         display: "flex", alignItems: "center", justifyContent: "center",
-                        flexShrink: 0, color: isIn ? GR : OR,
+                        flexShrink: 0, color: isIn ? GR : C.negative,
                         fontSize: 18,
                       }}>
                         {isIn ? "↓" : "↑"}
@@ -361,10 +361,10 @@ export default function BankLedgerClient({
                         </p>
                       </div>
                       <div style={{ textAlign: "right", flexShrink: 0 }}>
-                        <p style={{ fontSize: TYPE.numSmall, fontWeight: 800, color: isIn ? GR : OR, fontFamily: IN }}>
+                        <p style={{ fontSize: TYPE.numSmall, fontWeight: 800, color: isIn ? GR : C.negative, fontFamily: IN }}>
                           {isIn ? "+" : "−"}{fmtFull(entry.amount)}
                         </p>
-                        <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: IN, marginTop: 2 }}>
+                        <p style={{ fontSize: TYPE.caption, color: entry.runningBalance < 0 ? C.negative : "var(--sb-sub)", fontFamily: IN, marginTop: 2 }}>
                           Bal: {fmtFull(entry.runningBalance)}
                         </p>
                       </div>
@@ -409,10 +409,10 @@ export default function BankLedgerClient({
                       <p style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: GR, textAlign: "right", fontFamily: IN }}>
                         {entry.increase > 0 ? fmtFull(entry.increase) : "—"}
                       </p>
-                      <p style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: OR, textAlign: "right", fontFamily: IN }}>
+                      <p style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: C.negative, textAlign: "right", fontFamily: IN }}>
                         {entry.decrease > 0 ? fmtFull(entry.decrease) : "—"}
                       </p>
-                      <p style={{ fontSize: TYPE.numSmall, fontWeight: 800, color: "var(--sb-text)", textAlign: "right", fontFamily: IN }}>
+                      <p style={{ fontSize: TYPE.numSmall, fontWeight: 800, color: entry.runningBalance < 0 ? C.negative : "var(--sb-text)", textAlign: "right", fontFamily: IN }}>
                         {fmtFull(entry.runningBalance)}
                       </p>
                       <div style={{ display: "flex", justifyContent: "flex-end" }}>
@@ -424,7 +424,7 @@ export default function BankLedgerClient({
                             display: "flex", alignItems: "center", justifyContent: "center",
                             cursor: "pointer",
                           }}
-                          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = OR + "15"; (e.currentTarget as HTMLButtonElement).style.color = OR; }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = C.negative + "15"; (e.currentTarget as HTMLButtonElement).style.color = C.negative; }}
                           onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "var(--sb-sub)"; }}
                         >
                           <TrashIcon />
@@ -456,7 +456,7 @@ export default function BankLedgerClient({
         <p style={{ fontFamily: SG, fontSize: TYPE.body, color: "var(--sb-sub)" }}>
           {paymentToDelete && (
             <>
-              <span style={{ fontWeight: 700, color: OR }}>
+              <span style={{ fontWeight: 700, color: paymentToDelete.direction === "INCOMING" ? GR : C.negative }}>
                 {paymentToDelete.direction === "INCOMING" ? "+" : "−"}{fmtFull(paymentToDelete.amount)}
               </span>
               {" "}— {paymentToDelete.partyName} {t("banking.ledger.deleteModal.body")}

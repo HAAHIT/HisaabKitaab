@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import {
-  OR, PU, GR, AM, SG, IN, TYPE, TOUCH,
+  C, OR, PU, GR, AM, SG, IN, TYPE, TOUCH,
   fmtFull, useIsMobile, HKCard, HKToast, HKModal,
   PageHeader,
 } from "@/components/ui/hk-design";
@@ -206,7 +206,7 @@ export default function BankingPage() {
                 {item.icon}
                 <span style={{ fontSize: TYPE.label, fontWeight: 600, color: item.color }}>{item.label}</span>
               </div>
-              <p style={{ fontSize: isMobile ? TYPE.numMedium : TYPE.numLarge - 2, fontWeight: 800, color: "var(--sb-text)", fontFamily: IN, lineHeight: 1.1 }}>
+              <p style={{ fontSize: isMobile ? TYPE.numMedium : TYPE.numLarge - 2, fontWeight: 800, color: item.value < 0 ? C.negative : "var(--sb-text)", fontFamily: IN, lineHeight: 1.1 }}>
                 {loading ? "..." : fmtFull(item.value)}
               </p>
             </div>
@@ -297,7 +297,7 @@ export default function BankingPage() {
                     <p style={{
                       fontSize: TYPE.numSmall,
                       fontWeight: 800,
-                      color: bal >= 0 ? "var(--sb-text)" : OR,
+                      color: bal >= 0 ? "var(--sb-text)" : C.negative,
                       fontFamily: IN,
                     }}>
                       {fmtFull(bal)}
