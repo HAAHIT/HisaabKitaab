@@ -2,9 +2,9 @@
 import { motion } from "framer-motion";
 
 const numbers = [
-  { n: "30s", label: "Median time, party to shared bill", sub: "vs. 4–6 min in Vyapar" },
-  { n: "12,400+", label: "Dukandaars across India", sub: "in 280 cities" },
-  { n: "₹2.1Cr", label: "WhatsApp UPI links paid daily", sub: "average across May 2026" },
+  { n: "30s", label: "Party to shared bill", sub: "with UPI link inside" },
+  { n: "2", label: "Languages, day one", sub: "Hindi + English" },
+  { n: "100%", label: "Tally Prime / ERP 9 ready", sub: "XML import & export" },
   { n: "0", label: "Times we say 'Debit' or 'Credit'", sub: "to a shopkeeper. Ever." },
 ];
 

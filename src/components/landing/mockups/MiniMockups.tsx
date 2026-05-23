@@ -51,7 +51,7 @@ export function PurchaseOcrMockup() {
       <div className="flex items-center gap-2 mb-3">
         <span className="font-mono text-[9px] uppercase tracking-widest text-[#2563eb]">AI · OCR</span>
         <span className="h-1 w-1 rounded-full bg-slate-300" />
-        <span className="text-[10px] text-slate-400">Gemini Flash</span>
+        <span className="text-[10px] text-slate-400">Live extract</span>
       </div>
       <div className="grid grid-cols-[88px_1fr] gap-3 items-start">
         <div className="aspect-[3/4] rounded-lg ring-1 ring-slate-200 bg-[linear-gradient(135deg,#f1f5f9,#e2e8f0)] relative overflow-hidden">

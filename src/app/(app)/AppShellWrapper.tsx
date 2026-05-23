@@ -17,10 +17,12 @@ export default function AppShellWrapper({
   children,
   user,
   showOnboarding = false,
+  initialBusinessName,
 }: {
   children: React.ReactNode;
   user: UserSession;
   showOnboarding?: boolean;
+  initialBusinessName?: string;
 }) {
   const router = useRouter();
   const [wizardVisible, setWizardVisible] = useState(showOnboarding);
@@ -49,7 +51,7 @@ export default function AppShellWrapper({
     <AppShell user={user}>
       {wizardVisible && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-default-50 dark:bg-zinc-950">
-          <SetupWizard onComplete={handleOnboardingComplete} />
+          <SetupWizard onComplete={handleOnboardingComplete} initialBusinessName={initialBusinessName} />
         </div>
       )}
       {children}

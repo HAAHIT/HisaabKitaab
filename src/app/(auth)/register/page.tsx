@@ -68,7 +68,7 @@ export default function RegisterPage() {
           throw new Error(data.error || t("register.error"));
         }
 
-        router.push("/");
+        router.push("/login");
         router.refresh();
       } catch (err) {
         setErrorMessage(

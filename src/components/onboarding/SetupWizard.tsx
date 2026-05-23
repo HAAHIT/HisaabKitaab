@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { OR, PU, GR, AM, SG, IN, TYPE } from "@/components/ui/hk-design";
 import { HKInput } from "@/components/ui/HKInput";
+import { useLanguage } from "@/contexts/LanguageContext";
+import type { TranslationKey } from "@/lib/i18n/translations";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -28,15 +30,15 @@ const BANKS = [
 
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z][Z][0-9A-Z]$/;
 
-const STEP_META = [
-  { label: "Business",  desc: "Naam aur jagah"           },
-  { label: "GSTIN",     desc: "Tax registration"          },
-  { label: "Bank",      desc: "Account details"           },
-  { label: "Parties",   desc: "Grahak & Suppliers"        },
-  { label: "Items",     desc: "Jo bechte ho"              },
-  { label: "Template",  desc: "Default bill format"       },
-  { label: "CA",        desc: "Accountant contact"        },
-  { label: "Done",      desc: "Sab set!"                  },
+const STEP_META: { labelKey: TranslationKey; descKey: TranslationKey }[] = [
+  { labelKey: "wizard.step.business.label", descKey: "wizard.step.business.desc" },
+  { labelKey: "wizard.step.gstin.label",    descKey: "wizard.step.gstin.desc"    },
+  { labelKey: "wizard.step.bank.label",     descKey: "wizard.step.bank.desc"     },
+  { labelKey: "wizard.step.parties.label",  descKey: "wizard.step.parties.desc"  },
+  { labelKey: "wizard.step.items.label",    descKey: "wizard.step.items.desc"    },
+  { labelKey: "wizard.step.template.label", descKey: "wizard.step.template.desc" },
+  { labelKey: "wizard.step.ca.label",       descKey: "wizard.step.ca.desc"       },
+  { labelKey: "wizard.step.done.label",     descKey: "wizard.step.done.desc"     },
 ];
 
 const TOTAL_STEPS = 8;
@@ -47,7 +49,8 @@ const PRESET_TEMPLATES = [
   {
     id: "standard",
     label: "Standard Invoice",
-    desc: "Description · Qty · Rate · Amount",
+    labelKey: "wizard.preset.standard.label" as TranslationKey,
+    descKey: "wizard.preset.standard.desc" as TranslationKey,
     icon: "📄",
     columns: [
       { id: "description", name: "Description", type: "text" },
@@ -59,7 +62,8 @@ const PRESET_TEMPLATES = [
   {
     id: "gst",
     label: "GST Invoice",
-    desc: "Item · HSN · Qty · Rate · GST% · Total",
+    labelKey: "wizard.preset.gst.label" as TranslationKey,
+    descKey: "wizard.preset.gst.desc" as TranslationKey,
     icon: "🧾",
     columns: [
       { id: "item",    name: "Item",       type: "text" },
@@ -72,7 +76,8 @@ const PRESET_TEMPLATES = [
   {
     id: "service",
     label: "Service Invoice",
-    desc: "Service · Hours · Rate · Amount",
+    labelKey: "wizard.preset.service.label" as TranslationKey,
+    descKey: "wizard.preset.service.desc" as TranslationKey,
     icon: "🛠️",
     columns: [
       { id: "service", name: "Service",    type: "text" },
@@ -84,7 +89,8 @@ const PRESET_TEMPLATES = [
   {
     id: "material",
     label: "Material Supply",
-    desc: "Item · Unit · Qty · Rate · Total",
+    labelKey: "wizard.preset.material.label" as TranslationKey,
+    descKey: "wizard.preset.material.desc" as TranslationKey,
     icon: "📦",
     columns: [
       { id: "item",   name: "Item",       type: "text" },
@@ -100,6 +106,7 @@ const PRESET_TEMPLATES = [
 
 interface SetupWizardProps {
   onComplete: () => void;
+  initialBusinessName?: string;
 }
 
 interface BankEntry {
@@ -178,8 +185,9 @@ function clearWizardDraft() {
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export function SetupWizard({ onComplete }: SetupWizardProps) {
+export function SetupWizard({ onComplete, initialBusinessName }: SetupWizardProps) {
   const router = useRouter();
+  const { t } = useLanguage();
   const { resolvedTheme, setTheme } = useTheme();
   const [themeMounted, setThemeMounted] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -192,6 +200,14 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
   const [step, setStep] = useState<number>(draft.current?.step ?? 0);
 
   useEffect(() => setThemeMounted(true), []);
+
+  // Prefill business name from the tenant's signup value after mount, so SSR/CSR
+  // markup matches. Only seed if no draft value and no user-entered value yet.
+  useEffect(() => {
+    if (!draft.current?.businessName && initialBusinessName) {
+      setBusinessName((prev) => (prev ? prev : initialBusinessName));
+    }
+  }, [initialBusinessName]);
 
   // Responsive detection
   useEffect(() => {
@@ -268,24 +284,24 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
   // ── Step savers ───────────────────────────────────────────────────────────
 
   async function saveStep1() {
-    if (!businessName.trim()) { setError("Business ka naam zaroori hai."); return false; }
-    if (!stateName) { setError("State select karo."); return false; }
+    if (!businessName.trim()) { setError(t("wizard.error.businessNameRequired")); return false; }
+    if (!stateName) { setError(t("wizard.error.stateRequired")); return false; }
     setError(null); setSaving(true);
     try {
       const address = [city.trim(), stateName].filter(Boolean).join(", ");
       await apiPatch("/api/settings", { companyName: businessName.trim(), companyAddress: address || undefined, businessType });
       return true;
-    } catch (err) { setError(err instanceof Error ? err.message : "Save failed"); return false; }
+    } catch (err) { setError(err instanceof Error ? err.message : t("wizard.error.saveFailed")); return false; }
     finally { setSaving(false); }
   }
 
   async function saveStep2() {
-    if (gstin && gstinValidState === "invalid") { setError("GSTIN format sahi nahi hai."); return false; }
+    if (gstin && gstinValidState === "invalid") { setError(t("wizard.error.gstinInvalid")); return false; }
     setError(null); setSaving(true);
     try {
       if (gstin.trim()) await apiPatch("/api/settings", { companyGstin: gstin.trim(), taxRegistrationType: "REGISTERED" });
       return true;
-    } catch (err) { setError(err instanceof Error ? err.message : "Save failed"); return false; }
+    } catch (err) { setError(err instanceof Error ? err.message : t("wizard.error.saveFailed")); return false; }
     finally { setSaving(false); }
   }
 
@@ -299,7 +315,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
         await apiFetch("/api/bank-accounts", { name: bank.bankName.trim(), accountNumber: bank.accountNumber.trim() || null, openingBalance: Number(bank.openingBalance) || 0, type: "BANK" });
       }
       return true;
-    } catch (err) { setError(err instanceof Error ? err.message : "Bank save failed"); return false; }
+    } catch (err) { setError(err instanceof Error ? err.message : t("wizard.error.bankSaveFailed")); return false; }
     finally { setSaving(false); }
   }
 
@@ -310,7 +326,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
     try {
       for (const p of parties) await apiFetch("/api/parties", { name: p.name, phone: p.phone || null, type: p.type });
       return true;
-    } catch (err) { setError(err instanceof Error ? err.message : "Party save failed"); return false; }
+    } catch (err) { setError(err instanceof Error ? err.message : t("wizard.error.partySaveFailed")); return false; }
     finally { setSaving(false); }
   }
 
@@ -321,7 +337,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
     try {
       for (const it of items) await apiFetch("/api/items", { name: it.name, unit: it.unit, rate: Number(it.rate) || 0, hsnCode: it.hsnCode || null });
       return true;
-    } catch (err) { setError(err instanceof Error ? err.message : "Item save failed"); return false; }
+    } catch (err) { setError(err instanceof Error ? err.message : t("wizard.error.itemSaveFailed")); return false; }
     finally { setSaving(false); }
   }
 
@@ -331,7 +347,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
     try {
       const preset = PRESET_TEMPLATES.find((p) => p.id === selectedPreset);
       if (!preset) return true;
-      // Create the template
+      // Create the template — use the stable English label so the persisted name doesn't change with locale.
       const res = await apiFetch("/api/templates", { name: preset.label, columns: preset.columns });
       const templateId: string = res.template?.id;
       if (templateId) {
@@ -340,7 +356,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
       }
       return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Template save failed");
+      setError(err instanceof Error ? err.message : t("wizard.error.templateSaveFailed"));
       return false;
     } finally {
       setSaving(false);
@@ -354,7 +370,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
     try {
       await apiPatch("/api/settings", { caName: caName.trim() || undefined, caEmail: caEmail.trim() || undefined, caPhone: caPhone.trim() || undefined });
       return true;
-    } catch (err) { setError(err instanceof Error ? err.message : "Save failed"); return false; }
+    } catch (err) { setError(err instanceof Error ? err.message : t("wizard.error.saveFailed")); return false; }
     finally { setSaving(false); }
   }
 
@@ -366,7 +382,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
       onComplete();
       router.push("/dashboard");
     }
-    catch (err) { setError(err instanceof Error ? err.message : "Finish failed"); }
+    catch (err) { setError(err instanceof Error ? err.message : t("wizard.error.finishFailed")); }
     finally { setSaving(false); }
   }
 
@@ -389,7 +405,8 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
 
   async function skipAll() {
     const ok = await saveStep1();
-    if (ok) setStep((TOTAL_STEPS - 1) as typeof step);
+    if (!ok) return;
+    await finishWizard();
   }
 
   // ── Inline add helpers ────────────────────────────────────────────────────
@@ -454,10 +471,10 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
               marginTop: 10, fontSize: 22, fontWeight: 800,
               fontFamily: SG, letterSpacing: "-0.3px", lineHeight: 1.3, margin: "10px 0 0",
             }}>
-              Apna Karobaar<br />Shuru Karo
+              {t("wizard.title")}
             </h1>
             <p style={{ marginTop: 10, fontSize: TYPE.bodySmall, opacity: 0.75, fontFamily: SG }}>
-              Sirf 5 minute mein setup taiyaar
+              {t("wizard.subtitle")}
             </p>
           </div>
 
@@ -508,14 +525,14 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                         color: isComplete ? GR : isActive ? "var(--sb-text)" : "var(--sb-sub)",
                         fontFamily: SG, margin: 0, lineHeight: 1.3,
                       }}>
-                        {meta.label}
+                        {t(meta.labelKey)}
                       </p>
                       <p style={{
                         fontSize: TYPE.caption,
                         color: isComplete ? GR + "bb" : isActive ? OR : "var(--sb-muted)",
                         fontFamily: SG, marginTop: 2,
                       }}>
-                        {isComplete ? "Ho gaya ✓" : isActive ? "Abhi yahan ho" : meta.desc}
+                        {isComplete ? t("wizard.status.done") : isActive ? t("wizard.status.current") : t(meta.descKey)}
                       </p>
                     </div>
                   </div>
@@ -538,12 +555,12 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
           {/* Footer: note + theme toggle */}
           <div style={{ padding: "14px 20px", borderTop: "1px solid var(--sb-border)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
             <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", fontFamily: SG, lineHeight: 1.5, margin: 0 }}>
-              Baad mein Settings mein<br />edit kar sakte ho.
+              {t("wizard.footerNote.line1")}<br />{t("wizard.footerNote.line2")}
             </p>
             {themeMounted && (
               <button
                 onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-                title={resolvedTheme === "dark" ? "Light mode" : "Dark mode"}
+                title={resolvedTheme === "dark" ? t("wizard.theme.light") : t("wizard.theme.dark")}
                 style={{
                   width: 36, height: 36, borderRadius: 10, flexShrink: 0,
                   border: "1px solid var(--sb-border)", background: "var(--sb-badge)",
@@ -583,7 +600,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
               SoloBooks
             </p>
             <h1 style={{ fontSize: 22, fontWeight: 800, fontFamily: SG, marginTop: 6, marginBottom: 0 }}>
-              Apna Karobaar Shuru Karo
+              {t("wizard.title")}
             </h1>
           </div>
         )}
@@ -606,7 +623,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
               ))}
             </div>
             <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG, margin: 0 }}>
-              Step {step + 1} of {TOTAL_STEPS} · <strong style={{ color: "var(--sb-text)" }}>{STEP_META[step].label}</strong>
+              {t("wizard.mobile.stepOf").replace("{current}", String(step + 1)).replace("{total}", String(TOTAL_STEPS))} · <strong style={{ color: "var(--sb-text)" }}>{t(STEP_META[step].labelKey)}</strong>
             </p>
           </div>
         )}
@@ -623,20 +640,20 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
             {step === 0 && (
               <div>
                 <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 6, marginTop: 0 }}>
-                  Business ki Details
+                  {t("wizard.step1.title")}
                 </h2>
                 <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", marginBottom: 28, fontFamily: SG }}>
-                  Apna karobaar ka naam aur jagah batao.
+                  {t("wizard.step1.subtitle")}
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                  <HKInput label="Business ka naam *" placeholder="Jaise: Sharma Traders" value={businessName} onValueChange={setBusinessName} size="lg" />
-                  <HKSelect label="Business kya karta hai?" value={businessType} onValueChange={(v) => { if (v) setBusinessType(v); }} size="lg">
-                    {BUSINESS_TYPES.map((t) => <HKSelectItem key={t} value={t}>{t}</HKSelectItem>)}
+                  <HKInput label={t("wizard.step1.businessNameLabel")} placeholder={t("wizard.step1.businessNamePlaceholder")} value={businessName} onValueChange={setBusinessName} size="lg" />
+                  <HKSelect label={t("wizard.step1.businessTypeLabel")} value={businessType} onValueChange={(v) => { if (v) setBusinessType(v); }} size="lg">
+                    {BUSINESS_TYPES.map((bt) => <HKSelectItem key={bt} value={bt}>{bt}</HKSelectItem>)}
                   </HKSelect>
-                  <HKSelect label="State *" value={stateName} onValueChange={(v) => { if (v) setStateName(v); }} size="lg">
+                  <HKSelect label={t("wizard.step1.stateLabel")} value={stateName} onValueChange={(v) => { if (v) setStateName(v); }} size="lg">
                     {INDIAN_STATES.map((s) => <HKSelectItem key={s} value={s}>{s}</HKSelectItem>)}
                   </HKSelect>
-                  <HKInput label="City" placeholder="Jaise: Mumbai" value={city} onValueChange={setCity} size="lg" />
+                  <HKInput label={t("wizard.step1.cityLabel")} placeholder={t("wizard.step1.cityPlaceholder")} value={city} onValueChange={setCity} size="lg" />
                 </div>
               </div>
             )}
@@ -645,21 +662,21 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
             {step === 1 && (
               <div>
                 <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 6, marginTop: 0 }}>
-                  GSTIN hai?
+                  {t("wizard.step2.title")}
                 </h2>
                 <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", marginBottom: 28, fontFamily: SG }}>
-                  Optional, par bills mein zaroori hota hai. Baad mein bhi add kar sakte ho.
+                  {t("wizard.step2.subtitle")}
                 </p>
                 <HKInput
-                  label="GSTIN Number"
+                  label={t("wizard.step2.gstinLabel")}
                   placeholder="27AAAAA0000A1Z5"
                   value={gstin}
                   onValueChange={onGstinChange}
                   size="lg"
                   isInvalid={gstinValidState === "invalid"}
                   description={
-                    gstinValidState === "valid" ? "✓ Valid GSTIN format"
-                    : gstinValidState === "invalid" ? "Format sahi nahi — 15 characters hone chahiye"
+                    gstinValidState === "valid" ? t("wizard.step2.gstinValid")
+                    : gstinValidState === "invalid" ? t("wizard.step2.gstinInvalidHint")
                     : ""
                   }
                 />
@@ -670,30 +687,30 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
             {step === 2 && (
               <div>
                 <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 6, marginTop: 0 }}>
-                  Bank Account Jodo
+                  {t("wizard.step3.title")}
                 </h2>
                 <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", marginBottom: 28, fontFamily: SG }}>
-                  Month-end reconciliation ke liye helpful hoga. Skip kar sakte ho.
+                  {t("wizard.step3.subtitle")}
                 </p>
                 {banks.map((bank, i) => (
                   <div key={i} style={{ marginBottom: 16, padding: "16px", borderRadius: 14, border: "1.5px solid var(--sb-border)", background: "var(--sb-card)" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                      <p style={{ fontSize: TYPE.body, fontWeight: 700, fontFamily: SG, margin: 0 }}>Account {i + 1}</p>
+                      <p style={{ fontSize: TYPE.body, fontWeight: 700, fontFamily: SG, margin: 0 }}>{t("wizard.step3.accountHeading").replace("{n}", String(i + 1))}</p>
                       {banks.length > 1 && (
-                        <button onClick={() => removeBankRow(i)} style={{ background: "none", border: "none", cursor: "pointer", color: OR, fontSize: TYPE.bodySmall, fontFamily: SG }}>✕ Hatao</button>
+                        <button onClick={() => removeBankRow(i)} style={{ background: "none", border: "none", cursor: "pointer", color: OR, fontSize: TYPE.bodySmall, fontFamily: SG }}>{t("wizard.step3.removeAccount")}</button>
                       )}
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                      <HKSelect label="Bank" value={bank.bankName} onValueChange={(v) => { if (v) setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, bankName: v } : b)); }}>
+                      <HKSelect label={t("wizard.step3.bankLabel")} value={bank.bankName} onValueChange={(v) => { if (v) setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, bankName: v } : b)); }}>
                         {BANKS.map((b) => <HKSelectItem key={b} value={b}>{b}</HKSelectItem>)}
                       </HKSelect>
-                      <HKInput label="Account number (optional)" placeholder="XXXX XXXX XXXX" value={bank.accountNumber} onValueChange={(v) => setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, accountNumber: v } : b))} />
-                      <HKInput label="Opening balance (₹)" type="number" value={bank.openingBalance} onValueChange={(v) => setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, openingBalance: v } : b))} />
+                      <HKInput label={t("wizard.step3.accountNumberLabel")} placeholder={t("wizard.step3.accountNumberPlaceholder")} value={bank.accountNumber} onValueChange={(v) => setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, accountNumber: v } : b))} />
+                      <HKInput label={t("wizard.step3.openingBalanceLabel")} type="number" value={bank.openingBalance} onValueChange={(v) => setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, openingBalance: v } : b))} />
                     </div>
                   </div>
                 ))}
                 <button onClick={addBankRow} style={{ width: "100%", padding: "13px", borderRadius: 12, border: `1.5px dashed var(--sb-border)`, background: "transparent", cursor: "pointer", color: PU, fontSize: TYPE.body, fontWeight: 700, fontFamily: SG }}>
-                  + Aur Account Jodo
+                  {t("wizard.step3.addAccount")}
                 </button>
               </div>
             )}
@@ -702,37 +719,37 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
             {step === 3 && (
               <div>
                 <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 6, marginTop: 0 }}>
-                  Customers / Suppliers
+                  {t("wizard.step4.title")}
                 </h2>
                 <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", marginBottom: 28, fontFamily: SG }}>
-                  Kuch logon ko add karo, ya baad mein Udhar Khata mein karo.
+                  {t("wizard.step4.subtitle")}
                 </p>
                 {parties.map((p, i) => (
                   <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10, padding: "12px 16px", borderRadius: 10, background: (p.type === "CUSTOMER" ? PU : OR) + "14", border: `1px solid ${(p.type === "CUSTOMER" ? PU : OR)}22` }}>
                     <div style={{ flex: 1 }}>
                       <p style={{ fontSize: TYPE.body, fontWeight: 700, fontFamily: SG, margin: 0 }}>{p.name}</p>
-                      <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG, marginTop: 2 }}>{p.type === "CUSTOMER" ? "Grahak" : "Supplier"}{p.phone ? ` · ${p.phone}` : ""}</p>
+                      <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG, marginTop: 2 }}>{p.type === "CUSTOMER" ? t("wizard.step4.customerLabel") : t("wizard.step4.supplierLabel")}{p.phone ? ` · ${p.phone}` : ""}</p>
                     </div>
                     <button onClick={() => removeParty(i)} style={{ background: "none", border: "none", cursor: "pointer", color: OR, fontSize: 14 }}>✕</button>
                   </div>
                 ))}
                 <div style={{ padding: "16px", borderRadius: 14, border: "1.5px solid var(--sb-border)", background: "var(--sb-card)", marginTop: parties.length ? 12 : 0 }}>
-                  <p style={{ fontSize: TYPE.caption, fontWeight: 700, textTransform: "uppercase", color: "var(--sb-sub)", letterSpacing: "0.5px", marginBottom: 12, fontFamily: SG }}>Nayi party add karo</p>
+                  <p style={{ fontSize: TYPE.caption, fontWeight: 700, textTransform: "uppercase", color: "var(--sb-sub)", letterSpacing: "0.5px", marginBottom: 12, fontFamily: SG }}>{t("wizard.step4.newPartyHeading")}</p>
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    <HKInput label="Naam *" value={addPartyName} onValueChange={setAddPartyName} />
-                    <HKInput label="Phone (optional)" value={addPartyPhone} onValueChange={setAddPartyPhone} type="tel" />
+                    <HKInput label={t("wizard.step4.nameLabel")} value={addPartyName} onValueChange={setAddPartyName} />
+                    <HKInput label={t("wizard.step4.phoneLabel")} value={addPartyPhone} onValueChange={setAddPartyPhone} type="tel" />
                     <div style={{ display: "flex", gap: 8 }}>
-                      {(["CUSTOMER", "VENDOR"] as const).map((t) => (
-                        <button key={t} onClick={() => setAddPartyType(t)} style={{ flex: 1, padding: "10px", borderRadius: 8, border: `1.5px solid ${addPartyType === t ? (t === "CUSTOMER" ? PU : OR) : "var(--sb-border)"}`, background: addPartyType === t ? (t === "CUSTOMER" ? PU + "18" : OR + "18") : "transparent", color: addPartyType === t ? (t === "CUSTOMER" ? PU : OR) : "var(--sb-sub)", fontSize: TYPE.bodySmall, fontWeight: 700, cursor: "pointer", fontFamily: SG }}>
-                          {t === "CUSTOMER" ? "Grahak" : "Supplier"}
+                      {(["CUSTOMER", "VENDOR"] as const).map((pt) => (
+                        <button key={pt} onClick={() => setAddPartyType(pt)} style={{ flex: 1, padding: "10px", borderRadius: 8, border: `1.5px solid ${addPartyType === pt ? (pt === "CUSTOMER" ? PU : OR) : "var(--sb-border)"}`, background: addPartyType === pt ? (pt === "CUSTOMER" ? PU + "18" : OR + "18") : "transparent", color: addPartyType === pt ? (pt === "CUSTOMER" ? PU : OR) : "var(--sb-sub)", fontSize: TYPE.bodySmall, fontWeight: 700, cursor: "pointer", fontFamily: SG }}>
+                          {pt === "CUSTOMER" ? t("wizard.step4.customerLabel") : t("wizard.step4.supplierLabel")}
                         </button>
                       ))}
                     </div>
-                    <button onClick={addParty} style={{ padding: "12px", borderRadius: 10, border: "none", background: `linear-gradient(135deg, ${OR}, ${PU})`, color: "white", fontSize: TYPE.body, fontWeight: 700, cursor: "pointer", fontFamily: SG }}>+ Jodo</button>
+                    <button onClick={addParty} style={{ padding: "12px", borderRadius: 10, border: "none", background: `linear-gradient(135deg, ${OR}, ${PU})`, color: "white", fontSize: TYPE.body, fontWeight: 700, cursor: "pointer", fontFamily: SG }}>{t("wizard.step4.addButton")}</button>
                   </div>
                 </div>
                 <div style={{ marginTop: 14, textAlign: "center" }}>
-                  <a href="/settings/tally-import?returnTo=/dashboard" style={{ fontSize: TYPE.bodySmall, fontWeight: 600, color: PU, fontFamily: SG }}>📥 Ya Tally se import karo →</a>
+                  <a href="/settings/tally-import?returnTo=/dashboard" style={{ fontSize: TYPE.bodySmall, fontWeight: 600, color: PU, fontFamily: SG }}>{t("wizard.step4.importFromTally")}</a>
                 </div>
               </div>
             )}
@@ -741,10 +758,10 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
             {step === 4 && (
               <div>
                 <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 6, marginTop: 0 }}>
-                  Items / Saman
+                  {t("wizard.step5.title")}
                 </h2>
                 <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", marginBottom: 28, fontFamily: SG }}>
-                  Jo cheezein tum bechte ho — bills mein fast pick ke liye.
+                  {t("wizard.step5.subtitle")}
                 </p>
                 {items.map((it, i) => (
                   <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10, padding: "12px 16px", borderRadius: 10, background: GR + "10", border: `1px solid ${GR}22` }}>
@@ -756,15 +773,15 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                   </div>
                 ))}
                 <div style={{ padding: "16px", borderRadius: 14, border: "1.5px solid var(--sb-border)", background: "var(--sb-card)", marginTop: items.length ? 12 : 0 }}>
-                  <p style={{ fontSize: TYPE.caption, fontWeight: 700, textTransform: "uppercase", color: "var(--sb-sub)", letterSpacing: "0.5px", marginBottom: 12, fontFamily: SG }}>Naya item add karo</p>
+                  <p style={{ fontSize: TYPE.caption, fontWeight: 700, textTransform: "uppercase", color: "var(--sb-sub)", letterSpacing: "0.5px", marginBottom: 12, fontFamily: SG }}>{t("wizard.step5.newItemHeading")}</p>
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    <HKInput label="Item ka naam *" value={addItemName} onValueChange={setAddItemName} />
+                    <HKInput label={t("wizard.step5.itemNameLabel")} value={addItemName} onValueChange={setAddItemName} />
                     <div style={{ display: "flex", gap: 10 }}>
-                      <HKInput label="Unit" value={addItemUnit} onValueChange={setAddItemUnit} placeholder="pcs / kg / m" style={{ flex: 1 }} />
-                      <HKInput label="Rate (₹)" type="number" value={addItemRate} onValueChange={setAddItemRate} style={{ flex: 1 }} />
+                      <HKInput label={t("wizard.step5.unitLabel")} value={addItemUnit} onValueChange={setAddItemUnit} placeholder={t("wizard.step5.unitPlaceholder")} style={{ flex: 1 }} />
+                      <HKInput label={t("wizard.step5.rateLabel")} type="number" value={addItemRate} onValueChange={setAddItemRate} style={{ flex: 1 }} />
                     </div>
-                    <HKInput label="HSN Code (optional)" value={addItemHsn} onValueChange={setAddItemHsn} placeholder="E.g. 5208" />
-                    <button onClick={addItem} style={{ padding: "12px", borderRadius: 10, border: "none", background: `linear-gradient(135deg, ${GR}, ${PU})`, color: "white", fontSize: TYPE.body, fontWeight: 700, cursor: "pointer", fontFamily: SG }}>+ Jodo</button>
+                    <HKInput label={t("wizard.step5.hsnLabel")} value={addItemHsn} onValueChange={setAddItemHsn} placeholder={t("wizard.step5.hsnPlaceholder")} />
+                    <button onClick={addItem} style={{ padding: "12px", borderRadius: 10, border: "none", background: `linear-gradient(135deg, ${GR}, ${PU})`, color: "white", fontSize: TYPE.body, fontWeight: 700, cursor: "pointer", fontFamily: SG }}>{t("wizard.step5.addButton")}</button>
                   </div>
                 </div>
               </div>
@@ -774,10 +791,10 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
             {step === 5 && (
               <div>
                 <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 6, marginTop: 0 }}>
-                  Bill ka Format Chuno
+                  {t("wizard.step6.title")}
                 </h2>
                 <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", marginBottom: 28, fontFamily: SG }}>
-                  Ye default template har naye bill mein auto-select hoga. Baad mein Settings mein change kar sakte ho.
+                  {t("wizard.step6.subtitle")}
                 </p>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -815,13 +832,13 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                             fontSize: TYPE.bodyLarge, fontWeight: active ? 700 : 600,
                             color: active ? OR : "var(--sb-text)", fontFamily: SG, margin: 0,
                           }}>
-                            {preset.label}
+                            {t(preset.labelKey)}
                           </p>
                           <p style={{
                             fontSize: TYPE.bodySmall, color: "var(--sb-sub)",
                             fontFamily: SG, marginTop: 3,
                           }}>
-                            {preset.desc}
+                            {t(preset.descKey)}
                           </p>
                         </div>
                       </button>
@@ -830,7 +847,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                 </div>
 
                 <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", fontFamily: SG, marginTop: 16 }}>
-                  Columns baad mein Settings → Templates mein edit ho sakta hai.
+                  {t("wizard.step6.footnote")}
                 </p>
               </div>
             )}
@@ -839,15 +856,15 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
             {step === 6 && (
               <div>
                 <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 6, marginTop: 0 }}>
-                  CA ka Contact
+                  {t("wizard.step7.title")}
                 </h2>
                 <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", marginBottom: 28, fontFamily: SG }}>
-                  Tally file bhejna hoga toh CA ka email auto-fill ho jayega.
+                  {t("wizard.step7.subtitle")}
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                  <HKInput label="CA ka naam" value={caName} onValueChange={setCaName} size="lg" placeholder="Jaise: Pradeep Sharma" />
-                  <HKInput label="CA ka email" type="email" value={caEmail} onValueChange={setCaEmail} size="lg" placeholder="ca@example.com" />
-                  <HKInput label="CA ka phone" type="tel" value={caPhone} onValueChange={setCaPhone} size="lg" placeholder="+91 98765 43210" />
+                  <HKInput label={t("wizard.step7.caNameLabel")} value={caName} onValueChange={setCaName} size="lg" placeholder={t("wizard.step7.caNamePlaceholder")} />
+                  <HKInput label={t("wizard.step7.caEmailLabel")} type="email" value={caEmail} onValueChange={setCaEmail} size="lg" placeholder={t("wizard.step7.caEmailPlaceholder")} />
+                  <HKInput label={t("wizard.step7.caPhoneLabel")} type="tel" value={caPhone} onValueChange={setCaPhone} size="lg" placeholder={t("wizard.step7.caPhonePlaceholder")} />
                 </div>
               </div>
             )}
@@ -857,27 +874,27 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
               <div>
                 <div style={{ textAlign: isMobile ? "center" : "left", marginBottom: 32 }}>
                   <p style={{ fontSize: 56, marginBottom: 16, lineHeight: 1 }}>🎉</p>
-                  <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 8, marginTop: 0 }}>Sab Set Hai!</h2>
+                  <h2 style={{ fontSize: TYPE.h1, fontWeight: 800, fontFamily: SG, marginBottom: 8, marginTop: 0 }}>{t("wizard.step8.title")}</h2>
                   <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", fontFamily: SG }}>
-                    Business details, GSTIN, bank accounts — sab save ho gaya. Pehla bill banao aur shuru karo!
+                    {t("wizard.step8.subtitle")}
                   </p>
                 </div>
 
                 {/* Summary card */}
                 <div style={{ background: "var(--sb-card)", borderRadius: 16, border: "1.5px solid var(--sb-border)", overflow: "hidden" }}>
                   <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--sb-border)", background: OR + "08" }}>
-                    <p style={{ fontSize: TYPE.caption, fontWeight: 800, textTransform: "uppercase", color: OR, letterSpacing: "1px", fontFamily: SG, margin: 0 }}>Setup Summary</p>
+                    <p style={{ fontSize: TYPE.caption, fontWeight: 800, textTransform: "uppercase", color: OR, letterSpacing: "1px", fontFamily: SG, margin: 0 }}>{t("wizard.step8.summaryHeading")}</p>
                   </div>
                   <div style={{ padding: "4px 0" }}>
                     {[
-                      { label: "Business",      value: businessName || "—" },
-                      { label: "State",          value: stateName || "—" },
-                      { label: "GSTIN",          value: gstin || "Skip kiya" },
-                      { label: "Banks added",    value: String(banks.filter((b) => b.bankName).length) },
-                      { label: "Parties added",  value: String(parties.length) },
-                      { label: "Items added",    value: String(items.length) },
-                      { label: "Bill Template",  value: PRESET_TEMPLATES.find((p) => p.id === selectedPreset)?.label || "Skip kiya" },
-                      { label: "CA",             value: caName || caEmail || "Skip kiya" },
+                      { label: t("wizard.step8.summary.business"), value: businessName || "—" },
+                      { label: t("wizard.step8.summary.state"),    value: stateName || "—" },
+                      { label: t("wizard.step8.summary.gstin"),    value: gstin || t("wizard.step8.skipped") },
+                      { label: t("wizard.step8.summary.banks"),    value: String(banks.filter((b) => b.bankName).length) },
+                      { label: t("wizard.step8.summary.parties"),  value: String(parties.length) },
+                      { label: t("wizard.step8.summary.items"),    value: String(items.length) },
+                      { label: t("wizard.step8.summary.template"), value: (() => { const p = PRESET_TEMPLATES.find((pp) => pp.id === selectedPreset); return p ? t(p.labelKey) : t("wizard.step8.skipped"); })() },
+                      { label: t("wizard.step8.summary.ca"),       value: caName || caEmail || t("wizard.step8.skipped") },
                     ].map((row, idx, arr) => (
                       <div key={row.label} style={{
                         display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -892,7 +909,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                 </div>
 
                 <p style={{ fontSize: TYPE.bodySmall, color: "var(--sb-muted)", fontFamily: SG, marginTop: 16 }}>
-                  Settings mein sab kuch baad mein edit kar sakte ho.
+                  {t("wizard.step8.footnote")}
                 </p>
               </div>
             )}
@@ -908,7 +925,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                     textDecoration: "underline", textUnderlineOffset: 3,
                   }}
                 >
-                  Skip — Start using app
+                  {t("wizard.nav.skipStart")}
                 </button>
               </div>
             )}
@@ -951,7 +968,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
               transition: "opacity 0.2s",
             }}
           >
-            ← Peeche
+            {t("wizard.nav.back")}
           </button>
 
           {/* Right actions */}
@@ -968,7 +985,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                   fontFamily: SG, minHeight: 48,
                 }}
               >
-                Skip
+                {t("wizard.nav.skip")}
               </button>
             )}
 
@@ -986,7 +1003,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                   transition: "box-shadow 0.2s",
                 }}
               >
-                {saving ? "..." : "Aage Badho →"}
+                {saving ? "..." : t("wizard.nav.next")}
               </button>
             ) : (
               <button
@@ -1001,7 +1018,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                   boxShadow: saving ? "none" : `0 4px 16px ${GR}55`,
                 }}
               >
-                {saving ? "..." : "Karobaar Shuru Karo ✓"}
+                {saving ? "..." : t("wizard.nav.finish")}
               </button>
             )}
           </div>

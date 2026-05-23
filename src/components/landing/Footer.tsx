@@ -30,7 +30,7 @@ export function Footer() {
               <span className="font-display text-[20px] font-semibold text-slate-900">SoloBooks</span>
             </div>
             <p className="mt-4 text-[13.5px] text-slate-500 max-w-[280px] leading-relaxed">
-              Bookkeeping for the way India does business. Built in Bengaluru. Loved in 280 cities.
+              Bookkeeping for the way India does business. Built for Bharat.
             </p>
             <div className="mt-6 flex items-center gap-3">
               {["X", "in", "Yt", "Ig"].map((s) => (

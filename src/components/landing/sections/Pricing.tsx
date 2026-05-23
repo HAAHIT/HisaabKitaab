@@ -17,7 +17,7 @@ const tiers = [
     price: "₹299",
     suffix: "/month",
     sub: "Billed annually · ₹3,588/yr",
-    features: ["Unlimited bills · parties", "Tally XML export + import", "Bank reconciliation", "Purchase bill OCR (Gemini)", "GST returns (3B, 1)", "Up to 3 users · Hindi/English"],
+    features: ["Unlimited bills · parties", "Tally XML export + import", "Excel reports (trial balance, ledger)", "Credit notes & payment vouchers", "Bank reconciliation", "Purchase bill OCR", "GST returns (3B, 1)", "Owner + accountant roles · Hindi/English"],
     cta: "Try free for 30 days",
     accent: true,
   },

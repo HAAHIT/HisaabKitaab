@@ -19,7 +19,7 @@ export function TrustStrip() {
     <section className="relative py-10 border-y border-slate-200/60 bg-slate-50/80">
       <div className="mx-auto max-w-7xl px-5 sm:px-8 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-8">
         <p className="text-[11.5px] uppercase tracking-[0.18em] text-slate-400 font-mono shrink-0">
-          12,400+ shopkeepers · across India
+          Built for shopkeepers · across India
         </p>
         <div className="relative flex-1 overflow-hidden mask-fade">
           <motion.div

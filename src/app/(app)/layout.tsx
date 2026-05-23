@@ -15,16 +15,22 @@ export default async function AppLayout({
 
   const tenant = await prisma.tenant.findUnique({
     where: { id: session.tenantId },
-    select: { settings: true },
+    select: { settings: true, isOnboardingComplete: true },
   });
 
   const settings = tenant?.settings as Record<string, unknown> | null;
-  // Only show wizard when onboardingComplete is explicitly false (set at registration).
-  // Legacy tenants without this key should NOT see the wizard.
-  const showOnboarding = settings?.onboardingComplete === false;
+  // Show wizard only when the tenant column says onboarding is incomplete.
+  // /api/onboarding/complete writes to this column.
+  const showOnboarding = tenant?.isOnboardingComplete === false;
+  const initialBusinessName =
+    typeof settings?.companyName === "string" ? (settings.companyName as string) : undefined;
 
   return (
-    <AppShellWrapper user={session} showOnboarding={showOnboarding}>
+    <AppShellWrapper
+      user={session}
+      showOnboarding={showOnboarding}
+      initialBusinessName={initialBusinessName}
+    >
       {children}
     </AppShellWrapper>
   );

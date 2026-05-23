@@ -486,6 +486,8 @@ export default async function LoginPage({
             <button
               id="login-button"
               type="submit"
+              data-signing-in-label={t("login.signingIn")}
+              data-network-error={t("login.networkError")}
               style={{
                 marginTop: 8,
                 display: "inline-flex",
@@ -642,7 +644,9 @@ export default async function LoginPage({
               const loginBtn = document.getElementById("login-button");
               const loginSpinner = document.getElementById("login-spinner");
               const loginLabel = document.getElementById("login-label");
-              const defaultLabel = loginLabel ? loginLabel.textContent : "Sign in";
+              const defaultLabel = loginLabel ? loginLabel.textContent : "";
+              const signingInLabel = loginBtn ? loginBtn.getAttribute("data-signing-in-label") || defaultLabel : defaultLabel;
+              const networkErrorMessage = loginBtn ? loginBtn.getAttribute("data-network-error") || "" : "";
               const errorContainer = document.getElementById("login-error-container");
               const errorText = document.getElementById("login-error-text");
 
@@ -659,7 +663,7 @@ export default async function LoginPage({
                   loginBtn.style.opacity = "0.7";
                   loginBtn.style.cursor = "not-allowed";
                   loginSpinner.style.display = "flex";
-                  loginLabel.textContent = "Signing in\\u2026";
+                  loginLabel.textContent = signingInLabel;
 
                   try {
                     const formData = new FormData(form);
@@ -674,7 +678,7 @@ export default async function LoginPage({
                     const json = await res.json();
 
                     if (!res.ok) {
-                      throw new Error(json.error || "An unexpected error occurred");
+                      throw new Error(json.error || networkErrorMessage);
                     }
 
                     window.location.href = json.redirectTo || "/dashboard";
