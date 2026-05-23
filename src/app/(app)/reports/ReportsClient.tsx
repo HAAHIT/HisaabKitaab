@@ -11,6 +11,7 @@ import {
   getCurrentFinancialYearRange,
   getCurrentQuarterRange,
 } from "@/lib/journal-reporting";
+import FinancialReportsSection from "./FinancialReportsSection";
 
 interface ReportsClientProps {
   initialFrom: string;
@@ -18,6 +19,7 @@ interface ReportsClientProps {
   totalEntries: number;
   unbalancedCount: number;
   parties: { id: string; name: string; type: string }[];
+  accountOptions: { code: string; name: string; tallyGroup: string }[];
 }
 
 interface GstMonthRow {
@@ -112,6 +114,7 @@ export default function ReportsClient({
   totalEntries,
   unbalancedCount,
   parties,
+  accountOptions,
 }: ReportsClientProps) {
   const { t } = useLanguage();
   const [preset, setPreset] = useState<DatePreset>("currentFy");
@@ -392,6 +395,13 @@ export default function ReportsClient({
           </div>
         </div>
       </div>
+
+      <FinancialReportsSection
+        from={from}
+        to={to}
+        exportBlocked={exportBlocked}
+        accountOptions={accountOptions}
+      />
 
       {/* ── GST Summary Report ──────────────────────────────────────────────── */}
       <div className="rounded-2xl border border-[var(--sb-border)] bg-[var(--sb-card)] shadow-sm">
