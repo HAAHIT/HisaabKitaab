@@ -2,8 +2,24 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "How to Import Data from TallyPrime into SoloBooks | Guide",
-  description: "Learn step-by-step how to migrate existing ledgers, parties, and historical vouchers out of TallyPrime cleanly and seamlessly into SoloBooks.",
+  title: "Import Data from TallyPrime into SoloBooks — Guide",
+  description:
+    "Step-by-step guide to migrate ledgers, parties, and historical GST vouchers from Tally ERP 9 / TallyPrime into SoloBooks without data loss.",
+  keywords: [
+    "import from Tally",
+    "Tally to SoloBooks",
+    "migrate Tally data",
+    "Tally XML import",
+    "Tally ledger import",
+  ],
+  alternates: { canonical: "/guides/import-from-tally" },
+  openGraph: {
+    title: "Import Tally Data into SoloBooks",
+    description:
+      "Migrate ledgers, parties, and vouchers from Tally into SoloBooks cleanly.",
+    type: "article",
+    url: "/guides/import-from-tally",
+  },
 };
 
 export default function ImportFromTallyGuide() {

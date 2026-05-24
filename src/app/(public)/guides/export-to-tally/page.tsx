@@ -2,8 +2,24 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "How to Export Data from SoloBooks to TallyPrime | Guide",
-  description: "Learn how to effortlessly sync your daily billing and purchase data generated in SoloBooks back into TallyPrime for your CA.",
+  title: "Export Data from SoloBooks to TallyPrime — Guide",
+  description:
+    "Step-by-step guide to export GST-compliant vouchers, sales, and purchases from SoloBooks into Tally ERP 9 / TallyPrime XML format.",
+  keywords: [
+    "export to Tally",
+    "SoloBooks Tally export",
+    "Tally XML",
+    "TallyPrime import",
+    "GST voucher export",
+  ],
+  alternates: { canonical: "/guides/export-to-tally" },
+  openGraph: {
+    title: "Export SoloBooks Data to TallyPrime",
+    description:
+      "Sync daily billing and purchase data from SoloBooks into Tally for your CA.",
+    type: "article",
+    url: "/guides/export-to-tally",
+  },
 };
 
 export default function ExportToTallyGuide() {
