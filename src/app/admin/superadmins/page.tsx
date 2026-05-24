@@ -72,8 +72,7 @@ function ChangeOwnPassword() {
         border: "1px solid var(--sb-border)",
         borderRadius: 12,
         padding: 16,
-        marginBottom: 24,
-        maxWidth: 560,
+        height: "100%",
       }}
     >
       <h2 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Change your password</h2>
@@ -204,18 +203,25 @@ export default function SuperAdminsPage() {
         Manage platform-level admins. They have cross-tenant access.
       </p>
 
-      <ChangeOwnPassword />
-
-      <section
+      <div
         style={{
-          background: "var(--sb-card)",
-          border: "1px solid var(--sb-border)",
-          borderRadius: 12,
-          padding: 16,
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+          gap: 16,
           marginBottom: 24,
-          maxWidth: 560,
         }}
       >
+        <ChangeOwnPassword />
+
+        <section
+          style={{
+            background: "var(--sb-card)",
+            border: "1px solid var(--sb-border)",
+            borderRadius: 12,
+            padding: 16,
+            height: "100%",
+          }}
+        >
         <h2 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Add new superadmin</h2>
         <form onSubmit={submit} style={{ display: "grid", gap: 10 }}>
           <input
@@ -261,7 +267,8 @@ export default function SuperAdminsPage() {
             {submitting ? "Creating…" : "Create superadmin"}
           </button>
         </form>
-      </section>
+        </section>
+      </div>
 
       <h2 style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, color: "var(--sb-muted)" }}>Existing</h2>
       {error && <div style={{ color: "crimson", marginBottom: 12 }}>Failed: {error}</div>}
