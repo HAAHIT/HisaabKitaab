@@ -4,9 +4,10 @@ import { Nav } from "@/components/landing/Nav";
 import { Footer } from "@/components/landing/Footer";
 
 export const metadata: Metadata = {
-  title: "Terms of Use | SoloBooks",
+  title: "Terms of Use",
   description:
     "The terms that govern your use of SoloBooks — billing, Udhar Khata, Tally export and import, and GST accounting for Indian businesses.",
+  alternates: { canonical: "/terms" },
 };
 
 const LAST_UPDATED = "May 24, 2026";

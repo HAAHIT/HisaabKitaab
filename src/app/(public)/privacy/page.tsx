@@ -4,9 +4,10 @@ import { Nav } from "@/components/landing/Nav";
 import { Footer } from "@/components/landing/Footer";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy | SoloBooks",
+  title: "Privacy Policy",
   description:
     "How SoloBooks collects, uses, and protects information from Indian businesses using our billing, Udhar Khata, and Tally-compatible accounting platform.",
+  alternates: { canonical: "/privacy" },
 };
 
 const LAST_UPDATED = "May 24, 2026";
