@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { parseTallyXml, type TallyParseResult } from "@/lib/tally-xml-import";
 import { createJournalEntry } from "@/lib/journal";
 import { recomputePartyBalance } from "@/lib/party-balance.server";
+import { recomputeBankBalance } from "@/lib/bank-balance.server";
 import { logError, logWarn } from "@/lib/observability";
 import { gunzipSync } from "zlib";
 import crypto from "crypto";
@@ -776,6 +777,21 @@ export async function processImportJob(jobId?: string, preparsed?: TallyParseRes
         affectedPartyIds.slice(i, i + BALANCE_BATCH).map((pid) =>
           recomputePartyBalance(null, pid, tid).catch((err) =>
             logError("import.party-balance.error", { pid, jobId: job.id, error: err })
+          )
+        )
+      );
+    }
+
+    // Bank account balances are not mutated during voucher creation (unlike the
+    // regular Payment APIs that increment/decrement inline). Recompute from the
+    // journal-line source of truth so the Banking page reflects imported cash
+    // movements instead of showing ₹0.00.
+    const affectedBankAccountIds = [...new Set(bankAccountCache.values())];
+    for (let i = 0; i < affectedBankAccountIds.length; i += BALANCE_BATCH) {
+      await Promise.allSettled(
+        affectedBankAccountIds.slice(i, i + BALANCE_BATCH).map((bid) =>
+          recomputeBankBalance(bid, tid).catch((err) =>
+            logError("import.bank-balance.error", { bid, jobId: job.id, error: err })
           )
         )
       );

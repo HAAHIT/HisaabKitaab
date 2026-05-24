@@ -219,10 +219,9 @@ html.lenis, html.lenis body { height: auto; }
 .lenis.lenis-stopped { overflow: hidden; }
 
 /* Hide native cursor over interactive zones when our custom cursor is on (desktop only) */
-@media (hover: hover) and (pointer: fine) {
-  .solobooks-landing { cursor: none; }
-  .solobooks-landing a, .solobooks-landing button { cursor: none; }
-}
+.solobooks-landing { cursor: auto; }
+.solobooks-landing a,
+.solobooks-landing button { cursor: pointer; }
 
 /* Respect reduced motion */
 @media (prefers-reduced-motion: reduce) {

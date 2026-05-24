@@ -72,6 +72,9 @@ export default function BillsListPage() {
   const [collapsedMonths, setCollapsedMonths] = useState<Record<string, boolean>>({});
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [billSummary, setBillSummary] = useState({ kulBilled: 0, mila: 0, baaki: 0 });
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const monthlyBillGroups = useMemo(() => {
     const monthFormatter = new Intl.DateTimeFormat("en-IN", {
@@ -326,14 +329,131 @@ export default function BillsListPage() {
         </div>
 
         {/* Search + filter */}
-        <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
           <SearchBox value={search} onChange={setSearch} placeholder={t("bills.searchPlaceholder" as TranslationKey)} />
           <PillFilter
             options={filterOptions}
             value={statusFilter}
             onChange={(v) => { setStatusFilter(v); setPage(1); }}
           />
+          <HKButton
+            size="sm"
+            variant={selectMode ? "primary" : "secondary"}
+            onClick={() => {
+              setSelectMode((v) => !v);
+              setSelectedIds(new Set());
+            }}
+          >
+            {selectMode ? "Cancel" : "Select"}
+          </HKButton>
         </div>
+
+        {selectMode && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              flexWrap: "wrap",
+              padding: "10px 14px",
+              marginBottom: 14,
+              borderRadius: 12,
+              background: "var(--sb-surface-alt)",
+              border: "1px solid var(--sb-border)",
+              position: "sticky",
+              top: 64,
+              zIndex: 30,
+            }}
+          >
+            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--sb-text)", fontFamily: SG }}>
+              {selectedIds.size} selected
+            </span>
+            <button
+              onClick={() => {
+                const allDraftIds = bills.filter((b) => b.status === "DRAFT").map((b) => b.id);
+                setSelectedIds(new Set(allDraftIds));
+              }}
+              style={{
+                fontSize: 12, color: "var(--sb-primary)", background: "transparent",
+                border: "none", cursor: "pointer", fontWeight: 600, fontFamily: SG,
+              }}
+            >
+              Select all drafts
+            </button>
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              style={{
+                fontSize: 12, color: "var(--sb-sub)", background: "transparent",
+                border: "none", cursor: "pointer", fontFamily: SG,
+              }}
+            >
+              Clear
+            </button>
+            <div style={{ flex: 1 }} />
+            <HKButton
+              size="sm"
+              variant="secondary"
+              isDisabled={bulkBusy || selectedIds.size === 0}
+              onClick={async () => {
+                if (!window.confirm(`Mark ${selectedIds.size} selected DRAFT bill(s) as CANCELLED?`)) return;
+                setBulkBusy(true);
+                try {
+                  const res = await fetch("/api/bills/bulk", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ ids: [...selectedIds], action: "CANCEL_DRAFTS" }),
+                  });
+                  const json = await res.json();
+                  if (!res.ok) throw new Error(json?.error || "Failed");
+                  setToast({ message: `${json.data.updated} draft(s) cancelled`, type: "success" });
+                  setSelectedIds(new Set());
+                  setSelectMode(false);
+                  fetchBills();
+                } catch (err) {
+                  setToast({
+                    message: err instanceof Error ? err.message : "Failed",
+                    type: "error",
+                  });
+                } finally {
+                  setBulkBusy(false);
+                }
+              }}
+            >
+              Cancel drafts
+            </HKButton>
+            <HKButton
+              size="sm"
+              variant="danger"
+              isDisabled={bulkBusy || selectedIds.size === 0}
+              onClick={async () => {
+                if (!window.confirm(`Delete ${selectedIds.size} selected DRAFT bill(s)? Only drafts will be deleted.`)) return;
+                setBulkBusy(true);
+                try {
+                  const res = await fetch("/api/bills/bulk", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ ids: [...selectedIds], action: "DELETE_DRAFTS" }),
+                  });
+                  const json = await res.json();
+                  if (!res.ok) throw new Error(json?.error || "Failed");
+                  setToast({ message: `${json.data.updated} draft(s) deleted`, type: "success" });
+                  setSelectedIds(new Set());
+                  setSelectMode(false);
+                  fetchBills();
+                } catch (err) {
+                  setToast({
+                    message: err instanceof Error ? err.message : "Failed",
+                    type: "error",
+                  });
+                } finally {
+                  setBulkBusy(false);
+                }
+              }}
+            >
+              Delete drafts
+            </HKButton>
+          </div>
+        )}
 
         {loading ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -435,10 +555,23 @@ export default function BillsListPage() {
                     <HKCard style={{ padding: 0 }}>
                       {group.bills.map((bill, i) => {
                         const partyName = bill.party?.name || bill.customerName;
+                        const isSelected = selectedIds.has(bill.id);
+                        const onRowClick = () => {
+                          if (selectMode) {
+                            setSelectedIds((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(bill.id)) next.delete(bill.id);
+                              else next.add(bill.id);
+                              return next;
+                            });
+                          } else {
+                            router.push(`/bills/${bill.id}`);
+                          }
+                        };
                         return (
                           <button
                             key={bill.id}
-                            onClick={() => router.push(`/bills/${bill.id}`)}
+                            onClick={onRowClick}
                             style={{
                               width: "100%",
                               display: "flex",
@@ -457,6 +590,16 @@ export default function BillsListPage() {
                             onMouseEnter={e => (e.currentTarget.style.background = "var(--sb-hover)")}
                             onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
                           >
+                            {selectMode ? (
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => { /* row click handles it */ }}
+                                onClick={(e) => e.stopPropagation()}
+                                style={{ width: 18, height: 18, flexShrink: 0, accentColor: "var(--sb-primary)" }}
+                                aria-label={`Select ${bill.billNumber}`}
+                              />
+                            ) : null}
                             <HKAvatar name={partyName || "—"} size={40} />
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2, flexWrap: "wrap" }}>

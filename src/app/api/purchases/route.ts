@@ -232,7 +232,7 @@ export async function POST(request: NextRequest) {
           grandTotal: createdBill.grandTotal.toNumber(),
           isReverseCharge: isReverseCharge || false,
           createdBy: userId!,
-          billDate: billDate ? new Date(billDate) : createdBill.createdAt,
+          billDate: billDate ? new Date(billDate) : createdBill.date,
         });
       }
 

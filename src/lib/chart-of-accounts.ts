@@ -203,6 +203,42 @@ export const CHART_OF_ACCOUNTS: Record<AccountCode, AccountDefinition> = {
   },
 };
 
+/**
+ * Statement classification: P&L accounts roll up into Profit & Loss, BS accounts
+ * into the Balance Sheet. Driven by `type` so callers do not duplicate the rule.
+ */
+export type StatementType = "PROFIT_LOSS" | "BALANCE_SHEET";
+
+export function getStatementType(code: AccountCode): StatementType {
+  const def = CHART_OF_ACCOUNTS[code];
+  if (def.type === "INCOME" || def.type === "EXPENSE") return "PROFIT_LOSS";
+  return "BALANCE_SHEET";
+}
+
+export function isProfitLossAccount(code: AccountCode | string): boolean {
+  const def = CHART_OF_ACCOUNTS[code as AccountCode];
+  if (!def) return false;
+  return def.type === "INCOME" || def.type === "EXPENSE";
+}
+
+export function isBalanceSheetAccount(code: AccountCode | string): boolean {
+  const def = CHART_OF_ACCOUNTS[code as AccountCode];
+  if (!def) return false;
+  return def.type === "ASSET" || def.type === "LIABILITY" || def.type === "EQUITY";
+}
+
+export const PROFIT_LOSS_ACCOUNT_CODES: AccountCode[] = (
+  Object.values(CHART_OF_ACCOUNTS)
+    .filter((a) => a.type === "INCOME" || a.type === "EXPENSE")
+    .map((a) => a.code)
+);
+
+export const BALANCE_SHEET_ACCOUNT_CODES: AccountCode[] = (
+  Object.values(CHART_OF_ACCOUNTS)
+    .filter((a) => a.type === "ASSET" || a.type === "LIABILITY" || a.type === "EQUITY")
+    .map((a) => a.code)
+);
+
 export function paymentModeToAccount(mode: string): AccountCode {
   switch (mode) {
     case "CASH":

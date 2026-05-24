@@ -26,7 +26,8 @@ type PartyLedgerBill = {
   id: string;
   billNumber: string;
   grandTotal: number;
-  createdAt: Date;
+  /** User-chosen invoice date (Bill.date). Drives ledger ordering and reporting. */
+  date: Date;
 };
 
 type PartyLedgerPayment = {
@@ -258,7 +259,7 @@ export function buildPartyLedger({
 
   const allTransactions = [
     ...bills.map((bill) => ({
-      txDate: bill.createdAt,
+      txDate: bill.date,
       kind: "BILL" as const,
       bill,
     })),
@@ -285,7 +286,7 @@ export function buildPartyLedger({
 
       ledger.push({
         id: transaction.bill.id,
-        date: transaction.bill.createdAt,
+        date: transaction.bill.date,
         type: "BILL",
         description: getBillLedgerDescription(
           partyType,

@@ -10,10 +10,15 @@ const PUBLIC_PATHS = [
   "/api/auth/login",
   "/register",
   "/api/auth/register",
+  "/reset-password",
+  "/api/auth/forgot-password",
+  "/api/auth/reset-password",
   "/api/preferences/language",
   "/api/health",
   "/api/bills/*/public",
   "/guides",
+  "/terms",
+  "/privacy",
   "/api/jobs/process-import",
 ];
 
@@ -80,7 +85,12 @@ export async function proxy(request: NextRequest) {
     try {
       const { payload } = await jwtVerify(token, jwtSecret);
       const role = payload.role as string;
-      const redirectPath = role === "CUSTOMER" ? "/measurements/upload" : "/dashboard";
+      const redirectPath =
+        role === "SUPERADMIN"
+          ? "/admin/stats"
+          : role === "CUSTOMER"
+            ? "/measurements/upload"
+            : "/dashboard";
       return redirectWithRequestId(new URL(redirectPath, request.url));
     } catch {
       // Invalid token, remove it and let them see the login page
@@ -111,6 +121,24 @@ export async function proxy(request: NextRequest) {
     requestHeaders.set("x-user-id", payload.userId as string);
     requestHeaders.set("x-user-role", payload.role as string);
     requestHeaders.set("x-user-name", payload.name as string);
+
+    // Read-only impersonation: block writes. The exit endpoint must still work,
+    // otherwise the operator can't get out of the read-only session.
+    if (
+      payload.readOnly === true &&
+      request.method !== "GET" &&
+      request.method !== "HEAD" &&
+      !pathname.startsWith("/api/admin/exit-impersonation") &&
+      !pathname.startsWith("/api/auth/logout")
+    ) {
+      return attachRequestIdHeader(
+        NextResponse.json(
+          { error: "Read-only impersonation: writes are blocked. Exit impersonation first." },
+          { status: 403 }
+        ),
+        requestId
+      );
+    }
     
     const tenantId =
       (typeof payload.tenantId === "string" && payload.tenantId.trim()
@@ -139,6 +167,30 @@ export async function proxy(request: NextRequest) {
         const redirectUrl = new URL("/measurements/upload", request.url);
         return redirectWithRequestId(redirectUrl);
       }
+    }
+
+    if (
+      (pathname.startsWith("/admin") || pathname.startsWith("/api/admin/stats")) &&
+      role !== "SUPERADMIN"
+    ) {
+      if (pathname.startsWith("/api/")) {
+        return attachRequestIdHeader(
+          NextResponse.json({ error: "Forbidden" }, { status: 403 }),
+          requestId
+        );
+      }
+      const redirectUrl = new URL("/dashboard", request.url);
+      return redirectWithRequestId(redirectUrl);
+    }
+
+    if (
+      role === "SUPERADMIN" &&
+      !pathname.startsWith("/admin") &&
+      !pathname.startsWith("/api/admin") &&
+      !pathname.startsWith("/api/auth")
+    ) {
+      const redirectUrl = new URL("/admin/stats", request.url);
+      return redirectWithRequestId(redirectUrl);
     }
 
     if (pathname.startsWith("/settings") && role !== "ADMIN") {

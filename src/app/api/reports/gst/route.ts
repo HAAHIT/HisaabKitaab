@@ -76,11 +76,11 @@ export async function GET(request: NextRequest) {
         tenantId,
         isDeleted: false,
         status: "FINAL",
-        createdAt: { gte: from, lt: to },
+        date: { gte: from, lt: to },
       },
       select: {
         id: true,
-        createdAt: true,
+        date: true,
         subtotal: true,
         taxPercent: true,
         taxAmount: true,
@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
         rows: true,
         party: { select: { name: true, gstin: true } },
       },
-      orderBy: { createdAt: "asc" },
+      orderBy: { date: "asc" },
       take: MAX_REPORT_BILLS + 1,
     });
     const truncated = bills.length > MAX_REPORT_BILLS;
@@ -130,7 +130,7 @@ export async function GET(request: NextRequest) {
       // Bucket by IST calendar month — GSTR-1 filing periods are calendar months
       // in IST, and a UTC-evaluated month would split late-evening invoices
       // into the wrong bucket.
-      const d       = new Date(bill.createdAt);
+      const d       = new Date(bill.date);
       const dIst    = getIstCalendar(d);
       const sortKey = `${dIst.year}-${String(dIst.month + 1).padStart(2, "0")}`;
       const monthLabel = d.toLocaleDateString("en-IN", {

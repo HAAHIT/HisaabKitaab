@@ -42,7 +42,6 @@ export default function CompanySettingsPage() {
   const [logoRemoved, setLogoRemoved] = useState(false);
   const [defaultTaxPercent, setDefaultTaxPercent] = useState("18");
   const [defaultTerms, setDefaultTerms] = useState("");
-  const [billPrefix, setBillPrefix] = useState("BILL");
   const [upiId, setUpiId] = useState("");
   const [businessType, setBusinessType] = useState("INDIVIDUAL");
   const [taxRegistrationType, setTaxRegistrationType] = useState("REGISTERED");
@@ -68,7 +67,6 @@ export default function CompanySettingsPage() {
     setCompanyLogoUrl(settings?.companyLogo || settings?.companyLogoUrl || null);
     setDefaultTaxPercent(String(settings?.defaultTaxPercent ?? 18));
     setDefaultTerms(settings?.defaultTerms || "");
-    setBillPrefix(settings?.billPrefix || "BILL");
     setUpiId(settings?.upiId || "");
     setBusinessType(settings?.businessType || "INDIVIDUAL");
     setTaxRegistrationType(settings?.taxRegistrationType || "REGISTERED");
@@ -122,7 +120,7 @@ export default function CompanySettingsPage() {
       const response = await fetch("/api/settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ companyName, companyAddress, companyPhone, companyEmail, companyGstin, defaultTaxPercent, defaultTerms, billPrefix, upiId, businessType, taxRegistrationType, bankName, bankAccountNumber, bankBranch, bankIfscCode }),
+        body: JSON.stringify({ companyName, companyAddress, companyPhone, companyEmail, companyGstin, defaultTaxPercent, defaultTerms, upiId, businessType, taxRegistrationType, bankName, bankAccountNumber, bankBranch, bankIfscCode }),
       });
       if (!response.ok) throw new Error(await readError(response));
 
@@ -286,7 +284,26 @@ export default function CompanySettingsPage() {
         <HKCard style={{ marginBottom: 16 }}>
           <p style={sectionTitleStyle}>{t("settings.billingConfig")}</p>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 14, marginBottom: 14 }}>
-            <HKInput label={t("company.billPrefix")} placeholder={t("company.billPrefixPlaceholder")} value={billPrefix} onValueChange={setBillPrefix} description={t("company.billPrefixDescription")} />
+            <div
+              style={{
+                borderRadius: 12, border: "1px solid var(--sb-border)", background: "var(--sb-surface-alt)",
+                padding: "14px 16px", fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG,
+              }}
+            >
+              <p style={{ fontWeight: 700, color: "var(--sb-text)", marginBottom: 4 }}>
+                {t("company.billPrefix")}
+              </p>
+              <p style={{ marginBottom: 8 }}>
+                Bill number prefixes are now managed under Bill Numbering, where you can define multiple series
+                (e.g. Tax Invoice, Bill of Supply).
+              </p>
+              <a
+                href="/settings/bill-series"
+                style={{ color: "var(--sb-primary)", fontWeight: 600, textDecoration: "none" }}
+              >
+                Manage Bill Numbering →
+              </a>
+            </div>
             <HKInput label={t("company.defaultTax")} placeholder="0" type="number" value={defaultTaxPercent} onValueChange={setDefaultTaxPercent} endContent={<span className="text-default-400">%</span>} description={t("bills.autoTaxNote")} />
             <div
               style={{

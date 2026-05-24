@@ -41,7 +41,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    return NextResponse.json({ user });
+    return NextResponse.json({
+      user,
+      impersonation: session.impersonatedBy
+        ? {
+            impersonatedBy: session.impersonatedBy,
+            impersonatedAt: session.impersonatedAt ?? null,
+            readOnly: !!session.readOnly,
+          }
+        : null,
+    });
   } catch (error) {
     logError("auth.me.error", { requestId: getRequestId(request), error });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

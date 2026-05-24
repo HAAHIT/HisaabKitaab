@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getTenantId } from "@/lib/tenant";
 import { getCurrentFinancialYearRange } from "@/lib/journal-reporting";
+import { CHART_OF_ACCOUNTS } from "@/lib/chart-of-accounts";
 import ReportsClient from "./ReportsClient";
 
 export const dynamic = "force-dynamic";
@@ -43,6 +44,10 @@ export default async function ReportsPage() {
     }),
   ]);
 
+  const accountOptions = Object.values(CHART_OF_ACCOUNTS)
+    .map((a) => ({ code: a.code, name: a.name, tallyGroup: a.tallyGroup }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
   return (
     <ReportsClient
       initialFrom={initialRange.from}
@@ -50,6 +55,7 @@ export default async function ReportsPage() {
       totalEntries={totalEntries}
       unbalancedCount={unbalancedCount}
       parties={parties}
+      accountOptions={accountOptions}
     />
   );
 }

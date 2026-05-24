@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import ExcelJS from "exceljs";
 import { prisma } from "@/lib/prisma";
 import { resolveSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
+import { parseIndianDateRange } from "@/lib/journal-reporting";
 import {
-  escapeCsv,
-  formatDateForCsv,
-  parseIndianDateRange,
-} from "@/lib/journal-reporting";
+  applyMoneyFormat,
+  styleHeader,
+  workbookToBuffer,
+  xlsxHeaders,
+} from "@/lib/reports/excel";
 
 export const runtime = "nodejs";
 
@@ -22,7 +25,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const from = searchParams.get("from");
   const to = searchParams.get("to");
-  const format = searchParams.get("format") || "csv";
+  const format = searchParams.get("format") || "xlsx";
 
   if (!from || !to) {
     return NextResponse.json(
@@ -44,95 +47,97 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-  const unbalanced = await prisma.journalEntry.count({
-    where: { tenantId, isBalanced: false, isDeleted: false },
-  });
+    const unbalanced = await prisma.journalEntry.count({
+      where: { tenantId, isBalanced: false, isDeleted: false },
+    });
 
-  if (unbalanced > 0) {
-    return NextResponse.json(
-      {
-        error: `Export blocked: ${unbalanced} unbalanced journal entries found. Contact support.`,
-        unbalancedCount: unbalanced,
-      },
-      { status: 409 }
-    );
-  }
-
-  const entries = await prisma.journalEntry.findMany({
-    where: {
-      tenantId,
-      isDeleted: false,
-      entryDate: {
-        gte: fromDate,
-        lte: toDate,
-      },
-    },
-    orderBy: [{ entryDate: "asc" }, { createdAt: "asc" }],
-  });
-
-  // Fetch all lines for these entries to avoid "lines" relation type error
-  const entryIds = entries.map(e => e.id);
-  const allLines = await prisma.journalLine.findMany({
-    where: {
-      journalId: { in: entryIds }
+    if (unbalanced > 0) {
+      return NextResponse.json(
+        {
+          error: `Export blocked: ${unbalanced} unbalanced journal entries found. Contact support.`,
+          unbalancedCount: unbalanced,
+        },
+        { status: 409 }
+      );
     }
-  });
 
-  // Group lines by journalId
-  const linesMap = allLines.reduce((acc, line) => {
-    if (!acc[line.journalId]) acc[line.journalId] = [];
-    acc[line.journalId].push(line);
-    return acc;
-  }, {} as Record<string, typeof allLines>);
+    const entries = await prisma.journalEntry.findMany({
+      where: {
+        tenantId,
+        isDeleted: false,
+        entryDate: {
+          gte: fromDate,
+          lte: toDate,
+        },
+      },
+      orderBy: [{ entryDate: "asc" }, { createdAt: "asc" }],
+    });
 
-  if (format === "json") {
-    return NextResponse.json({ entries, totalEntries: entries.length });
-  }
+    const entryIds = entries.map((e) => e.id);
+    const allLines = await prisma.journalLine.findMany({
+      where: { journalId: { in: entryIds } },
+    });
 
-  const csvRows: string[] = [
-    [
-      "Date",
-      "Voucher Type",
-      "Voucher No.",
-      "Narration",
-      "Ledger Name",
-      "Tally Group",
-      "Party Name",
-      "Debit",
-      "Credit",
-    ]
-      .map(escapeCsv)
-      .join(","),
-  ];
+    const linesMap = allLines.reduce(
+      (acc, line) => {
+        if (!acc[line.journalId]) acc[line.journalId] = [];
+        acc[line.journalId].push(line);
+        return acc;
+      },
+      {} as Record<string, typeof allLines>
+    );
 
-  for (const entry of entries) {
-    const entryLines = linesMap[entry.id] || [];
-    for (const line of entryLines) {
-      csvRows.push(
-        [
-          formatDateForCsv(entry.entryDate),
+    if (format === "json") {
+      return NextResponse.json({ entries, totalEntries: entries.length });
+    }
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = "HisaabKitaab";
+    wb.created = new Date();
+    const ws = wb.addWorksheet("Transactions");
+    ws.columns = [
+      { header: "Date", width: 14 },
+      { header: "Voucher Type", width: 14 },
+      { header: "Voucher No.", width: 24 },
+      { header: "Narration", width: 40 },
+      { header: "Ledger Name", width: 28 },
+      { header: "Tally Group", width: 22 },
+      { header: "Party Name", width: 24 },
+      { header: "Debit", width: 14 },
+      { header: "Credit", width: 14 },
+    ];
+    styleHeader(ws.getRow(1));
+
+    const dateFmt = new Intl.DateTimeFormat("en-IN", {
+      timeZone: "Asia/Kolkata",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+
+    for (const entry of entries) {
+      const entryLines = linesMap[entry.id] || [];
+      for (const line of entryLines) {
+        const row = ws.addRow([
+          dateFmt.format(entry.entryDate),
           entry.voucherType,
           entry.billId || entry.purchaseId || entry.paymentId || entry.id,
           entry.narration,
           line.accountName,
           line.tallyGroup,
           line.partyName || "",
-          line.debit.toFixed(2),
-          line.credit.toFixed(2),
-        ]
-          .map(escapeCsv)
-          .join(",")
-      );
+          Number(line.debit),
+          Number(line.credit),
+        ]);
+        applyMoneyFormat(row.getCell(8));
+        applyMoneyFormat(row.getCell(9));
+      }
     }
-  }
 
-  const filename = `transactions_${from}_to_${to}.csv`;
-  return new NextResponse(csvRows.join("\n"), {
-    headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${filename}"`,
-    },
-  });
+    const buffer = await workbookToBuffer(wb);
+    return new NextResponse(buffer, {
+      headers: xlsxHeaders(`transactions_${from}_to_${to}.xlsx`),
+    });
   } catch (error) {
     logError("export.transactions.error", {
       requestId: getRequestId(request),

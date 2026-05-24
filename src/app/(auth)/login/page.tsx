@@ -572,20 +572,61 @@ export default async function LoginPage({
           fontFamily: "var(--font-space-grotesk), sans-serif",
         }}
       >
+       <div style={{ display: "flex", flexDirection: "column" }}>
         <div style={{ borderBottom: "1px solid var(--sb-border)", padding: "18px 24px" }}>
           <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--sb-text)" }}>
             {t("login.forgotPasswordTitle")}
           </h2>
         </div>
-        <div style={{ padding: "20px 24px" }}>
-          <p style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.6, color: "var(--sb-sub)" }}>
+        <form id="forgot-password-form" style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
+          <p style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.5, color: "var(--sb-sub)", margin: 0 }}>
             {t("login.forgotPasswordBody")}
           </p>
-        </div>
+          <label htmlFor="forgot-credential-input" style={{ display: "block" }}>
+            <span
+              style={{
+                display: "block",
+                fontSize: 13,
+                fontWeight: 600,
+                color: "var(--sb-text)",
+                marginBottom: 6,
+              }}
+            >
+              {t("login.credentialLabel")}
+            </span>
+            <input
+              id="forgot-credential-input"
+              name="credential"
+              type="text"
+              autoComplete="username"
+              required
+              placeholder={t("login.credentialPlaceholder")}
+              style={{
+                width: "100%",
+                height: 44,
+                padding: "0 12px",
+                borderRadius: 10,
+                border: "1.5px solid var(--sb-border)",
+                background: "var(--sb-input)",
+                fontSize: 14,
+                fontWeight: 500,
+                color: "var(--sb-text)",
+                outline: "none",
+              }}
+            />
+          </label>
+          <div
+            id="forgot-password-message"
+            data-network-error={t("login.networkError")}
+            style={{ display: "none" }}
+            aria-live="polite"
+          />
+        </form>
         <div
           style={{
             display: "flex",
             justifyContent: "flex-end",
+            gap: 10,
             borderTop: "1px solid var(--sb-border)",
             padding: "14px 24px",
           }}
@@ -595,10 +636,30 @@ export default async function LoginPage({
             type="button"
             style={{
               minHeight: 40,
+              padding: "0 16px",
+              borderRadius: 10,
+              background: "transparent",
+              color: "var(--sb-sub)",
+              fontSize: 14,
+              fontWeight: 600,
+              border: "1px solid var(--sb-border)",
+              cursor: "pointer",
+            }}
+          >
+            {t("common.cancel")}
+          </button>
+          <button
+            id="forgot-password-submit"
+            type="submit"
+            form="forgot-password-form"
+            data-default-label={t("login.forgotPasswordSubmit")}
+            data-submitting-label={t("login.forgotPasswordSubmitting")}
+            style={{
+              minHeight: 40,
               padding: "0 20px",
               borderRadius: 10,
-              background: "rgba(37, 99, 235, 0.12)",
-              color: "#2563eb",
+              background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
+              color: "#fff",
               fontSize: 14,
               fontWeight: 700,
               border: "none",
@@ -606,9 +667,10 @@ export default async function LoginPage({
               transition: "background 0.15s",
             }}
           >
-            {t("common.ok")}
+            {t("login.forgotPasswordSubmit")}
           </button>
         </div>
+       </div>
       </dialog>
 
       <style
@@ -726,6 +788,91 @@ export default async function LoginPage({
                 });
               }
 
+              const forgotForm = document.getElementById("forgot-password-form");
+              const forgotSubmit = document.getElementById("forgot-password-submit");
+              const forgotMessage = document.getElementById("forgot-password-message");
+              if (forgotForm && forgotSubmit && forgotMessage) {
+                const defaultLabel = forgotSubmit.getAttribute("data-default-label") || "";
+                const submittingLabel = forgotSubmit.getAttribute("data-submitting-label") || "";
+                const networkError = forgotMessage.getAttribute("data-network-error") || "";
+
+                const showForgotMessage = (text, isError) => {
+                  forgotMessage.textContent = text;
+                  forgotMessage.style.display = "block";
+                  forgotMessage.style.padding = "10px 12px";
+                  forgotMessage.style.borderRadius = "10px";
+                  forgotMessage.style.fontSize = "13px";
+                  forgotMessage.style.fontWeight = "600";
+                  forgotMessage.style.wordBreak = "break-all";
+                  if (isError) {
+                    forgotMessage.style.background = "rgba(196, 62, 28, 0.08)";
+                    forgotMessage.style.border = "1px solid rgba(196, 62, 28, 0.25)";
+                    forgotMessage.style.color = "#c43e1c";
+                  } else {
+                    forgotMessage.style.background = "rgba(34, 139, 34, 0.08)";
+                    forgotMessage.style.border = "1px solid rgba(34, 139, 34, 0.25)";
+                    forgotMessage.style.color = "#1f7a1f";
+                  }
+                };
+
+                forgotForm.addEventListener("submit", async (e) => {
+                  e.preventDefault();
+                  const formData = new FormData(forgotForm);
+                  const credential = String(formData.get("credential") || "").trim();
+                  if (!credential) return;
+
+                  forgotSubmit.setAttribute("disabled", "true");
+                  forgotSubmit.style.opacity = "0.7";
+                  forgotSubmit.style.cursor = "not-allowed";
+                  forgotSubmit.textContent = submittingLabel;
+                  forgotMessage.style.display = "none";
+                  forgotMessage.innerHTML = "";
+
+                  try {
+                    const res = await fetch("/api/auth/forgot-password", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ credential }),
+                    });
+                    const json = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                      throw new Error(json.error || networkError);
+                    }
+                    if (json.resetUrl) {
+                      forgotMessage.innerHTML = "";
+                      const note = document.createElement("div");
+                      note.textContent = json.message || "";
+                      note.style.marginBottom = "8px";
+                      const link = document.createElement("a");
+                      link.href = json.resetUrl;
+                      link.textContent = json.resetUrl;
+                      link.style.color = "#2563eb";
+                      link.style.textDecoration = "underline";
+                      forgotMessage.appendChild(note);
+                      forgotMessage.appendChild(link);
+                      forgotMessage.style.display = "block";
+                      forgotMessage.style.padding = "10px 12px";
+                      forgotMessage.style.borderRadius = "10px";
+                      forgotMessage.style.fontSize = "12px";
+                      forgotMessage.style.fontWeight = "500";
+                      forgotMessage.style.wordBreak = "break-all";
+                      forgotMessage.style.background = "rgba(37, 99, 235, 0.08)";
+                      forgotMessage.style.border = "1px solid rgba(37, 99, 235, 0.25)";
+                      forgotMessage.style.color = "var(--sb-text)";
+                    } else {
+                      showForgotMessage(json.message || "", false);
+                    }
+                  } catch (err) {
+                    showForgotMessage(err.message || networkError, true);
+                  } finally {
+                    forgotSubmit.removeAttribute("disabled");
+                    forgotSubmit.style.opacity = "1";
+                    forgotSubmit.style.cursor = "pointer";
+                    forgotSubmit.textContent = defaultLabel;
+                  }
+                });
+              }
+
               const dialog = document.getElementById("forgot-password-dialog");
               const trigger = document.getElementById("forgot-password-trigger");
               const closeButton = document.getElementById("forgot-password-close");
@@ -740,16 +887,14 @@ export default async function LoginPage({
                   });
                 }
                 if (closeButton) {
-                  closeButton.addEventListener("click", () => dialog.close());
+                  closeButton.addEventListener("click", (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dialog.close();
+                  });
                 }
                 dialog.addEventListener("click", (event) => {
-                  const rect = dialog.getBoundingClientRect();
-                  const withinDialog =
-                    rect.top <= event.clientY &&
-                    event.clientY <= rect.top + rect.height &&
-                    rect.left <= event.clientX &&
-                    event.clientX <= rect.left + rect.width;
-                  if (!withinDialog) {
+                  if (event.target === dialog) {
                     dialog.close();
                   }
                 });

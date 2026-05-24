@@ -60,40 +60,54 @@ export default function TransactionsClient({ initialTransactions, page, totalPag
     router.push(`/transactions?${params.toString()}`);
   };
 
-  const exportCSV = () => {
-    const headers = [
-      t("transactions.header.date"),
-      t("transactions.header.voucher"),
-      "Reference",
-      t("transactions.header.particulars"),
-      t("transactions.header.debit"),
-      t("transactions.header.credit")
+  const exportExcel = async () => {
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    wb.creator = "HisaabKitaab";
+    wb.created = new Date();
+    const ws = wb.addWorksheet("Transactions");
+
+    ws.columns = [
+      { header: t("transactions.header.date"), width: 14 },
+      { header: t("transactions.header.voucher"), width: 16 },
+      { header: "Reference", width: 24 },
+      { header: t("transactions.header.particulars"), width: 32 },
+      { header: t("transactions.header.debit"), width: 14 },
+      { header: t("transactions.header.credit"), width: 14 },
     ];
-    const rows = initialTransactions.flatMap(tx =>
-      tx.lines.map((line: any) => [
-        formatDate(tx.entryDate),
-        t(`voucher.type.${tx.voucherType}` as TranslationKey),
-        tx.id,
-        line.partyName || line.accountName || "Unknown",
-        line.debit,
-        line.credit
-      ])
-    );
+    ws.getRow(1).font = { bold: true };
 
-    const csvContent = [
-      headers.join(","),
-      ...rows.map(row => row.map((cell: any) => `"${cell}"`).join(","))
-    ].join("\n");
+    for (const tx of initialTransactions) {
+      for (const line of tx.lines) {
+        const row = ws.addRow([
+          formatDate(tx.entryDate),
+          t(`voucher.type.${tx.voucherType}` as TranslationKey),
+          tx.id,
+          line.partyName || line.accountName || "Unknown",
+          Number(line.debit) || 0,
+          Number(line.credit) || 0,
+        ]);
+        row.getCell(5).numFmt = '#,##0.00;[Red]-#,##0.00';
+        row.getCell(6).numFmt = '#,##0.00;[Red]-#,##0.00';
+      }
+    }
 
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const arr = await wb.xlsx.writeBuffer();
+    const blob = new Blob([arr], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", `Transactions_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute(
+      "download",
+      `Transactions_${new Date().toISOString().split("T")[0]}.xlsx`
+    );
     link.style.visibility = "hidden";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -107,7 +121,7 @@ export default function TransactionsClient({ initialTransactions, page, totalPag
         </div>
 
         <div className="flex gap-2">
-          <HKButton size="sm" variant="secondary" onClick={exportCSV}>
+          <HKButton size="sm" variant="secondary" onClick={exportExcel}>
             {t("transactions.exportCSV")}
           </HKButton>
           <HKButton size="sm" onClick={() => router.push("/reports")}>
