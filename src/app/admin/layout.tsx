@@ -4,6 +4,7 @@ import { jwtVerify } from "jose";
 import { getJwtSecret } from "@/lib/jwt-secret";
 import { SESSION_COOKIE_NAME } from "@/lib/cookie";
 import Link from "next/link";
+import { ThemeSwitcher } from "@/components/ui/ThemeSwitcher";
 
 export const dynamic = "force-dynamic";
 
@@ -59,20 +60,22 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             Superadmins
           </Link>
         </nav>
-        <a
-          href="/api/auth/logout"
-          style={{
-            marginLeft: "auto",
-            border: "1px solid var(--sb-border)",
-            borderRadius: 8,
-            padding: "6px 12px",
-            fontSize: 13,
-            color: "var(--sb-text)",
-            textDecoration: "none",
-          }}
-        >
-          Sign out
-        </a>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+          <ThemeSwitcher />
+          <a
+            href="/api/auth/logout"
+            style={{
+              border: "1px solid var(--sb-border)",
+              borderRadius: 8,
+              padding: "6px 12px",
+              fontSize: 13,
+              color: "var(--sb-text)",
+              textDecoration: "none",
+            }}
+          >
+            Sign out
+          </a>
+        </div>
       </header>
       <main style={{ padding: "24px", maxWidth: 1440, margin: "0 auto" }}>{children}</main>
     </div>
