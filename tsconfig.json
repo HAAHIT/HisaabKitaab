@@ -32,6 +32,7 @@
   ],
   "exclude": [
     "node_modules",
+    "landing",
     "tmp_*.ts",
     "check_bill.ts",
     "migrate.ts",

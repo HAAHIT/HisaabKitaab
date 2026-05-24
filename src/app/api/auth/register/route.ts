@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       });
       if (existingUser) {
         return NextResponse.json(
-          { error: "Could not create account with the provided credentials" },
+          { error: "This email is already registered. Try logging in, or use a different email address." },
           { status: 409 }
         );
       }
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
       });
       if (existingUser) {
         return NextResponse.json(
-          { error: "Could not create account with the provided credentials" },
+          { error: "This phone number is already registered. Try logging in, or use a different number." },
           { status: 409 }
         );
       }
