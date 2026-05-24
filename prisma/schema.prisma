@@ -51,6 +51,7 @@ model User {
   measurements  MeasurementUpload[]
   payments      Payment[]
   tenant        Tenant              @relation(fields: [tenantId], references: [id])
+  passwordResetTokens PasswordResetToken[]
 
   @@unique([tenantId, email])
   @@unique([tenantId, phone])
@@ -64,6 +65,19 @@ model ApiRateLimit {
   windowStart DateTime @default(now())
 
   @@index([windowStart])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model AuthThrottle {
@@ -412,6 +426,7 @@ enum Role {
   STAFF
   ACCOUNTANT
   CUSTOMER
+  SUPERADMIN
 }
 
 enum AuthThrottleScope {

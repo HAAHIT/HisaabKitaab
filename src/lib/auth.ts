@@ -5,6 +5,7 @@ import { getJwtSecret } from "@/lib/jwt-secret";
 import { SESSION_COOKIE_NAME } from "@/lib/cookie";
 
 const SESSION_DURATION = 7 * 24 * 60 * 60; // 7 days in seconds
+export const IMPERSONATION_DURATION = 30 * 60; // 30 minutes in seconds
 
 export interface SessionPayload {
   userId: string;
@@ -13,6 +14,15 @@ export interface SessionPayload {
   role: string;
   email?: string;
   phone?: string;
+  // Impersonation: set when a SUPERADMIN is acting as another user.
+  // The outer userId/tenantId/role are the target's (so all tenant-scoped
+  // logic just works). impersonatedBy is the original SUPERADMIN userId,
+  // used by /api/admin/exit-impersonation to restore the superadmin session.
+  impersonatedBy?: string;
+  impersonatedAt?: number;
+  // When true, all non-GET requests are blocked by the proxy. Set when a
+  // SUPERADMIN starts impersonation in read-only mode.
+  readOnly?: boolean;
 }
 
 // ── Password Utilities ────────────────────────────────
@@ -30,11 +40,14 @@ export async function comparePassword(
 
 // ── JWT Token Utilities ───────────────────────────────
 
-export async function signToken(payload: SessionPayload): Promise<string> {
+export async function signToken(
+  payload: SessionPayload,
+  durationSeconds: number = SESSION_DURATION
+): Promise<string> {
   return new SignJWT(payload as unknown as Record<string, unknown>)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime(`${SESSION_DURATION}s`)
+    .setExpirationTime(`${durationSeconds}s`)
     .sign(getJwtSecret());
 }
 
@@ -51,14 +64,17 @@ export async function verifyToken(
 
 // ── Cookie Session Helpers ────────────────────────────
 
-export async function createSession(payload: SessionPayload): Promise<string> {
-  const token = await signToken(payload);
+export async function createSession(
+  payload: SessionPayload,
+  durationSeconds: number = SESSION_DURATION
+): Promise<string> {
+  const token = await signToken(payload, durationSeconds);
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    maxAge: SESSION_DURATION,
+    maxAge: durationSeconds,
     path: "/",
   });
   return token;

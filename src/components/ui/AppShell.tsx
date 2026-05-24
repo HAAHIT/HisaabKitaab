@@ -431,6 +431,86 @@ function ThemeToggleMenuBtn() {
   );
 }
 
+// ── Impersonation Banner ─────────────────────────────────────────────────────
+
+function ImpersonationBanner({ name, role }: { name: string; role: string }) {
+  const [state, setState] = useState<{ active: boolean; readOnly: boolean }>({ active: false, readOnly: false });
+  const [exiting, setExiting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/auth/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (cancelled) return;
+        if (j?.impersonation) {
+          setState({ active: true, readOnly: !!j.impersonation.readOnly });
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  if (!state.active) return null;
+
+  const exit = async () => {
+    setExiting(true);
+    try {
+      await fetch("/api/admin/exit-impersonation", { method: "POST" });
+    } finally {
+      window.location.href = "/admin/stats";
+    }
+  };
+
+  return (
+    <div
+      className="no-print"
+      style={{
+        position: "sticky",
+        top: 0,
+        zIndex: 200,
+        background: "#7c2d12",
+        color: "white",
+        padding: "8px 16px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 16,
+        fontSize: 13,
+        fontWeight: 600,
+        boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
+      }}
+    >
+      <span>
+        ⚠ Impersonating <strong>{name}</strong> ({role})
+        {state.readOnly ? (
+          <span style={{ marginLeft: 8, background: "white", color: "#7c2d12", padding: "1px 6px", borderRadius: 4, fontSize: 11, fontWeight: 800 }}>
+            READ-ONLY
+          </span>
+        ) : (
+          <span style={{ marginLeft: 8, opacity: 0.85, fontSize: 12 }}>· writes attribute to this user</span>
+        )}
+      </span>
+      <button
+        onClick={exit}
+        disabled={exiting}
+        style={{
+          background: "white",
+          color: "#7c2d12",
+          border: "none",
+          borderRadius: 6,
+          padding: "4px 12px",
+          fontSize: 12,
+          fontWeight: 700,
+          cursor: exiting ? "wait" : "pointer",
+        }}
+      >
+        {exiting ? "Exiting…" : "Exit impersonation"}
+      </button>
+    </div>
+  );
+}
+
 // ── Main AppShell ─────────────────────────────────────────────────────────────
 
 export default function AppShell({
@@ -510,6 +590,8 @@ export default function AppShell({
           .sb-desktop-more { display: none !important; }
         }
       `}</style>
+
+      <ImpersonationBanner name={user.name} role={user.role} />
 
       {/* ── Unified Header ──────────────────────────────────── */}
       <header className="no-print" style={{
