@@ -3,7 +3,13 @@ WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 
 FROM base AS deps
+ARG DIRECT_URL
+ARG DATABASE_URL
+ENV DIRECT_URL=$DIRECT_URL
+ENV DATABASE_URL=$DATABASE_URL
 COPY package.json package-lock.json ./
+COPY prisma ./prisma
+COPY prisma.config.ts ./
 RUN npm ci
 
 FROM base AS builder

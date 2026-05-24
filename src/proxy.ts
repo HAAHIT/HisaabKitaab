@@ -4,6 +4,7 @@ import { getJwtSecret } from "@/lib/jwt-secret";
 import { attachRequestIdHeader, logError } from "@/lib/observability";
 import { TENANT_HEADER } from "@/lib/tenant";
 import { SESSION_COOKIE_NAME } from "@/lib/cookie";
+import { publicUrl } from "@/lib/public-url";
 
 const PUBLIC_PATHS = [
   "/login",
@@ -91,7 +92,7 @@ export async function proxy(request: NextRequest) {
           : role === "CUSTOMER"
             ? "/measurements/upload"
             : "/dashboard";
-      return redirectWithRequestId(new URL(redirectPath, request.url));
+      return redirectWithRequestId(publicUrl(request, redirectPath));
     } catch {
       // Invalid token, remove it and let them see the login page
       const response = nextWithRequestHeaders();
@@ -111,7 +112,7 @@ export async function proxy(request: NextRequest) {
   }
 
   if (!token) {
-    const loginUrl = new URL("/login", request.url);
+    const loginUrl = publicUrl(request, "/login");
     return redirectWithRequestId(loginUrl);
   }
 
@@ -164,7 +165,7 @@ export async function proxy(request: NextRequest) {
         "/api/auth",
       ];
       if (!allowed.some((p) => pathname.startsWith(p))) {
-        const redirectUrl = new URL("/measurements/upload", request.url);
+        const redirectUrl = publicUrl(request, "/measurements/upload");
         return redirectWithRequestId(redirectUrl);
       }
     }
@@ -179,7 +180,7 @@ export async function proxy(request: NextRequest) {
           requestId
         );
       }
-      const redirectUrl = new URL("/dashboard", request.url);
+      const redirectUrl = publicUrl(request, "/dashboard");
       return redirectWithRequestId(redirectUrl);
     }
 
@@ -189,12 +190,12 @@ export async function proxy(request: NextRequest) {
       !pathname.startsWith("/api/admin") &&
       !pathname.startsWith("/api/auth")
     ) {
-      const redirectUrl = new URL("/admin/stats", request.url);
+      const redirectUrl = publicUrl(request, "/admin/stats");
       return redirectWithRequestId(redirectUrl);
     }
 
     if (pathname.startsWith("/settings") && role !== "ADMIN") {
-      const redirectUrl = new URL("/dashboard", request.url);
+      const redirectUrl = publicUrl(request, "/dashboard");
       return redirectWithRequestId(redirectUrl);
     }
 
@@ -203,13 +204,13 @@ export async function proxy(request: NextRequest) {
       role !== "ADMIN" &&
       role !== "ACCOUNTANT"
     ) {
-      const redirectUrl = new URL("/dashboard", request.url);
+      const redirectUrl = publicUrl(request, "/dashboard");
       return redirectWithRequestId(redirectUrl);
     }
 
     return nextWithRequestHeaders();
   } catch {
-    const loginUrl = new URL("/login", request.url);
+    const loginUrl = publicUrl(request, "/login");
     const response = redirectWithRequestId(loginUrl);
     response.cookies.delete(SESSION_COOKIE_NAME);
     return response;

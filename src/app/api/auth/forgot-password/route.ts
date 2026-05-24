@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { type NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/api-rate-limit";
+import { publicUrl } from "@/lib/public-url";
 import {
   attachRequestIdHeader,
   getClientIp,
@@ -21,7 +22,7 @@ function hashToken(token: string) {
 }
 
 function buildResetUrl(request: NextRequest, token: string) {
-  const url = new URL("/reset-password", request.url);
+  const url = publicUrl(request, "/reset-password");
   url.searchParams.set("token", token);
   return url.toString();
 }

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { verifyToken, signToken } from "@/lib/auth";
 import { SESSION_COOKIE_NAME } from "@/lib/cookie";
 import { logError, logInfo, getRequestId } from "@/lib/observability";
+import { publicUrl } from "@/lib/public-url";
 
 // Restores the superadmin session encoded in impersonatedBy. Works on both
 // POST (from a button) and GET (so a banner link can hit it and redirect).
@@ -11,7 +12,7 @@ async function handle(request: NextRequest, redirectOnSuccess: boolean) {
   const session = token ? await verifyToken(token) : null;
   if (!session || !session.impersonatedBy) {
     if (redirectOnSuccess) {
-      return NextResponse.redirect(new URL("/login", request.url));
+      return NextResponse.redirect(publicUrl(request, "/login"));
     }
     return NextResponse.json({ error: "Not impersonating" }, { status: 400 });
   }
@@ -23,7 +24,7 @@ async function handle(request: NextRequest, redirectOnSuccess: boolean) {
     });
     if (!superadmin || !superadmin.isActive || superadmin.role !== "SUPERADMIN") {
       const res = redirectOnSuccess
-        ? NextResponse.redirect(new URL("/login", request.url))
+        ? NextResponse.redirect(publicUrl(request, "/login"))
         : NextResponse.json({ error: "Superadmin no longer active" }, { status: 403 });
       res.cookies.delete(SESSION_COOKIE_NAME);
       return res;
@@ -55,7 +56,7 @@ async function handle(request: NextRequest, redirectOnSuccess: boolean) {
     });
 
     const response = redirectOnSuccess
-      ? NextResponse.redirect(new URL("/admin/stats", request.url))
+      ? NextResponse.redirect(publicUrl(request, "/admin/stats"))
       : NextResponse.json({ data: { restored: true, redirectTo: "/admin/stats" } });
     response.cookies.set(SESSION_COOKIE_NAME, newToken, {
       httpOnly: true,
