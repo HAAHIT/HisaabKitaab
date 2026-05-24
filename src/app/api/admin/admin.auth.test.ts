@@ -47,9 +47,9 @@ vi.mock("@/lib/session-server", () => ({
   resolveSuperAdminSession: resolveSuperAdminSessionMock,
 }));
 
-const hashPasswordMock = vi.hoisted(() => vi.fn(async (p: string) => `hashed:${p}`));
-const signTokenMock = vi.hoisted(() => vi.fn(async () => "signed-token"));
-const verifyTokenMock = vi.hoisted(() => vi.fn());
+const hashPasswordMock = vi.hoisted(() => vi.fn() as ReturnType<typeof vi.fn>);
+const signTokenMock = vi.hoisted(() => vi.fn() as ReturnType<typeof vi.fn>);
+const verifyTokenMock = vi.hoisted(() => vi.fn() as ReturnType<typeof vi.fn>);
 
 vi.mock("@/lib/auth", () => ({
   hashPassword: hashPasswordMock,

@@ -14,6 +14,123 @@ interface SuperAdmin {
 const fmtDate = (s: string) =>
   new Date(s).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 
+const PASSWORD_INPUT_STYLE: React.CSSProperties = {
+  background: "var(--sb-card)",
+  border: "1px solid var(--sb-border)",
+  borderRadius: 8,
+  padding: "8px 12px",
+  fontSize: 13,
+  color: "var(--sb-text)",
+  width: "100%",
+};
+
+function ChangeOwnPassword() {
+  const inputStyle = PASSWORD_INPUT_STYLE;
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccess(false);
+    if (next !== confirm) {
+      setError("New password and confirmation don't match");
+      return;
+    }
+    if (next.length < 10) {
+      setError("New password must be at least 10 characters");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/admin/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword: current, newPassword: next }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error ?? `HTTP ${res.status}`);
+      }
+      setCurrent(""); setNext(""); setConfirm("");
+      setSuccess(true);
+    } catch (err) {
+      setError(String(err instanceof Error ? err.message : err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <section
+      style={{
+        background: "var(--sb-card)",
+        border: "1px solid var(--sb-border)",
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: 24,
+        maxWidth: 560,
+      }}
+    >
+      <h2 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Change your password</h2>
+      <form onSubmit={submit} style={{ display: "grid", gap: 10 }}>
+        <input
+          required
+          type="password"
+          autoComplete="current-password"
+          placeholder="Current password"
+          value={current}
+          onChange={(e) => setCurrent(e.target.value)}
+          style={inputStyle}
+        />
+        <input
+          required
+          type="password"
+          autoComplete="new-password"
+          placeholder="New password (min 10 chars)"
+          minLength={10}
+          value={next}
+          onChange={(e) => setNext(e.target.value)}
+          style={inputStyle}
+        />
+        <input
+          required
+          type="password"
+          autoComplete="new-password"
+          placeholder="Confirm new password"
+          minLength={10}
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          style={inputStyle}
+        />
+        {error && <div style={{ color: "crimson", fontSize: 12 }}>{error}</div>}
+        {success && <div style={{ color: "#166534", fontSize: 12 }}>Password updated.</div>}
+        <button
+          type="submit"
+          disabled={submitting}
+          style={{
+            padding: "8px 14px",
+            borderRadius: 8,
+            border: "none",
+            background: "var(--sb-primary)",
+            color: "white",
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: submitting ? "wait" : "pointer",
+            justifySelf: "start",
+          }}
+        >
+          {submitting ? "Saving…" : "Update password"}
+        </button>
+      </form>
+    </section>
+  );
+}
+
 export default function SuperAdminsPage() {
   const [rows, setRows] = useState<SuperAdmin[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,6 +203,8 @@ export default function SuperAdminsPage() {
       <p style={{ color: "var(--sb-muted)", marginBottom: 20, fontSize: 13 }}>
         Manage platform-level admins. They have cross-tenant access.
       </p>
+
+      <ChangeOwnPassword />
 
       <section
         style={{
