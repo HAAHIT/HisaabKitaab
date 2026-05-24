@@ -404,9 +404,25 @@ export function SetupWizard({ onComplete, initialBusinessName }: SetupWizardProp
   function skipAndNext() { setError(null); setStep((s) => Math.min(s + 1, TOTAL_STEPS - 1) as typeof s); }
 
   async function skipAll() {
-    const ok = await saveStep1();
-    if (!ok) return;
-    await finishWizard();
+    // Only the business name is required to skip — state and all other steps are optional.
+    if (!businessName.trim()) { setError(t("wizard.error.businessNameRequired")); return; }
+    setError(null); setSaving(true);
+    try {
+      const address = [city.trim(), stateName].filter(Boolean).join(", ");
+      await apiPatch("/api/settings", {
+        companyName: businessName.trim(),
+        businessType,
+        ...(address ? { companyAddress: address } : {}),
+      });
+      await apiFetch("/api/onboarding/complete", {});
+      clearWizardDraft();
+      onComplete();
+      router.push("/dashboard");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("wizard.error.saveFailed"));
+    } finally {
+      setSaving(false);
+    }
   }
 
   // ── Inline add helpers ────────────────────────────────────────────────────
@@ -650,7 +666,7 @@ export function SetupWizard({ onComplete, initialBusinessName }: SetupWizardProp
                   <HKSelect label={t("wizard.step1.businessTypeLabel")} value={businessType} onValueChange={(v) => { if (v) setBusinessType(v); }} size="lg">
                     {BUSINESS_TYPES.map((bt) => <HKSelectItem key={bt} value={bt}>{bt}</HKSelectItem>)}
                   </HKSelect>
-                  <HKSelect label={t("wizard.step1.stateLabel")} value={stateName} onValueChange={(v) => { if (v) setStateName(v); }} size="lg">
+                  <HKSelect label={t("wizard.step1.stateLabel")} placeholder="Select your state" value={stateName} onValueChange={(v) => { if (v) setStateName(v); }} size="lg">
                     {INDIAN_STATES.map((s) => <HKSelectItem key={s} value={s}>{s}</HKSelectItem>)}
                   </HKSelect>
                   <HKInput label={t("wizard.step1.cityLabel")} placeholder={t("wizard.step1.cityPlaceholder")} value={city} onValueChange={setCity} size="lg" />
@@ -749,7 +765,12 @@ export function SetupWizard({ onComplete, initialBusinessName }: SetupWizardProp
                   </div>
                 </div>
                 <div style={{ marginTop: 14, textAlign: "center" }}>
-                  <a href="/settings/tally-import?returnTo=/dashboard" style={{ fontSize: TYPE.bodySmall, fontWeight: 600, color: PU, fontFamily: SG }}>{t("wizard.step4.importFromTally")}</a>
+                  <button
+                    onClick={() => { clearWizardDraft(); router.push("/settings/tally-import?returnTo=/dashboard"); }}
+                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: TYPE.bodySmall, fontWeight: 600, color: PU, fontFamily: SG, textDecoration: "underline", textUnderlineOffset: 3 }}
+                  >
+                    {t("wizard.step4.importFromTally")}
+                  </button>
                 </div>
               </div>
             )}

@@ -36,13 +36,6 @@ export default function AppShellWrapper({
     }
   }, []);
 
-  // Force full reload on browser back/forward to bust Next.js router cache
-  useEffect(() => {
-    const reload = () => window.location.reload();
-    window.addEventListener("popstate", reload);
-    return () => window.removeEventListener("popstate", reload);
-  }, []);
-
   function handleOnboardingComplete() {
     setWizardVisible(false);
     router.refresh();
@@ -52,7 +45,9 @@ export default function AppShellWrapper({
     <AppShell user={user}>
       <GlobalSearch />
       {wizardVisible && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-default-50 dark:bg-zinc-950">
+        // z-[300] must exceed AppShell header (z-index: 200).
+        // No overflow-y-auto here — SetupWizard manages its own internal scroll.
+        <div className="fixed inset-0 z-[300]">
           <SetupWizard onComplete={handleOnboardingComplete} initialBusinessName={initialBusinessName} />
         </div>
       )}
