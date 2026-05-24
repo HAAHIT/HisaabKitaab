@@ -45,12 +45,16 @@ steps:
     args:
       - -c
       - |
-        docker build . \
+        docker pull ${_AR_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE_NAME}:latest || true
+        DOCKER_BUILDKIT=1 docker build . \
           --file=Dockerfile \
           --target=runner \
+          --build-arg BUILDKIT_INLINE_CACHE=1 \
           --build-arg DIRECT_URL="$$DIRECT_URL" \
           --build-arg DATABASE_URL="$$DATABASE_URL" \
-          --tag=${_AR_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE_NAME}:$COMMIT_SHA
+          --cache-from=${_AR_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE_NAME}:latest \
+          --tag=${_AR_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE_NAME}:$COMMIT_SHA \
+          --tag=${_AR_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE_NAME}:latest
 
   - id: build-migrator-image
     name: gcr.io/cloud-builders/docker
@@ -59,24 +63,34 @@ steps:
     args:
       - -c
       - |
-        docker build . \
+        docker pull ${_AR_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_MIGRATOR_JOB_NAME}:latest || true
+        DOCKER_BUILDKIT=1 docker build . \
           --file=Dockerfile \
           --target=migrator \
+          --build-arg BUILDKIT_INLINE_CACHE=1 \
           --build-arg DIRECT_URL="$$DIRECT_URL" \
           --build-arg DATABASE_URL="$$DATABASE_URL" \
-          --tag=${_AR_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_MIGRATOR_JOB_NAME}:$COMMIT_SHA
+          --cache-from=${_AR_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_MIGRATOR_JOB_NAME}:latest \
+          --tag=${_AR_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_MIGRATOR_JOB_NAME}:$COMMIT_SHA \
+          --tag=${_AR_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_MIGRATOR_JOB_NAME}:latest
 
   - id: push-web-image
     name: gcr.io/cloud-builders/docker
+    entrypoint: bash
     args:
-      - push
-      - ${_AR_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE_NAME}:$COMMIT_SHA
+      - -c
+      - |
+        docker push ${_AR_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE_NAME}:$COMMIT_SHA
+        docker push ${_AR_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE_NAME}:latest
 
   - id: push-migrator-image
     name: gcr.io/cloud-builders/docker
+    entrypoint: bash
     args:
-      - push
-      - ${_AR_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_MIGRATOR_JOB_NAME}:$COMMIT_SHA
+      - -c
+      - |
+        docker push ${_AR_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_MIGRATOR_JOB_NAME}:$COMMIT_SHA
+        docker push ${_AR_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_MIGRATOR_JOB_NAME}:latest
 
   - id: deploy-migration-job
     name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
