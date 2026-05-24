@@ -13,14 +13,12 @@ import { Pricing } from "./sections/Pricing";
 import { CTA } from "./sections/CTA";
 import { Footer } from "./Footer";
 import { SmoothScroll } from "./SmoothScroll";
-import { Cursor } from "./Cursor";
 import { Reveal } from "./Reveal";
 
 export function LandingPage() {
   return (
     <main className="solobooks-landing min-h-screen relative">
       <SmoothScroll />
-      <Cursor />
       <Nav />
       <Hero />
       <Reveal stagger={false}><TrustStrip /></Reveal>

@@ -17,6 +17,8 @@ const PUBLIC_PATHS = [
   "/api/health",
   "/api/bills/*/public",
   "/guides",
+  "/terms",
+  "/privacy",
   "/api/jobs/process-import",
 ];
 

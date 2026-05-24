@@ -25,7 +25,7 @@ export function Nav() {
       scrolled ? "backdrop-blur-xl bg-white/80 border-b border-slate-200/60 shadow-sm" : "bg-transparent"
     }`}>
       <div className="mx-auto max-w-7xl px-5 sm:px-8 h-16 flex items-center justify-between">
-        <a href="#top" className="flex items-center gap-2.5 group">
+        <a href="/" className="flex items-center gap-2.5 group">
           <span className="grid place-items-center h-8 w-8 rounded-lg bg-gradient-to-br from-[#2563eb] to-[#1d4ed8] text-white">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M4 19V8a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/><path d="M9 13h6"/></svg>
           </span>

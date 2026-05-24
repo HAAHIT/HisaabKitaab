@@ -23,12 +23,12 @@ export function Footer() {
       <div className="mx-auto max-w-7xl px-5 sm:px-8 pt-16 pb-10">
         <div className="grid md:grid-cols-[1.4fr_repeat(4,1fr)] gap-10">
           <div>
-            <div className="flex items-center gap-2.5">
+            <a href="/" className="flex items-center gap-2.5">
               <span className="grid place-items-center h-9 w-9 rounded-lg bg-gradient-to-br from-[#2563eb] to-[#1d4ed8] text-white">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M4 19V8a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/><path d="M9 13h6"/></svg>
               </span>
               <span className="font-display text-[20px] font-semibold text-slate-900">SoloBooks</span>
-            </div>
+            </a>
             <p className="mt-4 text-[13.5px] text-slate-500 max-w-[280px] leading-relaxed">
               Bookkeeping for the way India does business. Built for Bharat.
             </p>
@@ -58,9 +58,9 @@ export function Footer() {
         <div className="mt-12 pt-6 border-t border-slate-200/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-[12px] text-slate-400">
           <p>© 2026 SoloBooks Technologies Pvt. Ltd. · Made for Bharat.</p>
           <div className="flex items-center gap-5">
-            <a href="#" className="hover:text-slate-700">Terms</a>
-            <a href="#" className="hover:text-slate-700">Privacy</a>
-            <a href="#" className="hover:text-slate-700">Refund policy</a>
+            <a href="/terms" className="hover:text-slate-700">Terms</a>
+            <a href="/privacy" className="hover:text-slate-700">Privacy</a>
+            <a href="/terms#refunds" className="hover:text-slate-700">Refund policy</a>
             <span className="font-mono">v3.2</span>
           </div>
         </div>
