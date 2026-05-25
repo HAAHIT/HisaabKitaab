@@ -197,7 +197,7 @@ export default function BillsListPage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: `repeat(3, 1fr)`,
+            gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)",
             gap: 10,
             marginBottom: 16,
           }}
@@ -602,11 +602,11 @@ export default function BillsListPage() {
                             ) : null}
                             <HKAvatar name={partyName || "—"} size={40} />
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2, flexWrap: "wrap" }}>
-                                <span style={{ fontSize: TYPE.body, fontWeight: 600, color: "var(--sb-text)", fontFamily: SG }}>{partyName}</span>
-                                <StatusChip status={bill.status} />
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2, minWidth: 0 }}>
+                                <span style={{ fontSize: TYPE.body, fontWeight: 600, color: "var(--sb-text)", fontFamily: SG, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1 }}>{partyName}</span>
+                                <span style={{ flexShrink: 0 }}><StatusChip status={bill.status} /></span>
                               </div>
-                              <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", margin: 0, fontFamily: SG }}>
+                              <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", margin: 0, fontFamily: SG, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                 {bill.billNumber} · {new Date(bill.date ?? bill.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
                               </p>
                             </div>

@@ -368,22 +368,23 @@ export default function PartiesPage() {
                     >
                       <HKAvatar name={party.name} size={44} />
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                          <span style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG }}>{party.name}</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                          <span style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1 }}>{party.name}</span>
                           {overdueFilter && (
                             <span style={{
                               display: "inline-flex", alignItems: "center", height: 22, padding: "0 8px",
                               borderRadius: 8, background: C.primarySoft, color: C.primary,
                               fontSize: 11, fontWeight: 600, fontFamily: SG, letterSpacing: "0.1px",
+                              flexShrink: 0,
                             }}>{t("dash.overdueLabel" as TranslationKey)}</span>
                           )}
                         </div>
-                        <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", margin: "2px 0 0", fontFamily: SG }}>
+                        <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", margin: "2px 0 0", fontFamily: SG, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {party.type === "CUSTOMER" ? t("parties.customerType" as TranslationKey) : t("parties.vendorType" as TranslationKey)}
                           {party.phone ? ` · ${party.phone}` : ""}
                         </p>
                       </div>
-                      <div style={{ textAlign: "right", marginRight: 8 }}>
+                      <div style={{ textAlign: "right", marginRight: 8, flexShrink: 0 }}>
                         <p style={{ fontFamily: IN, fontWeight: 700, fontSize: 16, color: balColor, margin: 0, fontVariantNumeric: "tabular-nums" }}>
                           {owesUs ? fmtFull(Math.abs(party.currentBalance)) : weOwe ? fmtFull(party.currentBalance) : t("khata.settled" as TranslationKey)}
                         </p>

@@ -869,7 +869,9 @@ export default function AppShell({
           {t("shell.karobaar")}
         </p>
         {[
+          { label: t("nav.purchases"),    href: "/purchases",    icon: <Icons.purchases /> },
           { label: t("nav.payments"),     href: "/payments",     icon: <>{Icons.payments(false)}</> },
+          { label: t("nav.banking"),      href: "/banking",      icon: <Icons.bank /> },
           { label: t("nav.notes"),        href: "/notes",        icon: <Icons.notes /> },
           { label: t("nav.transactions"), href: "/transactions", icon: <Icons.transactions /> },
         ].map(item => (
