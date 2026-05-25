@@ -5,6 +5,7 @@ import { resolveSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { isValidGstinFormat } from "@/lib/gst-helpers";
+import { checkPartyQuota, incrementPartyCounter } from "@/lib/quota";
 
 const VALID_PARTY_TYPES = new Set<PartyType>(["CUSTOMER", "VENDOR"]);
 
@@ -115,6 +116,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // [Phase 1 — Quota] FREE plan caps total active parties at 50.
+  const partyQuota = await checkPartyQuota(tenantId);
+  if (!partyQuota.allowed) {
+    return NextResponse.json(
+      {
+        error: partyQuota.reason ?? "Party limit reached",
+        code: "QUOTA_EXCEEDED",
+        quota: { used: partyQuota.used, limit: partyQuota.limit, resource: "parties" },
+      },
+      { status: 402 }
+    );
+  }
+
   try {
     const body = await request.json();
     const { name, phone, email, address, gstin, type, openingBalance } = body;
@@ -179,6 +193,10 @@ export async function POST(request: NextRequest) {
           action: "CREATE",
         },
       });
+
+      // [Phase 1 — Quota] Monthly analytics counter (live limit uses
+      // count(*) from party table; this is for billing-period analytics).
+      await incrementPartyCounter(tx, tenantId);
 
       return p;
     }, { isolationLevel: "RepeatableRead" });

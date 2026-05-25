@@ -23,6 +23,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveSession } from "@/lib/api-tenant";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { logError, getRequestId } from "@/lib/observability";
+import { checkBillQuota, incrementBillCounter } from "@/lib/quota";
 import { generateLockKey } from "@/lib/locks";
 import { getIstCalendar, istMidnightUtc } from "@/lib/journal-reporting";
 import { resolveBillSeriesPrefix } from "@/lib/bill-series";
@@ -344,6 +345,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // [Phase 1 — Quota] Enforce monthly bill limit before doing any work.
+  // Returns 402 PAYMENT_REQUIRED so the client can show the upgrade modal.
+  const billQuota = await checkBillQuota(tenantId);
+  if (!billQuota.allowed) {
+    return NextResponse.json(
+      {
+        error: billQuota.reason ?? "Monthly bill limit reached",
+        code: "QUOTA_EXCEEDED",
+        quota: { used: billQuota.used, limit: billQuota.limit, resource: "bills" },
+      },
+      { status: 402 }
+    );
+  }
+
   try {
     let rawBody: Record<string, unknown>;
     try {
@@ -596,6 +611,10 @@ export async function POST(request: NextRequest) {
           isDeleted: false,
         },
       });
+
+      // [Phase 1 — Quota] Atomic counter increment so partial transaction
+      // failures don't leave us double-counted or under-counted.
+      await incrementBillCounter(tx, tenantId);
 
       // [MCA GSR 247(E)] Append-only edit log — mandatory since April 1 2023.
       // Logged inside the same transaction so log entry and bill creation are atomic.

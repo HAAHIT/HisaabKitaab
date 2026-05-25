@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/hk-design";
 import { HKButton } from "@/components/ui/HKButton";
 import { HKInput } from "@/components/ui/HKInput";
+import { dispatchQuotaExceeded } from "@/components/billing/QuotaProvider";
 
 interface Template {
   id: string;
@@ -382,6 +383,15 @@ export default function NewBillPage() {
           status,
         }),
       });
+      // [Phase 1 — Quota] 402 from /api/bills means monthly limit hit;
+      // fire the global event so QuotaProvider shows the upgrade modal.
+      if (response.status === 402) {
+        const errData = await response.json().catch(() => ({}));
+        if (errData?.code === "QUOTA_EXCEEDED" && errData.quota) {
+          dispatchQuotaExceeded(errData.quota);
+          return;
+        }
+      }
       if (!response.ok) throw new Error(await readError(response));
       const data = await response.json();
       showToast(status === "FINAL" ? t("bills.new.createSuccess" as TranslationKey) : t("bills.new.saveSuccess" as TranslationKey), "success");

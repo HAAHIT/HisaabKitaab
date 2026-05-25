@@ -12,6 +12,7 @@ import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { type TranslationKey } from "@/lib/i18n/translations";
+import { dispatchQuotaExceeded } from "@/components/billing/QuotaProvider";
 import {
   C, OR, PU, GR, SG, IN, TYPE,
   fmt, fmtFull, useIsMobile,
@@ -193,6 +194,15 @@ export default function PartiesPage() {
             }),
           });
 
+      // [Phase 1 — Quota] Surface party limit via the global upgrade modal.
+      if (!editingParty && response.status === 402) {
+        const errData = await response.json().catch(() => ({}));
+        if (errData?.code === "QUOTA_EXCEEDED" && errData.quota) {
+          dispatchQuotaExceeded(errData.quota);
+          setShowPanel(false);
+          return;
+        }
+      }
       if (!response.ok) throw new Error(await readError(response));
 
       showToast(editingParty ? t("parties.updated") : t("parties.created"), "success");

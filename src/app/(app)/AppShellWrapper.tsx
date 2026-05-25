@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import AppShell from "@/components/ui/AppShell";
 import { SetupWizard } from "@/components/onboarding/SetupWizard";
 import GlobalSearch from "@/components/search/GlobalSearch";
+import { QuotaProvider } from "@/components/billing/QuotaProvider";
 
 interface UserSession {
   userId: string;
@@ -44,6 +45,7 @@ export default function AppShellWrapper({
   return (
     <AppShell user={user}>
       <GlobalSearch />
+      <QuotaProvider />
       {wizardVisible && (
         // z-[300] must exceed AppShell header (z-index: 200).
         // No overflow-y-auto here — SetupWizard manages its own internal scroll.

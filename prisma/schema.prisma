@@ -20,6 +20,21 @@ model Tenant {
   createdAt            DateTime            @default(now())
   updatedAt            DateTime            @updatedAt
   isOnboardingComplete Boolean?            @default(false)
+
+  // ── Billing / Quota tracking ─────────────────────────────────────────────
+  // trialEndsAt: null = no trial taken; future date = trial active
+  trialEndsAt          DateTime?
+  // planExpiresAt: when the current paid plan expires (null for FREE)
+  planExpiresAt        DateTime?
+  subscriptionStatus   SubscriptionStatus  @default(ACTIVE)
+  // Razorpay identifiers — null for FREE tenants
+  razorpayCustomerId   String?
+  razorpaySubscriptionId String?
+  // Monthly usage counters (reset by usageWindowStart rollover)
+  monthlyBillCount     Int                 @default(0)
+  monthlyPartyCount    Int                 @default(0)
+  usageWindowStart     DateTime            @default(now())
+  subscriptionEvents   SubscriptionEvent[]
   auditLogs            AuditLog[]
   BankAccount          BankAccount[]
   bills                Bill[]
@@ -419,6 +434,34 @@ model BankAccount {
 enum TenantPlan {
   FREE
   PRO
+  PRO_PLUS
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIALING
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+// ── §Billing ─ Subscription event audit log ───────────────────────────────
+// Every Razorpay webhook + manual plan change is recorded here as an
+// append-only audit log, so we can always reconstruct billing history.
+model SubscriptionEvent {
+  id          String   @id @default(cuid())
+  tenantId    String
+  eventType   String   // "subscription.activated", "payment.captured", "manual.upgrade", etc.
+  fromPlan    TenantPlan?
+  toPlan      TenantPlan?
+  amount      Int?     // paise
+  razorpayId  String?  // payment_id / subscription_id reference
+  payload     Json?    // full webhook payload for forensics
+  createdAt   DateTime @default(now())
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([razorpayId])
 }
 
 enum Role {
