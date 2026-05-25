@@ -48,14 +48,18 @@ export default function AppShellWrapper({
     router.refresh();
   }
 
+  if (wizardVisible) {
+    return (
+      <SetupWizard
+        onComplete={handleOnboardingComplete}
+        initialBusinessName={initialBusinessName}
+      />
+    );
+  }
+
   return (
     <AppShell user={user}>
       <GlobalSearch />
-      {wizardVisible && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-default-50 dark:bg-zinc-950">
-          <SetupWizard onComplete={handleOnboardingComplete} initialBusinessName={initialBusinessName} />
-        </div>
-      )}
       {children}
     </AppShell>
   );

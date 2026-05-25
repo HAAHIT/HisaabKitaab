@@ -8,6 +8,8 @@ export interface ColumnDef {
   options?: string[];
   position: number;
   isSystem?: boolean;
+  /** Default value used to pre-fill new rows in the bill editor. */
+  default?: string | number;
 }
 
 /**

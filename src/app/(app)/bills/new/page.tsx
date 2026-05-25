@@ -53,7 +53,11 @@ async function readError(response: Response) {
 
 function buildEmptyRow(template: Template) {
   return template.columns.reduce<Record<string, string | number>>((row, column) => {
-    row[column.id] = column.type === "number" || column.type === "formula" ? 0 : "";
+    if (column.default !== undefined) {
+      row[column.id] = column.default;
+    } else {
+      row[column.id] = column.type === "number" || column.type === "formula" ? 0 : "";
+    }
     return row;
   }, {});
 }
@@ -101,7 +105,6 @@ export default function NewBillPage() {
   const [taxPercent, setTaxPercent] = useState(18);
   const [isInterState, setIsInterState] = useState(false);
   const [placeOfSupply, setPlaceOfSupply] = useState("");
-  const [hsnPerRow, setHsnPerRow] = useState(false);
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("");
   const [didAutoFocusRow, setDidAutoFocusRow] = useState(false);
@@ -325,7 +328,6 @@ export default function NewBillPage() {
     const evaluatedRow = evaluateRow(base, selectedTemplate.columns);
     setRows((prev) => { const next = [...prev]; next[rowIndex] = evaluatedRow; return next; });
     if (item.taxRate !== null) setTaxPercent(Number(item.taxRate));
-    if (item.hsnCode && !hsnColId) setHsnPerRow(true);
   }
 
   useEffect(() => { setDidAutoFocusRow(false); }, [selectedParty?.id, selectedTemplate?.id]);
@@ -374,7 +376,7 @@ export default function NewBillPage() {
           customerPhone: currentParty.phone || null,
           customerAddress: currentParty.address || null,
           gstin: currentParty.gstin || null,
-          rows, subtotal, taxPercent, taxAmount, grandTotal: roundedGrandTotal, roundOff, isInterState, billDate,
+          rows, subtotal, taxPercent: uniqueTaxRate ?? 0, taxAmount, grandTotal: roundedGrandTotal, roundOff, isInterState, billDate,
           placeOfSupply: placeOfSupply || null,
           hsnCode: null,
           notes: notes.trim() || null,
@@ -599,22 +601,6 @@ export default function NewBillPage() {
                   </span>
                 </div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  {taxPercent > 0 && (
-                    <button
-                      onClick={() => setHsnPerRow((v) => !v)}
-                      style={{
-                        height: TOUCH.secondary, padding: "0 12px",
-                        borderRadius: 10, fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG,
-                        border: `1.5px solid ${hsnPerRow ? PU : "var(--sb-border)"}`,
-                        background: hsnPerRow ? PU + "18" : "transparent",
-                        color: hsnPerRow ? PU : "var(--sb-sub)",
-                        cursor: "pointer",
-                      }}
-                      title={t("bills.new.hsnTooltip" as TranslationKey)}
-                    >
-                      {t("bills.new.hsnPerRow" as TranslationKey)}
-                    </button>
-                  )}
                   <button
                     onClick={addRow}
                     style={{
@@ -638,9 +624,6 @@ export default function NewBillPage() {
                   <thead>
                     <tr style={{ borderBottom: "1px solid var(--sb-border)", background: "var(--sb-badge)" }}>
                       <th style={{ padding: "10px 12px", textAlign: "center", fontWeight: 600, color: "var(--sb-sub)", width: 40 }}>#</th>
-                      {hsnPerRow && taxPercent > 0 && (
-                        <th style={{ padding: "10px 12px", textAlign: "left", fontWeight: 600, color: "var(--sb-sub)", whiteSpace: "nowrap" }}>HSN/SAC</th>
-                      )}
                       {selectedTemplate.columns.map((column) => (
                         <th key={column.id} style={{ padding: "10px 12px", textAlign: "left", fontWeight: 600, color: "var(--sb-sub)", whiteSpace: "nowrap" }}>
                           {column.name}
@@ -654,18 +637,6 @@ export default function NewBillPage() {
                     {rows.map((row, rowIndex) => (
                       <tr key={rowIndex} style={{ borderBottom: "1px solid var(--sb-border)" }}>
                         <td style={{ padding: "8px 12px", textAlign: "center", color: "var(--sb-sub)", fontSize: TYPE.bodySmall }}>{rowIndex + 1}</td>
-                        {hsnPerRow && taxPercent > 0 && (
-                          <td style={{ padding: "8px 8px" }}>
-                            <input
-                              type="text"
-                              aria-label={`Row ${rowIndex + 1} HSN/SAC`}
-                              placeholder={t("bills.new.hsnPlaceholder" as TranslationKey)}
-                              value={String(row._hsnCode || "")}
-                              onChange={(e) => updateRowHsn(rowIndex, e.target.value)}
-                              style={{ minWidth: 80, maxWidth: 100, background: "transparent", color: "var(--sb-text)", fontSize: TYPE.bodySmall, fontFamily: SG, outline: "none", border: "none", borderBottom: "1.5px solid var(--sb-border)", padding: "2px 0" }}
-                            />
-                          </td>
-                        )}
                         {selectedTemplate.columns.map((column) => (
                           <td
                             key={column.id}
@@ -855,22 +826,7 @@ export default function NewBillPage() {
                   </div>
 
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ color: "var(--sb-sub)", fontSize: TYPE.body, fontFamily: SG }}>{taxLabelText}</span>
-                      {taxRateColId === null && (
-                        <>
-                          <HKInput
-                            type="number"
-                            aria-label="Tax percentage"
-                            value={String(taxPercent)}
-                            onValueChange={(value) => setTaxPercent(Number.parseFloat(value) || 0)}
-                            size="sm"
-                            style={{ width: 64 }}
-                          />
-                          <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)" }}>%</span>
-                        </>
-                      )}
-                    </div>
+                    <span style={{ color: "var(--sb-sub)", fontSize: TYPE.body, fontFamily: SG }}>{taxLabelText}</span>
                     <span style={{ fontFamily: IN, fontWeight: 600, color: "var(--sb-text)" }}>{formatCurrency(taxAmount)}</span>
                   </div>
 

@@ -26,7 +26,11 @@ interface Template {
 
 function buildEmptyRow(template: Template) {
   return template.columns.reduce<Record<string, string | number>>((row, column) => {
-    row[column.id] = column.type === "number" || column.type === "formula" ? 0 : "";
+    if (column.default !== undefined) {
+      row[column.id] = column.default;
+    } else {
+      row[column.id] = column.type === "number" || column.type === "formula" ? 0 : "";
+    }
     return row;
   }, {});
 }

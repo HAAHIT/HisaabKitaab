@@ -212,7 +212,17 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
 
   const cols     = bill.template.columns as ColumnDef[];
   const isIS     = bill.isInterState === true;
-  const halfRate = bill.taxPercent / 2;
+
+  const taxRateCol = cols.find(c => c.type === "number" && ["tax rate","tax%","gst rate","gst%"].some(h => c.name.toLowerCase().includes(h)));
+  const rowRates = taxRateCol
+    ? (bill.rows as Record<string,string|number>[])
+        .map(r => typeof r[taxRateCol.id] === "number" ? r[taxRateCol.id] as number : 0)
+        .filter(r => r > 0)
+    : [];
+  const isMultiRate = new Set(rowRates).size > 1;
+  const uniformRate = !isMultiRate && rowRates.length > 0 ? rowRates[0] : bill.taxPercent;
+
+  const halfRate = uniformRate / 2;
   const halfTax  = Math.round((bill.taxAmount / 2) * 100) / 100;
   const cgst     = halfTax;
   const sgst     = halfTax;
@@ -222,15 +232,6 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
   const lastNumCol = [...cols].reverse().find(c => c.type === "formula" || c.type === "number");
   const numColCount = cols.filter(c => c.type === "number" || c.type === "formula").length;
   const templateHasHsnCol = cols.some(c => c.type === "text" && ["hsn","sac"].some(h => c.name.toLowerCase().includes(h)));
-
-  const isMultiRate = (() => {
-    const taxRateCol = cols.find(c => c.type === "number" && ["tax rate","tax%","gst rate","gst%"].some(h => c.name.toLowerCase().includes(h)));
-    if (!taxRateCol) return false;
-    const rates = (bill.rows as Record<string,string|number>[])
-      .map(r => typeof r[taxRateCol.id] === "number" ? r[taxRateCol.id] as number : 0)
-      .filter(r => r > 0);
-    return new Set(rates).size > 1;
-  })();
 
   const isVendor = bill.party?.type === "VENDOR";
 
@@ -451,7 +452,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
             )}
             {settings?.companyGstin && (
               <div style={{ fontSize:11, fontWeight:700, marginTop:4, letterSpacing:0.5 }}>
-                GST NO : {settings.companyGstin}
+                GST NO : {settings.companyGstin.toUpperCase()}
               </div>
             )}
           </div>
@@ -466,7 +467,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
               )}
               {bill.customerPhone && <div style={{ marginTop:3 }}>Ph: {bill.customerPhone}</div>}
               {bill.gstin && (
-                <div style={{ marginTop:5, fontWeight:700 }}>GST No: <span style={{ fontFamily:"monospace" }}>{bill.gstin}</span></div>
+                <div style={{ marginTop:5, fontWeight:700 }}>GST No: <span style={{ fontFamily:"monospace" }}>{bill.gstin.toUpperCase()}</span></div>
               )}
               {bill.placeOfSupply && (
                 <div style={{ marginTop:3, color:"#555" }}>

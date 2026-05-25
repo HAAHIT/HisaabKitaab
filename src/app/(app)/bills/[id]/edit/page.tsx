@@ -7,7 +7,6 @@ import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { evaluateRow, type ColumnDef } from "@/lib/formula";
 import { GST_STATE_CODES } from "@/lib/gst-states";
-import ItemCatalogPicker from "@/components/bills/ItemCatalogPicker";
 import {
   C, GR, AM, OR, SG, IN, TYPE, TOUCH, DISPLAY,
   fmtFull,
@@ -67,7 +66,11 @@ async function readError(response: Response) {
 
 function buildEmptyRow(template: Template) {
   return template.columns.reduce<Record<string, string | number>>((row, column) => {
-    row[column.id] = column.type === "number" || column.type === "formula" ? 0 : "";
+    if (column.default !== undefined) {
+      row[column.id] = column.default;
+    } else {
+      row[column.id] = column.type === "number" || column.type === "formula" ? 0 : "";
+    }
     return row;
   }, {});
 }
@@ -117,10 +120,9 @@ export default function EditBillPage({
   const [isInterState, setIsInterState] = useState(false);
   const [placeOfSupply, setPlaceOfSupply] = useState("");
   const [hsnCode, setHsnCode] = useState("");
-  const [hsnPerRow, setHsnPerRow] = useState(false);
+  const hsnPerRow = false;
   const [enableRoundOff, setEnableRoundOff] = useState(false);
   const [billDate, setBillDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [showCatalogPicker, setShowCatalogPicker] = useState(false);
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("");
 
@@ -154,10 +156,6 @@ export default function EditBillPage({
       setGstin(nextBill.gstin || "");
       const loadedRows = Array.isArray(nextBill.rows) ? nextBill.rows : [];
       setRows(loadedRows);
-      const hasRowHsn = loadedRows.some(
-        (r) => typeof r._hsnCode === "string" && (r._hsnCode as string).trim()
-      );
-      if (hasRowHsn) setHsnPerRow(true);
       setNotes(nextBill.notes || "");
       setTerms(nextBill.terms || "");
       setTaxPercent(nextBill.taxPercent);
@@ -238,8 +236,6 @@ export default function EditBillPage({
     const evaluated = evaluateRow(merged, selectedTemplate.columns);
     setRows((prev) => [...prev, evaluated]);
     if (taxRate !== null) setTaxPercent(taxRate);
-    if (rowData._hsnCode && String(rowData._hsnCode).trim()) setHsnPerRow(true);
-    setShowCatalogPicker(false);
   }
 
   const { subtotal, taxAmount, grandTotal } = useMemo(() => {
@@ -422,34 +418,6 @@ export default function EditBillPage({
                 </span>
               </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                {taxPercent > 0 && (
-                  <button
-                    onClick={() => setHsnPerRow((v) => !v)}
-                    style={{
-                      height: TOUCH.secondary, padding: "0 12px",
-                      borderRadius: 10, fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG,
-                      border: `1.5px solid ${hsnPerRow ? C.primary : "var(--sb-border)"}`,
-                      background: hsnPerRow ? C.primary + "18" : "transparent",
-                      color: hsnPerRow ? C.primary : "var(--sb-sub)",
-                      cursor: "pointer",
-                    }}
-                    title="Add HSN/SAC code per line item for GSTR-1 Table 12"
-                  >
-                    HSN per row
-                  </button>
-                )}
-                <button
-                  onClick={() => setShowCatalogPicker(true)}
-                  style={{
-                    height: TOUCH.secondary, padding: "0 12px",
-                    borderRadius: 10, border: `1.5px solid ${C.primary}44`,
-                    background: C.primary + "12", color: C.primary,
-                    fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG,
-                    cursor: "pointer",
-                  }}
-                >
-                  Catalogue
-                </button>
                 <button
                   onClick={addRow}
                   style={{
@@ -606,18 +574,7 @@ export default function EditBillPage({
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ color: "var(--sb-sub)", fontSize: TYPE.body, fontFamily: SG }}>{taxLabelText}</span>
-                    <HKInput
-                      type="number"
-                      aria-label="Tax percentage"
-                      value={String(taxPercent)}
-                      onValueChange={(value) => setTaxPercent(Number.parseFloat(value) || 0)}
-                      size="sm"
-                      className="w-20"
-                      endContent={<span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)" }}>%</span>}
-                    />
-                  </div>
+                  <span style={{ color: "var(--sb-sub)", fontSize: TYPE.body, fontFamily: SG }}>{taxLabelText}</span>
                   <span style={{ fontFamily: IN, fontWeight: 600, color: "var(--sb-text)" }}>{fmtFull(taxAmount)}</span>
                 </div>
 
@@ -732,13 +689,6 @@ export default function EditBillPage({
         </div>
       </div>
 
-      {showCatalogPicker && selectedTemplate && (
-        <ItemCatalogPicker
-          columns={selectedTemplate.columns}
-          onSelect={handleCatalogSelect}
-          onClose={() => setShowCatalogPicker(false)}
-        />
-      )}
     </>
   );
 }

@@ -32,11 +32,11 @@ export function CTA() {
           transition={{ duration: 0.6, delay: 0.2 }}
           className="mt-9 flex flex-wrap items-center justify-center gap-3"
         >
-          <a href="#" className="btn-primary">
+          <a href="/register" className="btn-primary">
             Try free — start in 4 minutes
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
           </a>
-          <a href="#" className="btn-ghost">
+          <a href="/register" className="btn-ghost">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
             Book a 15-min demo
           </a>

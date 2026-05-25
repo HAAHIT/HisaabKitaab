@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { type TranslationKey } from "@/lib/i18n/translations";
 import { useInstallPrompt } from "@/hooks/useInstallPrompt";
-import { SetupWizard } from "@/components/onboarding/SetupWizard";
 import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { HKButton } from "@/components/ui/HKButton";
 import { C, OR, PU, GR, AM, SG, IN, TYPE, DISPLAY, BRAND, fmtFull } from "@/components/ui/hk-design";
@@ -377,7 +376,6 @@ export default function DashboardPage() {
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingReady, setOnboardingReady] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -425,7 +423,6 @@ export default function DashboardPage() {
         setHasBankAccount(false);
       }
       setData(d);
-      setShowOnboarding(!d.isOnboardingComplete);
       setOnboardingReady(true);
     } catch (err: unknown) {
       if (err instanceof Error && err.name === "AbortError") return;
@@ -478,10 +475,6 @@ export default function DashboardPage() {
         <HKButton onClick={() => { setLoading(true); fetchDashboard(); }}>{t("dash.tryAgain" as TranslationKey)}</HKButton>
       </div>
     );
-  }
-
-  if (showOnboarding) {
-    return <SetupWizard onComplete={() => { setShowOnboarding(false); void fetchDashboard(); }}/>;
   }
 
   if (!data) return null;

@@ -110,8 +110,15 @@ export default async function PublicBillPage(
   const sub       = Number(bill.subtotal);
   const tax       = Number(bill.taxAmount);
   const total     = Number(bill.grandTotal);
-  const taxPct    = Number(bill.taxPercent);
   const roundOff  = Number(bill.roundOff);
+  const taxRateCol = cols.find(c => c.type === "number" && ["tax rate","tax%","gst rate","gst%"].some(h => c.name.toLowerCase().includes(h)));
+  const rowRates = taxRateCol
+    ? (bill.rows as Record<string,string|number>[])
+        .map(r => typeof r[taxRateCol.id] === "number" ? r[taxRateCol.id] as number : 0)
+        .filter(r => r > 0)
+    : [];
+  const isMultiRate = new Set(rowRates).size > 1;
+  const taxPct    = !isMultiRate && rowRates.length > 0 ? rowRates[0] : Number(bill.taxPercent);
   const halfRate  = taxPct / 2;
   const halfTax   = Math.round((tax / 2) * 100) / 100;
   const cgst      = halfTax;
@@ -198,7 +205,7 @@ export default async function PublicBillPage(
           )}
           {settings.companyGstin && (
             <div style={{ fontSize:11, fontWeight:700, marginTop:4, letterSpacing:0.5 }}>
-              GST NO : {settings.companyGstin}
+              GST NO : {settings.companyGstin.toUpperCase()}
             </div>
           )}
         </div>
@@ -214,7 +221,7 @@ export default async function PublicBillPage(
             {bill.customerPhone && <div style={{ marginTop:3 }}>Ph: {bill.customerPhone}</div>}
             {bill.gstin && (
               <div style={{ marginTop:5, fontWeight:700 }}>
-                GST No: <span style={{ fontFamily:"monospace" }}>{bill.gstin}</span>
+                GST No: <span style={{ fontFamily:"monospace" }}>{bill.gstin.toUpperCase()}</span>
               </div>
             )}
             {bill.placeOfSupply && (
