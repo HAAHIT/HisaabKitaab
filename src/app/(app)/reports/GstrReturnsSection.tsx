@@ -5,6 +5,51 @@ import { HKButton } from "@/components/ui/HKButton";
 import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
 import { HKSkeleton } from "@/components/ui/HKSkeleton";
 
+// ── GSTR-1 types ─────────────────────────────────────────────────────────────
+
+interface Gstr1B2bEntry {
+  ctin: string;
+  inv: Array<{
+    inum: string;
+    idt: string;
+    val: number;
+    pos: string;
+    itms: Array<{ num: number; itm_det: { txval: number; rt: number; iamt: number; camt: number; samt: number } }>;
+  }>;
+}
+
+interface Gstr1B2csEntry {
+  sply_ty: string;
+  rt: number;
+  pos: string;
+  txval: number;
+  iamt: number;
+  camt: number;
+  samt: number;
+}
+
+interface Gstr1HsnEntry {
+  num: number;
+  hsn_sc: string;
+  uqc: string;
+  qty: number;
+  rt: number;
+  txval: number;
+  iamt: number;
+  camt: number;
+  samt: number;
+}
+
+interface Gstr1Summary {
+  fp: string;
+  gt: number;
+  b2b: { ctinCount: number; invoiceCount: number; taxableValue: number; tax: number; entries: Gstr1B2bEntry[] };
+  b2cs: { rowCount: number; taxableValue: number; tax: number; entries: Gstr1B2csEntry[] };
+  hsn: { entryCount: number; taxableValue: number; entries: Gstr1HsnEntry[] };
+}
+
+// ── GSTR-3B types ─────────────────────────────────────────────────────────────
+
 interface Bucket {
   taxableValue: number;
   igst: number;
@@ -79,12 +124,22 @@ export default function GstrReturnsSection() {
 
   const fyStartYear = useMemo(() => (fpMonth >= 4 ? fpYear : fpYear - 1), [fpMonth, fpYear]);
 
+  const [returnType, setReturnType] = useState<"gstr1" | "gstr3b">("gstr3b");
+
+  // GSTR-3B state
   const [summary, setSummary] = useState<Gstr3bSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"3.1" | "3.2" | "4" | "6.1">("3.1");
 
+  // GSTR-1 state
+  const [gstr1, setGstr1] = useState<Gstr1Summary | null>(null);
+  const [gstr1Loading, setGstr1Loading] = useState(false);
+  const [gstr1Error, setGstr1Error] = useState<string | null>(null);
+  const [gstr1Tab, setGstr1Tab] = useState<"b2b" | "b2cs" | "hsn">("b2b");
+
   useEffect(() => {
+    if (returnType !== "gstr3b") return;
     const controller = new AbortController();
     setLoading(true);
     setError(null);
@@ -109,7 +164,36 @@ export default function GstrReturnsSection() {
       });
 
     return () => controller.abort();
-  }, [fyStartYear, fpMonth]);
+  }, [fyStartYear, fpMonth, returnType]);
+
+  useEffect(() => {
+    if (returnType !== "gstr1") return;
+    const controller = new AbortController();
+    setGstr1(null);
+    setGstr1Loading(true);
+    setGstr1Error(null);
+
+    fetch(
+      `/api/reports/gstr1?fyStartYear=${fyStartYear}&fpMonth=${fpMonth}`,
+      { signal: controller.signal }
+    )
+      .then(async (res) => {
+        const json = await res.json();
+        if (!res.ok) throw new Error(json?.error || "Failed to load");
+        return json.data as Gstr1Summary;
+      })
+      .then((data) => {
+        setGstr1(data);
+        setGstr1Loading(false);
+      })
+      .catch((err) => {
+        if (controller.signal.aborted) return;
+        setGstr1Error(err instanceof Error ? err.message : "Failed to load");
+        setGstr1Loading(false);
+      });
+
+    return () => controller.abort();
+  }, [fyStartYear, fpMonth, returnType]);
 
   const downloadGstr1 = () => {
     const url = `/api/reports/gstr1/json?fyStartYear=${fyStartYear}&fpMonth=${fpMonth}&download=1`;
@@ -137,12 +221,16 @@ export default function GstrReturnsSection() {
             </p>
           </div>
           <div className="flex gap-2">
-            <HKButton size="sm" variant="secondary" onClick={downloadGstr1}>
-              Download GSTR-1 JSON
-            </HKButton>
-            <HKButton size="sm" variant="secondary" onClick={downloadGstr3b}>
-              Download GSTR-3B JSON
-            </HKButton>
+            {returnType === "gstr1" && (
+              <HKButton size="sm" variant="secondary" onClick={downloadGstr1}>
+                Download GSTR-1 JSON
+              </HKButton>
+            )}
+            {returnType === "gstr3b" && (
+              <HKButton size="sm" variant="secondary" onClick={downloadGstr3b}>
+                Download GSTR-3B JSON
+              </HKButton>
+            )}
           </div>
         </div>
 
@@ -171,6 +259,59 @@ export default function GstrReturnsSection() {
           </HKSelect>
         </div>
 
+        {/* Return type toggle */}
+        <div className="flex gap-1 bg-default-100 rounded-xl p-1 w-fit">
+          {(["gstr3b", "gstr1"] as const).map((rt) => (
+            <button
+              key={rt}
+              onClick={() => setReturnType(rt)}
+              className={`px-4 py-1.5 text-sm font-semibold rounded-lg transition-colors ${
+                returnType === rt
+                  ? "bg-white text-foreground shadow-sm"
+                  : "text-default-500 hover:text-foreground"
+              }`}
+            >
+              {rt === "gstr3b" ? "GSTR-3B" : "GSTR-1"}
+            </button>
+          ))}
+        </div>
+
+        {returnType === "gstr1" ? (
+          <>
+            <div className="flex gap-2 border-b border-divider pb-1 overflow-x-auto">
+              {(["b2b", "b2cs", "hsn"] as const).map((k) => (
+                <button
+                  key={k}
+                  onClick={() => setGstr1Tab(k)}
+                  className={`px-3 py-1.5 text-sm font-semibold rounded-t transition-colors whitespace-nowrap ${
+                    gstr1Tab === k
+                      ? "border-b-2 border-primary text-primary bg-primary/5"
+                      : "text-default-500 hover:text-foreground"
+                  }`}
+                >
+                  {k === "b2b" ? "B2B (Registered buyers)" : k === "b2cs" ? "B2CS (Consumers)" : "HSN Summary"}
+                </button>
+              ))}
+            </div>
+
+            {gstr1Loading ? (
+              <div className="grid gap-2">
+                {[1, 2, 3].map((i) => <HKSkeleton key={i} className="h-10 rounded-xl" />)}
+              </div>
+            ) : gstr1Error ? (
+              <p className="text-sm text-danger">{gstr1Error}</p>
+            ) : !gstr1 ? (
+              <p className="text-sm text-default-500">No data.</p>
+            ) : gstr1Tab === "b2b" ? (
+              <Gstr1B2bSection data={gstr1.b2b} />
+            ) : gstr1Tab === "b2cs" ? (
+              <Gstr1B2csSection data={gstr1.b2cs} />
+            ) : (
+              <Gstr1HsnSection data={gstr1.hsn} />
+            )}
+          </>
+        ) : (
+          <>
         <div className="flex gap-2 border-b border-divider pb-1 overflow-x-auto">
           {(["3.1", "3.2", "4", "6.1"] as const).map((k) => (
             <button
@@ -211,6 +352,8 @@ export default function GstrReturnsSection() {
           <Section4 summary={summary} />
         ) : (
           <Section61 summary={summary} />
+        )}
+          </>
         )}
       </div>
     </div>
@@ -356,6 +499,134 @@ function Section4({ summary }: { summary: Gstr3bSummary }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// ── GSTR-1 display components ─────────────────────────────────────────────────
+
+function Gstr1B2bSection({ data }: { data: Gstr1Summary["b2b"] }) {
+  if (data.entries.length === 0) {
+    return <p className="text-sm text-default-500 py-4 text-center">No B2B (registered buyer) supplies in this period.</p>;
+  }
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-6 text-sm text-default-500">
+        <span><strong className="text-foreground">{data.ctinCount}</strong> GSTINs</span>
+        <span><strong className="text-foreground">{data.invoiceCount}</strong> invoices</span>
+        <span>Taxable: <strong className="text-foreground">{inr(data.taxableValue)}</strong></span>
+        <span>Tax: <strong className="text-foreground">{inr(data.tax)}</strong></span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-divider text-xs text-default-500 uppercase tracking-wide">
+              <th className="py-2 pr-3 text-left font-semibold">Buyer GSTIN</th>
+              <th className="py-2 pr-3 text-right font-semibold">Invoices</th>
+              <th className="py-2 pr-3 text-right font-semibold">Taxable Value</th>
+              <th className="py-2 text-right font-semibold">Tax</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.entries.map((c) => {
+              const txval = c.inv.reduce((s, i) => s + i.itms.reduce((si, it) => si + it.itm_det.txval, 0), 0);
+              const tax = c.inv.reduce((s, i) => s + i.itms.reduce((si, it) => si + it.itm_det.iamt + it.itm_det.camt + it.itm_det.samt, 0), 0);
+              return (
+                <tr key={c.ctin} className="border-b border-divider/40 hover:bg-default-50">
+                  <td className="py-2 pr-3 font-mono text-xs">{c.ctin}</td>
+                  <td className="py-2 pr-3 text-right">{c.inv.length}</td>
+                  <td className="py-2 pr-3 text-right">{inr(txval)}</td>
+                  <td className="py-2 text-right">{inr(tax)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function Gstr1B2csSection({ data }: { data: Gstr1Summary["b2cs"] }) {
+  if (data.entries.length === 0) {
+    return <p className="text-sm text-default-500 py-4 text-center">No B2CS (consumer) supplies in this period.</p>;
+  }
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-6 text-sm text-default-500">
+        <span>Taxable: <strong className="text-foreground">{inr(data.taxableValue)}</strong></span>
+        <span>Tax: <strong className="text-foreground">{inr(data.tax)}</strong></span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-divider text-xs text-default-500 uppercase tracking-wide">
+              <th className="py-2 pr-3 text-left font-semibold">Supply Type</th>
+              <th className="py-2 pr-3 text-left font-semibold">Place of Supply</th>
+              <th className="py-2 pr-3 text-right font-semibold">Rate</th>
+              <th className="py-2 pr-3 text-right font-semibold">Taxable Value</th>
+              <th className="py-2 text-right font-semibold">Tax</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.entries.map((r, i) => (
+              <tr key={i} className="border-b border-divider/40 hover:bg-default-50">
+                <td className="py-2 pr-3">{r.sply_ty === "INTER" ? "Inter-state" : "Intra-state"}</td>
+                <td className="py-2 pr-3 font-mono text-xs">{r.pos}</td>
+                <td className="py-2 pr-3 text-right">{r.rt}%</td>
+                <td className="py-2 pr-3 text-right">{inr(r.txval)}</td>
+                <td className="py-2 text-right">{inr(r.iamt + r.camt + r.samt)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function Gstr1HsnSection({ data }: { data: Gstr1Summary["hsn"] }) {
+  if (data.entries.length === 0) {
+    return <p className="text-sm text-default-500 py-4 text-center">No HSN data in this period. Add HSN/SAC codes to bill items.</p>;
+  }
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-6 text-sm text-default-500">
+        <span><strong className="text-foreground">{data.entryCount}</strong> HSN/SAC codes</span>
+        <span>Taxable: <strong className="text-foreground">{inr(data.taxableValue)}</strong></span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-divider text-xs text-default-500 uppercase tracking-wide">
+              <th className="py-2 pr-3 text-left font-semibold">HSN / SAC</th>
+              <th className="py-2 pr-3 text-right font-semibold">Rate</th>
+              <th className="py-2 pr-3 text-right font-semibold">UQC</th>
+              <th className="py-2 pr-3 text-right font-semibold">Taxable Value</th>
+              <th className="py-2 pr-3 text-right font-semibold">IGST</th>
+              <th className="py-2 pr-3 text-right font-semibold">CGST</th>
+              <th className="py-2 text-right font-semibold">SGST</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.entries.map((h) => (
+              <tr key={`${h.hsn_sc}-${h.rt}`} className="border-b border-divider/40 hover:bg-default-50">
+                <td className="py-2 pr-3 font-mono">{h.hsn_sc}</td>
+                <td className="py-2 pr-3 text-right">{h.rt}%</td>
+                <td className="py-2 pr-3 text-right text-xs text-default-500">{h.uqc}</td>
+                <td className="py-2 pr-3 text-right">{inr(h.txval)}</td>
+                <td className="py-2 pr-3 text-right">{h.iamt > 0 ? inr(h.iamt) : "—"}</td>
+                <td className="py-2 pr-3 text-right">{h.camt > 0 ? inr(h.camt) : "—"}</td>
+                <td className="py-2 text-right">{h.samt > 0 ? inr(h.samt) : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-default-500">
+        Separate rows appear per HSN/SAC and tax rate. Add HSN codes to bill items for accurate Table 12 filing.
+        UNCLASSIFIED entries indicate bills with no HSN code — fix these before filing.
+      </p>
     </div>
   );
 }

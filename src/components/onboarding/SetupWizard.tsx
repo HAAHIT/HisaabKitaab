@@ -381,7 +381,7 @@ export function SetupWizard({ onComplete, initialBusinessName }: SetupWizardProp
       await apiFetch("/api/onboarding/complete", {});
       clearWizardDraft();
       onComplete();
-      router.push("/dashboard");
+      router.push("/bills/new?tour=1");
     }
     catch (err) { setError(err instanceof Error ? err.message : t("wizard.error.finishFailed")); }
     finally { setSaving(false); }
@@ -418,7 +418,7 @@ export function SetupWizard({ onComplete, initialBusinessName }: SetupWizardProp
       await apiFetch("/api/onboarding/complete", {});
       clearWizardDraft();
       onComplete();
-      router.push("/dashboard");
+      router.push("/bills/new?tour=1");
     } catch (err) {
       setError(err instanceof Error ? err.message : t("wizard.error.saveFailed"));
     } finally {

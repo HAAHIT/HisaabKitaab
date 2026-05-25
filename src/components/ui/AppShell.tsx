@@ -891,6 +891,7 @@ export default function AppShell({
           { label: t("nav.reports"),       href: "/reports",               icon: <Icons.reports />,  roles: ["ADMIN","ACCOUNTANT"] },
           { label: t("nav.tallyExportImport"), href: "/settings/tally-export", icon: <Icons.tally />, roles: ["ADMIN","ACCOUNTANT"] },
           { label: t("nav.reconcile"),     href: "/settings/reconcile",    icon: <Icons.bank />,     roles: ["ADMIN","ACCOUNTANT"] },
+          { label: t("nav.caPortal"),       href: "/ca",                    icon: <Icons.reports />,  roles: ["ACCOUNTANT"] },
           { label: t("shell.settings"),    href: "/settings/company",      icon: <Icons.settings />, roles: ["ADMIN"] },
         ].filter(item => item.roles.includes(user.role)).map(item => (
           <button key={item.href}

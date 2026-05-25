@@ -19,6 +19,7 @@ import {
 import { HKButton } from "@/components/ui/HKButton";
 import { HKInput } from "@/components/ui/HKInput";
 import { dispatchQuotaExceeded } from "@/components/billing/QuotaProvider";
+import { BillCreationTour } from "@/components/onboarding/BillCreationTour";
 
 interface Template {
   id: string;
@@ -97,6 +98,12 @@ export default function NewBillPage() {
 
   const searchParams = useSearchParams();
   const preselectedPartyId = searchParams.get("partyId");
+  const tourMode = searchParams.get("tour") === "1";
+  const [tourDismissed, setTourDismissed] = useState(false);
+  const [billFinalized, setBillFinalized] = useState(false);
+  const [finalizeSeconds, setFinalizeSeconds] = useState<number | undefined>(undefined);
+  const openedAtRef = useRef<number>(typeof performance !== "undefined" ? performance.now() : Date.now());
+
   const [selectedParty, setSelectedParty] = useState<PartyOption | null>(null);
   const [rows, setRows] = useState<Record<string, string | number>[]>([]);
   const [taxPercent, setTaxPercent] = useState(18);
@@ -395,7 +402,23 @@ export default function NewBillPage() {
       if (!response.ok) throw new Error(await readError(response));
       const data = await response.json();
       showToast(status === "FINAL" ? t("bills.new.createSuccess" as TranslationKey) : t("bills.new.saveSuccess" as TranslationKey), "success");
-      window.setTimeout(() => router.push(`/bills/${data.bill.id}`), 700);
+
+      if (status === "FINAL") {
+        const elapsedMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - openedAtRef.current;
+        const secondsToFinalize = elapsedMs / 1000;
+        setFinalizeSeconds(secondsToFinalize);
+        setBillFinalized(true);
+        // Fire-and-forget — don't block navigation on telemetry
+        fetch("/api/telemetry/bill-timing", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ secondsToFinalize, billId: data.bill.id }),
+        }).catch(() => undefined);
+      }
+
+      if (!tourMode || status !== "FINAL") {
+        window.setTimeout(() => router.push(`/bills/${data.bill.id}`), 700);
+      }
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("bills.new.saveError" as TranslationKey), "error");
     } finally {
@@ -526,6 +549,7 @@ export default function NewBillPage() {
 
             {/* ── Party / Bill To ────────────────────────────────────────── */}
             <Section title={t("bills.new.billTo" as TranslationKey)}>
+              <div data-tour="party-search">
               <PartySearch
                 value={selectedParty?.id || null}
                 onChange={(party) => {
@@ -591,9 +615,11 @@ export default function NewBillPage() {
                   )}
                 </div>
               )}
+              </div>
             </Section>
 
             {/* ── Line Items ──────────────────────────────────────────────── */}
+            <div data-tour="line-items">
             <HKCard style={{ marginBottom: 16, padding: 0 }}>
               <div style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -821,6 +847,7 @@ export default function NewBillPage() {
                 </table>
               </div>
             </HKCard>
+            </div>
 
             {/* ── Notes + Summary ─────────────────────────────────────────── */}
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16, marginBottom: 24 }}>
@@ -992,6 +1019,7 @@ export default function NewBillPage() {
               >
                 {savingAs === "DRAFT" ? t("common.saving" as TranslationKey) : t("bills.saveDraft" as TranslationKey)}
               </button>
+              <div data-tour="finalize-btn">
               <HKButton
                 onClick={() => handleSave("FINAL")}
                 isLoading={savingAs === "FINAL"}
@@ -999,10 +1027,21 @@ export default function NewBillPage() {
               >
                 {t("bills.finalize" as TranslationKey)}
               </HKButton>
+              </div>
             </div>
           </>
         )}
       </div>
+
+      {tourMode && !tourDismissed && (
+        <BillCreationTour
+          onDismiss={() => setTourDismissed(true)}
+          billFinalized={billFinalized}
+          secondsToFinalize={finalizeSeconds}
+          partySelected={!!selectedParty}
+          hasItems={grandTotal > 0}
+        />
+      )}
     </div>
   );
 }

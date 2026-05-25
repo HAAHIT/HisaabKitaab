@@ -132,6 +132,8 @@ export interface Gstr1Json {
       hsn_sc: string;
       uqc: string;
       qty: number;
+      /** Tax rate percentage (required by GSTN portal) */
+      rt: number;
       txval: number;
       iamt: number;
       camt: number;
@@ -264,7 +266,8 @@ export async function buildGstr1Json(input: Gstr1PeriodInput): Promise<Gstr1Json
       entry.samt = roundTo2(entry.samt + sgst);
     }
 
-    // HSN: prefer bill-level hsnCode; else collect from rows
+    // HSN: prefer bill-level hsnCode; else collect from rows.
+    // Key by (hsn_sc, rate) so different tax rates produce separate GSTN rows.
     const hsnSet = new Set<string>();
     if (bill.hsnCode?.trim()) hsnSet.add(bill.hsnCode.trim());
     for (const row of bill.rows) {
@@ -274,20 +277,22 @@ export async function buildGstr1Json(input: Gstr1PeriodInput): Promise<Gstr1Json
     const hsnKeys = hsnSet.size > 0 ? [...hsnSet] : ["UNCLASSIFIED"];
     const factor = 1 / hsnKeys.length;
     for (const hsn of hsnKeys) {
-      let h = hsnByCode.get(hsn);
+      const hsnRateKey = `${hsn}|${rate}`;
+      let h = hsnByCode.get(hsnRateKey);
       if (!h) {
         h = {
           num: hsnByCode.size + 1,
           hsn_sc: hsn,
           uqc: "NOS",
           qty: 0,
+          rt: rate,
           txval: 0,
           iamt: 0,
           camt: 0,
           samt: 0,
           csamt: 0,
         };
-        hsnByCode.set(hsn, h);
+        hsnByCode.set(hsnRateKey, h);
       }
       h.txval = roundTo2(h.txval + bill.subtotal * factor);
       h.iamt = roundTo2(h.iamt + igst * factor);
