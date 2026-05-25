@@ -115,10 +115,6 @@ export default function GstrReturnsSection() {
     const url = `/api/reports/gstr1/json?fyStartYear=${fyStartYear}&fpMonth=${fpMonth}&download=1`;
     window.open(url, "_blank", "noopener,noreferrer");
   };
-  const downloadGstr3b = () => {
-    const url = `/api/reports/gstr3b/json?fyStartYear=${fyStartYear}&fpMonth=${fpMonth}`;
-    window.open(url, "_blank", "noopener,noreferrer");
-  };
 
   const yearOptions = (() => {
     const ist = currentDefault();
@@ -139,9 +135,6 @@ export default function GstrReturnsSection() {
           <div className="flex gap-2">
             <HKButton size="sm" variant="secondary" onClick={downloadGstr1}>
               Download GSTR-1 JSON
-            </HKButton>
-            <HKButton size="sm" variant="secondary" onClick={downloadGstr3b}>
-              Download GSTR-3B JSON
             </HKButton>
           </div>
         </div>

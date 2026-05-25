@@ -103,11 +103,10 @@ export function fmtFull(n: number): string {
 // ── Mobile detection ─────────────────────────────────────────────────────────
 
 export function useIsMobile(): boolean {
-  const [m, setM] = useState(
-    typeof window !== "undefined" ? window.innerWidth < 768 : false
-  );
+  const [m, setM] = useState(false);
   useEffect(() => {
     const h = () => setM(window.innerWidth < 768);
+    h();
     window.addEventListener("resize", h);
     return () => window.removeEventListener("resize", h);
   }, []);
@@ -624,12 +623,17 @@ export function HKSheet({
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
+      document.body.classList.add("hk-sheet-open");
       requestAnimationFrame(() => setVisible(true));
     } else {
       setVisible(false);
       document.body.style.overflow = "";
+      document.body.classList.remove("hk-sheet-open");
     }
-    return () => { document.body.style.overflow = ""; };
+    return () => {
+      document.body.style.overflow = "";
+      document.body.classList.remove("hk-sheet-open");
+    };
   }, [isOpen]);
 
   useEffect(() => {
@@ -643,18 +647,20 @@ export function HKSheet({
 
   const panelStyle: React.CSSProperties = isMobile ? {
     position: "fixed", left: 0, right: 0, bottom: 0,
+    width: "100%", maxWidth: "100vw", boxSizing: "border-box", overflowX: "hidden",
     maxHeight: "92vh", borderTopLeftRadius: 20, borderTopRightRadius: 20,
     background: "var(--sb-card)", display: "flex", flexDirection: "column",
-    zIndex: 301,
+    zIndex: 1000,
     transform: visible ? "translateY(0)" : "translateY(100%)",
     transition: "transform 0.28s cubic-bezier(0.32,0.72,0,1)",
     boxShadow: "0 -4px 40px rgba(0,0,0,0.18)",
   } : {
     position: "fixed", top: 0, right: 0, bottom: 0,
-    width, background: "var(--sb-card)",
+    width, maxWidth: "100vw", boxSizing: "border-box",
+    background: "var(--sb-card)",
     borderLeft: "1px solid var(--sb-border)",
     display: "flex", flexDirection: "column",
-    zIndex: 301,
+    zIndex: 1000,
     transform: visible ? "translateX(0)" : "translateX(100%)",
     transition: "transform 0.28s cubic-bezier(0.32,0.72,0,1)",
     boxShadow: "-4px 0 40px rgba(0,0,0,0.12)",
@@ -663,7 +669,7 @@ export function HKSheet({
   return (
     <>
       <div onClick={onClose} style={{
-        position: "fixed", inset: 0, zIndex: 300,
+        position: "fixed", inset: 0, zIndex: 999,
         background: "var(--sb-overlay, rgba(0,0,0,0.45))",
         opacity: visible ? 1 : 0, transition: "opacity 0.25s",
         backdropFilter: "blur(2px)", WebkitBackdropFilter: "blur(2px)",
@@ -720,7 +726,11 @@ export function HKModal({
     if (!isOpen) return;
     function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    document.body.classList.add("hk-sheet-open");
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.classList.remove("hk-sheet-open");
+    };
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
@@ -728,7 +738,7 @@ export function HKModal({
   return (
     <div
       style={{
-        position: "fixed", inset: 0, zIndex: 200,
+        position: "fixed", inset: 0, zIndex: 1000,
         display: "flex", alignItems: "center", justifyContent: "center",
         background: "var(--sb-overlay, rgba(0,0,0,0.50))",
         backdropFilter: "blur(2px)",

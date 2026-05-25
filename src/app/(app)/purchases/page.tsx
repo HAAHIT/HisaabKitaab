@@ -251,11 +251,11 @@ export default function PurchasesListPage() {
                           <div style={{ display: "flex", gap: 12, alignItems: "center", flex: 1, minWidth: 0 }}>
                             <HKAvatar name={bill.party?.name || bill.customerName || "—"} size={40} />
                             <div style={{ minWidth: 0, flex: 1 }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2, flexWrap: "wrap" }}>
-                                <span style={{ fontSize: TYPE.body, fontWeight: 600, color: "var(--sb-text)", fontFamily: SG, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2, minWidth: 0 }}>
+                                <span style={{ fontSize: TYPE.body, fontWeight: 600, color: "var(--sb-text)", fontFamily: SG, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1 }}>
                                   {bill.party?.name || bill.customerName}
                                 </span>
-                                <StatusChip status={bill.status} />
+                                <span style={{ flexShrink: 0 }}><StatusChip status={bill.status} /></span>
                               </div>
                               <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: IN, margin: 0 }}>
                                 {bill.billNumber} · {new Date(bill.date ?? bill.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}

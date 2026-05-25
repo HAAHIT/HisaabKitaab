@@ -279,6 +279,9 @@ dialog[open] { display: flex; }
 .dark .bottom-nav-glass {
   background-color: hsl(240 12% 8% / 0.92);
 }
+/* Hide the mobile bottom nav whenever a sheet/modal is open so its
+   FAB / avatar doesn't overlap modal footer controls. */
+body.hk-sheet-open .sb-bottom-nav-wrap { display: none !important; }
 
 /* ── Touch Feedback ──────────────────────────────────── */
 @media (hover: none) {
