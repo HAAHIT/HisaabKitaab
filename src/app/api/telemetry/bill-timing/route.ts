@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveSession } from "@/lib/api-tenant";
 import { logInfo, logError, getRequestId } from "@/lib/observability";
+import { checkRateLimit } from "@/lib/api-rate-limit";
 import { z } from "zod";
 
 export const runtime = "nodejs";
@@ -13,7 +14,14 @@ const Schema = z.object({
 export async function POST(request: NextRequest) {
   const sessionResolution = await resolveSession(request);
   if (!sessionResolution.ok) return sessionResolution.response;
-  const { tenantId, userId } = sessionResolution.session;
+  const { tenantId, userId, role } = sessionResolution.session;
+
+  if (role === "CUSTOMER") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const rateLimited = await checkRateLimit(request, "telemetry.bill-timing", 10);
+  if (rateLimited) return rateLimited;
 
   try {
     const raw = await request.json().catch(() => null);

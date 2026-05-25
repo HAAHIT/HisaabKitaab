@@ -76,6 +76,23 @@ export function BillCreationTour({ onDismiss, billFinalized, secondsToFinalize, 
     if (hasItems && step === 1) setStep(2);
   }, [hasItems, step]);
 
+  // Highlight the target element for the current step
+  useEffect(() => {
+    if (billFinalized) return;
+    const current = STEPS[step];
+    if (!current) return;
+    const el = document.querySelector<HTMLElement>(current.target);
+    if (!el) return;
+    el.style.transition = "box-shadow 0.3s ease";
+    el.style.boxShadow = `0 0 0 3px var(--sb-primary, #6366f1), 0 0 16px 2px rgba(99,102,241,0.18)`;
+    el.style.borderRadius = "14px";
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    return () => {
+      el.style.boxShadow = "";
+      el.style.borderRadius = "";
+    };
+  }, [step, billFinalized]);
+
   const isUnder30 = (secondsToFinalize ?? elapsed) < 30;
   const displaySec = secondsToFinalize ?? elapsed;
 
