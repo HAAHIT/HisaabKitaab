@@ -113,6 +113,7 @@ interface BankEntry {
   bankName: string;
   accountNumber: string;
   openingBalance: string;
+  type: "BANK" | "CASH";
 }
 
 interface PartyEntry {
@@ -158,7 +159,7 @@ async function apiPatch(url: string, body: object) {
 
 // ── Wizard draft persistence ──────────────────────────────────────────────────
 
-const WIZARD_STORAGE_KEY = "hk_wizard_draft_v1";
+const WIZARD_STORAGE_KEY = "hk_wizard_draft_v2"; // bump on BankEntry schema change
 
 interface WizardDraft {
   step: number;
@@ -233,7 +234,7 @@ export function SetupWizard({ onComplete, initialBusinessName }: SetupWizardProp
 
   // Step 2 — Bank accounts
   const [banks, setBanks] = useState<BankEntry[]>(
-    draft.current?.banks ?? [{ bankName: "", accountNumber: "", openingBalance: "0" }]
+    draft.current?.banks ?? [{ bankName: "", accountNumber: "", openingBalance: "0", type: "BANK" }]
   );
 
   // Step 3 — Parties
@@ -312,7 +313,7 @@ export function SetupWizard({ onComplete, initialBusinessName }: SetupWizardProp
     setSaving(true);
     try {
       for (const bank of validBanks) {
-        await apiFetch("/api/bank-accounts", { name: bank.bankName.trim(), accountNumber: bank.accountNumber.trim() || null, openingBalance: Number(bank.openingBalance) || 0, type: "BANK" });
+        await apiFetch("/api/bank-accounts", { name: bank.bankName.trim(), accountNumber: bank.accountNumber.trim() || null, openingBalance: Number(bank.openingBalance) || 0, type: bank.type });
       }
       return true;
     } catch (err) { setError(err instanceof Error ? err.message : t("wizard.error.bankSaveFailed")); return false; }
@@ -441,7 +442,7 @@ export function SetupWizard({ onComplete, initialBusinessName }: SetupWizardProp
   }
   function removeItem(i: number) { setItems((it) => it.filter((_, idx) => idx !== i)); }
 
-  function addBankRow() { setBanks((b) => [...b, { bankName: "", accountNumber: "", openingBalance: "0" }]); }
+  function addBankRow() { setBanks((b) => [...b, { bankName: "", accountNumber: "", openingBalance: "0", type: "BANK" }]); }
   function removeBankRow(i: number) { setBanks((b) => b.filter((_, idx) => idx !== i)); }
 
   // ── Shared styles ─────────────────────────────────────────────────────────
@@ -717,10 +718,36 @@ export function SetupWizard({ onComplete, initialBusinessName }: SetupWizardProp
                       )}
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                      <HKSelect label={t("wizard.step3.bankLabel")} value={bank.bankName} onValueChange={(v) => { if (v) setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, bankName: v } : b)); }}>
-                        {BANKS.map((b) => <HKSelectItem key={b} value={b}>{b}</HKSelectItem>)}
-                      </HKSelect>
-                      <HKInput label={t("wizard.step3.accountNumberLabel")} placeholder={t("wizard.step3.accountNumberPlaceholder")} value={bank.accountNumber} onValueChange={(v) => setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, accountNumber: v } : b))} />
+                      {/* Account type toggle */}
+                      <div>
+                        <p style={{ fontSize: TYPE.caption, fontWeight: 600, color: "var(--sb-sub)", marginBottom: 6, fontFamily: SG }}>Account type</p>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          {(["BANK", "CASH"] as const).map((at) => (
+                            <button
+                              key={at}
+                              type="button"
+                              onClick={() => setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, bankName: at === "CASH" ? "Cash" : b.bankName, accountNumber: at === "CASH" ? "" : b.accountNumber, type: at } : b))}
+                              style={{
+                                flex: 1, padding: "10px", borderRadius: 8, cursor: "pointer",
+                                border: `1.5px solid ${bank.type === at ? (at === "BANK" ? PU : GR) : "var(--sb-border)"}`,
+                                background: bank.type === at ? (at === "BANK" ? PU + "18" : GR + "18") : "transparent",
+                                color: bank.type === at ? (at === "BANK" ? PU : GR) : "var(--sb-sub)",
+                                fontSize: TYPE.bodySmall, fontWeight: 700, fontFamily: SG,
+                              }}
+                            >
+                              {at === "BANK" ? "🏦 Bank Account" : "💵 Cash in Hand"}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {bank.type === "BANK" && (
+                        <HKSelect label={t("wizard.step3.bankLabel")} value={bank.bankName} onValueChange={(v) => { if (v) setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, bankName: v } : b)); }}>
+                          {BANKS.map((b) => <HKSelectItem key={b} value={b}>{b}</HKSelectItem>)}
+                        </HKSelect>
+                      )}
+                      {bank.type === "BANK" && (
+                        <HKInput label={t("wizard.step3.accountNumberLabel")} placeholder={t("wizard.step3.accountNumberPlaceholder")} value={bank.accountNumber} onValueChange={(v) => setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, accountNumber: v } : b))} />
+                      )}
                       <HKInput label={t("wizard.step3.openingBalanceLabel")} type="number" value={bank.openingBalance} onValueChange={(v) => setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, openingBalance: v } : b))} />
                     </div>
                   </div>

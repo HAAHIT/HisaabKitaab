@@ -668,6 +668,7 @@ export default function AppShell({
           {canQuickBill && (
             <button
               onClick={openSmartFab}
+              title="Quick actions (F8 = New Bill · F9 = New Purchase)"
               style={{
                 display: "flex", alignItems: "center", gap: 7,
                 height: 40, padding: "0 16px",
@@ -683,6 +684,11 @@ export default function AppShell({
               onMouseLeave={e => (e.currentTarget.style.background = "var(--sb-primary)")}
             >
               <Icons.plus /> {t("nav.billAction")}
+              <span style={{
+                marginLeft: 4, fontSize: 10, fontWeight: 700,
+                background: "rgba(255,255,255,0.2)", borderRadius: 4,
+                padding: "1px 5px", letterSpacing: "0.3px",
+              }}>F8</span>
             </button>
           )}
           <ThemeToggleBtn />
