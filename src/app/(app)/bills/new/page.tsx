@@ -84,6 +84,11 @@ function Section({ title, action, children }: { title?: string; action?: React.R
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function NewBillPage() {
+  return <BillFormPage />;
+}
+
+export function BillFormPage({ editBillId }: { editBillId?: string } = {}) {
+  const isEdit = Boolean(editBillId);
   const router = useRouter();
   const { t } = useLanguage();
   const isMobile = useIsMobile();
@@ -121,20 +126,24 @@ export default function NewBillPage() {
   const fetchFormData = useCallback(async () => {
     setLoading(true);
     try {
-      const [templatesResponse, partiesResponse, settingsResponse, itemsResponse] = await Promise.all([
+      const [templatesResponse, partiesResponse, settingsResponse, itemsResponse, billResponse] = await Promise.all([
         fetch("/api/templates"),
         fetch("/api/parties"),
         fetch("/api/settings"),
         fetch("/api/items"),
+        editBillId ? fetch(`/api/bills/${editBillId}`) : Promise.resolve(null),
       ]);
-      const [templatesData, partiesData, settingsData, itemsData] = await Promise.all([
+      const [templatesData, partiesData, settingsData, itemsData, billData] = await Promise.all([
         templatesResponse.json().catch(() => ({ templates: [] })),
         partiesResponse.json().catch(() => ({ parties: [] })),
         settingsResponse.json().catch(() => ({ settings: null })),
         itemsResponse.json().catch(() => ({ items: [] })),
+        billResponse ? billResponse.json().catch(() => null) : Promise.resolve(null),
       ]);
-      setTemplates(templatesData.templates || []);
-      setParties((partiesData.parties || []) as PartyOption[]);
+      const nextTemplates = (templatesData.templates || []) as Template[];
+      const nextParties = (partiesData.parties || []) as PartyOption[];
+      setTemplates(nextTemplates);
+      setParties(nextParties);
       setCatalogItems(itemsData.items || []);
       if (settingsData.settings) {
         setTaxPercent(settingsData.settings.defaultTaxPercent || 18);
@@ -142,12 +151,29 @@ export default function NewBillPage() {
         setDefaultTemplateId(settingsData.settings.defaultTemplateId || null);
         setCompanyGstin(settingsData.settings.companyGstin || "");
       }
+      if (editBillId && billData?.bill) {
+        const b = billData.bill;
+        const tpl = nextTemplates.find((tp) => tp.id === b.templateId) || null;
+        if (tpl) {
+          setSelectedTemplate(tpl);
+          setRows(Array.isArray(b.rows) ? b.rows : [buildEmptyRow(tpl)]);
+        }
+        const party = nextParties.find((p) => p.id === b.partyId) || null;
+        if (party) setSelectedParty(party);
+        setTaxPercent(Number(b.taxPercent) || 0);
+        setIsInterState(b.isInterState === true);
+        setPlaceOfSupply(b.placeOfSupply || "");
+        setNotes(b.notes || "");
+        setTerms(b.terms || "");
+        if (b.roundOff && Number(b.roundOff) !== 0) setEnableRoundOff(true);
+        if (b.date) setBillDate(new Date(b.date).toISOString().slice(0, 10));
+      }
     } catch {
       showToast(t("bills.loadFailed" as TranslationKey), "error");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [editBillId]);
 
   useEffect(() => { fetchFormData(); }, [fetchFormData]);
 
@@ -366,28 +392,36 @@ export default function NewBillPage() {
     setErrors({});
     setSavingAs(status);
     try {
-      const response = await fetch("/api/bills", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          templateId: selectedTemplate.id,
-          partyId: currentParty.id,
-          customerName: currentParty.name,
-          customerPhone: currentParty.phone || null,
-          customerAddress: currentParty.address || null,
-          gstin: currentParty.gstin || null,
-          rows, subtotal, taxPercent: uniqueTaxRate ?? 0, taxAmount, grandTotal: roundedGrandTotal, roundOff, isInterState, billDate,
-          placeOfSupply: placeOfSupply || null,
-          hsnCode: null,
-          notes: notes.trim() || null,
-          terms: terms.trim() || null,
-          status,
-        }),
-      });
+      const payload = {
+        templateId: selectedTemplate.id,
+        partyId: currentParty.id,
+        customerName: currentParty.name,
+        customerPhone: currentParty.phone || null,
+        customerAddress: currentParty.address || null,
+        gstin: currentParty.gstin || null,
+        rows, subtotal, taxPercent: uniqueTaxRate ?? 0, taxAmount, grandTotal: roundedGrandTotal, roundOff, isInterState, billDate,
+        placeOfSupply: placeOfSupply || null,
+        hsnCode: null,
+        notes: notes.trim() || null,
+        terms: terms.trim() || null,
+        status,
+      };
+      const response = isEdit
+        ? await fetch(`/api/bills/${editBillId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          })
+        : await fetch("/api/bills", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
       if (!response.ok) throw new Error(await readError(response));
       const data = await response.json();
       showToast(status === "FINAL" ? t("bills.new.createSuccess" as TranslationKey) : t("bills.new.saveSuccess" as TranslationKey), "success");
-      window.setTimeout(() => router.push(`/bills/${data.bill.id}`), 700);
+      const targetId = isEdit ? editBillId : data.bill.id;
+      window.setTimeout(() => router.push(`/bills/${targetId}`), 700);
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("bills.new.saveError" as TranslationKey), "error");
     } finally {
@@ -420,7 +454,7 @@ export default function NewBillPage() {
           </button>
           <div>
             <h1 style={{ fontFamily: DISPLAY, fontSize: isMobile ? 24 : 30, fontWeight: 600, color: "var(--sb-text)", margin: 0, letterSpacing: "-0.01em", lineHeight: 1.2 }}>
-              {t("bills.new" as TranslationKey)}
+              {isEdit ? t("bills.edit" as TranslationKey) : t("bills.new" as TranslationKey)}
             </h1>
             <p style={{ fontSize: 14, fontWeight: 500, color: "var(--sb-sub)", marginTop: 4 }}>
               {t("bills.new.subtitle" as TranslationKey)}
