@@ -22,27 +22,49 @@ const PUBLIC_PATHS = [
   "/api/jobs/process-import",
 ];
 
-function isPublicPath(pathname: string) {
-  return PUBLIC_PATHS.some((pattern) => {
-    if (pattern.includes("*")) {
-      const regex = new RegExp(`^${pattern.replace(/\*/g, "[^/]+")}$`);
-      return regex.test(pathname);
-    }
+// Precompile regexes once on module load to avoid regex creation and compilation overhead on every request
+const PUBLIC_PATH_PATTERNS = PUBLIC_PATHS.map((pattern) => {
+  if (pattern.includes("*")) {
+    return new RegExp(`^${pattern.replace(/\*/g, "[^/]+")}$`);
+  }
+  return pattern;
+});
 
-    return pathname.startsWith(pattern);
-  });
+function isPublicPath(pathname: string) {
+  for (const pattern of PUBLIC_PATH_PATTERNS) {
+    if (pattern instanceof RegExp) {
+      if (pattern.test(pathname)) return true;
+    } else {
+      if (pathname.startsWith(pattern)) return true;
+    }
+  }
+  return false;
 }
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // 1. FAST-PATH BYPASS: Bypasses headers/cookie/JWT parsing completely for static file and asset routes,
+  // returning within sub-millisecond ranges to maximize edge performance.
+  if (
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/favicon") ||
+    pathname.includes(".")
+  ) {
+    return NextResponse.next();
+  }
+
   const requestId =
     request.headers.get("x-request-id")?.trim() || crypto.randomUUID();
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-request-id", requestId);
   
-  // Strip any client-supplied tenant header immediately — it will be set
-  // authoritatively from the verified JWT payload below.
+  // Strip any client-supplied tenant or user identity headers immediately — they 
+  // will be set authoritatively from the verified JWT payload below.
   requestHeaders.delete(TENANT_HEADER);
+  requestHeaders.delete("x-user-id");
+  requestHeaders.delete("x-user-role");
+  requestHeaders.delete("x-user-name");
   
   let jwtSecret: Uint8Array;
 
@@ -64,7 +86,7 @@ export async function proxy(request: NextRequest) {
   try {
     jwtSecret = getJwtSecret();
   } catch (error) {
-    logError("proxy.auth.misconfigured", {
+    logError("middleware.auth.misconfigured", {
       requestId,
       pathname,
       error,
@@ -100,13 +122,7 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  if (
-    isPublicPath(pathname) ||
-    pathname === "/" ||
-    pathname.startsWith("/_next") ||
-    pathname.startsWith("/favicon") ||
-    pathname.includes(".")
-  ) {
+  if (isPublicPath(pathname) || pathname === "/") {
     return nextWithRequestHeaders();
   }
 

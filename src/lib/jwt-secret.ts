@@ -8,7 +8,13 @@ const WEAK_JWT_SECRET_MESSAGE =
 // we reject at startup so a misconfiguration cannot quietly weaken sessions.
 const MIN_SECRET_BYTES = 32;
 
+let cachedSecret: Uint8Array | null = null;
+
 export function getJwtSecret() {
+  if (cachedSecret) {
+    return cachedSecret;
+  }
+
   const secret = process.env.JWT_SECRET?.trim();
   if (!secret) {
     throw new Error(MISSING_JWT_SECRET_MESSAGE);
@@ -19,5 +25,6 @@ export function getJwtSecret() {
     throw new Error(WEAK_JWT_SECRET_MESSAGE);
   }
 
+  cachedSecret = encoded;
   return encoded;
 }

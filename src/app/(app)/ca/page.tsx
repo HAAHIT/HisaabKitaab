@@ -85,12 +85,10 @@ export default function CaPortalPage() {
   const [parties, setParties] = useState<Party[]>([]);
   const [ledgerLoading, setLedgerLoading] = useState(false);
   const [ledgerError, setLedgerError] = useState<string | null>(null);
-  const [ledgerFetched, setLedgerFetched] = useState(false);
 
   const [journals, setJournals] = useState<JournalEntry[]>([]);
   const [journalLoading, setJournalLoading] = useState(false);
   const [journalError, setJournalError] = useState<string | null>(null);
-  const [journalsFetched, setJournalsFetched] = useState(false);
 
   const [roleError, setRoleError] = useState(false);
 
@@ -121,7 +119,6 @@ export default function CaPortalPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Failed to load");
       setParties(json.parties || []);
-      setLedgerFetched(true);
     } catch (err) {
       setLedgerError(err instanceof Error ? err.message : "Failed to load");
     } finally {
@@ -138,7 +135,6 @@ export default function CaPortalPage() {
       const json = await res.json().catch(() => null);
       if (!res.ok) throw new Error(json?.error || "Failed to load");
       setJournals(json.entries || []);
-      setJournalsFetched(true);
     } catch (err) {
       setJournalError(err instanceof Error ? err.message : "Failed to load");
     } finally {
@@ -148,9 +144,9 @@ export default function CaPortalPage() {
 
   useEffect(() => {
     if (tab === "trial-balance" && !trialBalance && !tbLoading) loadTrialBalance();
-    else if (tab === "ledger" && !ledgerFetched && !ledgerLoading) loadLedger();
-    else if (tab === "journals" && !journalsFetched && !journalLoading) loadJournals();
-  }, [tab, trialBalance, tbLoading, ledgerFetched, ledgerLoading, journalsFetched, journalLoading, loadTrialBalance, loadLedger, loadJournals]);
+    else if (tab === "ledger" && parties.length === 0 && !ledgerLoading) loadLedger();
+    else if (tab === "journals" && journals.length === 0 && !journalLoading) loadJournals();
+  }, [tab, trialBalance, tbLoading, parties.length, ledgerLoading, journals.length, journalLoading, loadTrialBalance, loadLedger, loadJournals]);
 
   if (roleError) {
     return (
