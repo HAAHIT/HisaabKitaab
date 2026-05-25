@@ -1,8 +1,30 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-// Mock api-tenant (resolveWriteTenant is imported from here, not session-server)
+// Mock api-tenant — credit-notes route imports `resolveSession` from here.
 vi.mock("@/lib/api-tenant", () => ({
+  resolveSession: vi.fn(async (request: { headers: { get(name: string): string | null } }) => {
+    const role = request.headers.get("x-user-role");
+    const tenantHeader = request.headers.get("x-tenant-id");
+    const userId = request.headers.get("x-user-id") ?? "test-user";
+    if (!role) {
+      return {
+        ok: false,
+        response: new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { "content-type": "application/json" },
+        }),
+      };
+    }
+    return {
+      ok: true,
+      session: {
+        tenantId: tenantHeader || "test-tenant",
+        userId,
+        role,
+      },
+    };
+  }),
   resolveReadTenant: vi.fn().mockResolvedValue({ ok: true, tenantId: "test-tenant" }),
   resolveWriteTenant: vi.fn().mockResolvedValue({ ok: true, tenantId: "test-tenant" }),
 }));

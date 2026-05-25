@@ -36,7 +36,7 @@ steps:
     secretEnv: ['DIRECT_URL', 'DATABASE_URL']
     args:
       - -c
-      - npm ci && npx tsc --noEmit
+      - npm ci && npx tsc --noEmit && npm run test:ci
 
   - id: build-web-image
     name: gcr.io/cloud-builders/docker
