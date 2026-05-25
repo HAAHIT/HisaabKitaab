@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import type { TenantDetail } from "@/lib/admin-stats";
+import { FEATURE_FLAGS } from "@/lib/feature-flags";
 
 const fmtInt = (n: number) => new Intl.NumberFormat("en-IN").format(n);
 const fmtMoney = (n: number) =>
@@ -118,6 +119,7 @@ async function jsonOrThrow(res: Response) {
 
 export default function TenantDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const id = params?.id;
   const [data, setData] = useState<TenantDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -202,6 +204,26 @@ export default function TenantDetailPage() {
     }
   };
 
+  const deleteTenant = async () => {
+    if (!id || !data) return;
+    const first = window.prompt(
+      `This will PERMANENTLY DELETE tenant "${data.name}" and ALL its data (bills, payments, parties, users, audit logs).\n\nType the tenant name to confirm:`
+    );
+    if (first !== data.name) {
+      if (first !== null) setActionError("Confirmation text did not match — aborted.");
+      return;
+    }
+    setBusy("delete");
+    setActionError(null);
+    try {
+      await jsonOrThrow(await fetch(`/api/admin/tenants/${id}`, { method: "DELETE" }));
+      router.push("/admin/stats/tenants");
+    } catch (e) {
+      setActionError(String(e instanceof Error ? e.message : e));
+      setBusy(null);
+    }
+  };
+
   const suspendAll = async (suspend: boolean) => {
     if (!id) return;
     if (!confirm(suspend ? "Deactivate all non-superadmin users in this tenant?" : "Reactivate all users in this tenant?")) return;
@@ -265,6 +287,21 @@ export default function TenantDetailPage() {
             >
               {busy === "suspend" ? "…" : anyUserActive ? "Suspend all users" : "Reactivate all users"}
             </button>
+            {FEATURE_FLAGS.testingDeleteTenant && (
+              <button
+                onClick={deleteTenant}
+                disabled={busy === "delete"}
+                title="PERMANENTLY delete tenant + all data. Testing only."
+                style={{
+                  padding: "6px 12px", borderRadius: 8,
+                  border: "1px solid #b91c1c",
+                  background: "#b91c1c", color: "#fff",
+                  fontSize: 13, fontWeight: 600, cursor: "pointer",
+                }}
+              >
+                {busy === "delete" ? "Deleting…" : "🗑 Delete tenant"}
+              </button>
+            )}
             {!data.isOnboardingComplete && (
               <button
                 onClick={() => patchTenant({ isOnboardingComplete: true }, "onboarding")}

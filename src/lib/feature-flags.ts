@@ -31,6 +31,10 @@ export const FEATURE_FLAGS = {
     process.env.NEXT_PUBLIC_FEATURE_TESTING_WIPE_DATA,
     false
   ),
+  testingDeleteTenant: readBooleanFlag(
+    process.env.NEXT_PUBLIC_FEATURE_TESTING_DELETE_TENANT,
+    false
+  ),
 } as const;
 
 export type FeatureFlagKey = keyof typeof FEATURE_FLAGS;

@@ -36,7 +36,7 @@ steps:
     secretEnv: ['DIRECT_URL', 'DATABASE_URL']
     args:
       - -c
-      - npm ci && npx tsc --noEmit
+      - npm ci && npx tsc --noEmit && npm run test:ci
 
   - id: build-web-image
     name: gcr.io/cloud-builders/docker
@@ -129,7 +129,7 @@ steps:
       - --max-instances=${_MAX_INSTANCES}
       - --ingress=${_INGRESS}
       - --set-secrets=DATABASE_URL=${_DATABASE_URL_SECRET}:latest,JWT_SECRET=${_JWT_SECRET_SECRET}:latest
-      - --set-env-vars=NODE_ENV=production,OBJECT_STORAGE_PROVIDER=gcs,GCS_BUCKET_NAME=${_GCS_BUCKET_NAME},GCS_PROJECT_ID=$PROJECT_ID,DEFAULT_TENANT_ID=cmnd84lsk0000i7x4y74rrtss,NEXT_PUBLIC_SITE_URL=https://solobooks.in
+      - --set-env-vars=NODE_ENV=production,OBJECT_STORAGE_PROVIDER=gcs,GCS_BUCKET_NAME=${_GCS_BUCKET_NAME},GCS_PROJECT_ID=$PROJECT_ID,DEFAULT_TENANT_ID=cmnd84lsk0000i7x4y74rrtss,NEXT_PUBLIC_SITE_URL=https://solobooks.in,NEXT_PUBLIC_SENTRY_DSN=https://1c151f7e829315fe690fb7919572d361@o4511449126993920.ingest.us.sentry.io/4511449136168960,SENTRY_DSN=https://1c151f7e829315fe690fb7919572d361@o4511449126993920.ingest.us.sentry.io/4511449136168960
       - --allow-unauthenticated
 
   - id: smoke-test-health

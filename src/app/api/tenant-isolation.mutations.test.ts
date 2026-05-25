@@ -30,6 +30,55 @@ vi.mock("@/lib/session-server", () => ({
   }),
 }));
 
+// All these routes import `resolveSession` from `@/lib/api-tenant`. Derive the
+// session from the test request headers so existing test inputs keep working.
+vi.mock("@/lib/api-tenant", () => ({
+  resolveSession: vi.fn(async (request: NextRequest) => {
+    const role = request.headers.get("x-user-role");
+    const tenantId = request.headers.get("x-tenant-id");
+    const userId = request.headers.get("x-user-id") ?? "test-user";
+    if (!role || !tenantId) {
+      return {
+        ok: false,
+        response: new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { "content-type": "application/json" },
+        }),
+      };
+    }
+    return {
+      ok: true,
+      session: { tenantId, userId, role },
+    };
+  }),
+  resolveReadTenant: vi.fn(async (request: NextRequest) => {
+    const tenantId = request.headers.get("x-tenant-id");
+    if (!tenantId) {
+      return {
+        ok: false,
+        response: new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { "content-type": "application/json" },
+        }),
+      };
+    }
+    return { ok: true, tenantId };
+  }),
+  resolveWriteTenant: vi.fn(async (request: NextRequest) => {
+    const tenantId = request.headers.get("x-tenant-id");
+    if (!tenantId) {
+      return {
+        ok: false,
+        response: new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { "content-type": "application/json" },
+        }),
+      };
+    }
+    return { ok: true, tenantId };
+  }),
+}));
+
 import { POST as postBill } from "./bills/route";
 import { POST as postPayment } from "./payments/route";
 import { PATCH as patchParty } from "./parties/[id]/route";
@@ -127,6 +176,7 @@ describe("tenant isolation for critical mutations", () => {
         amount: 1000,
         type: "INCOMING",
         mode: "CASH",
+        accountId: "account-1",
       }
     );
 

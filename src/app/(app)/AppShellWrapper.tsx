@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import AppShell from "@/components/ui/AppShell";
 import { SetupWizard } from "@/components/onboarding/SetupWizard";
+import { ProductTour } from "@/components/onboarding/ProductTour";
 import GlobalSearch from "@/components/search/GlobalSearch";
 
 interface UserSession {
@@ -18,15 +19,19 @@ export default function AppShellWrapper({
   children,
   user,
   showOnboarding = false,
+  showTour = false,
   initialBusinessName,
 }: {
   children: React.ReactNode;
   user: UserSession;
   showOnboarding?: boolean;
+  showTour?: boolean;
   initialBusinessName?: string;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [wizardVisible, setWizardVisible] = useState(showOnboarding);
+  const [tourVisible, setTourVisible] = useState(showTour);
 
   useEffect(() => {
     if (process.env.NODE_ENV === "production" && "serviceWorker" in navigator) {
@@ -48,6 +53,15 @@ export default function AppShellWrapper({
     router.refresh();
   }
 
+  async function handleTourFinish() {
+    setTourVisible(false);
+    try {
+      await fetch("/api/onboarding/tour-complete", { method: "POST" });
+    } catch {
+      // Non-fatal — user already saw the tour, server will retry next visit
+    }
+  }
+
   if (wizardVisible) {
     return (
       <SetupWizard
@@ -57,10 +71,14 @@ export default function AppShellWrapper({
     );
   }
 
+  // Only show tour on the dashboard (target nav elements are in the shell)
+  const showTourNow = tourVisible && pathname === "/dashboard";
+
   return (
     <AppShell user={user}>
       <GlobalSearch />
       {children}
+      {showTourNow && <ProductTour onFinish={handleTourFinish} />}
     </AppShell>
   );
 }

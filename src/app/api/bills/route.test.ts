@@ -1,7 +1,37 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-// Mock session-server so POST tests don't need a real JWT cookie
+// Mock api-tenant so POST/GET tests don't need a real JWT cookie.
+// resolveSession is the JWT-cookie based session resolver. We derive the
+// fake session from request headers in tests for ergonomics.
+vi.mock("@/lib/api-tenant", () => ({
+  resolveSession: vi.fn(async (request: { headers: { get(name: string): string | null } }) => {
+    const role = request.headers.get("x-user-role");
+    const tenantHeader = request.headers.get("x-tenant-id");
+    const userId = request.headers.get("x-user-id") ?? "test-user";
+    if (!role) {
+      return {
+        ok: false,
+        response: new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { "content-type": "application/json" },
+        }),
+      };
+    }
+    return {
+      ok: true,
+      session: {
+        tenantId: tenantHeader || "test-tenant",
+        userId,
+        role,
+      },
+    };
+  }),
+  resolveReadTenant: vi.fn().mockResolvedValue({ ok: true, tenantId: "test-tenant" }),
+  resolveWriteTenant: vi.fn().mockResolvedValue({ ok: true, tenantId: "test-tenant" }),
+}));
+
+// Also mock session-server in case anything imports it directly
 vi.mock("@/lib/session-server", () => ({
   resolveVerifiedTenantId: vi.fn().mockResolvedValue("test-tenant"),
 }));
@@ -15,6 +45,10 @@ const prismaMock = vi.hoisted(() => ({
   bill: {
     findMany: vi.fn(),
     count: vi.fn(),
+    aggregate: vi.fn().mockResolvedValue({ _sum: { grandTotal: null } }),
+  },
+  payment: {
+    aggregate: vi.fn().mockResolvedValue({ _sum: { amount: null } }),
   },
   billTemplate: {
     findFirst: vi.fn(),
@@ -38,11 +72,11 @@ import { buildMockBill, buildMockParty, buildMockTenant } from "@/__tests__/fixt
 // ── Authorization guards ───────────────────────────────────────────────────
 
 describe("Bills API — authorization guards", () => {
-  it("GET rejects missing role header with 403", async () => {
+  it("GET rejects missing session with 401", async () => {
     const req = new NextRequest("http://localhost/api/bills");
     const res = await GET(req);
-    expect(res.status).toBe(403);
-    expect((await res.json()).error).toBe("Forbidden");
+    expect(res.status).toBe(401);
+    expect((await res.json()).error).toBe("Unauthorized");
   });
 
   it("GET rejects CUSTOMER role with 403", async () => {
