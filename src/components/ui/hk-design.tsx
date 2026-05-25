@@ -103,11 +103,10 @@ export function fmtFull(n: number): string {
 // ── Mobile detection ─────────────────────────────────────────────────────────
 
 export function useIsMobile(): boolean {
-  const [m, setM] = useState(
-    typeof window !== "undefined" ? window.innerWidth < 768 : false
-  );
+  const [m, setM] = useState(false);
   useEffect(() => {
     const h = () => setM(window.innerWidth < 768);
+    h();
     window.addEventListener("resize", h);
     return () => window.removeEventListener("resize", h);
   }, []);
