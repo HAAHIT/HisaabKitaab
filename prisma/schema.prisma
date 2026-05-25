@@ -34,6 +34,8 @@ model Tenant {
   monthlyBillCount     Int                 @default(0)
   monthlyPartyCount    Int                 @default(0)
   usageWindowStart     DateTime            @default(now())
+  // Reminder language for WhatsApp reminders: "hinglish" | "hindi" | "english"
+  reminderLanguage     String              @default("hinglish")
   subscriptionEvents   SubscriptionEvent[]
   auditLogs            AuditLog[]
   BankAccount          BankAccount[]

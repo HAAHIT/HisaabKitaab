@@ -24,6 +24,7 @@ import { HKInput } from "@/components/ui/HKInput";
 import { OverdueBanner } from "@/components/ui/OverdueBanner";
 import { normalizeIndianPhone, buildWhatsAppReminderUrl } from "@/lib/phone";
 import { useOverdueData } from "@/hooks/useOverdueData";
+import { BulkReminderModal } from "@/components/parties/BulkReminderModal";
 
 interface Party {
   id: string;
@@ -67,6 +68,7 @@ export default function PartiesPage() {
   const [editingParty, setEditingParty] = useState<Party | null>(null);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [showBulkReminder, setShowBulkReminder] = useState(false);
 
   // Auto-open add panel when ?addNew=true (from Smart FAB §5.5)
   useEffect(() => {
@@ -263,7 +265,18 @@ export default function PartiesPage() {
             title={t("parties.title" as TranslationKey)}
             subtitle={t("parties.subtitle" as TranslationKey)}
             isMobile={isMobile}
-            action={<HKButton onClick={openCreate}>{t("parties.addBtn" as TranslationKey)}</HKButton>}
+            action={
+              <div style={{ display: "flex", gap: 8 }}>
+                <HKButton
+                  variant="secondary"
+                  onClick={() => setShowBulkReminder(true)}
+                  title="Send month-end WhatsApp reminders to overdue customers"
+                >
+                  📲 {isMobile ? "" : "Reminders"}
+                </HKButton>
+                <HKButton onClick={openCreate}>{t("parties.addBtn" as TranslationKey)}</HKButton>
+              </div>
+            }
           />
           {/* Overdue banner */}
           <OverdueBanner
@@ -780,6 +793,10 @@ export default function PartiesPage() {
           to { transform: translateX(0); }
         }
       `}</style>
+
+      {showBulkReminder && (
+        <BulkReminderModal onClose={() => setShowBulkReminder(false)} />
+      )}
     </>
   );
 }
