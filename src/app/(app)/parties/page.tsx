@@ -55,6 +55,7 @@ export default function PartiesPage() {
   const isMobile = useIsMobile();
   const overdue = useOverdueData();
   const addNewHandled = useRef(false);
+  const overflowMenuRef = useRef<HTMLDivElement | null>(null);
 
   const [parties, setParties] = useState<Party[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,6 +83,18 @@ export default function PartiesPage() {
   useEffect(() => {
     setOverdueFilter(searchParams.get("overdue") === "true");
   }, [searchParams]);
+
+  // Close overflow menu on outside click
+  useEffect(() => {
+    if (!overflowPartyId) return;
+    function handleOutside(e: MouseEvent) {
+      if (overflowMenuRef.current && !overflowMenuRef.current.contains(e.target as Node)) {
+        setOverflowPartyId(null);
+      }
+    }
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [overflowPartyId]);
 
   const [formName, setFormName] = useState("");
   const [formPhone, setFormPhone] = useState("");
@@ -487,6 +500,7 @@ export default function PartiesPage() {
                           )}
                           {/* Overflow menu */}
                           <div
+                            ref={overflowPartyId === party.id ? overflowMenuRef : undefined}
                             role="button"
                             tabIndex={0}
                             onClick={(e) => {

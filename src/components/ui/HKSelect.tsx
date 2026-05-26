@@ -100,7 +100,10 @@ export function HKSelect({
     if (!containerRef.current) return;
     const bcr = containerRef.current.getBoundingClientRect();
     const dropdownMaxH = 260;
-    const spaceBelow = window.innerHeight - bcr.bottom;
+    // Use visualViewport.height when available — on mobile it excludes the
+    // virtual keyboard, so flipUp is correctly computed against visible space.
+    const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+    const spaceBelow = viewportHeight - bcr.bottom;
     const flipUp = spaceBelow < dropdownMaxH && bcr.top > spaceBelow;
     setRect({
       top: flipUp ? bcr.top - 4 : bcr.bottom + 4,
@@ -122,15 +125,28 @@ export function HKSelect({
     setFocusedIndex(-1);
   }, []);
 
-  // Reposition on scroll/resize while open
+  // Reposition on scroll/resize while open.
+  // rAF throttle eliminates the one-frame visual lag during fast scrolls.
+  // visualViewport listener handles the mobile virtual keyboard resize.
   useEffect(() => {
     if (!isOpen) return;
-    const update = () => calcRect();
+    let rafId: number | null = null;
+    const update = () => {
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        calcRect();
+      });
+    };
     window.addEventListener("scroll", update, true);
     window.addEventListener("resize", update);
+    // Mobile: virtual keyboard fires visualViewport resize, not window resize
+    window.visualViewport?.addEventListener("resize", update);
     return () => {
       window.removeEventListener("scroll", update, true);
       window.removeEventListener("resize", update);
+      window.visualViewport?.removeEventListener("resize", update);
+      if (rafId !== null) cancelAnimationFrame(rafId);
     };
   }, [isOpen, calcRect]);
 
@@ -211,7 +227,7 @@ export function HKSelect({
             style={{
               position: "fixed",
               ...(rect.flipUp
-                ? { bottom: window.innerHeight - rect.top }
+                ? { bottom: (window.visualViewport?.height ?? window.innerHeight) - rect.top }
                 : { top: rect.top }),
               left: rect.left,
               width: rect.width,

@@ -63,16 +63,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true });
   }
 
-  // Dedupe: have we already processed this exact event?
+  // Idempotency key — uniquely identifies this specific event delivery.
+  // Includes payment entity ID so multiple payments on the same subscription
+  // (e.g. monthly renewals) are treated as distinct events.
   const eventKey = `${eventType}:${razorpayId}:${payEntity?.id ?? "none"}`;
-  const existing = await prisma.subscriptionEvent.findFirst({
-    where: { eventType, razorpayId, payload: { path: ["eventKey"], equals: eventKey } },
-    select: { id: true },
-  });
-  if (existing) {
-    logInfo("billing.webhook.duplicate", { requestId: getRequestId(request), eventKey });
-    return NextResponse.json({ received: true, duplicate: true });
-  }
 
   // Resolve the tenant from subscription id
   const tenant = await prisma.tenant.findFirst({
@@ -142,32 +136,52 @@ export async function POST(request: NextRequest) {
       });
   }
 
-  await prisma.$transaction(async (tx) => {
-    await tx.subscriptionEvent.create({
-      data: {
-        tenantId: tenant.id,
-        eventType,
-        fromPlan: tenant.plan,
-        toPlan: newPlan ?? tenant.plan,
-        amount: payEntity?.amount ?? null,
-        razorpayId,
-        payload: { eventKey, raw: event } as unknown as object,
-      },
-    });
-
-    if (newPlan || newStatus || newExpiresAt !== undefined) {
-      await tx.tenant.update({
-        where: { id: tenant.id },
+  try {
+    await prisma.$transaction(async (tx) => {
+      // The idempotencyKey unique constraint makes this create atomic — if a
+      // duplicate webhook races in, the DB throws P2002 and the outer catch
+      // returns 200 without re-applying the plan change.
+      await tx.subscriptionEvent.create({
         data: {
-          ...(newPlan ? { plan: newPlan } : {}),
-          ...(newStatus ? { subscriptionStatus: newStatus } : {}),
-          ...(newExpiresAt !== undefined ? { planExpiresAt: newExpiresAt } : {}),
-          // Clear trial once they're on a paid plan
-          ...(newPlan && newPlan !== "FREE" ? { trialEndsAt: null } : {}),
+          tenantId: tenant.id,
+          eventType,
+          fromPlan: tenant.plan,
+          toPlan: newPlan ?? tenant.plan,
+          amount: payEntity?.amount ?? null,
+          razorpayId,
+          idempotencyKey: eventKey,
+          payload: { raw: event } as unknown as object,
         },
       });
+
+      if (newPlan || newStatus || newExpiresAt !== undefined) {
+        await tx.tenant.update({
+          where: { id: tenant.id },
+          data: {
+            ...(newPlan ? { plan: newPlan } : {}),
+            ...(newStatus ? { subscriptionStatus: newStatus } : {}),
+            ...(newExpiresAt !== undefined ? { planExpiresAt: newExpiresAt } : {}),
+            // Clear trial once they're on a paid plan
+            ...(newPlan && newPlan !== "FREE" ? { trialEndsAt: null } : {}),
+          },
+        });
+      }
+    });
+  } catch (txError: unknown) {
+    // P2002 = unique constraint violation — duplicate webhook delivery.
+    // Return 200 so Razorpay stops retrying; no state change applied.
+    const isPrismaUniqueViolation =
+      typeof txError === "object" &&
+      txError !== null &&
+      "code" in txError &&
+      (txError as { code: string }).code === "P2002";
+
+    if (isPrismaUniqueViolation) {
+      logInfo("billing.webhook.duplicate", { requestId: getRequestId(request), eventKey });
+      return NextResponse.json({ received: true, duplicate: true });
     }
-  });
+    throw txError;
+  }
 
   logInfo("billing.webhook.processed", {
     requestId: getRequestId(request),
