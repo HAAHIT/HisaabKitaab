@@ -115,6 +115,8 @@ export default function BillingPage() {
       if (data.checkoutUrl) {
         // Razorpay hosted checkout — open in same window
         window.location.href = data.checkoutUrl;
+      } else {
+        setError("Subscription could not be started. Please try again or contact support.");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error");
@@ -134,6 +136,8 @@ export default function BillingPage() {
         const data = await res.json();
         setError(data.error || "Could not cancel.");
       }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {
       setActionLoading(null);
     }

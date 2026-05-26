@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 // letting an attacker enumerate valid credentials by latency. The plaintext
 // of this hash is unknown to anyone, so it can never match a real password.
 const TIMING_EQUALISATION_HASH =
-  "$2a$12$0000000000000000000000000000000000000000000000000000u";
+  "$2b$12$i7vy.sTznz65LCelBwJGE.8EyuUGjcgECLV.IKqwxdq.NR7E8ZFMa";
 import {
   assertLoginAllowed,
   clearLoginFailures,

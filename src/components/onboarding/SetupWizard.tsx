@@ -198,6 +198,11 @@ export function SetupWizard({ onComplete, initialBusinessName }: SetupWizardProp
   // Load persisted draft once — used as lazy initial values for all state below
   const draft = useRef(getWizardDraft());
 
+  // Guards to prevent duplicate server writes when the user presses Back then Next.
+  // These are NOT persisted — a page reload is a safe retry signal.
+  const step3SavedRef = useRef(false);
+  const step5TemplateSavedRef = useRef(false);
+
   const [step, setStep] = useState<number>(draft.current?.step ?? 0);
 
   useEffect(() => setThemeMounted(true), []);
@@ -310,11 +315,14 @@ export function SetupWizard({ onComplete, initialBusinessName }: SetupWizardProp
     setError(null);
     const validBanks = banks.filter((b) => b.bankName.trim());
     if (!validBanks.length) return true;
+    // Already saved in this session — skip to prevent duplicates on Back→Next.
+    if (step3SavedRef.current) return true;
     setSaving(true);
     try {
       for (const bank of validBanks) {
         await apiFetch("/api/bank-accounts", { name: bank.bankName.trim(), accountNumber: bank.accountNumber.trim() || null, openingBalance: Number(bank.openingBalance) || 0, type: bank.type });
       }
+      step3SavedRef.current = true;
       return true;
     } catch (err) { setError(err instanceof Error ? err.message : t("wizard.error.bankSaveFailed")); return false; }
     finally { setSaving(false); }
@@ -344,10 +352,12 @@ export function SetupWizard({ onComplete, initialBusinessName }: SetupWizardProp
 
   async function saveStep5Template() {
     setError(null);
+    const preset = PRESET_TEMPLATES.find((p) => p.id === selectedPreset);
+    if (!preset) return true;
+    // Already saved in this session — skip to prevent duplicate template creation on Back→Next.
+    if (step5TemplateSavedRef.current) return true;
     setSaving(true);
     try {
-      const preset = PRESET_TEMPLATES.find((p) => p.id === selectedPreset);
-      if (!preset) return true;
       // Create the template — use the stable English label so the persisted name doesn't change with locale.
       const res = await apiFetch("/api/templates", { name: preset.label, columns: preset.columns });
       const templateId: string = res.template?.id;
@@ -355,6 +365,7 @@ export function SetupWizard({ onComplete, initialBusinessName }: SetupWizardProp
         // Save as default
         await apiPatch("/api/settings", { defaultTemplateId: templateId });
       }
+      step5TemplateSavedRef.current = true;
       return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : t("wizard.error.templateSaveFailed"));
@@ -986,6 +997,20 @@ export function SetupWizard({ onComplete, initialBusinessName }: SetupWizardProp
                 color: OR, fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG,
               }}>
                 ⚠ {error}
+                {/* On the final step, a persistent failure must not lock the user out. */}
+                {step === TOTAL_STEPS - 1 && (
+                  <button
+                    onClick={() => { clearWizardDraft(); onComplete(); router.push("/dashboard"); }}
+                    style={{
+                      display: "block", marginTop: 8, background: "none", border: "none",
+                      cursor: "pointer", fontSize: TYPE.bodySmall, fontWeight: 700,
+                      color: OR, fontFamily: SG, textDecoration: "underline",
+                      textUnderlineOffset: 3, padding: 0,
+                    }}
+                  >
+                    Skip anyway and go to dashboard →
+                  </button>
+                )}
               </div>
             )}
 

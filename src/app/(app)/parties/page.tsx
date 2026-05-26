@@ -92,6 +92,16 @@ export default function PartiesPage() {
   const [formBalance, setFormBalance] = useState("0");
   const [companyName, setCompanyName] = useState("");
 
+  // One-time settings fetch — separated so it never re-triggers the parties fetch.
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((s) => {
+        if (s?.settings?.companyName) setCompanyName(s.settings.companyName as string);
+      })
+      .catch(() => undefined);
+  }, []);
+
   const fetchParties = useCallback(async () => {
     setLoading(true);
     try {
@@ -102,19 +112,12 @@ export default function PartiesPage() {
       if (typeFilter !== "ALL") params.set("type", typeFilter);
       if (overdueFilter) params.set("overdue", "true");
 
-      const [response, settingsRes] = await Promise.all([
-        fetch(`/api/parties?${params.toString()}`),
-        companyName ? Promise.resolve(null) : fetch("/api/settings"),
-      ]);
+      const response = await fetch(`/api/parties?${params.toString()}`);
       if (!response.ok) throw new Error(await readError(response));
 
       const data = await response.json();
       setParties((data.parties || []) as Party[]);
       setTotalPages(typeof data.totalPages === "number" && data.totalPages > 0 ? data.totalPages : 1);
-      if (settingsRes) {
-        const s = await settingsRes.json().catch(() => null);
-        if (s?.settings?.companyName) setCompanyName(s.settings.companyName as string);
-      }
     } catch (error) {
       setParties([]);
       setToast({
@@ -124,7 +127,7 @@ export default function PartiesPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, t, typeFilter, overdueFilter, page, companyName]);
+  }, [search, t, typeFilter, overdueFilter, page]);
 
   // Reset to page 1 when filters change so we don't sit on a now-empty page.
   useEffect(() => {

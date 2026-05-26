@@ -582,7 +582,7 @@ export async function POST(request: NextRequest) {
         const lastSeq = parseInt(parts[parts.length - 1], 10);
         if (!Number.isNaN(lastSeq)) nextSeq = lastSeq + 1;
       }
-      const billNumber = `${prefix}-${yearMonth}-${String(nextSeq).padStart(3, "0")}`;
+      const billNumber = `${prefix}-${yearMonth}-${String(nextSeq).padStart(5, "0")}`;
 
       const createdBill = await tx.bill.create({
         data: {
