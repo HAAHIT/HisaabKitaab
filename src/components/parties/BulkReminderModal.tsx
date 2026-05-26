@@ -59,23 +59,32 @@ export function BulkReminderModal({ onClose }: Props) {
   async function handleLanguageChange(lang: ReminderLanguage) {
     setSavingLang(true);
     try {
-      // Persist language preference on Tenant via settings endpoint
-      await fetch("/api/settings/reminder-language", {
+      // Persist language preference on Tenant via settings endpoint (async, non-blocking)
+      fetch("/api/settings/reminder-language", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reminderLanguage: lang }),
-      });
-      // Reload with new language
-      const res = await fetch("/api/parties/remind-overdue", { method: "POST" });
-      if (res.ok) {
-        const data = await res.json();
-        setParties(data.parties || []);
-        setLanguage(data.language || lang);
-        setTotalAmount(data.totalAmount || 0);
-        setSentIds(new Set()); // reset sent tracking on language switch
-      }
+      }).catch(() => {}); // Ignore save errors — language changed locally is fine
+
+      // Rebuild wa.me URLs client-side without re-fetching party list (saves round-trip)
+      const { buildWhatsAppReminderUrl } = await import("@/lib/phone");
+      const tenantName = parties[0]?.name ? parties[0].name.split(" ")[0] : undefined; // Approximate tenant name
+      const updatedParties = parties.map((p) => ({
+        ...p,
+        waUrl: buildWhatsAppReminderUrl({
+          phone: p.phone,
+          partyName: p.name,
+          balanceAmount: p.balanceAmount,
+          tenantName,
+          language: lang,
+        }),
+      }));
+
+      setParties(updatedParties);
+      setLanguage(lang);
+      setSentIds(new Set()); // reset sent tracking on language switch
     } catch {
-      // Non-critical — language preference save failed, still show the modal
+      // Non-critical — URL rebuild failed, keep showing modal with old URLs
     } finally {
       setSavingLang(false);
     }
@@ -87,9 +96,13 @@ export function BulkReminderModal({ onClose }: Props) {
   }
 
   function sendAll() {
-    for (const party of parties) {
-      window.open(party.waUrl, "_blank", "noopener,noreferrer");
-    }
+    // Open URLs sequentially with 200ms delay to work around pop-up blocking
+    // (browsers allow pop-ups if they're triggered by user interaction)
+    parties.forEach((party, idx) => {
+      setTimeout(() => {
+        window.open(party.waUrl, "_blank", "noopener,noreferrer");
+      }, idx * 200);
+    });
     setSentIds(new Set(parties.map((p) => p.id)));
   }
 

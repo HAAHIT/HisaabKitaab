@@ -214,49 +214,73 @@ export default function CaPortalPage() {
 
         {/* ── Trial Balance ── */}
         {tab === "trial-balance" && (
-          <HKCard style={{ padding: 0 }}>
-            {tbLoading ? (
-              <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 8 }}>
-                {[1, 2, 3, 4, 5].map((i) => <HKSkeleton key={i} style={{ height: 36, borderRadius: 8 }} />)}
-              </div>
-            ) : tbError ? (
-              <div style={{ padding: 24, color: OR, fontSize: TYPE.body }}>{tbError}</div>
-            ) : !trialBalance ? null : (
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: TYPE.bodySmall, fontFamily: SG }}>
-                  <thead>
-                    <tr style={{ background: "var(--sb-badge)", borderBottom: "1px solid var(--sb-border)" }}>
-                      <th style={{ padding: "10px 16px", textAlign: "left", fontWeight: 600, color: "var(--sb-sub)" }}>Account</th>
-                      <th style={{ padding: "10px 16px", textAlign: "left", fontWeight: 600, color: "var(--sb-sub)" }}>Group</th>
-                      <th style={{ padding: "10px 16px", textAlign: "right", fontWeight: 600, color: "var(--sb-sub)", fontFamily: IN }}>Debit</th>
-                      <th style={{ padding: "10px 16px", textAlign: "right", fontWeight: 600, color: "var(--sb-sub)", fontFamily: IN }}>Credit</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {trialBalance.rows.map((r) => (
-                      <tr key={r.accountCode} style={{ borderBottom: "1px solid var(--sb-border)" }}>
-                        <td style={{ padding: "10px 16px", fontWeight: 600, color: "var(--sb-text)" }}>{r.accountName}</td>
-                        <td style={{ padding: "10px 16px", color: "var(--sb-sub)" }}>{r.tallyGroup}</td>
-                        <td style={{ padding: "10px 16px", textAlign: "right", fontFamily: IN, color: r.closingDebit > 0 ? GR : "var(--sb-sub)" }}>
-                          {r.closingDebit > 0 ? inr(r.closingDebit) : "—"}
-                        </td>
-                        <td style={{ padding: "10px 16px", textAlign: "right", fontFamily: IN, color: r.closingCredit > 0 ? OR : "var(--sb-sub)" }}>
-                          {r.closingCredit > 0 ? inr(r.closingCredit) : "—"}
-                        </td>
+          <div>
+            <HKCard style={{ padding: 0 }}>
+              {tbLoading ? (
+                <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 8 }}>
+                  {[1, 2, 3, 4, 5].map((i) => <HKSkeleton key={i} style={{ height: 36, borderRadius: 8 }} />)}
+                </div>
+              ) : tbError ? (
+                <div style={{ padding: 24, color: OR, fontSize: TYPE.body }}>{tbError}</div>
+              ) : !trialBalance ? null : (
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: TYPE.bodySmall, fontFamily: SG }}>
+                    <thead>
+                      <tr style={{ background: "var(--sb-badge)", borderBottom: "1px solid var(--sb-border)" }}>
+                        <th style={{ padding: "10px 16px", textAlign: "left", fontWeight: 600, color: "var(--sb-sub)" }}>Account</th>
+                        <th style={{ padding: "10px 16px", textAlign: "left", fontWeight: 600, color: "var(--sb-sub)" }}>Group</th>
+                        <th style={{ padding: "10px 16px", textAlign: "right", fontWeight: 600, color: "var(--sb-sub)", fontFamily: IN }}>Debit</th>
+                        <th style={{ padding: "10px 16px", textAlign: "right", fontWeight: 600, color: "var(--sb-sub)", fontFamily: IN }}>Credit</th>
                       </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr style={{ background: "var(--sb-badge)", fontWeight: 800, fontSize: TYPE.body }}>
-                      <td style={{ padding: "12px 16px" }} colSpan={2}>Total</td>
-                      <td style={{ padding: "12px 16px", textAlign: "right", fontFamily: IN, color: GR }}>{inr(trialBalance.totalDebit)}</td>
-                      <td style={{ padding: "12px 16px", textAlign: "right", fontFamily: IN, color: OR }}>{inr(trialBalance.totalCredit)}</td>
-                    </tr>
-                  </tfoot>
-                </table>
+                    </thead>
+                    <tbody>
+                      {trialBalance.rows.map((r) => (
+                        <tr key={r.accountCode} style={{ borderBottom: "1px solid var(--sb-border)" }}>
+                          <td style={{ padding: "10px 16px", fontWeight: 600, color: "var(--sb-text)" }}>{r.accountName}</td>
+                          <td style={{ padding: "10px 16px", color: "var(--sb-sub)" }}>{r.tallyGroup}</td>
+                          <td style={{ padding: "10px 16px", textAlign: "right", fontFamily: IN, color: r.closingDebit > 0 ? GR : "var(--sb-sub)" }}>
+                            {r.closingDebit > 0 ? inr(r.closingDebit) : "—"}
+                          </td>
+                          <td style={{ padding: "10px 16px", textAlign: "right", fontFamily: IN, color: r.closingCredit > 0 ? OR : "var(--sb-sub)" }}>
+                            {r.closingCredit > 0 ? inr(r.closingCredit) : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ background: "var(--sb-badge)", fontWeight: 800, fontSize: TYPE.body }}>
+                        <td style={{ padding: "12px 16px" }} colSpan={2}>
+                          Total
+                          {trialBalance.isBalanced ? (
+                            <span style={{ marginLeft: 8, fontSize: TYPE.bodySmall, fontWeight: 600, color: GR, background: GR + "18", border: `1px solid ${GR}30`, borderRadius: 6, padding: "1px 7px" }}>
+                              ✓ Balanced
+                            </span>
+                          ) : (
+                            <span style={{ marginLeft: 8, fontSize: TYPE.bodySmall, fontWeight: 600, color: OR, background: OR + "18", border: `1px solid ${OR}40`, borderRadius: 6, padding: "1px 7px" }}>
+                              ⚠ Unbalanced
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ padding: "12px 16px", textAlign: "right", fontFamily: IN, color: GR }}>{inr(trialBalance.totalDebit)}</td>
+                        <td style={{ padding: "12px 16px", textAlign: "right", fontFamily: IN, color: OR }}>{inr(trialBalance.totalCredit)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </HKCard>
+            {trialBalance && (
+              <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
+                <HKButton
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => window.open(`/api/export/trial-balance?from=${from}&to=${to}`, "_blank", "noopener,noreferrer")}
+                >
+                  Export Trial Balance CSV
+                </HKButton>
               </div>
             )}
-          </HKCard>
+          </div>
         )}
 
         {/* ── Party Ledger ── */}
@@ -367,16 +391,7 @@ export default function CaPortalPage() {
               </HKCard>
             )}
 
-            <div style={{ marginTop: 16, display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <HKButton
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  window.open(`/api/export/trial-balance?from=${from}&to=${to}`, "_blank", "noopener,noreferrer");
-                }}
-              >
-                Export Trial Balance CSV
-              </HKButton>
+            <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end" }}>
               <HKButton
                 variant="secondary"
                 size="sm"

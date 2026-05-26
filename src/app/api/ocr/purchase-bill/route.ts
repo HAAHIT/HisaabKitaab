@@ -26,16 +26,11 @@ export interface OcrParsedFields {
 }
 
 // ── Regex constants ────────────────────────────────────────────────────────
+// NOTE: avoid stateful regexes at module level — they share lastIndex across concurrent requests.
+// Create these inside functions or reset lastIndex explicitly (risky in serverless).
 const RE_GSTIN = /\b\d{2}[A-Z]{5}\d{4}[A-Z]{1}[A-Z\d]{1}Z[A-Z\d]{1}\b/g;
 
 const RE_INVOICE_NO = /(?:invoice|bill|inv\.?|voucher|receipt)\s*(?:no\.?|number|#|num)\s*[:.\s]*([A-Z0-9\-\/\\]+)/i;
-
-const RE_DATE = /\b(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})\b/g;
-
-const RE_TOTAL = /(?:grand\s*total|total\s*(?:amount|payable|due|value|charges)?|net\s*(?:payable|amount|total)|amount\s*(?:payable|due)|payable\s*amount)\s*[:\s₹Rs.]*\s*([\d,]+(?:\.\d{1,2})?)/i;
-
-// Fallback — last "Total" line in the document
-const RE_TOTAL_FALLBACK = /total\s*[:\s₹Rs.]*\s*([\d,]+(?:\.\d{1,2})?)/gi;
 
 const RE_GST_RATE = /(?:@|gst|igst|cgst\s*\+\s*sgst|tax)\s*@?\s*(\d+(?:\.\d+)?)\s*%/i;
 
@@ -58,6 +53,7 @@ function parseIndianDate(raw: string): string | null {
 /**
  * Extract the most likely bill date from OCR text.
  * Prefers dates near keywords like "Date:", "Invoice Date:", etc.
+ * Uses local regex to avoid concurrent request interference.
  */
 function extractDate(text: string): string | null {
   // First try: keyword-anchored date
@@ -69,10 +65,11 @@ function extractDate(text: string): string | null {
   }
 
   // Fallback: collect all date-like strings and pick the first valid one
+  // Local regex to avoid shared lastIndex across concurrent requests
+  const reDateLocal = /\b(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})\b/g;
   const all: string[] = [];
   let m;
-  RE_DATE.lastIndex = 0;
-  while ((m = RE_DATE.exec(text)) !== null) {
+  while ((m = reDateLocal.exec(text)) !== null) {
     const parsed = parseIndianDate(m[0]);
     if (parsed) all.push(parsed);
   }
@@ -124,10 +121,12 @@ function extractInvoiceNo(text: string): string | null {
 
 /**
  * Extract the grand total payable amount.
+ * Uses local regex to avoid shared lastIndex across concurrent requests.
  */
 function extractAmount(text: string): number | null {
   // Primary: "Grand Total", "Net Payable", etc.
-  const m = text.match(RE_TOTAL);
+  const reTotalPrimary = /(?:grand\s*total|total\s*(?:amount|payable|due|value|charges)?|net\s*(?:payable|amount|total)|amount\s*(?:payable|due)|payable\s*amount)\s*[:\s₹Rs.]*\s*([\d,]+(?:\.\d{1,2})?)/i;
+  const m = text.match(reTotalPrimary);
   if (m) {
     const raw = m[1].replace(/,/g, "");
     const n = parseFloat(raw);
@@ -136,10 +135,11 @@ function extractAmount(text: string): number | null {
 
   // Fallback: find all "Total X" occurrences, return the largest value
   // (grand total is almost always the largest figure in the document)
+  // Local regex to avoid shared lastIndex across concurrent requests
+  const reTotalFallback = /total\s*[:\s₹Rs.]*\s*([\d,]+(?:\.\d{1,2})?)/gi;
   const amounts: number[] = [];
   let fm;
-  RE_TOTAL_FALLBACK.lastIndex = 0;
-  while ((fm = RE_TOTAL_FALLBACK.exec(text)) !== null) {
+  while ((fm = reTotalFallback.exec(text)) !== null) {
     const raw = fm[1].replace(/,/g, "");
     const n = parseFloat(raw);
     if (Number.isFinite(n) && n > 0) amounts.push(n);

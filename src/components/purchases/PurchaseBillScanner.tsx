@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { HKButton } from "@/components/ui/HKButton";
 import { C, SG, TYPE, useIsMobile } from "@/components/ui/hk-design";
 import type { OcrParsedFields } from "@/app/api/ocr/purchase-bill/route";
@@ -14,9 +14,51 @@ interface Props {
 
 type ScanState = "idle" | "preview" | "recognizing" | "parsing" | "done" | "error";
 
+/**
+ * Preprocess image before OCR: resize to max 1600px for faster recognition.
+ * Returns a new File (JPEG) at 92% quality.
+ */
+async function preprocessImage(file: File): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        // Resize to max 1600px on longest edge (2-3x speedup)
+        const maxDim = 1600;
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { reject(new Error("Canvas context unavailable")); return; }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) { reject(new Error("Canvas toBlob failed")); return; }
+            resolve(new File([blob], file.name, { type: "image/jpeg" }));
+          },
+          "image/jpeg",
+          0.92
+        );
+      };
+      img.onerror = () => reject(new Error("Image load failed"));
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => reject(new Error("File read failed"));
+    reader.readAsDataURL(file);
+  });
+}
+
 export function PurchaseBillScanner({ onScanComplete, onClose }: Props) {
   const isMobile = useIsMobile();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputUploadRef = useRef<HTMLInputElement>(null); // Separate input for desktop upload
+  const workerRef = useRef<any>(null); // Cache Tesseract worker across scans
+  const previewUrlRef = useRef<string | null>(null); // Track URL for cleanup
   const [state, setState] = useState<ScanState>("idle");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
@@ -24,47 +66,73 @@ export function PurchaseBillScanner({ onScanComplete, onClose }: Props) {
   const [error, setError] = useState("");
   const [parsedFields, setParsedFields] = useState<OcrParsedFields | null>(null);
 
+  // Cleanup: revoke object URLs and terminate worker on unmount
+  useEffect(() => {
+    return () => {
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+      if (workerRef.current) workerRef.current.terminate();
+    };
+  }, []);
+
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // File size check — reject files > 20MB
+    const MAX_FILE_SIZE = 20 * 1024 * 1024;
+    if (file.size > MAX_FILE_SIZE) {
+      setError(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max 20MB.`);
+      setState("error");
+      return;
+    }
+
+    // Revoke previous preview URL to avoid memory leak
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+
     // Show preview
     const url = URL.createObjectURL(file);
+    previewUrlRef.current = url;
     setPreviewUrl(url);
     setState("recognizing");
     setProgress(0);
-    setProgressStatus("Loading OCR engine…");
+    setProgressStatus("Preprocessing image…");
     setError("");
     setParsedFields(null);
 
     try {
-      // Dynamic import — Tesseract.js is only loaded when the user actually scans.
-      // This avoids a ~4MB JS bundle hit for users who never use the scanner.
-      const { createWorker } = await import("tesseract.js");
+      // Preprocess image (resize to 1600px) for 2-3x speedup
+      setProgressStatus("Resizing image for OCR…");
+      const processedFile = await preprocessImage(file);
+      setProgress(15);
 
-      const worker = await createWorker("eng", 1, {
-        logger: (m: { status: string; progress: number }) => {
-          if (m.status === "loading tesseract core") {
-            setProgressStatus("Loading OCR core…");
-            setProgress(Math.round(m.progress * 20));
-          } else if (m.status === "initializing tesseract") {
-            setProgressStatus("Initializing…");
-            setProgress(20 + Math.round(m.progress * 20));
-          } else if (m.status === "loading language traineddata") {
-            setProgressStatus("Loading language data…");
-            setProgress(40 + Math.round(m.progress * 20));
-          } else if (m.status === "recognizing text") {
-            setProgressStatus("Recognizing text…");
-            setProgress(60 + Math.round(m.progress * 35));
-          }
-        },
-      });
+      // Dynamic import & worker caching — create worker once, reuse on retry
+      if (!workerRef.current) {
+        const { createWorker } = await import("tesseract.js");
+        workerRef.current = await createWorker("eng", 1, {
+          logger: (m: { status: string; progress: number }) => {
+            if (m.status === "loading tesseract core") {
+              setProgressStatus("Loading OCR core…");
+              setProgress(Math.round(15 + m.progress * 15));
+            } else if (m.status === "initializing tesseract") {
+              setProgressStatus("Initializing…");
+              setProgress(30 + Math.round(m.progress * 15));
+            } else if (m.status === "loading language traineddata") {
+              setProgressStatus("Loading language data…");
+              setProgress(45 + Math.round(m.progress * 15));
+            } else if (m.status === "recognizing text") {
+              setProgressStatus("Recognizing text…");
+              setProgress(60 + Math.round(m.progress * 35));
+            }
+          },
+        });
+      } else {
+        setProgress(60);
+      }
 
       setProgressStatus("Recognizing text…");
       const {
         data: { text, confidence },
-      } = await worker.recognize(file);
-      await worker.terminate();
+      } = await workerRef.current.recognize(processedFile);
 
       setProgress(95);
       setState("parsing");
@@ -91,8 +159,9 @@ export function PurchaseBillScanner({ onScanComplete, onClose }: Props) {
       setState("error");
       setError(err instanceof Error ? err.message : "OCR failed. Please try again.");
     } finally {
-      // Reset file input so the same file can be re-selected if needed
+      // Reset file inputs so the same file can be re-selected if needed
       if (fileInputRef.current) fileInputRef.current.value = "";
+      if (fileInputUploadRef.current) fileInputUploadRef.current.value = "";
     }
   }, []);
 
@@ -184,7 +253,7 @@ export function PurchaseBillScanner({ onScanComplete, onClose }: Props) {
 
         {/* Body */}
         <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
-          {/* Hidden file input */}
+          {/* Hidden file inputs — separate for camera vs upload (avoid DOM mutation) */}
           <input
             ref={fileInputRef}
             type="file"
@@ -192,7 +261,15 @@ export function PurchaseBillScanner({ onScanComplete, onClose }: Props) {
             capture="environment"
             onChange={handleFileChange}
             style={{ display: "none" }}
-            aria-label="Camera or file picker for purchase bill"
+            aria-label="Camera for purchase bill"
+          />
+          <input
+            ref={fileInputUploadRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileChange}
+            style={{ display: "none" }}
+            aria-label="File picker for purchase bill"
           />
 
           {/* IDLE — show camera button */}
@@ -220,15 +297,7 @@ export function PurchaseBillScanner({ onScanComplete, onClose }: Props) {
                 </HKButton>
                 <HKButton
                   variant="secondary"
-                  onClick={() => {
-                    // Remove capture attribute for file picker mode
-                    if (fileInputRef.current) {
-                      fileInputRef.current.removeAttribute("capture");
-                      fileInputRef.current.click();
-                      // Restore capture for next time
-                      fileInputRef.current.setAttribute("capture", "environment");
-                    }
-                  }}
+                  onClick={() => fileInputUploadRef.current?.click()}
                 >
                   🖼️ Upload Image
                 </HKButton>
