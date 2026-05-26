@@ -484,6 +484,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Party not found" }, { status: 404 });
     }
 
+    if (party.type !== "CUSTOMER") {
+      return NextResponse.json(
+        { error: "Party must be a CUSTOMER for sales bills. Use /api/purchases for vendor bills." },
+        { status: 400 }
+      );
+    }
+
     const billingSettings = await loadBillingSettings(tenantId);
     const billSeriesIdRaw =
       typeof body.billSeriesId === "string" && body.billSeriesId.trim()
