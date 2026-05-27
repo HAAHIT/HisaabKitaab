@@ -164,7 +164,7 @@ export default function PurchaseDetailPage({ params }: { params: Promise<{ id: s
 
       <div className="pur-bg" style={{ background: "var(--sb-bg)", minHeight: "100%", fontFamily: SG }}>
         <div style={{ padding: isMobile ? "18px 14px 100px" : "24px 28px 60px", maxWidth: 1000, margin: "0 auto" }}>
-          <div className="no-print" style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 18, flexWrap: "wrap" }}>
+          <div className="no-print" style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 14, marginBottom: 18, flexWrap: "wrap" }}>
             <button
               onClick={() => router.push("/purchases")}
               style={{
@@ -189,11 +189,12 @@ export default function PurchaseDetailPage({ params }: { params: Promise<{ id: s
                 {bill.billNumber} · {fmtDate(bill.date ?? bill.createdAt)}
               </p>
             </div>
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: isMobile ? 6 : 8, alignItems: "center", flexWrap: "wrap", width: isMobile ? "100%" : "auto", justifyContent: isMobile ? "flex-end" : "flex-start" }}>
                   <button
                     onClick={() => window.print()}
+                    aria-label={t("common.print" as TranslationKey)}
                     style={{
-                      height: 40, padding: "0 14px", borderRadius: 12,
+                      height: isMobile ? 36 : 40, padding: isMobile ? "0 10px" : "0 14px", borderRadius: 12,
                       border: "1.5px solid var(--sb-border)",
                       background: "var(--sb-card)", color: "var(--sb-text)",
                       fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG,
@@ -203,14 +204,14 @@ export default function PurchaseDetailPage({ params }: { params: Promise<{ id: s
                     <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6v-8z" />
                     </svg>
-                    {t("common.print" as TranslationKey)}
+                    {!isMobile && t("common.print" as TranslationKey)}
                   </button>
                   {bill.status === "DRAFT" && (
                     <>
                       <button
                         onClick={() => router.push(`/bills/${id}/edit`)}
                         style={{
-                          height: 40, padding: "0 14px", borderRadius: 12,
+                          height: isMobile ? 36 : 40, padding: isMobile ? "0 12px" : "0 14px", borderRadius: 12,
                           border: "1.5px solid var(--sb-border)",
                           background: "var(--sb-card)", color: "var(--sb-text)",
                           fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG,
@@ -222,7 +223,7 @@ export default function PurchaseDetailPage({ params }: { params: Promise<{ id: s
                       <button
                         onClick={() => setConfirmAction("FINAL")}
                         style={{
-                          height: 40, padding: "0 14px", borderRadius: 12, border: "none",
+                          height: isMobile ? 36 : 40, padding: isMobile ? "0 12px" : "0 14px", borderRadius: 12, border: "none",
                           background: GR, color: "#fff",
                           fontSize: TYPE.bodySmall, fontWeight: 700, fontFamily: SG,
                           cursor: "pointer", boxShadow: `0 3px 12px ${GR}40`,
@@ -236,7 +237,7 @@ export default function PurchaseDetailPage({ params }: { params: Promise<{ id: s
                     <button
                       onClick={() => setConfirmAction("CANCELLED")}
                       style={{
-                        height: 40, padding: "0 14px", borderRadius: 12,
+                        height: isMobile ? 36 : 40, padding: isMobile ? "0 12px" : "0 14px", borderRadius: 12,
                         border: "1.5px solid var(--sb-border)",
                         background: "transparent", color: OR,
                         fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG,
