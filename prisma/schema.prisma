@@ -255,6 +255,7 @@ model Payment {
   createdAt                                             DateTime      @default(now())
   isDeleted                                             Boolean       @default(false)
   updatedAt                                             DateTime      @updatedAt
+  reconciledAt                                          DateTime?
   tenantId                                              String
   accountId                                             String?
   destinationAccountId                                  String?

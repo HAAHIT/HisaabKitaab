@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { HKButton } from "@/components/ui/HKButton";
 import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
 import { HKSkeleton } from "@/components/ui/HKSkeleton";
+import { HKModal } from "@/components/ui/hk-design";
+import { Input } from "@heroui/react";
 
 interface PreviewLine {
   accountCode: string;
@@ -53,6 +55,8 @@ export default function YearEndCloseClient() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
 
   const yearOptions = Array.from({ length: 6 }, (_, i) => current - i);
 
@@ -84,14 +88,15 @@ export default function YearEndCloseClient() {
     return () => controller.abort();
   }, [fyStartYear]);
 
+  function openConfirm() {
+    setConfirmText("");
+    setConfirmOpen(true);
+  }
+
   async function handleClose() {
     if (!preview) return;
-    const confirmed = window.confirm(
-      `Close ${preview.fyLabel}? This creates a permanent JOURNAL voucher transferring net ${
-        preview.netProfit >= 0 ? "profit" : "loss"
-      } of ${inr(Math.abs(preview.netProfit))} to Capital Account. It cannot be undone via the UI.`
-    );
-    if (!confirmed) return;
+    if (confirmText.trim() !== preview.fyLabel) return;
+    setConfirmOpen(false);
 
     setSubmitting(true);
     setError(null);
@@ -148,7 +153,7 @@ export default function YearEndCloseClient() {
           {preview && (
             <HKButton
               isDisabled={preview.alreadyClosed || submitting}
-              onClick={handleClose}
+              onClick={openConfirm}
             >
               {submitting
                 ? "Closing…"
@@ -212,6 +217,47 @@ export default function YearEndCloseClient() {
           </div>
         ) : null}
       </div>
+
+      {preview && (
+        <HKModal
+          isOpen={confirmOpen}
+          onClose={() => setConfirmOpen(false)}
+          title={`Confirm close of ${preview.fyLabel}`}
+          footer={
+            <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+              <HKButton variant="secondary" onClick={() => setConfirmOpen(false)} isDisabled={submitting}>
+                Cancel
+              </HKButton>
+              <HKButton
+                onClick={handleClose}
+                isDisabled={confirmText.trim() !== preview.fyLabel || submitting}
+                isLoading={submitting}
+              >
+                Close FY
+              </HKButton>
+            </div>
+          }
+        >
+          <div className="space-y-3 text-sm">
+            <p>
+              This creates a permanent JOURNAL voucher transferring net{" "}
+              <strong>{preview.netProfit >= 0 ? "profit" : "loss"}</strong> of{" "}
+              <strong>{inr(Math.abs(preview.netProfit))}</strong> to the Capital Account.
+              It cannot be undone via the UI.
+            </p>
+            <p>
+              Type <strong>{preview.fyLabel}</strong> to confirm:
+            </p>
+            <Input
+              autoFocus
+              value={confirmText}
+              onValueChange={setConfirmText}
+              placeholder={preview.fyLabel}
+              variant="bordered"
+            />
+          </div>
+        </HKModal>
+      )}
     </div>
   );
 }

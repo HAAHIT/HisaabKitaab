@@ -60,6 +60,30 @@ export async function POST(request: NextRequest) {
         data: { status: "AMBIGUOUS" },
       });
 
+      // Per BRS (Bank Reconciliation Statement) standards, reconciliation does not
+      // create new journal entries for matched payments — the original payment
+      // vouchers already posted to the Bank ledger. We only stamp a `reconciledAt`
+      // timestamp confirming the bank statement attests these movements.
+      const matchedRows = await tx.bankStatementRow.findMany({
+        where: {
+          statementId,
+          tenantId,
+          status: { in: ["AUTO_MATCHED", "MANUALLY_CATEGORIZED"] },
+          matchedPaymentId: { not: null },
+        },
+        select: { matchedPaymentId: true },
+      });
+      const matchedPaymentIds = matchedRows
+        .map((r) => r.matchedPaymentId)
+        .filter((id): id is string => !!id);
+
+      const reconciledPaymentUpdate = matchedPaymentIds.length
+        ? await tx.payment.updateMany({
+            where: { id: { in: matchedPaymentIds }, tenantId, reconciledAt: null },
+            data: { reconciledAt: new Date() },
+          })
+        : { count: 0 };
+
       // Final counts
       const [matched, total] = await Promise.all([
         tx.bankStatementRow.count({
@@ -81,13 +105,19 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      return { ambiguousCount: ambiguousUpdate.count, matchedCount: matched, totalRows: total };
+      return {
+        ambiguousCount: ambiguousUpdate.count,
+        matchedCount: matched,
+        reconciledPaymentCount: reconciledPaymentUpdate.count,
+        totalRows: total,
+      };
     });
 
     return NextResponse.json({
       success: true,
       matchedCount: result.matchedCount,
       ambiguousCount: result.ambiguousCount,
+      reconciledPaymentCount: result.reconciledPaymentCount,
       totalRows: result.totalRows,
     });
   } catch (error) {

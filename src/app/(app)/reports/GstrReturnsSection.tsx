@@ -206,7 +206,7 @@ export default function GstrReturnsSection() {
 
   const yearOptions = (() => {
     const ist = currentDefault();
-    const baseYear = ist.fpMonth >= 4 ? ist.fyStartYear + 1 : ist.fyStartYear + 1;
+    const baseYear = ist.fpMonth >= 4 ? ist.fyStartYear : ist.fyStartYear + 1;
     return Array.from({ length: 5 }, (_, i) => baseYear - i);
   })();
 

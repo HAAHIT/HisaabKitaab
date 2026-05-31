@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { type TranslationKey } from "@/lib/i18n/translations";
 import { HKButton } from "@/components/ui/HKButton";
-import { OR, PU, GR, AM, SG, IN, TYPE, PageHeader, useIsMobile } from "@/components/ui/hk-design";
+import { OR, PU, GR, AM, SG, IN, TYPE, PageHeader, useIsMobile, HKModal } from "@/components/ui/hk-design";
 import { SUPPORTED_BANKS } from "@/lib/bank-reconciliation/parsers/index";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -86,7 +86,8 @@ export default function ReconcilePage() {
   const [statements, setStatements] = useState<Statement[]>([]);
 
   // Commit result
-  const [commitResult, setCommitResult] = useState<{ matchedCount: number; ambiguousCount: number; totalRows: number } | null>(null);
+  const [commitResult, setCommitResult] = useState<{ matchedCount: number; ambiguousCount: number; reconciledPaymentCount?: number; totalRows: number } | null>(null);
+  const [commitConfirmOpen, setCommitConfirmOpen] = useState(false);
 
   // ── Load bank accounts ───────────────────────────────────────────────────
 
@@ -160,6 +161,7 @@ export default function ReconcilePage() {
 
   async function handleCommit() {
     if (!uploadResult) return;
+    setCommitConfirmOpen(false);
     setLoading(true);
     try {
       // First, mark user-ignored rows. The `ignored` set holds BankStatementRow
@@ -214,6 +216,54 @@ export default function ReconcilePage() {
         subtitle={t("reconcile.subtitle" as TranslationKey)}
         isMobile={isMobile}
       />
+
+      {uploadResult && (
+        (() => {
+          const matchedToCommit = uploadResult.matchedCount - ignored.size;
+          const ambiguousToCreate = uploadResult.rowCount - uploadResult.matchedCount + ignored.size;
+          return (
+            <HKModal
+              isOpen={commitConfirmOpen}
+              onClose={() => setCommitConfirmOpen(false)}
+              title="Confirm reconciliation commit"
+              footer={
+                <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+                  <HKButton variant="secondary" onClick={() => setCommitConfirmOpen(false)} isDisabled={loading}>
+                    Cancel
+                  </HKButton>
+                  <HKButton variant="success" onClick={handleCommit} isLoading={loading}>
+                    Commit reconciliation
+                  </HKButton>
+                </div>
+              }
+            >
+              <div style={{ fontSize: 14, lineHeight: 1.55, color: "var(--sb-text)" }}>
+                <ul style={{ paddingLeft: 18, margin: "0 0 12px" }}>
+                  <li>
+                    <strong>{matchedToCommit}</strong> payment{matchedToCommit === 1 ? "" : "s"} will be
+                    marked reconciled (a <code>reconciledAt</code> timestamp will be stamped — no new journal entries are created, per BRS standards).
+                  </li>
+                  <li style={{ marginTop: 6 }}>
+                    <strong>{ambiguousToCreate}</strong> row{ambiguousToCreate === 1 ? "" : "s"} will be left
+                    as <strong>AMBIGUOUS</strong>. This cannot be undone from the UI.
+                  </li>
+                </ul>
+                {ambiguousToCreate > 0 && (
+                  <div style={{
+                    background: "var(--sb-warning-bg, #fff7ed)",
+                    border: "1px solid var(--sb-warning-border, #fed7aa)",
+                    borderRadius: 10, padding: "10px 12px", fontSize: 13, color: "#9a3412",
+                  }}>
+                    Bank charges, interest credits, or NEFT fees in the AMBIGUOUS rows
+                    are not yet auto-journaled. Post a manual journal voucher for them so
+                    your bank ledger balance matches the statement.
+                  </div>
+                )}
+              </div>
+            </HKModal>
+          );
+        })()
+      )}
 
       {/* ── Step: History ──────────────────────────────────────────────────── */}
       {step === "history" && (
@@ -563,7 +613,7 @@ export default function ReconcilePage() {
           <HKButton
             variant="success"
             fullWidth
-            onClick={handleCommit}
+            onClick={() => setCommitConfirmOpen(true)}
             isLoading={loading}
           >
             {t("reconcile.commitBtn" as TranslationKey)}

@@ -303,6 +303,7 @@ export default function UserManagementPage() {
                   value={formRole}
                   onValueChange={(v) => { if (v) setFormRole(v); }}
                 >
+                  <HKSelectItem value="ADMIN">{t("users.admin")}</HKSelectItem>
                   <HKSelectItem value="STAFF">{t("users.staff")}</HKSelectItem>
                   <HKSelectItem value="ACCOUNTANT">{t("users.accountant")}</HKSelectItem>
                   <HKSelectItem value="CUSTOMER">{t("users.customer")}</HKSelectItem>

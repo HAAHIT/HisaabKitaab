@@ -18,7 +18,11 @@ export const runtime = "nodejs";
 export async function POST(request: NextRequest) {
   const sessionResolution = await resolveSession(request);
   if (!sessionResolution.ok) return sessionResolution.response;
-  const { tenantId } = sessionResolution.session;
+  const { tenantId, role } = sessionResolution.session;
+
+  if (role !== "ADMIN" && role !== "ACCOUNTANT") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const rl = await checkRateLimit(request, `reconcile:categorize:${tenantId}`, 60);
   if (rl) return rl;
