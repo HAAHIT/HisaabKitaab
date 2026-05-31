@@ -303,6 +303,7 @@ model JournalEntry {
   bill            Bill?         @relation(fields: [billId], references: [id])
   tenant          Tenant        @relation(fields: [tenantId], references: [id])
   lines           JournalLine[]
+  bankStatementRows BankStatementRow[]
 
   @@unique([tenantId, remoteId])
   @@index([tenantId])
@@ -605,10 +606,14 @@ model BankStatementRow {
   matchedPaymentId String?
   status           BankRowStatus  @default(PENDING)
   category         String?
+  categoryCode     String?
+  journalEntryId   String?
   statement        BankStatement  @relation(fields: [statementId], references: [id])
   matchedPayment   Payment?       @relation(fields: [matchedPaymentId], references: [id])
+  journalEntry     JournalEntry?  @relation(fields: [journalEntryId], references: [id])
 
   @@index([tenantId])
   @@index([statementId])
+  @@index([journalEntryId])
   @@unique([statementId, date, amount, description])
 }

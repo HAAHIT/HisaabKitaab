@@ -4,8 +4,10 @@ import { useEffect, useState, useRef } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { type TranslationKey } from "@/lib/i18n/translations";
 import { HKButton } from "@/components/ui/HKButton";
+import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
 import { OR, PU, GR, AM, SG, IN, TYPE, PageHeader, useIsMobile, HKModal } from "@/components/ui/hk-design";
 import { SUPPORTED_BANKS } from "@/lib/bank-reconciliation/parsers/index";
+import { RECONCILE_CATEGORY_OPTIONS } from "@/lib/bank-reconciliation/categories";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -81,6 +83,8 @@ export default function ReconcilePage() {
 
   // Review: track per-row manual overrides
   const [ignored, setIgnored] = useState<Set<string>>(new Set());
+  // rowId → selected categoryCode (AccountCode whitelist entry, joined with option index to allow same code under different labels)
+  const [categorized, setCategorized] = useState<Record<string, string>>({});
 
   // History
   const [statements, setStatements] = useState<Statement[]>([]);
@@ -159,6 +163,31 @@ export default function ReconcilePage() {
 
   // ── Commit handler ───────────────────────────────────────────────────────
 
+  async function setRowCategory(rowId: string, categoryCode: string | null) {
+    if (categoryCode) {
+      setCategorized((prev) => ({ ...prev, [rowId]: categoryCode }));
+    } else {
+      setCategorized((prev) => {
+        const next = { ...prev };
+        delete next[rowId];
+        return next;
+      });
+    }
+    try {
+      await fetch("/api/reconcile/categorize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          categoryCode
+            ? { rowId, action: "JOURNAL", categoryCode }
+            : { rowId, action: "IGNORE" }
+        ),
+      });
+    } catch {
+      // silent; user can retry by re-selecting
+    }
+  }
+
   async function handleCommit() {
     if (!uploadResult) return;
     setCommitConfirmOpen(false);
@@ -220,7 +249,9 @@ export default function ReconcilePage() {
       {uploadResult && (
         (() => {
           const matchedToCommit = uploadResult.matchedCount - ignored.size;
-          const ambiguousToCreate = uploadResult.rowCount - uploadResult.matchedCount + ignored.size;
+          const journalToPost = Object.keys(categorized).length;
+          const ambiguousToCreate =
+            uploadResult.rowCount - uploadResult.matchedCount + ignored.size - journalToPost;
           return (
             <HKModal
               isOpen={commitConfirmOpen}
@@ -243,22 +274,21 @@ export default function ReconcilePage() {
                     <strong>{matchedToCommit}</strong> payment{matchedToCommit === 1 ? "" : "s"} will be
                     marked reconciled (a <code>reconciledAt</code> timestamp will be stamped — no new journal entries are created, per BRS standards).
                   </li>
+                  {journalToPost > 0 && (
+                    <li style={{ marginTop: 6 }}>
+                      <strong>{journalToPost}</strong> categorized row{journalToPost === 1 ? "" : "s"} will
+                      post a balanced JOURNAL voucher (bank charges / interest / round-off).
+                    </li>
+                  )}
                   <li style={{ marginTop: 6 }}>
                     <strong>{ambiguousToCreate}</strong> row{ambiguousToCreate === 1 ? "" : "s"} will be left
-                    as <strong>AMBIGUOUS</strong>. This cannot be undone from the UI.
+                    as <strong>AMBIGUOUS</strong>.
                   </li>
                 </ul>
-                {ambiguousToCreate > 0 && (
-                  <div style={{
-                    background: "var(--sb-warning-bg, #fff7ed)",
-                    border: "1px solid var(--sb-warning-border, #fed7aa)",
-                    borderRadius: 10, padding: "10px 12px", fontSize: 13, color: "#9a3412",
-                  }}>
-                    Bank charges, interest credits, or NEFT fees in the AMBIGUOUS rows
-                    are not yet auto-journaled. Post a manual journal voucher for them so
-                    your bank ledger balance matches the statement.
-                  </div>
-                )}
+                <p style={{ fontSize: 13, color: "var(--sb-sub)", margin: 0 }}>
+                  You can undo this reconciliation later — journal entries will be reversed and{" "}
+                  <code>reconciledAt</code> cleared.
+                </p>
               </div>
             </HKModal>
           );
@@ -322,19 +352,41 @@ export default function ReconcilePage() {
                     {s.isReconciled ? t("reconcile.statusReconciled" as TranslationKey) : t("reconcile.statusPending" as TranslationKey)}
                   </span>
                 </div>
-                <div style={{ display: "flex", gap: 20, marginTop: 12 }}>
-                  {[
-                    { l: t("reconcile.statTotalRows" as TranslationKey), v: s.rowCount },
-                    { l: t("reconcile.statMatched" as TranslationKey), v: s.matchedCount, c: GR },
-                    { l: t("reconcile.statUnmatched" as TranslationKey), v: s.unmatchedCount, c: s.unmatchedCount > 0 ? AM : "var(--sb-sub)" },
-                  ].map((stat) => (
-                    <div key={stat.l}>
-                      <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG, margin: 0 }}>{stat.l}</p>
-                      <p style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: stat.c ?? "var(--sb-text)", fontFamily: IN, margin: 0 }}>
-                        {stat.v}
-                      </p>
-                    </div>
-                  ))}
+                <div style={{ display: "flex", gap: 20, marginTop: 12, alignItems: "flex-end", justifyContent: "space-between" }}>
+                  <div style={{ display: "flex", gap: 20 }}>
+                    {[
+                      { l: t("reconcile.statTotalRows" as TranslationKey), v: s.rowCount },
+                      { l: t("reconcile.statMatched" as TranslationKey), v: s.matchedCount, c: GR },
+                      { l: t("reconcile.statUnmatched" as TranslationKey), v: s.unmatchedCount, c: s.unmatchedCount > 0 ? AM : "var(--sb-sub)" },
+                    ].map((stat) => (
+                      <div key={stat.l}>
+                        <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG, margin: 0 }}>{stat.l}</p>
+                        <p style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: stat.c ?? "var(--sb-text)", fontFamily: IN, margin: 0 }}>
+                          {stat.v}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  {s.isReconciled && (
+                    <HKButton
+                      size="sm"
+                      variant="secondary"
+                      onClick={async () => {
+                        if (!confirm(`Undo reconciliation for ${s.bankAccount.name} (${fmtDate(s.periodFrom)} – ${fmtDate(s.periodTo)})? This will reverse any auto-posted journal entries and clear reconciledAt timestamps.`)) return;
+                        const res = await fetch("/api/reconcile/uncommit", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ statementId: s.id }),
+                        });
+                        const data = await res.json();
+                        if (!res.ok) { showToast(data.error ?? "Undo failed", false); return; }
+                        showToast(`Reversed ${data.journalsReversed} journal entries.`, true);
+                        loadHistory();
+                      }}
+                    >
+                      Undo
+                    </HKButton>
+                  )}
                 </div>
               </div>
             ))}
@@ -543,6 +595,24 @@ export default function ReconcilePage() {
                       <p style={{ fontSize: TYPE.caption, color: GR, fontFamily: SG, marginTop: 2 }}>
                         ✓ {row.reason}
                       </p>
+                    )}
+                    {!row.matchedPaymentId && (
+                      <div style={{ marginTop: 8, maxWidth: 280 }}>
+                        <HKSelect
+                          size="sm"
+                          placeholder="Categorize (optional)"
+                          value={categorized[row.id] ?? ""}
+                          onValueChange={(v) => setRowCategory(row.id, v || null)}
+                        >
+                          {RECONCILE_CATEGORY_OPTIONS
+                            .filter((opt) => opt.validFor.includes(row.direction))
+                            .map((opt, i) => (
+                              <HKSelectItem key={`${opt.code}-${i}`} value={opt.code}>
+                                {opt.label}
+                              </HKSelectItem>
+                            ))}
+                        </HKSelect>
+                      </div>
                     )}
                   </div>
                   <div style={{ textAlign: "right", flexShrink: 0 }}>
