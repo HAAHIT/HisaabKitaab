@@ -11,6 +11,8 @@ substitutions:
   _DATABASE_URL_SECRET: solobooks-database-url
   _DIRECT_URL_SECRET: solobooks-direct-url
   _JWT_SECRET_SECRET: solobooks-jwt-secret
+  _SMTP_USER_SECRET: solobooks-smtp-user
+  _SMTP_PASS_SECRET: solobooks-smtp-pass
   _GCS_BUCKET_NAME: solobooks-project-78db3a10-dbdd-4944-88b
   _CPU: "1"
   _MEMORY: 1Gi
@@ -128,8 +130,8 @@ steps:
       - --min-instances=${_MIN_INSTANCES}
       - --max-instances=${_MAX_INSTANCES}
       - --ingress=${_INGRESS}
-      - --set-secrets=DATABASE_URL=${_DATABASE_URL_SECRET}:latest,JWT_SECRET=${_JWT_SECRET_SECRET}:latest
-      - --set-env-vars=NODE_ENV=production,OBJECT_STORAGE_PROVIDER=gcs,GCS_BUCKET_NAME=${_GCS_BUCKET_NAME},GCS_PROJECT_ID=$PROJECT_ID,DEFAULT_TENANT_ID=cmnd84lsk0000i7x4y74rrtss,NEXT_PUBLIC_SITE_URL=https://solobooks.in,NEXT_PUBLIC_SENTRY_DSN=https://1c151f7e829315fe690fb7919572d361@o4511449126993920.ingest.us.sentry.io/4511449136168960,SENTRY_DSN=https://1c151f7e829315fe690fb7919572d361@o4511449126993920.ingest.us.sentry.io/4511449136168960
+      - --set-secrets=DATABASE_URL=${_DATABASE_URL_SECRET}:latest,JWT_SECRET=${_JWT_SECRET_SECRET}:latest,SMTP_USER=${_SMTP_USER_SECRET}:latest,SMTP_PASS=${_SMTP_PASS_SECRET}:latest
+      - --set-env-vars=NODE_ENV=production,OBJECT_STORAGE_PROVIDER=gcs,GCS_BUCKET_NAME=${_GCS_BUCKET_NAME},GCS_PROJECT_ID=$PROJECT_ID,DEFAULT_TENANT_ID=cmnd84lsk0000i7x4y74rrtss,NEXT_PUBLIC_SITE_URL=https://solobooks.in,NEXT_PUBLIC_SENTRY_DSN=https://1c151f7e829315fe690fb7919572d361@o4511449126993920.ingest.us.sentry.io/4511449136168960,SENTRY_DSN=https://1c151f7e829315fe690fb7919572d361@o4511449126993920.ingest.us.sentry.io/4511449136168960,SMTP_HOST=smtp.msg91.com,SMTP_PORT=587,MAIL_FROM=SoloBooks <noreply@solobooks.in>
       - --allow-unauthenticated
 
   - id: smoke-test-health

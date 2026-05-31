@@ -127,7 +127,7 @@ export default function TenantDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [resetLink, setResetLink] = useState<{ userName: string; url: string; expiresAt: string } | null>(null);
+  const [resetLink, setResetLink] = useState<{ userName: string; userId: string; userEmail: string | null; url: string; expiresAt: string; emailDelivered?: boolean; emailReason?: string } | null>(null);
 
   const load = () => {
     if (!id) return;
@@ -174,12 +174,24 @@ export default function TenantDetailPage() {
     }
   };
 
-  const issueReset = async (userId: string, userName: string) => {
+  const issueReset = async (userId: string, userName: string, sendEmail: boolean) => {
     setBusy(`reset:${userId}`);
     setActionError(null);
     try {
-      const j = await jsonOrThrow(await fetch(`/api/admin/users/${userId}/reset-password`, { method: "POST" }));
-      setResetLink({ userName, url: j.data.resetUrl, expiresAt: j.data.expiresAt });
+      const j = await jsonOrThrow(await fetch(`/api/admin/users/${userId}/reset-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sendEmail }),
+      }));
+      setResetLink({
+        userName,
+        userId,
+        userEmail: j.data.userEmail,
+        url: j.data.resetUrl,
+        expiresAt: j.data.expiresAt,
+        emailDelivered: j.data.emailDelivered,
+        emailReason: j.data.emailReason,
+      });
     } catch (e) {
       setActionError(String(e instanceof Error ? e.message : e));
     } finally {
@@ -324,12 +336,35 @@ export default function TenantDetailPage() {
           <div style={{ fontSize: 11, color: "var(--sb-muted)", marginBottom: 8 }}>
             Expires {fmtDateTime(resetLink.expiresAt)}. Share over a secure channel.
           </div>
-          <input
-            readOnly
-            value={resetLink.url}
-            onFocus={(e) => e.currentTarget.select()}
-            style={{ width: "100%", fontFamily: "monospace", fontSize: 12, padding: 6, border: "1px solid var(--sb-border)", borderRadius: 6 }}
-          />
+          {resetLink.emailDelivered === true ? (
+            <div style={{ fontSize: 12, color: "#15803d", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "6px 8px", marginBottom: 8 }}>
+              ✓ Email sent to {resetLink.userEmail}. The link is not shown here for security.
+            </div>
+          ) : (
+            <>
+              {resetLink.emailDelivered === false && resetLink.emailReason && (
+                <div style={{ fontSize: 12, color: "#b91c1c", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, padding: "6px 8px", marginBottom: 8 }}>
+                  Email not sent ({resetLink.emailReason}). Copy the link below and share it manually.
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <input
+                  readOnly
+                  value={resetLink.url}
+                  onFocus={(e) => e.currentTarget.select()}
+                  style={{ flex: 1, fontFamily: "monospace", fontSize: 12, padding: 6, border: "1px solid var(--sb-border)", borderRadius: 6 }}
+                />
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(resetLink.url);
+                  }}
+                  style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--sb-border)", background: "white", fontSize: 12, cursor: "pointer" }}
+                >
+                  Copy
+                </button>
+              </div>
+            </>
+          )}
           <button
             onClick={() => setResetLink(null)}
             style={{ marginTop: 8, padding: "4px 10px", borderRadius: 6, border: "1px solid var(--sb-border)", background: "white", fontSize: 12, cursor: "pointer" }}
@@ -418,12 +453,20 @@ export default function TenantDetailPage() {
                           {busy === `user:${u.id}` ? "…" : u.isActive ? "Deactivate" : "Activate"}
                         </button>
                         <button
-                          onClick={() => issueReset(u.id, u.name)}
+                          onClick={() => issueReset(u.id, u.name, false)}
                           disabled={busy === `reset:${u.id}` || !u.email}
-                          title={!u.email ? "User has no email" : ""}
-                          style={{ padding: "3px 8px", borderRadius: 6, border: "1px solid var(--sb-border)", background: "var(--sb-card)", fontSize: 11, cursor: u.email ? "pointer" : "not-allowed", opacity: u.email ? 1 : 0.5, marginRight: 6 }}
+                          title={!u.email ? "User has no email" : "Generate reset link (copy/share manually)"}
+                          style={{ padding: "3px 8px", borderRadius: "6px 0 0 6px", border: "1px solid var(--sb-border)", background: "var(--sb-card)", fontSize: 11, cursor: u.email ? "pointer" : "not-allowed", opacity: u.email ? 1 : 0.5 }}
                         >
-                          {busy === `reset:${u.id}` ? "…" : "Reset password"}
+                          {busy === `reset:${u.id}` ? "…" : "Reset link"}
+                        </button>
+                        <button
+                          onClick={() => issueReset(u.id, u.name, true)}
+                          disabled={busy === `reset:${u.id}` || !u.email}
+                          title={!u.email ? "User has no email" : `Generate reset link and email it to ${u.email}`}
+                          style={{ padding: "3px 8px", borderRadius: "0 6px 6px 0", border: "1px solid var(--sb-border)", borderLeft: "none", background: "var(--sb-card)", fontSize: 11, cursor: u.email ? "pointer" : "not-allowed", opacity: u.email ? 1 : 0.5, marginRight: 6 }}
+                        >
+                          Email
                         </button>
                         <button
                           onClick={() => impersonate(u.id, u.name, true)}

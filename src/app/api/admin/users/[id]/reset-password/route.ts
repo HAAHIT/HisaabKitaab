@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { logError, logInfo, getRequestId } from "@/lib/observability";
 import { resolveSuperAdminSession } from "@/lib/session-server";
 import { publicUrl } from "@/lib/public-url";
+import { sendMail } from "@/lib/mail";
+import { buildPasswordResetEmail } from "@/lib/mail-templates";
 
 const TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour — operator-initiated, slightly longer than self-serve
 
@@ -21,6 +23,14 @@ export async function POST(
   if (!session) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { id } = await context.params;
+
+  let body: { sendEmail?: unknown } = {};
+  try {
+    body = await request.json();
+  } catch {
+    // empty body OK — defaults to sendEmail=false
+  }
+  const sendEmail = body.sendEmail === true;
 
   try {
     const user = await prisma.user.findUnique({
@@ -64,6 +74,30 @@ export async function POST(
       expiresAt: expiresAt.toISOString(),
     });
 
+    let emailDelivered = false;
+    let emailReason: string | undefined;
+    if (sendEmail) {
+      if (!user.email) {
+        emailReason = "user_has_no_email";
+      } else {
+        const { subject, text, html } = buildPasswordResetEmail({
+          recipientName: user.name,
+          resetUrl: resetUrl.toString(),
+          expiresAt,
+          initiatedByAdmin: true,
+        });
+        const mailResult = await sendMail({
+          to: user.email,
+          subject,
+          text,
+          html,
+          event: "auth.password-reset.admin",
+        });
+        emailDelivered = mailResult.delivered;
+        emailReason = mailResult.reason;
+      }
+    }
+
     return NextResponse.json({
       data: {
         userId: user.id,
@@ -71,6 +105,8 @@ export async function POST(
         userName: user.name,
         resetUrl: resetUrl.toString(),
         expiresAt: expiresAt.toISOString(),
+        emailDelivered,
+        emailReason,
       },
     });
   } catch (error) {

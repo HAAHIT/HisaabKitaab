@@ -3,6 +3,8 @@ import { type NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { publicUrl } from "@/lib/public-url";
+import { sendMail } from "@/lib/mail";
+import { buildPasswordResetEmail } from "@/lib/mail-templates";
 import {
   attachRequestIdHeader,
   getClientIp,
@@ -63,7 +65,7 @@ export async function POST(request: NextRequest) {
           { phone: credential },
         ],
       },
-      select: { id: true, email: true, phone: true },
+      select: { id: true, email: true, phone: true, name: true },
     });
 
     if (!user) {
@@ -93,8 +95,6 @@ export async function POST(request: NextRequest) {
 
     const resetUrl = buildResetUrl(request, rawToken);
 
-    // TODO: integrate transactional email provider. For now the link is returned
-    // in dev for testing. Never log the raw token or resetUrl in production.
     logInfo("auth.forgot-password.token_issued", {
       requestId,
       clientIp,
@@ -102,7 +102,34 @@ export async function POST(request: NextRequest) {
       expiresAt: expiresAt.toISOString(),
     });
 
-    if (process.env.NODE_ENV !== "production") {
+    // Send email (only if recipient has an email and SMTP is configured).
+    // The genericResponse is returned regardless to prevent enumeration.
+    if (user.email) {
+      const { subject, text, html } = buildPasswordResetEmail({
+        recipientName: user.name,
+        resetUrl,
+        expiresAt,
+        initiatedByAdmin: false,
+      });
+      const mailResult = await sendMail({
+        to: user.email,
+        subject,
+        text,
+        html,
+        event: "auth.password-reset.self-serve",
+      });
+      if (!mailResult.delivered) {
+        logWarn("auth.forgot-password.mail_undelivered", {
+          requestId,
+          userId: user.id,
+          reason: mailResult.reason,
+        });
+      }
+    }
+
+    // Dev fallback: surface the link in the response when SMTP isn't configured
+    // so local testing isn't blocked.
+    if (process.env.NODE_ENV !== "production" && !process.env.SMTP_HOST) {
       return attachRequestIdHeader(
         NextResponse.json(
           {
