@@ -188,7 +188,7 @@ export default function BankingPage() {
         />
 
         {/* Summary cards */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 20 }}>
           {[
             { label: t("banking.bankBalance"), value: totalBank, color: PU, icon: <BankIcon /> },
             { label: t("banking.cashInHand"), value: totalCash, color: GR, icon: <CashIcon /> },

@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { type NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/api-rate-limit";
+import { publicUrl } from "@/lib/public-url";
 import {
   attachRequestIdHeader,
   getClientIp,
@@ -20,14 +21,8 @@ function hashToken(token: string) {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
-function buildResetUrl(token: string) {
-  // Use the canonical app origin from env to avoid request.url returning an
-  // internal cluster hostname (e.g. 10.x.x.x) in production deployments.
-  const base =
-    process.env.APP_URL ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    "http://localhost:3000";
-  const url = new URL("/reset-password", base);
+function buildResetUrl(request: NextRequest, token: string) {
+  const url = publicUrl(request, "/reset-password");
   url.searchParams.set("token", token);
   return url.toString();
 }
@@ -96,7 +91,7 @@ export async function POST(request: NextRequest) {
       });
     });
 
-    const resetUrl = buildResetUrl(rawToken);
+    const resetUrl = buildResetUrl(request, rawToken);
 
     // TODO: integrate transactional email provider. For now the link is returned
     // in dev for testing. Never log the raw token or resetUrl in production.

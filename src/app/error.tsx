@@ -1,8 +1,11 @@
 "use client";
 
+import { useEffect } from "react";
+import * as Sentry from "@sentry/nextjs";
 import { HKButton } from "@/components/ui/HKButton";
 
 export default function RootError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+  useEffect(() => { Sentry.captureException(error); }, [error]);
 
   return (
     <div className="flex justify-center mt-20 p-4">

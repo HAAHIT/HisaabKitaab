@@ -23,6 +23,7 @@ import {
   logWarn,
 } from "@/lib/observability";
 import { resolvePublicTenant } from "@/lib/api-tenant";
+import { publicUrl } from "@/lib/public-url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -54,15 +55,15 @@ function redirectWithRequestId(requestId: string, url: URL, status = 303) {
 }
 
 function getLoginErrorUrl(request: NextRequest, errorCode: string) {
-  const url = new URL("/login", request.url);
+  const url = publicUrl(request, "/login");
   url.searchParams.set("error", errorCode);
   return url;
 }
 
 function getPostLoginUrl(request: NextRequest, role: string) {
-  return new URL(
-    role === "CUSTOMER" ? "/measurements/upload" : "/dashboard",
-    request.url
+  return publicUrl(
+    request,
+    role === "CUSTOMER" ? "/measurements/upload" : "/dashboard"
   );
 }
 

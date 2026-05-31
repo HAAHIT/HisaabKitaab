@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { GET } from "./route";
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { resolveReadTenant } from "@/lib/api-tenant";
+import { resolveSession } from "@/lib/api-tenant";
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -16,7 +16,7 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 vi.mock("@/lib/api-tenant", () => ({
-  resolveReadTenant: vi.fn(),
+  resolveSession: vi.fn(),
 }));
 
 // Mock global fetch
@@ -35,9 +35,9 @@ describe("Assets API Security - Open Redirect Fix", () => {
     const mockImageData = new Uint8Array([0, 1, 2, 3]);
 
     // Mock tenant resolution
-    (resolveReadTenant as import("vitest").Mock).mockReturnValue({
+    (resolveSession as import("vitest").Mock).mockReturnValue({
       ok: true,
-      tenantId,
+      session: { tenantId, userId: "user-123", role: "CUSTOMER" },
     });
 
     // Mock asset lookup
@@ -93,7 +93,7 @@ describe("Assets API Security - Open Redirect Fix", () => {
     const assetId = "test-asset-id";
     const tenantId = "test-tenant-id";
 
-    (resolveReadTenant as import("vitest").Mock).mockReturnValue({ ok: true, tenantId });
+    (resolveSession as import("vitest").Mock).mockReturnValue({ ok: true, session: { tenantId, userId: "user-123", role: "CUSTOMER" } });
     (prisma.mediaAsset.findUnique as import("vitest").Mock).mockResolvedValue({
       id: assetId,
       kind: "MEASUREMENT_PHOTO",
@@ -123,7 +123,7 @@ describe("Assets API Security - Open Redirect Fix", () => {
     const assetId = "test-asset-id";
     const tenantId = "test-tenant-id";
 
-    (resolveReadTenant as import("vitest").Mock).mockReturnValue({ ok: true, tenantId });
+    (resolveSession as import("vitest").Mock).mockReturnValue({ ok: true, session: { tenantId, userId: "user-123", role: "CUSTOMER" } });
     (prisma.mediaAsset.findUnique as import("vitest").Mock).mockResolvedValue({
       id: assetId,
       kind: "MEASUREMENT_PHOTO",

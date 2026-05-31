@@ -67,6 +67,22 @@ export function logWarn(event: string, context?: LogContext) {
 
 export function logError(event: string, context?: LogContext) {
   writeLog("ERROR", event, context);
+  // Forward to Sentry if configured. Dynamic import so client bundles don't pull
+  // the SDK when this module is used in non-Sentry contexts.
+  if (process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN) {
+    import("@sentry/nextjs")
+      .then((Sentry) => {
+        const err = context?.error;
+        if (err instanceof Error) {
+          Sentry.captureException(err, { tags: { event }, extra: context });
+        } else {
+          Sentry.captureMessage(event, { level: "error", extra: context });
+        }
+      })
+      .catch(() => {
+        // Sentry import failed (e.g. SDK absent) — non-fatal
+      });
+  }
 }
 
 export function getRequestId(request: RequestLike) {

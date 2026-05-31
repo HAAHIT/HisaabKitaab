@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { type TranslationKey } from "@/lib/i18n/translations";
 import { useInstallPrompt } from "@/hooks/useInstallPrompt";
-import { SetupWizard } from "@/components/onboarding/SetupWizard";
 import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { HKButton } from "@/components/ui/HKButton";
 import { C, OR, PU, GR, AM, SG, IN, TYPE, DISPLAY, BRAND, fmtFull } from "@/components/ui/hk-design";
@@ -57,11 +56,10 @@ interface DashboardData {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function useIsMobile() {
-  const [m, setM] = useState(
-    typeof window !== "undefined" ? window.innerWidth < 768 : false
-  );
+  const [m, setM] = useState(false);
   useEffect(() => {
     const h = () => setM(window.innerWidth < 768);
+    h();
     window.addEventListener("resize", h);
     return () => window.removeEventListener("resize", h);
   }, []);
@@ -163,7 +161,7 @@ function CashFlowCard({ data, isMobile }: { data: DashboardData; isMobile: boole
       boxShadow: "var(--sb-shadow-card)",
       padding: isMobile ? "18px" : "22px",
     }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+      <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", justifyContent: "space-between", alignItems: isMobile ? "flex-start" : "center", gap: isMobile ? 8 : 0, marginBottom: 18 }}>
         <div>
           <h2 style={{ fontFamily: DISPLAY, fontSize: 17, fontWeight: 600, color: "var(--sb-text)", margin: "0 0 2px" }}>
             {t("dash.cashFlowTitle" as TranslationKey)}
@@ -172,7 +170,7 @@ function CashFlowCard({ data, isMobile }: { data: DashboardData; isMobile: boole
             {t("dash.lastMonths" as TranslationKey).replace("{count}", String(cashFlow.length))}
           </p>
         </div>
-        <div style={{ display: "flex", gap: 14 }}>
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
             <span style={{ width: 8, height: 8, borderRadius: 2, background: GR, display: "inline-block" }}/>
             <span style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", fontFamily: SG }}>{t("dash.milaLabel" as TranslationKey)}</span>
@@ -234,7 +232,7 @@ function CashFlowCard({ data, isMobile }: { data: DashboardData; isMobile: boole
 
 // ── Recent Activity Card ──────────────────────────────────────────────────────
 
-function RecentActivityCard({ data, onNavigate }: { data: DashboardData; onNavigate: () => void }) {
+function RecentActivityCard({ data, onNavigate, isMobile }: { data: DashboardData; onNavigate: () => void; isMobile: boolean }) {
   const { t } = useLanguage();
   const payments = (data.recentPayments ?? []).filter(p => p.party);
 
@@ -243,7 +241,7 @@ function RecentActivityCard({ data, onNavigate }: { data: DashboardData; onNavig
       background: "var(--sb-card)", borderRadius: 16,
       border: "1px solid var(--sb-border)",
       boxShadow: "var(--sb-shadow-card)",
-      padding: "22px",
+      padding: isMobile ? "16px" : "22px",
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <h2 style={{ fontFamily: DISPLAY, fontSize: 17, fontWeight: 600, color: "var(--sb-text)", margin: 0 }}>
@@ -390,7 +388,6 @@ export default function DashboardPage() {
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingReady, setOnboardingReady] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -438,7 +435,6 @@ export default function DashboardPage() {
         setHasBankAccount(false);
       }
       setData(d);
-      setShowOnboarding(!d.isOnboardingComplete);
       setOnboardingReady(true);
     } catch (err: unknown) {
       if (err instanceof Error && err.name === "AbortError") return;
@@ -493,10 +489,6 @@ export default function DashboardPage() {
     );
   }
 
-  if (showOnboarding) {
-    return <SetupWizard onComplete={() => { setShowOnboarding(false); void fetchDashboard(); }}/>;
-  }
-
   if (!data) return null;
 
   const now = new Date();
@@ -524,8 +516,9 @@ export default function DashboardPage() {
           marginBottom: 20, padding: "12px 16px", borderRadius: 14,
           background: C.infoSoft, border: `1px solid ${PU}28`,
           display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+          flexWrap: "wrap",
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, flex: 1 }}>
             <span style={{ fontSize: 22 }}>📲</span>
             <div>
               <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>{t("install.banner")}</p>
@@ -548,10 +541,10 @@ export default function DashboardPage() {
             background: "var(--sb-primary-soft)",
             border: "1px solid var(--sb-border)",
             display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
-            cursor: "pointer",
+            cursor: "pointer", flexWrap: "wrap",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, flex: 1 }}>
             <span style={{ fontSize: 20 }}>📁</span>
             <div>
               <p style={{ fontSize: TYPE.body, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>{t("dash.tallyNudgeTitle")}</p>
@@ -663,7 +656,7 @@ export default function DashboardPage() {
         marginBottom: 16,
       }}>
         <CashFlowCard data={data} isMobile={isMobile} />
-        <RecentActivityCard data={data} onNavigate={() => router.push("/payments")} />
+        <RecentActivityCard data={data} onNavigate={() => router.push("/payments")} isMobile={isMobile} />
       </div>
 
       {/* Quick links */}

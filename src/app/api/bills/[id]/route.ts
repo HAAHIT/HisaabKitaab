@@ -38,6 +38,7 @@ const ALLOWED_BILL_PATCH_KEYS = new Set([
   "status",
   "isInterState",
   "hsnCode",
+  "billDate",
 ]);
 
 const ALLOWED_BILL_PATCH_STATUSES = new Set(["DRAFT", "FINAL"]);

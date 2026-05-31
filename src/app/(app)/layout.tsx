@@ -22,6 +22,7 @@ export default async function AppLayout({
   // Show wizard only when the tenant column says onboarding is incomplete.
   // /api/onboarding/complete writes to this column.
   const showOnboarding = tenant?.isOnboardingComplete === false;
+  const showTour = !showOnboarding && settings?.tourCompleted !== true;
   const initialBusinessName =
     typeof settings?.companyName === "string" ? (settings.companyName as string) : undefined;
 
@@ -29,6 +30,7 @@ export default async function AppLayout({
     <AppShellWrapper
       user={session}
       showOnboarding={showOnboarding}
+      showTour={showTour}
       initialBusinessName={initialBusinessName}
     >
       {children}

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { logError, logInfo, getRequestId } from "@/lib/observability";
 import { resolveSuperAdminSession } from "@/lib/session-server";
+import { publicUrl } from "@/lib/public-url";
 
 const TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour — operator-initiated, slightly longer than self-serve
 
@@ -53,7 +54,7 @@ export async function POST(
       },
     });
 
-    const resetUrl = new URL("/reset-password", request.url);
+    const resetUrl = publicUrl(request, "/reset-password");
     resetUrl.searchParams.set("token", rawToken);
 
     logInfo("admin.users.reset-password.issued", {

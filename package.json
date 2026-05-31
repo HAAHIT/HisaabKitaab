@@ -31,6 +31,7 @@
     "@heroui/react": "^2.8.10",
     "@prisma/adapter-pg": "^7.5.0",
     "@prisma/client": "^7.8.0",
+    "@sentry/nextjs": "^10.53.1",
     "bcryptjs": "^3.0.3",
     "dexie": "^4.3.0",
     "dotenv": "^17.3.1",

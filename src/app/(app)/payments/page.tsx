@@ -257,7 +257,7 @@ export default function PaymentsListPage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr 1fr",
+            gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr",
             gap: 10,
             marginBottom: 16,
           }}
@@ -605,9 +605,10 @@ export default function PaymentsListPage() {
                               <div
                                 style={{
                                   display: "flex",
+                                  flexDirection: isMobile ? "column" : "row",
                                   justifyContent: "space-between",
-                                  alignItems: "flex-start",
-                                  gap: 12,
+                                  alignItems: isMobile ? "stretch" : "flex-start",
+                                  gap: isMobile ? 8 : 12,
                                 }}
                               >
                                 <div style={{ minWidth: 0, flex: 1 }}>
@@ -710,6 +711,7 @@ export default function PaymentsListPage() {
                                     alignItems: "center",
                                     gap: 10,
                                     flexShrink: 0,
+                                    justifyContent: isMobile ? "flex-end" : undefined,
                                   }}
                                 >
                                   <p
@@ -719,6 +721,7 @@ export default function PaymentsListPage() {
                                       color: dirColor,
                                       fontFamily: IN,
                                       whiteSpace: "nowrap",
+                                      marginRight: isMobile ? "auto" : 0,
                                     }}
                                   >
                                     {isIncoming ? "+" : "-"}

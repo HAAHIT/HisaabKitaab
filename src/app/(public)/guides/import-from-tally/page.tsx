@@ -1,172 +1,201 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import "@/components/landing/landing.css";
+import { Nav } from "@/components/landing/Nav";
+import { Footer } from "@/components/landing/Footer";
+import { FAQ, type FaqItem } from "@/components/landing/FAQ";
+
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://solobooks.in";
+
+const FAQS: FaqItem[] = [
+  {
+    q: "Will my opening balances and history come across from Tally?",
+    a: "Yes. You export Masters (ledgers, parties, stock items) and Transactions (vouchers) from Tally as XML and upload both to SoloBooks. After import, your trial balance in SoloBooks should match Tally to the rupee.",
+  },
+  {
+    q: "In what order should I upload the Tally files?",
+    a: "Always upload Master.xml first, then DayBook.xml. Vouchers reference ledger and party names, so the masters must exist before the transactions are imported, otherwise SoloBooks will reject the mismatches.",
+  },
+  {
+    q: "Does importing from Tally create duplicate vouchers?",
+    a: "No. SoloBooks detects duplicates by matching voucher type, date, narration, and total amount, so re-running an import skips entries that already exist instead of duplicating them.",
+  },
+  {
+    q: "What happens if a voucher references a party that doesn't exist yet?",
+    a: "SoloBooks resolves parties by exact name first and then by phone number. If no match is found, it creates a new party record rather than failing the import.",
+  },
+];
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "HowTo",
+      name: "How to Import Data from TallyPrime into SoloBooks",
+      description:
+        "Migrate your existing ledgers, parties, and historical vouchers out of Tally and into SoloBooks.",
+      step: [
+        { "@type": "HowToStep", name: "Export Masters from Tally", text: "Open TallyPrime → Export > Masters → format XML. Generates Master.xml." },
+        { "@type": "HowToStep", name: "Export Vouchers", text: "Export > Transactions → date range → XML. Generates DayBook.xml." },
+        { "@type": "HowToStep", name: "Upload to SoloBooks", text: "Settings > Data Management > Import from Tally. Upload Master.xml then DayBook.xml." },
+        { "@type": "HowToStep", name: "Verify and Confirm", text: "Review the parsed summary and click Confirm Import." },
+      ],
+    },
+    {
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: "Home", item: SITE_URL },
+        { "@type": "ListItem", position: 2, name: "Guides", item: `${SITE_URL}/guides` },
+        { "@type": "ListItem", position: 3, name: "Import from Tally", item: `${SITE_URL}/guides/import-from-tally` },
+      ],
+    },
+  ],
+};
 
 export const metadata: Metadata = {
-  title: "How to Import Data from TallyPrime into SoloBooks | Guide",
-  description: "Learn step-by-step how to migrate existing ledgers, parties, and historical vouchers out of TallyPrime cleanly and seamlessly into SoloBooks.",
+  title: "Import Data from TallyPrime into SoloBooks — Guide",
+  description:
+    "Step-by-step guide to migrate ledgers, parties, and historical GST vouchers from Tally ERP 9 / TallyPrime into SoloBooks without data loss.",
+  keywords: [
+    "import from Tally",
+    "Tally to SoloBooks",
+    "migrate Tally data",
+    "Tally XML import",
+    "Tally ledger import",
+  ],
+  alternates: { canonical: "/guides/import-from-tally" },
+  openGraph: {
+    title: "Import Tally Data into SoloBooks",
+    description:
+      "Migrate ledgers, parties, and vouchers from Tally into SoloBooks cleanly.",
+    type: "article",
+    url: "/guides/import-from-tally",
+  },
 };
 
 export default function ImportFromTallyGuide() {
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "HowTo",
-    name: "How to Import Data from TallyPrime into SoloBooks",
-    description:
-      "Migrate your existing ledgers, parties, and historical vouchers out of Tally and into our cloud platform.",
-    step: [
-      {
-        "@type": "HowToStep",
-        name: "Export Masters from Tally",
-        text: "Open TallyPrime and navigate to Export > Masters. Ensure the export format is set to XML (Data Interchange). This will generate a Master.xml file.",
-      },
-      {
-        "@type": "HowToStep",
-        name: "Export Vouchers (Historical Data)",
-        text: "Navigate to Export > Transactions or a specific Day Book/Register. Select the date range and export as XML (Data Interchange). This will give you DayBook.xml.",
-      },
-      {
-        "@type": "HowToStep",
-        name: "Upload to SoloBooks",
-        text: "Log into your SoloBooks dashboard. Navigate to Settings > Data Management > Import from Tally. Upload the Master.xml first, followed by the DayBook.xml.",
-      },
-      {
-        "@type": "HowToStep",
-        name: "Verify and Confirm",
-        text: "Once the parsing is complete, review the summary of imported ledgers and vouchers. Click Confirm Import to permanently write these records into your cloud database.",
-      },
-    ],
-  };
+  const steps = [
+    {
+      n: 1,
+      t: "Export Masters from Tally",
+      d: (
+        <>
+          Open TallyPrime → <strong>Export → Masters</strong>. Set format to{" "}
+          <strong>XML (Data Interchange)</strong>. Generates{" "}
+          <code className="font-mono text-[13px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded">Master.xml</code>{" "}
+          containing all Ledgers, Stock Items, and Party details.
+        </>
+      ),
+    },
+    {
+      n: 2,
+      t: "Export Vouchers (historical data)",
+      d: (
+        <>
+          Navigate to <strong>Export → Transactions</strong> or a specific Day Book / Register. Pick a date range and export as <strong>XML</strong>. Produces{" "}
+          <code className="font-mono text-[13px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded">DayBook.xml</code>.
+        </>
+      ),
+    },
+    {
+      n: 3,
+      t: "Upload to SoloBooks",
+      d: (
+        <>
+          In your dashboard go to <strong>Settings → Data Management → Import from Tally</strong>. Upload <code className="font-mono text-[13px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded">Master.xml</code> first, then <code className="font-mono text-[13px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded">DayBook.xml</code>. Our parser handles structural mapping, balance validation, and GST checks automatically.
+        </>
+      ),
+    },
+    {
+      n: 4,
+      t: "Verify and confirm",
+      d: (
+        <>
+          Review the summary of imported ledgers and vouchers. Click <strong>Confirm Import</strong> to write the records to your account. Trial balances should match Tally exactly.
+        </>
+      ),
+    },
+  ];
 
   return (
-    <div className="min-h-screen relative overflow-hidden bg-white py-16 px-4 sm:px-6 lg:px-8 font-sans">
-      {/* Background decorations for glassmorphism */}
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-teal-200/50 rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute top-[40%] right-[-10%] w-[30%] h-[50%] bg-indigo-200/40 rounded-full blur-[100px] pointer-events-none" />
+    <main className="solobooks-landing min-h-screen relative">
+      <Nav />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
 
-      <article className="relative max-w-4xl mx-auto bg-white/70 backdrop-blur-md border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-3xl p-8 sm:p-12">
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-        />
-
-        <header className="mb-10 text-center">
-          <h1 className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight mb-6">
-            How to Import Data from{" "}
-            <span className="text-teal-600">TallyPrime</span> into SoloBooks
+      <section className="relative pt-32 pb-16 overflow-hidden">
+        <div className="absolute inset-0 bg-grid opacity-40" aria-hidden />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(37,99,235,0.08),transparent_60%)]" aria-hidden />
+        <div className="relative mx-auto max-w-4xl px-5 sm:px-8 text-center">
+          <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-[12px] font-medium text-blue-700 ring-1 ring-blue-200">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="m5 12 5 5L20 7"/></svg>
+            Guide · Tally Import
+          </span>
+          <h1 className="mt-5 font-display text-[40px] sm:text-[60px] font-medium leading-[1.05] tracking-tight text-slate-900">
+            Move from Tally<br />to SoloBooks.
           </h1>
-          <p className="text-lg text-slate-600 max-w-2xl mx-auto font-medium leading-relaxed">
-            A comprehensive guide to migrating your existing ledgers, parties,
-            and historical vouchers out of Tally and into our cloud platform.
+          <p className="mt-5 text-[16px] sm:text-[17px] text-slate-500 max-w-2xl mx-auto leading-relaxed">
+            Migrate ledgers, parties, and historical vouchers out of TallyPrime — your trial balances will match to the rupee.
           </p>
-        </header>
+        </div>
+      </section>
 
-        <div className="prose prose-slate prose-teal max-w-none prose-headings:font-semibold prose-a:text-teal-600 hover:prose-a:text-teal-500 prose-p:leading-relaxed">
-          <h2 className="text-2xl font-bold text-slate-800 mb-4 mt-8">
-            Why Migrate to SoloBooks?
-          </h2>
-          <p className="text-slate-600 mb-8">
-            Moving from traditional desktop software like TallyPrime to a modern
-            cloud-based solution like SoloBooks gives you real-time access to
-            your financial data, anywhere, anytime. Our system is designed
-            specifically for Indian MSMEs to streamline their workflow.
-          </p>
+      <article className="relative mx-auto max-w-3xl px-5 sm:px-8 pb-24">
+        <h2 className="font-display text-[28px] sm:text-[34px] font-medium tracking-tight text-slate-900 mt-8 mb-3">
+          Why migrate to SoloBooks?
+        </h2>
+        <p className="text-[15.5px] text-slate-600 leading-relaxed">
+          Moving from desktop Tally to a cloud-native platform gives you real-time access to your books anywhere — and tools built specifically for Indian MSMEs: GST, Udhar Khata, multilingual receipts, party reminders, and a workflow your CA already understands.
+        </p>
 
-          <h2 className="text-2xl font-bold text-slate-800 mb-6 mt-12">
-            Step-by-Step Import Process
-          </h2>
+        <h2 className="font-display text-[28px] sm:text-[34px] font-medium tracking-tight text-slate-900 mt-14 mb-6">
+          Step-by-step import
+        </h2>
 
-          <div className="space-y-6 mt-8">
-            <section className="bg-white/50 rounded-2xl p-6 md:p-8 border border-teal-50 shadow-sm backdrop-blur-sm transition-all hover:bg-white/80 hover:shadow-md">
-              <h3 className="text-xl font-bold text-teal-800 mt-0 mb-3 flex items-center gap-3">
-                <span className="flex-shrink-0 w-8 h-8 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-sm">
-                  1
-                </span>
-                Step 1: Export Masters from Tally
-              </h3>
-              <p className="text-slate-600 mb-0 pl-11">
-                Open TallyPrime and navigate to <strong>Export &gt; Masters</strong>
-                . Ensure the export format is set to{" "}
-                <strong>XML (Data Interchange)</strong>. This will generate a{" "}
-                <code className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded text-sm whitespace-nowrap">
-                  Master.xml
-                </code>{" "}
-                file containing all your Ledgers, Stock Items, and Party details.
+        <div className="space-y-6 mb-10">
+          {steps.map((s) => (
+            <div key={s.n} className="flex gap-5 rounded-2xl border border-slate-200 bg-white p-6">
+              <div className="flex-shrink-0 h-11 w-11 rounded-full bg-blue-50 ring-1 ring-blue-200 text-blue-700 flex items-center justify-center font-display text-[20px] font-semibold">
+                {s.n}
+              </div>
+              <div>
+                <h3 className="text-[18px] font-semibold text-slate-900 mb-1.5">{s.t}</h3>
+                <p className="text-[14.5px] text-slate-600 leading-relaxed mb-0">{s.d}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="rounded-2xl border border-blue-200 bg-blue-50/40 p-5 my-8">
+          <div className="flex gap-3">
+            <div className="flex-shrink-0 grid place-items-center h-9 w-9 rounded-full bg-blue-100 text-blue-700">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>
+            </div>
+            <div>
+              <p className="text-[13px] font-semibold text-blue-900 uppercase tracking-wider">Tip</p>
+              <p className="mt-1 text-[14px] text-blue-900/80 leading-relaxed">
+                Always upload <strong>Master.xml first</strong>. Vouchers reference ledgers and party names — if those don&apos;t exist yet, the import will reject mismatches.
               </p>
-            </section>
-
-            <section className="bg-white/50 rounded-2xl p-6 md:p-8 border border-teal-50 shadow-sm backdrop-blur-sm transition-all hover:bg-white/80 hover:shadow-md">
-              <h3 className="text-xl font-bold text-teal-800 mt-0 mb-3 flex items-center gap-3">
-                <span className="flex-shrink-0 w-8 h-8 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-sm">
-                  2
-                </span>
-                Step 2: Export Vouchers (Historical Data)
-              </h3>
-              <p className="text-slate-600 mb-0 pl-11">
-                Similarly, navigate to{" "}
-                <strong>Export &gt; Transactions</strong> or a specific Day
-                Book/Register. Select the date range you wish to migrate and
-                export as <strong>XML (Data Interchange)</strong>. This will give
-                you{" "}
-                <code className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded text-sm whitespace-nowrap">
-                  DayBook.xml
-                </code>{" "}
-                containing your historical vouchers.
-              </p>
-            </section>
-
-            <section className="bg-white/50 rounded-2xl p-6 md:p-8 border border-teal-50 shadow-sm backdrop-blur-sm transition-all hover:bg-white/80 hover:shadow-md">
-              <h3 className="text-xl font-bold text-teal-800 mt-0 mb-3 flex items-center gap-3">
-                <span className="flex-shrink-0 w-8 h-8 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-sm">
-                  3
-                </span>
-                Step 3: Upload to SoloBooks
-              </h3>
-              <p className="text-slate-600 mb-0 pl-11">
-                Log into your SoloBooks dashboard. Navigate to{" "}
-                <strong>Settings &gt; Data Management &gt; Import from Tally</strong>
-                . Upload the{" "}
-                <code className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded text-sm whitespace-nowrap">
-                  Master.xml
-                </code>{" "}
-                first, followed by the{" "}
-                <code className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded text-sm whitespace-nowrap">
-                  DayBook.xml
-                </code>
-                . Our intelligent parser will automatically handle structural
-                mappings, balance validations, and GST compliance checks.
-              </p>
-            </section>
-
-            <section className="bg-white/50 rounded-2xl p-6 md:p-8 border border-teal-50 shadow-sm backdrop-blur-sm transition-all hover:bg-white/80 hover:shadow-md">
-              <h3 className="text-xl font-bold text-teal-800 mt-0 mb-3 flex items-center gap-3">
-                <span className="flex-shrink-0 w-8 h-8 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-sm">
-                  4
-                </span>
-                Step 4: Verify and Confirm
-              </h3>
-              <p className="text-slate-600 mb-0 pl-11">
-                Once the parsing is complete, review the summary of imported
-                ledgers and vouchers. Click <strong>Confirm Import</strong> to
-                permanently write these records into your cloud database. Your
-                trial balances should perfectly match!
-              </p>
-            </section>
+            </div>
           </div>
         </div>
 
-        <div className="mt-12 text-center pt-8 border-t border-gray-100">
-          <Link
-            href="/"
-            className="inline-flex items-center justify-center px-8 py-3.5 border border-transparent text-base font-medium rounded-full text-white bg-teal-600 hover:bg-teal-700 shadow-lg shadow-teal-200 transition-all duration-200 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500"
-          >
-            Go to Dashboard
+        <div className="mt-14 text-center pt-10 border-t border-slate-200">
+          <Link href="/register" className="btn-primary">
+            Start your migration
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
           </Link>
-          <p className="mt-8 text-xs text-slate-400 leading-relaxed max-w-2xl mx-auto">
-            *Tally and TallyPrime are registered trademarks of Tally Solutions Pvt. Ltd. <br />
-            SoloBooks is an independent product and is not affiliated with, endorsed by, or sponsored by Tally Solutions.
+          <p className="mt-6 text-[11.5px] text-slate-400 leading-relaxed max-w-2xl mx-auto">
+            Tally and TallyPrime are registered trademarks of Tally Solutions Pvt. Ltd. SoloBooks is an independent product, not affiliated with or endorsed by Tally Solutions.
           </p>
         </div>
       </article>
-    </div>
+
+      <FAQ items={FAQS} heading="Tally import — common questions" />
+
+      <Footer />
+    </main>
   );
 }

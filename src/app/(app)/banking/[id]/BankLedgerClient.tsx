@@ -193,7 +193,7 @@ export default function BankLedgerClient({
         </div>
 
         {/* Balance cards */}
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
           {((): { label: string; value: number; color: string; bg: string; isCount?: boolean }[] => [
             { label: t("banking.ledger.openingBalance"), value: account.openingBalance, color: AM, bg: C.warningSoft },
             { label: t("banking.ledger.currentBalance"), value: account.currentBalance, color: account.currentBalance >= 0 ? GR : C.negative, bg: account.currentBalance >= 0 ? C.positiveSoft : C.negativeSoft },

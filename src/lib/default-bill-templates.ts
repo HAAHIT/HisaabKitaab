@@ -42,10 +42,11 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
       { name: "HSN/SAC", type: "text", position: 1 },
       { name: "Qty", type: "number", position: 2 },
       { name: "Rate", type: "number", position: 3 },
+      { name: "GST %", type: "number", position: 4, default: 18 },
       {
         name: "Amount",
         type: "formula",
-        position: 4,
+        position: 5,
         formula: "{Qty} * {Rate}",
       },
     ],

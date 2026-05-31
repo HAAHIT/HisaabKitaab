@@ -13,7 +13,7 @@ import { shareBill } from "@/lib/share";
 import { GST_STATE_CODES } from "@/lib/gst-states";
 import {
   OR, GR, AM, SG, IN, TYPE, TOUCH,
-  HKToast, StatusChip,
+  HKToast, StatusChip, useIsMobile,
 } from "@/components/ui/hk-design";
 import { HKButton } from "@/components/ui/HKButton";
 
@@ -111,6 +111,18 @@ const PRINT_CSS = `
   .main-content-area { padding: 0 !important; min-height: 0 !important; }
   .bill-pad-row { display: none !important; }
   .bill-paper table th { white-space: normal !important; }
+  .bill-table-scroll { overflow: visible !important; }
+}
+@media screen and (max-width: 767px) {
+  .bill-toolbar-btn-label { display: none !important; }
+  .bill-toolbar-btn { padding: 0 10px !important; }
+  .bill-paper:not(.exporting) .bill-grid-2col { grid-template-columns: 1fr !important; }
+  .bill-paper:not(.exporting) .bill-grid-2col > div { border-right: none !important; border-bottom: 1px solid #999; }
+  .bill-paper:not(.exporting) .bill-grid-2col > div:last-child { border-bottom: none; }
+  .bill-paper:not(.exporting) .bill-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .bill-paper:not(.exporting) .bill-table-scroll > table { min-width: 560px; }
+  .bill-paper:not(.exporting) .bill-company-name { font-size: 20px !important; }
+  .bill-paper:not(.exporting) { font-size: 11px !important; }
 }
 `;
 
@@ -120,6 +132,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
   const router = useRouter();
   const { t } = useLanguage();
   const { id } = use(params);
+  const isMobile = useIsMobile();
 
   const [bill,          setBill]          = useState<BillDetail | null>(null);
   const [settings,      setSettings]      = useState<CompanySettings | null>(null);
@@ -212,7 +225,17 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
 
   const cols     = bill.template.columns as ColumnDef[];
   const isIS     = bill.isInterState === true;
-  const halfRate = bill.taxPercent / 2;
+
+  const taxRateCol = cols.find(c => c.type === "number" && ["tax rate","tax%","gst rate","gst%"].some(h => c.name.toLowerCase().includes(h)));
+  const rowRates = taxRateCol
+    ? (bill.rows as Record<string,string|number>[])
+        .map(r => typeof r[taxRateCol.id] === "number" ? r[taxRateCol.id] as number : 0)
+        .filter(r => r > 0)
+    : [];
+  const isMultiRate = new Set(rowRates).size > 1;
+  const uniformRate = !isMultiRate && rowRates.length > 0 ? rowRates[0] : bill.taxPercent;
+
+  const halfRate = uniformRate / 2;
   const halfTax  = Math.round((bill.taxAmount / 2) * 100) / 100;
   const cgst     = halfTax;
   const sgst     = halfTax;
@@ -222,15 +245,6 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
   const lastNumCol = [...cols].reverse().find(c => c.type === "formula" || c.type === "number");
   const numColCount = cols.filter(c => c.type === "number" || c.type === "formula").length;
   const templateHasHsnCol = cols.some(c => c.type === "text" && ["hsn","sac"].some(h => c.name.toLowerCase().includes(h)));
-
-  const isMultiRate = (() => {
-    const taxRateCol = cols.find(c => c.type === "number" && ["tax rate","tax%","gst rate","gst%"].some(h => c.name.toLowerCase().includes(h)));
-    if (!taxRateCol) return false;
-    const rates = (bill.rows as Record<string,string|number>[])
-      .map(r => typeof r[taxRateCol.id] === "number" ? r[taxRateCol.id] as number : 0)
-      .filter(r => r > 0);
-    return new Set(rates).size > 1;
-  })();
 
   const isVendor = bill.party?.type === "VENDOR";
 
@@ -252,7 +266,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
           backdropFilter: "blur(12px)",
         }}
       >
-        <div style={{ maxWidth: 900, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 16px" }}>
+        <div style={{ maxWidth: 900, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: isMobile ? 6 : 12, padding: isMobile ? "8px 10px" : "10px 16px" }}>
           {/* Left: back + bill number + status */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
             <button
@@ -280,9 +294,20 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
           </div>
 
           {/* Right: actions */}
-          <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center" }}>
+          <div style={{ display: "flex", gap: isMobile ? 4 : 8, flexShrink: 0, alignItems: "center" }}>
             <button
-              onClick={() => window.print()}
+              onClick={() => {
+                const el = document.querySelector(".bill-paper") as HTMLElement | null;
+                el?.classList.add("exporting");
+                const cleanup = () => {
+                  el?.classList.remove("exporting");
+                  window.removeEventListener("afterprint", cleanup);
+                };
+                window.addEventListener("afterprint", cleanup);
+                window.print();
+              }}
+              className="bill-toolbar-btn"
+              aria-label={t("common.print" as TranslationKey)}
               style={{
                 height: TOUCH.secondary, padding: "0 14px",
                 borderRadius: 10, border: "1.5px solid var(--sb-border)",
@@ -294,7 +319,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
               <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6v-8z" />
               </svg>
-              {t("common.print" as TranslationKey)}
+              <span className="bill-toolbar-btn-label">{t("common.print" as TranslationKey)}</span>
             </button>
             <button
               onClick={async () => {
@@ -310,7 +335,8 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
                   showToast(err instanceof Error ? err.message : "Failed to duplicate", "error");
                 }
               }}
-              className="no-print"
+              className="no-print bill-toolbar-btn"
+              aria-label="Duplicate"
               style={{
                 height: TOUCH.secondary, padding: "0 14px",
                 borderRadius: 10, border: "1.5px solid var(--sb-border)",
@@ -322,26 +348,38 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
               <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
               </svg>
-              Duplicate
+              <span className="bill-toolbar-btn-label">Duplicate</span>
             </button>
             <button
               onClick={async () => {
                 const el = document.querySelector(".bill-paper") as HTMLElement | null;
                 if (!el) return;
                 const { default: html2pdf } = await import("html2pdf.js");
-                await html2pdf()
-                  .set({
-                    margin: 8,
-                    filename: `invoice_${bill?.billNumber ?? "bill"}.pdf`,
-                    image: { type: "jpeg", quality: 0.98 },
-                    html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" },
-                    jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-                    pagebreak: { mode: ["css", "legacy"] },
-                  })
-                  .from(el)
-                  .save();
+                const prevWidth = el.style.width;
+                const prevMaxWidth = el.style.maxWidth;
+                el.classList.add("exporting");
+                el.style.width = "860px";
+                el.style.maxWidth = "860px";
+                try {
+                  await html2pdf()
+                    .set({
+                      margin: 8,
+                      filename: `invoice_${bill?.billNumber ?? "bill"}.pdf`,
+                      image: { type: "jpeg", quality: 0.98 },
+                      html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff", windowWidth: 1024 },
+                      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+                      pagebreak: { mode: ["css", "legacy"] },
+                    })
+                    .from(el)
+                    .save();
+                } finally {
+                  el.classList.remove("exporting");
+                  el.style.width = prevWidth;
+                  el.style.maxWidth = prevMaxWidth;
+                }
               }}
-              className="no-print"
+              className="no-print bill-toolbar-btn"
+              aria-label="PDF"
               style={{
                 height: TOUCH.secondary, padding: "0 14px",
                 borderRadius: 10, border: "1.5px solid var(--sb-border)",
@@ -353,13 +391,15 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
               <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/>
               </svg>
-              PDF
+              <span className="bill-toolbar-btn-label">PDF</span>
             </button>
 
             {bill.status === "DRAFT" && (
               <>
                 <button
                   onClick={() => router.push(`/bills/${id}/edit`)}
+                  className="bill-toolbar-btn"
+                  aria-label={t("templates.edit" as TranslationKey)}
                   style={{
                     height: TOUCH.secondary, padding: "0 14px",
                     borderRadius: 10, border: "1.5px solid var(--sb-border)",
@@ -371,10 +411,12 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
                   <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
                   </svg>
-                  {t("templates.edit" as TranslationKey)}
+                  <span className="bill-toolbar-btn-label">{t("templates.edit" as TranslationKey)}</span>
                 </button>
                 <button
                   onClick={() => setConfirmAction("FINAL")}
+                  className="bill-toolbar-btn"
+                  aria-label={t("bills.finalize" as TranslationKey)}
                   style={{
                     height: TOUCH.secondary, padding: "0 14px",
                     borderRadius: 10, border: "none",
@@ -387,7 +429,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
                   <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M5 13l4 4L19 7" />
                   </svg>
-                  {t("bills.finalize" as TranslationKey)}
+                  <span className="bill-toolbar-btn-label">{t("bills.finalize" as TranslationKey)}</span>
                 </button>
               </>
             )}
@@ -411,7 +453,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
       </div>
 
       {/* ── Invoice document ──────────────────────────────────────────────────── */}
-      <div className="bill-bg" style={{ minHeight: "100vh", padding: "24px 12px 120px", background: "var(--sb-bg)" }}>
+      <div className="bill-bg" style={{ minHeight: "100vh", padding: isMobile ? "12px 6px 120px" : "24px 12px 120px", background: "var(--sb-bg)" }}>
         <div
           className="bill-paper"
           style={{
@@ -439,7 +481,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
                   style={{ height:60, width:"auto", objectFit:"contain", display:"inline-block" }} />
               </div>
             )}
-            <div style={{ fontWeight:900, fontSize:28, letterSpacing:0.5, color:"#111", lineHeight:1 }}>
+            <div className="bill-company-name" style={{ fontWeight:900, fontSize:28, letterSpacing:0.5, color:"#111", lineHeight:1.1 }}>
               {settings?.companyName || "—"}
             </div>
             {settings?.companyAddress && (
@@ -451,13 +493,13 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
             )}
             {settings?.companyGstin && (
               <div style={{ fontSize:11, fontWeight:700, marginTop:4, letterSpacing:0.5 }}>
-                GST NO : {settings.companyGstin}
+                GST NO : {settings.companyGstin.toUpperCase()}
               </div>
             )}
           </div>
 
           {/* ══ PARTY + INVOICE META ══════════════════════════════════════════ */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", borderBottom:"1.5px solid #333" }}>
+          <div className="bill-grid-2col" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", borderBottom:"1.5px solid #333" }}>
             <div style={{ padding:"10px 14px", borderRight:"1px solid #999", fontSize:11 }}>
               <div style={{ fontWeight:700, marginBottom:5, fontSize:11 }}>Party Name &amp; Address :</div>
               <div style={{ fontWeight:800, fontSize:13 }}>{bill.customerName}</div>
@@ -466,7 +508,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
               )}
               {bill.customerPhone && <div style={{ marginTop:3 }}>Ph: {bill.customerPhone}</div>}
               {bill.gstin && (
-                <div style={{ marginTop:5, fontWeight:700 }}>GST No: <span style={{ fontFamily:"monospace" }}>{bill.gstin}</span></div>
+                <div style={{ marginTop:5, fontWeight:700 }}>GST No: <span style={{ fontFamily:"monospace" }}>{bill.gstin.toUpperCase()}</span></div>
               )}
               {bill.placeOfSupply && (
                 <div style={{ marginTop:3, color:"#555" }}>
@@ -496,6 +538,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
           </div>
 
           {/* ══ ITEMS TABLE ═══════════════════════════════════════════════════ */}
+          <div className="bill-table-scroll">
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
             <thead>
               <tr style={{ background:"#f5f5f5", borderBottom:"1.5px solid #333", borderTop:"none" }}>
@@ -619,6 +662,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
               </tr>
             </tbody>
           </table>
+          </div>
 
           {/* ══ AMOUNT IN WORDS ═══════════════════════════════════════════════ */}
           <div style={{ padding:"10px 14px", borderTop:"1.5px solid #333", borderBottom:"1px solid #ccc", fontSize:12 }}>
@@ -634,7 +678,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
           )}
 
           {/* ══ FOOTER ════════════════════════════════════════════════════════ */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", borderTop:"1.5px solid #333" }}>
+          <div className="bill-grid-2col" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", borderTop:"1.5px solid #333" }}>
             <div style={{ padding:"12px 14px", borderRight:"1px solid #999", fontSize:11 }}>
               <div style={{ fontWeight:800, marginBottom:8, fontSize:12 }}>Company&apos;s Bank Details</div>
               {settings?.bankName || settings?.bankAccountNumber ? (

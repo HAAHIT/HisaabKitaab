@@ -111,30 +111,30 @@ export default function TransactionsClient({ initialTransactions, page, totalPag
   };
 
   return (
-    <div className="p-4 lg:p-8 max-w-7xl mx-auto space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="p-3 sm:p-4 lg:p-8 max-w-7xl mx-auto space-y-4 sm:space-y-6 pb-24">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4">
         <div>
-          <h1 className="text-2xl font-bold">
+          <h1 className="text-xl sm:text-2xl font-bold">
             {t("transactions.title")}
           </h1>
-          <p className="text-default-500 text-sm">{t("transactions.subtitle")}</p>
+          <p className="text-default-500 text-xs sm:text-sm">{t("transactions.subtitle")}</p>
         </div>
 
-        <div className="flex gap-2">
-          <HKButton size="sm" variant="secondary" onClick={exportExcel}>
+        <div className="flex gap-2 w-full md:w-auto">
+          <HKButton size="sm" variant="secondary" onClick={exportExcel} className="flex-1 md:flex-none">
             {t("transactions.exportCSV")}
           </HKButton>
-          <HKButton size="sm" onClick={() => router.push("/reports")}>
+          <HKButton size="sm" onClick={() => router.push("/reports")} className="flex-1 md:flex-none">
             {t("transactions.goToReports")}
           </HKButton>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 items-center">
-        <span className="text-xs font-semibold text-default-400 uppercase tracking-wider mr-2">{t("transactions.filterBy")}</span>
+      <div className="flex md:flex-wrap gap-2 items-center overflow-x-auto md:overflow-visible -mx-3 px-3 md:mx-0 md:px-0 pb-1 md:pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <span className="text-xs font-semibold text-default-400 uppercase tracking-wider mr-2 shrink-0">{t("transactions.filterBy")}</span>
         <button
           onClick={() => handleTypeFilter(null)}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors shrink-0 ${
             !type ? "bg-[var(--sb-orange)] text-white" : "bg-default-100 text-default-600 hover:bg-default-200"
           }`}
         >
@@ -144,7 +144,7 @@ export default function TransactionsClient({ initialTransactions, page, totalPag
           <button
             key={vt}
             onClick={() => handleTypeFilter(vt)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors shrink-0 ${
               type === vt ? "bg-[var(--sb-orange)] text-white" : "bg-default-100 text-default-600 hover:bg-default-200"
             }`}
           >
@@ -153,7 +153,69 @@ export default function TransactionsClient({ initialTransactions, page, totalPag
         ))}
       </div>
 
-      <div className="rounded-2xl border border-[var(--sb-border)] bg-[var(--sb-card)] overflow-hidden shadow-sm">
+      {/* Mobile card list */}
+      <div className="md:hidden space-y-3">
+        {initialTransactions.length === 0 ? (
+          <div className="rounded-2xl border border-[var(--sb-border)] bg-[var(--sb-card)]">
+            <EmptyState
+              icon={Activity}
+              title={t("transactions.noTransactions")}
+              description={t("transactions.noTransactionsDesc")}
+              className="py-10 flex items-center justify-center mx-auto"
+            />
+          </div>
+        ) : (
+          initialTransactions.map((tx: any) => (
+            <div key={tx.id} className="rounded-2xl border border-[var(--sb-border)] bg-[var(--sb-card)] shadow-sm overflow-hidden">
+              <div className="flex items-start justify-between gap-2 p-3 border-b border-[var(--sb-border)] bg-[var(--sb-badge)]">
+                <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                  <HKChip size="sm" variant="flat" color={getVoucherColor(tx.voucherType)}>
+                    {t(`voucher.type.${tx.voucherType}` as TranslationKey)}
+                  </HKChip>
+                  <span className="text-[10px] font-mono text-default-400 bg-default-100 px-1.5 py-0.5 rounded">
+                    #{tx.id.substring(tx.id.length - 6).toUpperCase()}
+                  </span>
+                </div>
+                <span className="text-xs text-default-500 whitespace-nowrap">{formatDate(tx.entryDate)}</span>
+              </div>
+              <div className="divide-y divide-[var(--sb-border)]">
+                {tx.lines.map((line: any, idx: number) => {
+                  const debit = Number(line.debit) || 0;
+                  const credit = Number(line.credit) || 0;
+                  return (
+                    <div key={idx} className="flex items-center justify-between gap-2 px-3 py-2.5">
+                      <span className="text-sm font-medium truncate flex-1 min-w-0">
+                        {line.partyName || line.accountName || "Unknown"}
+                      </span>
+                      {debit > 0 && (
+                        <span className="text-danger font-mono text-sm font-medium whitespace-nowrap">
+                          Dr {debit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      )}
+                      {credit > 0 && (
+                        <span className="text-success font-mono text-sm font-medium whitespace-nowrap">
+                          Cr {credit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {tx.narration && (
+                <div className="px-3 py-2 text-[11px] text-default-500 border-t border-[var(--sb-border)] bg-default-50/40 flex items-start gap-1.5">
+                  <svg className="w-3 h-3 mt-0.5 text-default-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                  </svg>
+                  <span>{tx.narration}</span>
+                </div>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Desktop table */}
+      <div className="hidden md:block rounded-2xl border border-[var(--sb-border)] bg-[var(--sb-card)] overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="min-w-full">
             <thead>

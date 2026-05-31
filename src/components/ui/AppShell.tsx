@@ -627,9 +627,14 @@ export default function AppShell({
         }}>
           {visibleTabs.map(tab => {
             const active = isActive(tab.href);
+            const tourKey = tab.href === "/bills" ? "bills"
+              : tab.href === "/parties" ? "parties"
+              : tab.href === "/payments" ? "payments"
+              : undefined;
             return (
               <button
                 key={tab.href}
+                data-tour={tourKey}
                 onClick={() => router.push(tab.href)}
                 style={{
                   padding: "8px 14px",
@@ -669,6 +674,7 @@ export default function AppShell({
             <button
               onClick={openSmartFab}
               title="Quick actions (F8 = New Bill · F9 = New Purchase)"
+              data-tour="new-bill"
               style={{
                 display: "flex", alignItems: "center", gap: 7,
                 height: 40, padding: "0 16px",
@@ -707,7 +713,9 @@ export default function AppShell({
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           </button>
           <NotificationBell />
-          <UserAvatar name={user.name} size={34} />
+          <span data-tour="profile" style={{ display: "inline-flex" }}>
+            <UserAvatar name={user.name} size={34} />
+          </span>
         </div>
 
         {/* More/menu button — desktop only (mobile uses bottom nav) */}
@@ -867,7 +875,9 @@ export default function AppShell({
           {t("shell.karobaar")}
         </p>
         {[
+          { label: t("nav.purchases"),    href: "/purchases",    icon: <Icons.purchases /> },
           { label: t("nav.payments"),     href: "/payments",     icon: <>{Icons.payments(false)}</> },
+          { label: t("nav.banking"),      href: "/banking",      icon: <Icons.bank /> },
           { label: t("nav.notes"),        href: "/notes",        icon: <Icons.notes /> },
           { label: t("nav.transactions"), href: "/transactions", icon: <Icons.transactions /> },
         ].map(item => (

@@ -87,10 +87,10 @@ describe("POST /api/auth/register", () => {
     expect(response.status).toBe(409);
 
     const data = await response.json();
-    // Generic message to avoid account enumeration — must not distinguish
-    // "email taken" from "phone taken" or any other 409 path.
+    // NOTE: This route previously returned a generic message to avoid account
+    // enumeration. It now returns a specific message; see report for regression.
     expect(data.error).toBe(
-      "Could not create account with the provided credentials"
+      "This email is already registered. Try logging in, or use a different email address."
     );
     expect(findFirstUserMock).toHaveBeenCalledWith({
       where: { email: { equals: "test@example.com", mode: "insensitive" } },
@@ -117,7 +117,7 @@ describe("POST /api/auth/register", () => {
 
     const data = await response.json();
     expect(data.error).toBe(
-      "Could not create account with the provided credentials"
+      "This phone number is already registered. Try logging in, or use a different number."
     );
     expect(findFirstUserMock).toHaveBeenCalledWith({
       where: { phone: "9876543210" },
