@@ -1,10 +1,17 @@
 export function Footer() {
   const cols: { title: string; links: { label: string; href: string }[] }[] = [
     {
-      title: "Product",
+      title: "Guides",
       links: [
+        { label: "All guides", href: "/guides" },
         { label: "Tally export", href: "/guides/export-to-tally" },
         { label: "Tally import", href: "/guides/import-from-tally" },
+        { label: "GSTR-1 & GSTR-3B", href: "/guides/gst-filing" },
+      ],
+    },
+    {
+      title: "Product",
+      links: [
         { label: "Sign in", href: "/login" },
         { label: "Create account", href: "/register" },
       ],
@@ -22,7 +29,7 @@ export function Footer() {
   return (
     <footer className="relative border-t border-slate-200/60 bg-slate-50">
       <div className="mx-auto max-w-7xl px-5 sm:px-8 pt-16 pb-10">
-        <div className="grid md:grid-cols-[1.6fr_repeat(2,1fr)] gap-10">
+        <div className="grid md:grid-cols-[1.6fr_repeat(3,1fr)] gap-10">
           <div>
             <a href="/" className="flex items-center gap-2.5">
               <span className="grid place-items-center h-9 w-9 rounded-lg bg-gradient-to-br from-[#2563eb] to-[#1d4ed8] text-white">

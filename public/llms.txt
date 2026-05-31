@@ -1,0 +1,45 @@
+# SoloBooks
+
+> SoloBooks is cloud GST billing and Tally-compatible double-entry accounting software for Indian small businesses (MSMEs). It handles invoicing, payments, party/Udhar ledgers, GSTR-1 and GSTR-3B reports, and one-click Tally ERP 9 / TallyPrime XML export. Free for the first 100 bills a month. Available in Hindi and English, works offline as a PWA.
+
+## About
+
+- **Product**: SoloBooks (internal codename: HisaabKitaab)
+- **Built for**: Indian micro, small, and medium businesses (MSMEs), shopkeepers, traders, and their Chartered Accountants
+- **Category**: Business / Accounting / GST billing software
+- **Key differentiator**: Cloud-native billing that exports losslessly to Tally, so business owners work online while their CA keeps using TallyPrime
+- **Pricing**: Free tier (first 100 bills/month), no credit card required
+- **Languages**: Hindi, English
+- **Compliance**: Indian GST (CGST/SGST for intra-state, IGST for inter-state), double-entry bookkeeping compatible with Tally ERP 9 and TallyPrime
+
+## Core features
+
+- GST-compliant invoicing and bill generation with automatic CGST/SGST/IGST tax splits
+- Party (customer/vendor) ledgers and Udhar Khata (credit/receivables tracking)
+- Payments (receipts and payments) with running party balances
+- Double-entry journal posting compatible with Tally's group hierarchy
+- GSTR-1 and GSTR-3B report generation
+- One-click Tally XML voucher export and Tally master/voucher import
+- Multilingual receipts, payment reminders, offline PWA support
+
+## Guides
+
+- [Export data from SoloBooks to TallyPrime](https://solobooks.in/guides/export-to-tally): Step-by-step guide to export GST-compliant vouchers, sales, and purchases into Tally ERP 9 / TallyPrime XML format.
+- [Import data from TallyPrime into SoloBooks](https://solobooks.in/guides/import-from-tally): Migrate ledgers, parties, and historical GST vouchers from Tally into SoloBooks without data loss.
+- [Filing GSTR-1 and GSTR-3B from SoloBooks](https://solobooks.in/guides/gst-filing): How SoloBooks generates GSTR-1 and GSTR-3B summaries from your billing data and how to use them when filing.
+
+## Key pages
+
+- [Home](https://solobooks.in/): Product overview, features, pricing, and testimonials.
+- [Create account](https://solobooks.in/register): Sign up for a free SoloBooks account.
+- [Sign in](https://solobooks.in/login): Log in to an existing account.
+
+## Legal
+
+- [Terms of Service](https://solobooks.in/terms)
+- [Privacy Policy](https://solobooks.in/privacy)
+
+## Notes
+
+- Tally and TallyPrime are registered trademarks of Tally Solutions Pvt. Ltd. SoloBooks is an independent product, not affiliated with or endorsed by Tally Solutions.
+- The Indian financial year runs April 1 to March 31.

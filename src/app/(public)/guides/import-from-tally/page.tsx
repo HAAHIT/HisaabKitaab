@@ -3,6 +3,54 @@ import Link from "next/link";
 import "@/components/landing/landing.css";
 import { Nav } from "@/components/landing/Nav";
 import { Footer } from "@/components/landing/Footer";
+import { FAQ, type FaqItem } from "@/components/landing/FAQ";
+
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://solobooks.in";
+
+const FAQS: FaqItem[] = [
+  {
+    q: "Will my opening balances and history come across from Tally?",
+    a: "Yes. You export Masters (ledgers, parties, stock items) and Transactions (vouchers) from Tally as XML and upload both to SoloBooks. After import, your trial balance in SoloBooks should match Tally to the rupee.",
+  },
+  {
+    q: "In what order should I upload the Tally files?",
+    a: "Always upload Master.xml first, then DayBook.xml. Vouchers reference ledger and party names, so the masters must exist before the transactions are imported, otherwise SoloBooks will reject the mismatches.",
+  },
+  {
+    q: "Does importing from Tally create duplicate vouchers?",
+    a: "No. SoloBooks detects duplicates by matching voucher type, date, narration, and total amount, so re-running an import skips entries that already exist instead of duplicating them.",
+  },
+  {
+    q: "What happens if a voucher references a party that doesn't exist yet?",
+    a: "SoloBooks resolves parties by exact name first and then by phone number. If no match is found, it creates a new party record rather than failing the import.",
+  },
+];
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "HowTo",
+      name: "How to Import Data from TallyPrime into SoloBooks",
+      description:
+        "Migrate your existing ledgers, parties, and historical vouchers out of Tally and into SoloBooks.",
+      step: [
+        { "@type": "HowToStep", name: "Export Masters from Tally", text: "Open TallyPrime → Export > Masters → format XML. Generates Master.xml." },
+        { "@type": "HowToStep", name: "Export Vouchers", text: "Export > Transactions → date range → XML. Generates DayBook.xml." },
+        { "@type": "HowToStep", name: "Upload to SoloBooks", text: "Settings > Data Management > Import from Tally. Upload Master.xml then DayBook.xml." },
+        { "@type": "HowToStep", name: "Verify and Confirm", text: "Review the parsed summary and click Confirm Import." },
+      ],
+    },
+    {
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: "Home", item: SITE_URL },
+        { "@type": "ListItem", position: 2, name: "Guides", item: `${SITE_URL}/guides` },
+        { "@type": "ListItem", position: 3, name: "Import from Tally", item: `${SITE_URL}/guides/import-from-tally` },
+      ],
+    },
+  ],
+};
 
 export const metadata: Metadata = {
   title: "Import Data from TallyPrime into SoloBooks — Guide",
@@ -26,20 +74,6 @@ export const metadata: Metadata = {
 };
 
 export default function ImportFromTallyGuide() {
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "HowTo",
-    name: "How to Import Data from TallyPrime into SoloBooks",
-    description:
-      "Migrate your existing ledgers, parties, and historical vouchers out of Tally and into SoloBooks.",
-    step: [
-      { "@type": "HowToStep", name: "Export Masters from Tally", text: "Open TallyPrime → Export > Masters → format XML. Generates Master.xml." },
-      { "@type": "HowToStep", name: "Export Vouchers", text: "Export > Transactions → date range → XML. Generates DayBook.xml." },
-      { "@type": "HowToStep", name: "Upload to SoloBooks", text: "Settings > Data Management > Import from Tally. Upload Master.xml then DayBook.xml." },
-      { "@type": "HowToStep", name: "Verify and Confirm", text: "Review the parsed summary and click Confirm Import." },
-    ],
-  };
-
   const steps = [
     {
       n: 1,
@@ -158,6 +192,8 @@ export default function ImportFromTallyGuide() {
           </p>
         </div>
       </article>
+
+      <FAQ items={FAQS} heading="Tally import — common questions" />
 
       <Footer />
     </main>

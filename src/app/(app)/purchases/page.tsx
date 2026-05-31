@@ -130,7 +130,7 @@ export default function PurchasesListPage() {
         />
 
         {/* Month metrics */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 10, marginBottom: 16 }}>
           {[
             { l: t("purchases.metric.purchased"), v: fmtFull(summary.kulBilled), sub: t("purchases.metric.thisMonth"), c: "var(--sb-text)", bg: "var(--sb-card)" },
             { l: t("purchases.metric.paid"), v: fmtFull(summary.mila), sub: t("purchases.metric.paidOut"), c: GR, bg: C.positiveSoft },
@@ -219,9 +219,11 @@ export default function PurchasesListPage() {
                       <span style={{ fontSize: TYPE.numSmall, fontWeight: 700, color: "var(--sb-sub)", fontFamily: IN }}>
                         {fmtFull(group.total)}
                       </span>
-                      <span style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--sb-sub)" }}>
-                        · {group.bills.length} bills
-                      </span>
+                      {!isMobile && (
+                        <span style={{ fontSize: TYPE.bodySmall, fontWeight: 500, color: "var(--sb-sub)" }}>
+                          · {group.bills.length} bills
+                        </span>
+                      )}
                       <svg
                         width="16" height="16" viewBox="0 0 24 24" fill="none"
                         stroke="var(--sb-sub)" strokeWidth="1.8" strokeLinecap="round"

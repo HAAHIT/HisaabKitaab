@@ -3,6 +3,53 @@ import Link from "next/link";
 import "@/components/landing/landing.css";
 import { Nav } from "@/components/landing/Nav";
 import { Footer } from "@/components/landing/Footer";
+import { FAQ, type FaqItem } from "@/components/landing/FAQ";
+
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://solobooks.in";
+
+const FAQS: FaqItem[] = [
+  {
+    q: "What file format does SoloBooks export for Tally?",
+    a: "SoloBooks exports native Tally XML (the same TDL voucher format Tally uses internally). The file imports directly into Tally ERP 9 or TallyPrime through Import → Transactions, with no manual data entry.",
+  },
+  {
+    q: "Will the GST tax splits come through correctly in Tally?",
+    a: "Yes. SoloBooks writes CGST and SGST ledgers for intra-state vouchers and IGST for inter-state vouchers, with the correct taxable values, so your GST output liability matches in Tally.",
+  },
+  {
+    q: "What does a Tally 'Balance Mismatch' error mean during import?",
+    a: "Tally represents debits as negative amounts and credits as positive. A balance mismatch usually means a sign is wrong — the customer/debtor amount should be negative and the sales amount positive. SoloBooks exports already follow this convention.",
+  },
+  {
+    q: "Can my Chartered Accountant import the file without my login?",
+    a: "Yes. You download the TallyExport.xml file and send it to your CA by email or a shared link. They import it into their own Tally installation; no SoloBooks account is needed on their side.",
+  },
+];
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "HowTo",
+      name: "How to Export Data from SoloBooks to TallyPrime",
+      description:
+        "Syncing daily billing/purchases generated in our SaaS software back into Tally for the user's CA.",
+      step: [
+        { "@type": "HowToStep", name: "Generate the Export", text: "Go to Reports > Tally Export. Select your desired date range and click Generate XML." },
+        { "@type": "HowToStep", name: "Send to CA", text: "Download TallyExport.xml and share it with your CA." },
+        { "@type": "HowToStep", name: "Import into Tally", text: "Your CA goes to Import > Transactions in TallyPrime and imports the file." },
+      ],
+    },
+    {
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: "Home", item: SITE_URL },
+        { "@type": "ListItem", position: 2, name: "Guides", item: `${SITE_URL}/guides` },
+        { "@type": "ListItem", position: 3, name: "Export to TallyPrime", item: `${SITE_URL}/guides/export-to-tally` },
+      ],
+    },
+  ],
+};
 
 export const metadata: Metadata = {
   title: "Export Data from SoloBooks to TallyPrime — Guide",
@@ -26,19 +73,6 @@ export const metadata: Metadata = {
 };
 
 export default function ExportToTallyGuide() {
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "HowTo",
-    name: "How to Export Data from SoloBooks to TallyPrime",
-    description:
-      "Syncing daily billing/purchases generated in our SaaS software back into Tally for the user's CA.",
-    step: [
-      { "@type": "HowToStep", name: "Generate the Export", text: "Go to Reports > Tally Export. Select your desired date range and click Generate XML." },
-      { "@type": "HowToStep", name: "Send to CA", text: "Download TallyExport.xml and share it with your CA." },
-      { "@type": "HowToStep", name: "Import into Tally", text: "Your CA goes to Import > Transactions in TallyPrime and imports the file." },
-    ],
-  };
-
   return (
     <main className="solobooks-landing min-h-screen relative">
       <Nav />
@@ -195,6 +229,8 @@ export default function ExportToTallyGuide() {
           </p>
         </div>
       </article>
+
+      <FAQ items={FAQS} heading="Tally export — common questions" />
 
       <Footer />
     </main>

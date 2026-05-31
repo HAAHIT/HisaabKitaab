@@ -132,23 +132,68 @@ export default async function RootLayout({
           dangerouslySetInnerHTML={{
             __html: JSON.stringify({
               "@context": "https://schema.org",
-              "@type": "SoftwareApplication",
-              name: "SoloBooks",
-              applicationCategory: "BusinessApplication",
-              operatingSystem: "Web",
-              url: process.env.NEXT_PUBLIC_SITE_URL || "https://solobooks.in",
-              description:
-                "Cloud GST billing & Tally-compatible double-entry accounting for Indian businesses.",
-              offers: {
-                "@type": "Offer",
-                price: "0",
-                priceCurrency: "INR",
-              },
-              publisher: {
-                "@type": "Organization",
-                name: "SoloBooks",
-                url: process.env.NEXT_PUBLIC_SITE_URL || "https://solobooks.in",
-              },
+              "@graph": [
+                {
+                  "@type": "Organization",
+                  "@id": `${SITE_URL}/#organization`,
+                  name: "SoloBooks",
+                  legalName: "SoloBooks Technologies Pvt. Ltd.",
+                  url: SITE_URL,
+                  logo: {
+                    "@type": "ImageObject",
+                    url: `${SITE_URL}/icons/icon-512.png`,
+                    width: 512,
+                    height: 512,
+                  },
+                  description:
+                    "Cloud GST billing & Tally-compatible double-entry accounting software for Indian small businesses.",
+                  foundingDate: "2025",
+                  areaServed: { "@type": "Country", name: "India" },
+                  contactPoint: {
+                    "@type": "ContactPoint",
+                    contactType: "customer support",
+                    email: "support@solobooks.in",
+                    availableLanguage: ["en", "hi"],
+                  },
+                  sameAs: [
+                    "https://twitter.com/solobooks",
+                    "https://www.linkedin.com/company/solobooks",
+                  ],
+                },
+                {
+                  "@type": "WebSite",
+                  "@id": `${SITE_URL}/#website`,
+                  url: SITE_URL,
+                  name: "SoloBooks",
+                  inLanguage: "en-IN",
+                  publisher: { "@id": `${SITE_URL}/#organization` },
+                },
+                {
+                  "@type": "SoftwareApplication",
+                  name: "SoloBooks",
+                  applicationCategory: "BusinessApplication",
+                  operatingSystem: "Web, iOS, Android (PWA)",
+                  url: SITE_URL,
+                  description:
+                    "Cloud GST billing & Tally-compatible double-entry accounting for Indian businesses. Invoicing, party ledgers, GSTR-1/GSTR-3B reports, and one-click Tally XML export.",
+                  inLanguage: ["en-IN", "hi-IN"],
+                  offers: {
+                    "@type": "Offer",
+                    price: "0",
+                    priceCurrency: "INR",
+                    description: "Free for the first 100 bills per month",
+                  },
+                  featureList: [
+                    "GST-compliant invoicing",
+                    "Party ledgers and Udhar Khata",
+                    "GSTR-1 and GSTR-3B reports",
+                    "Tally ERP 9 / TallyPrime XML export and import",
+                    "Double-entry bookkeeping",
+                    "Offline PWA",
+                  ],
+                  publisher: { "@id": `${SITE_URL}/#organization` },
+                },
+              ],
             }),
           }}
         />

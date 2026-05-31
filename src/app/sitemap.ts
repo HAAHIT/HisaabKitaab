@@ -10,8 +10,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { path: "/register", priority: 0.7, changeFrequency: "yearly" as const },
     { path: "/privacy", priority: 0.3, changeFrequency: "yearly" as const },
     { path: "/terms", priority: 0.3, changeFrequency: "yearly" as const },
+    { path: "/guides", priority: 0.7, changeFrequency: "monthly" as const },
     { path: "/guides/export-to-tally", priority: 0.8, changeFrequency: "monthly" as const },
     { path: "/guides/import-from-tally", priority: 0.8, changeFrequency: "monthly" as const },
+    { path: "/guides/gst-filing", priority: 0.8, changeFrequency: "monthly" as const },
   ];
 
   return routes.map((route) => ({
