@@ -193,7 +193,16 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
       });
       if (!res.ok) throw new Error((await res.json()).error);
       showToast(status === "FINAL" ? t("bills.detail.finalizeSuccess" as TranslationKey) : t("bills.detail.cancelSuccess" as TranslationKey), "success");
-      setBill((await fetch(`/api/bills/${id}`).then(r => r.json())).bill);
+      try {
+        const freshRes = await fetch(`/api/bills/${id}`);
+        if (!freshRes.ok) throw new Error(`HTTP ${freshRes.status}`);
+        const freshJson = await freshRes.json();
+        if (freshJson?.bill) setBill(freshJson.bill);
+      } catch {
+        // Status changed successfully on the server but we couldn't refresh
+        // the local view. Tell the user to reload so stale state isn't acted on.
+        showToast("Status updated, but the view couldn't refresh — reload the page.", "error");
+      }
     } catch (e) { showToast(e instanceof Error ? e.message : "Failed", "error"); }
     finally { setActionLoading(false); setConfirmAction(null); }
   }

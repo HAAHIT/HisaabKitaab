@@ -528,11 +528,11 @@ function Gstr1B2bSection({ data }: { data: Gstr1Summary["b2b"] }) {
             </tr>
           </thead>
           <tbody>
-            {data.entries.map((c) => {
+            {data.entries.map((c, idx) => {
               const txval = c.inv.reduce((s, i) => s + i.itms.reduce((si, it) => si + it.itm_det.txval, 0), 0);
               const tax = c.inv.reduce((s, i) => s + i.itms.reduce((si, it) => si + it.itm_det.iamt + it.itm_det.camt + it.itm_det.samt, 0), 0);
               return (
-                <tr key={c.ctin} className="border-b border-divider/40 hover:bg-default-50">
+                <tr key={`${c.ctin || "unregistered"}-${idx}`} className="border-b border-divider/40 hover:bg-default-50">
                   <td className="py-2 pr-3 font-mono text-xs">{c.ctin}</td>
                   <td className="py-2 pr-3 text-right">{c.inv.length}</td>
                   <td className="py-2 pr-3 text-right">{inr(txval)}</td>

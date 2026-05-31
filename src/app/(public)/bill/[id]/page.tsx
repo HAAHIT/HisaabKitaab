@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { GST_STATE_CODES } from "@/lib/gst-states";
@@ -196,9 +197,14 @@ export default async function PublicBillPage(
         {/* Company nameplate */}
         <div style={{ textAlign:"center", padding:"14px 20px 10px", borderBottom:"1.5px solid #333" }}>
           {bill.tenant.logoUrl && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={bill.tenant.logoUrl} alt="Logo"
-              style={{ height:56, width:"auto", objectFit:"contain", display:"block", margin:"0 auto 8px" }} />
+            <Image
+              src={bill.tenant.logoUrl}
+              alt="Logo"
+              width={200}
+              height={56}
+              unoptimized
+              style={{ height:56, width:"auto", objectFit:"contain", display:"block", margin:"0 auto 8px" }}
+            />
           )}
           <div style={{ fontWeight:900, fontSize:28, letterSpacing:0.5, lineHeight:1 }}>
             {settings.companyName || bill.tenant.name}

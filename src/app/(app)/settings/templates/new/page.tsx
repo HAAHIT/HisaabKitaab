@@ -111,6 +111,10 @@ export default function CreateTemplatePage() {
   }
 
   async function handleSave() {
+    // Block re-entry: client-side UUIDs are stable across renders, but a double
+    // submit before navigation would POST the same payload twice and create two
+    // templates. The button uses isLoading, but guarding here is belt-and-braces.
+    if (saving) return;
     if (!validateAll()) return;
     const encodedColumns = columns.map((col) => {
       if (col.type === "formula" && col.formula) return { ...col, formula: translateFormulaToIds(col.formula, columns) };

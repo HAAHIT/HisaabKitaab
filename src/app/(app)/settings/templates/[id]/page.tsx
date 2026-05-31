@@ -125,6 +125,7 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
   }
 
   async function handleSave() {
+    if (saving) return;
     if (!validateAll()) return;
     const encodedColumns = columns.map((col) => {
       if (col.type === "formula" && col.formula) return { ...col, formula: translateFormulaToIds(col.formula, columns) };
