@@ -123,7 +123,10 @@ export async function POST(request: NextRequest) {
 
   const matchResults = matchRows(parsedRows, matchablePayments);
 
-  // Persist inside a transaction
+  // Persist inside a transaction. rowIds is populated in matchResults order so
+  // the returned preview can carry each persisted BankStatementRow id — the
+  // categorize endpoint keys on that id, not on a payment id.
+  const rowIds: string[] = [];
   try {
     const statement = await prisma.$transaction(async (tx) => {
       // Create the BankStatement header
@@ -147,7 +150,7 @@ export async function POST(request: NextRequest) {
           result.payment !== null && result.confidence >= 60;
         if (isMatched) matchedCount++;
 
-        await tx.bankStatementRow.upsert({
+        const upserted = await tx.bankStatementRow.upsert({
           where: {
             statementId_date_amount_description: {
               statementId: stmt.id,
@@ -168,7 +171,9 @@ export async function POST(request: NextRequest) {
             matchedPaymentId: isMatched ? result.payment!.id : null,
             status: isMatched ? "AUTO_MATCHED" : "PENDING",
           },
+          select: { id: true },
         });
+        rowIds.push(upserted.id);
       }
 
       // Update counts on the statement
@@ -184,7 +189,8 @@ export async function POST(request: NextRequest) {
     });
 
     // Return statement summary + row previews
-    const preview = matchResults.map((r) => ({
+    const preview = matchResults.map((r, i) => ({
+      id: rowIds[i],
       date: r.bankRow.date,
       description: r.bankRow.description,
       amount: r.bankRow.amount,

@@ -325,46 +325,59 @@ function QuickLinks({ isMobile, onNavigate }: { isMobile: boolean; onNavigate: (
       gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)",
       gap: 10,
     }}>
-      {links.map(q => {
-        const [hovered, setHovered] = useState(false);
-        return (
-          <button key={q.label}
-            onClick={() => onNavigate(q.href)}
-            onMouseEnter={() => setHovered(true)}
-            onMouseLeave={() => setHovered(false)}
-            style={{
-              background: "var(--sb-card)",
-              borderRadius: 14,
-              border: `1px solid ${hovered ? "var(--sb-border-strong)" : "var(--sb-border)"}`,
-              boxShadow: hovered ? "var(--sb-shadow-card-hover)" : "var(--sb-shadow-card)",
-              padding: "14px",
-              textAlign: "left",
-              cursor: "pointer",
-              transition: "border-color 0.15s, box-shadow 0.15s, transform 0.15s",
-              transform: hovered ? "translateY(-1px)" : "none",
-              display: "flex", gap: 10, alignItems: "center",
-              fontFamily: SG,
-            }}
-          >
-            <div style={{
-              width: 36, height: 36, borderRadius: 10,
-              background: "var(--sb-surface-alt)",
-              color: "var(--sb-sub)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              flexShrink: 0,
-            }}>{q.icon}</div>
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <p style={{ fontSize: TYPE.bodySm, fontWeight: 700, color: "var(--sb-text)", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {q.label}
-              </p>
-              <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", margin: "3px 0 0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {q.sub}
-              </p>
-            </div>
-          </button>
-        );
-      })}
+      {links.map(q => (
+        <QuickLinkCard key={q.label} link={q} onNavigate={onNavigate} />
+      ))}
     </div>
+  );
+}
+
+// One card per quick link. Extracted from the map() above so its hover `useState`
+// lives at a component's top level — calling hooks inside a .map() callback
+// violates the Rules of Hooks.
+function QuickLinkCard({
+  link,
+  onNavigate,
+}: {
+  link: { label: string; sub: string; href: string; icon: React.ReactNode };
+  onNavigate: (href: string) => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <button
+      onClick={() => onNavigate(link.href)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background: "var(--sb-card)",
+        borderRadius: 14,
+        border: `1px solid ${hovered ? "var(--sb-border-strong)" : "var(--sb-border)"}`,
+        boxShadow: hovered ? "var(--sb-shadow-card-hover)" : "var(--sb-shadow-card)",
+        padding: "14px",
+        textAlign: "left",
+        cursor: "pointer",
+        transition: "border-color 0.15s, box-shadow 0.15s, transform 0.15s",
+        transform: hovered ? "translateY(-1px)" : "none",
+        display: "flex", gap: 10, alignItems: "center",
+        fontFamily: SG,
+      }}
+    >
+      <div style={{
+        width: 36, height: 36, borderRadius: 10,
+        background: "var(--sb-surface-alt)",
+        color: "var(--sb-sub)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        flexShrink: 0,
+      }}>{link.icon}</div>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <p style={{ fontSize: TYPE.bodySm, fontWeight: 700, color: "var(--sb-text)", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {link.label}
+        </p>
+        <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", margin: "3px 0 0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {link.sub}
+        </p>
+      </div>
+    </button>
   );
 }
 

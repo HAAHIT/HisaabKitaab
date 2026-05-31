@@ -31,33 +31,58 @@ Items are grouped by product area, not file. The goal is a clear, actionable bac
 
 ---
 
-## 🔴 P0 — Production-Breaking (Fix Immediately)
+> [!NOTE]
+> **Verification pass — 2026-05-31.** The 9 P0 items below were checked against the
+> current code on branch `hitesh-dev`. Each carries a verdict:
+> **✅ VERIFIED** (reproduces as described), **⚠️ PARTIAL** (real but mis-described
+> or over-severitied), **❌ REFUTED** (does not reproduce / already fixed).
+> `[FIXED]` marks items resolved in this same pass. Net result: 3 verified+fixed,
+> 1 verified-latent+fixed, 1 partial+fixed, 1 partial (left as-is), 3 refuted.
+> Treat unverified P1–P3 items below as hypotheses, not confirmed bugs.
 
 ### 1. Dashboard crashes on every load — React hook called inside `.map()`
+**⚠️ PARTIAL → [FIXED]** — `useState()` *is* called inside a `.map()` callback ([dashboard/page.tsx](../src/app/(app)/dashboard/page.tsx)), a real Rules-of-Hooks violation. But because `links` is a static array, hook order stays stable across renders, so it does **not** "crash on every load" as claimed. Fixed by extracting a `QuickLinkCard` component that owns its hover `useState`.
+
 The dashboard's Quick Links component calls `useState()` inside an `Array.map()` loop. React's Rules of Hooks forbid this — it throws an "Invalid hook call" error on every render. The dashboard is the first page users see after login; this is a broken landing page for every user.
 
 ### 2. Public invoice "Print" button is in a Server Component — will crash at runtime
+**✅ VERIFIED → [FIXED]** — `onClick={() => window.print()}` was on a `<button>` inside the `async` Server Component at `src/app/(public)/bill/[id]/page.tsx`. Fixed by extracting a `"use client"` `PrintButton` component.
+
 `/bill/[id]` (the shareable invoice link) has `onClick={() => window.print()}` on a button inside a Server Component. Next.js does not allow browser event handlers in Server Components. This crashes at runtime. The "Print Invoice" button on every shared bill is non-functional.
 
 ### 3. Unauthenticated background job endpoint
+**❌ REFUTED** — `/api/jobs/process-import` is in `PUBLIC_PATHS` (to bypass JWT middleware), but the route's `GET` handler enforces an `x-cron-secret` header matching `process.env.CRON_SECRET` and returns 401 otherwise ([route.ts:46-53](../src/app/api/jobs/process-import/route.ts#L46-L53)). It is not callable by an anonymous attacker.
+
 `/api/jobs/process-import` is in the public-paths list — anyone on the internet can call it without logging in. This is a server-side execution endpoint. An attacker can trigger repeated job processing calls, causing denial-of-service or partial re-runs of import jobs.
 
 ### 4. Purchase finalize/cancel calls the wrong API endpoint
+**❌ REFUTED** — There is no separate `Purchase` Prisma model; purchases are rows in the `Bill` model (distinguished by a `VENDOR` party, given a `PUR-` billNumber). `getBill` in `/api/bills/[id]` has no party-type filter, so fetching/PATCH/DELETE of a purchase via `/api/bills/[id]` operates on the correct row. No 404. (The AGENTS.md claim that "Purchases and Bills are separate models" is itself inaccurate.)
+
 The Purchase detail page sends status changes to `/api/bills/[id]` instead of `/api/purchases/[id]`. A purchase ID does not exist in the bills table — every "Finalize" and "Cancel" action on a purchase silently returns a 404. Purchase status management is completely broken.
 
 ### 5. CGST/SGST display mismatch on printed invoices
+**❌ REFUTED** — `roundTo2(v)` is literally `Math.round(v * 100) / 100` ([journal-reporting.ts:4-6](../src/lib/journal-reporting.ts#L4-L6)), and the public invoice page uses the identical expression (`Math.round((tax / 2) * 100) / 100`). There is no divergence from the cause cited. (A separate, subtler question — whether splitting the *already-rounded* total tax in half matches the books computing each half from the taxable base — is not what this item describes.)
+
 The public invoice page computes the CGST/SGST split using old rounding logic (`Math.round`) while the journal/books use the fixed `roundTo2()` function. For odd-penny tax amounts, the numbers printed on the customer's invoice don't match what's in the books — a GST auditor will flag this.
 
 ### 6. `DEFAULT_TENANT_ID` env fallback silently assigns failed JWT requests to a real tenant
+**⚠️ PARTIAL (left as-is)** — The fallback exists ([middleware.ts:159-162](../src/middleware.ts#L159-L162)) but only fires *after* a successfully **verified** JWT that happens to lack a `tenantId` claim. Malformed/expired/unauthenticated tokens fail `jwtVerify` and hit the catch → login redirect; they never reach this branch. So the "unauthenticated or malformed-token requests" framing is wrong. It remains a genuine misconfiguration footgun, but may be intentional for single-tenant deployments — left for a product decision rather than auto-fixed.
+
 If JWT resolution fails and `DEFAULT_TENANT_ID` is set in the environment, the middleware silently assigns the request to that tenant instead of returning 401. In a misconfigured production deployment this bypasses multi-tenant isolation for unauthenticated or malformed-token requests.
 
 ### 7. Tally import maps ledger groups to account codes that don't exist
+**❌ REFUTED** — All six codes (`DIRECT_EXPENSE`, `INDIRECT_EXPENSE`, `FIXED_ASSETS`, `LOANS_ADVANCES`, `CURRENT_ASSETS`, `CURRENT_LIABILITIES`) are present in `src/lib/chart-of-accounts.ts` and referenced consistently by the importer. The codes exist.
+
 The Tally XML importer references internal account codes (`DIRECT_EXPENSE`, `INDIRECT_EXPENSE`, `FIXED_ASSETS`, `LOANS_ADVANCES`, `CURRENT_ASSETS`, `CURRENT_LIABILITIES`) that are absent from the chart of accounts. Any real Tally file containing Fixed Assets, Loans, or Expense ledgers will either throw a runtime error or silently corrupt the imported journal entries.
 
 ### 8. `pathname.includes(".")` auth bypass in middleware
+**✅ VERIFIED (latent) → [FIXED]** — The check existed verbatim ([middleware.ts](../src/middleware.ts)); any path with a dot anywhere bypassed auth. No real route currently contains a dot, so it was latent, but a genuine footgun. Fixed by matching only a trailing file extension (`/\.[a-zA-Z0-9]+$/`).
+
 Any request whose path contains a dot character (e.g. `/api/v2.0/bills`, any path with a file-extension-like segment) skips all authentication and tenant checks. This is a latent security hole that could be triggered by URL manipulation.
 
 ### 9. Bank reconciliation commit field mismatch — categorize calls ignored silently
+**✅ VERIFIED → [FIXED]** — The upload endpoint persisted `BankStatementRow` records but omitted their ids from the returned `preview`, so the UI sent `rowId: matchedPaymentId` (a payment id) to `/api/reconcile/categorize`, which looks rows up by `BankStatementRow` id → 404, silent failure. Fixed by returning each row's `id` in the preview, adding `id` to the `RowPreview` type, and keying the `ignored` set + categorize calls on the real row id.
+
 The reconciliation UI sends `rowId: matchedPaymentId` (a payment ID) to the categorize endpoint which expects a `BankStatementRow` ID. The two types are different DB records. Every manual match action silently fails — the row is never marked as matched. The reconciliation feature's core matching action is broken.
 
 ---

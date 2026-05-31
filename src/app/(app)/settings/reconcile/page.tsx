@@ -17,6 +17,7 @@ interface BankAccount {
 }
 
 interface RowPreview {
+  id: string;
   date: string;
   description: string;
   amount: number;
@@ -161,20 +162,18 @@ export default function ReconcilePage() {
     if (!uploadResult) return;
     setLoading(true);
     try {
-      // First, mark user-ignored rows
-      const ignorePromises = Array.from(ignored).map((matchedPaymentId) => {
-        // Find row by matchedPaymentId in preview
-        const row = uploadResult.preview.find((r) => r.matchedPaymentId === matchedPaymentId);
-        if (!row) return Promise.resolve();
-        return fetch("/api/reconcile/categorize", {
+      // First, mark user-ignored rows. The `ignored` set holds BankStatementRow
+      // ids, which is exactly what the categorize endpoint keys on.
+      const ignorePromises = Array.from(ignored).map((rowId) =>
+        fetch("/api/reconcile/categorize", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            rowId: matchedPaymentId, // this is a preview; we use statementId from upload result
+            rowId,
             action: "IGNORE",
           }),
-        });
-      });
+        })
+      );
       await Promise.allSettled(ignorePromises);
 
       const res = await fetch("/api/reconcile/commit", {
@@ -475,9 +474,9 @@ export default function ReconcilePage() {
           {/* Row table */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
             {uploadResult.preview.map((row, idx) => {
-              const matched = !!row.matchedPaymentId && !ignored.has(row.matchedPaymentId);
+              const matched = !!row.matchedPaymentId && !ignored.has(row.id);
               return (
-                <div key={idx} style={{
+                <div key={row.id ?? idx} style={{
                   border: `1.5px solid ${matched ? GR + "44" : "var(--sb-border)"}`,
                   borderRadius: 12, padding: "12px 16px",
                   background: matched ? GR + "08" : "var(--sb-card)",
@@ -502,15 +501,15 @@ export default function ReconcilePage() {
                     </p>
                     {matched && row.matchedPaymentId && (
                       <button
-                        onClick={() => setIgnored((prev) => new Set([...prev, row.matchedPaymentId!]))}
+                        onClick={() => setIgnored((prev) => new Set([...prev, row.id]))}
                         style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", background: "none", border: "none", cursor: "pointer", fontFamily: SG, marginTop: 4 }}
                       >
                         {t("reconcile.ignore" as TranslationKey)}
                       </button>
                     )}
-                    {!matched && row.matchedPaymentId && ignored.has(row.matchedPaymentId) && (
+                    {!matched && row.matchedPaymentId && ignored.has(row.id) && (
                       <button
-                        onClick={() => setIgnored((prev) => { const s = new Set(prev); s.delete(row.matchedPaymentId!); return s; })}
+                        onClick={() => setIgnored((prev) => { const s = new Set(prev); s.delete(row.id); return s; })}
                         style={{ fontSize: TYPE.caption, color: PU, background: "none", border: "none", cursor: "pointer", fontFamily: SG, marginTop: 4 }}
                       >
                         {t("reconcile.undo" as TranslationKey)}

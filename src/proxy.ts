@@ -41,15 +41,17 @@ function isPublicPath(pathname: string) {
   return false;
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // 1. FAST-PATH BYPASS: Bypasses headers/cookie/JWT parsing completely for static file and asset routes,
   // returning within sub-millisecond ranges to maximize edge performance.
+  // Only the LAST path segment is checked for a file extension — `pathname.includes(".")`
+  // would let any path containing a dot (e.g. `/api/v2.0/bills`) skip auth entirely.
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
-    pathname.includes(".")
+    /\.[a-zA-Z0-9]+$/.test(pathname)
   ) {
     return NextResponse.next();
   }

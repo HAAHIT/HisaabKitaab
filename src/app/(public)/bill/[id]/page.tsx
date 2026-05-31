@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { GST_STATE_CODES } from "@/lib/gst-states";
 import { serializeTenantSettings } from "@/lib/tenant-settings";
 import type { ColumnDef } from "@/lib/formula";
+import { PrintButton } from "./PrintButton";
 
 // ─── Helpers (duplicated from bill detail — no client import allowed here) ────
 
@@ -158,12 +159,7 @@ export default async function PublicBillPage(
               Pay ₹{total.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} via UPI
             </a>
           )}
-          <button
-            onClick={() => window.print()}
-            style={{ padding:"8px 18px", borderRadius:8, border:"1.5px solid #374151", background:"white", fontWeight:700, fontSize:13, cursor:"pointer" }}
-          >
-            🖨 Print / Save PDF
-          </button>
+          <PrintButton />
         </div>
       </div>
 
