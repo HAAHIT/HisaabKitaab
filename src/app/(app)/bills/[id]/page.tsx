@@ -77,12 +77,20 @@ function w(n: number): string {
   return ONES[Math.floor(n/100)] + " Hundred" + (n%100 ? " and " + w(n%100) : "");
 }
 function numberToWords(amount: number): string {
-  const n = Math.round(amount);
-  if (!n) return "Zero Rupees Only";
-  const cr=Math.floor(n/1e7), lk=Math.floor((n%1e7)/1e5), th=Math.floor((n%1e5)/1e3), rm=n%1e3;
-  return "Indian Rupees " +
-    [(cr?w(cr)+" Crore ":""),(lk?w(lk)+" Lakh ":""),(th?w(th)+" Thousand ":""),(rm?w(rm):" ")].join("").trim() +
-    " Only.";
+  const totalPaise = Math.round(Math.abs(amount) * 100);
+  if (!totalPaise) return "Zero Rupees Only";
+  const rupees = Math.floor(totalPaise / 100);
+  const paise = totalPaise % 100;
+  const rupeeWords = (() => {
+    if (!rupees) return "";
+    const cr=Math.floor(rupees/1e7), lk=Math.floor((rupees%1e7)/1e5), th=Math.floor((rupees%1e5)/1e3), rm=rupees%1e3;
+    return [(cr?w(cr)+" Crore ":""),(lk?w(lk)+" Lakh ":""),(th?w(th)+" Thousand ":""),(rm?w(rm):"")].join("").trim();
+  })();
+  const paiseWords = paise ? `${w(paise).trim()} Paise` : "";
+  const parts: string[] = [];
+  if (rupeeWords) parts.push(`Indian Rupees ${rupeeWords}`);
+  if (paiseWords) parts.push(rupeeWords ? `and ${paiseWords}` : paiseWords);
+  return `${parts.join(" ")} Only.`;
 }
 
 function formatINR(n: number) {

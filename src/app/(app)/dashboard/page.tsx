@@ -492,9 +492,12 @@ export default function DashboardPage() {
   if (!data) return null;
 
   const now = new Date();
-  const today = now.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" });
-  const mo = now.getMonth();
-  const dy = now.getDate();
+  const today = now.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", timeZone: "Asia/Kolkata" });
+  // Use IST for quarter-boundary calculation so the nudge fires correctly
+  // when the server is on UTC (Cloud Run / Vercel default).
+  const istParts = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Kolkata", month: "numeric", day: "numeric" }).formatToParts(now);
+  const mo = Number(istParts.find((p) => p.type === "month")?.value) - 1; // 0-indexed
+  const dy = Number(istParts.find((p) => p.type === "day")?.value);
   const showTallyNudge = (mo % 3 === 2 && dy >= 15) || (mo % 3 === 0 && dy <= 15);
   const s = data.summary;
 

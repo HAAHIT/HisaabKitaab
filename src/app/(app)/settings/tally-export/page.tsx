@@ -133,11 +133,19 @@ export default function TallyExportPage() {
         window.open(`https://wa.me/?text=${msg}`, "_blank");
         showToast(t("tally.export.successWhatsapp" as TranslationKey), "success");
       } else if (method === "email") {
+        const trimmedEmail = (caEmail || "").trim();
+        // Simple RFC-5322-ish format check — enough to catch the obvious "not an email"
+        // mistakes (missing @, trailing spaces, two @s). Real validation happens at delivery time.
+        const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail);
+        if (!emailOk) {
+          showToast(t("tally.export.invalidEmail" as TranslationKey) || "Enter a valid CA email address in Settings first.", "error");
+          return;
+        }
         const a = document.createElement("a");
         a.href = url; a.download = `SoloBooks-${from}-to-${to}.xml`; a.click();
         const subject = encodeURIComponent(`SoloBooks Tally file for ${from} to ${to}`);
         const body = encodeURIComponent(`Namaste,\nSoloBooks ka ${from} se ${to} ka Tally file ready hai.\nDownload karke Tally mein import kar lo.\n\n— SoloBooks`);
-        window.open(`mailto:${caEmail}?subject=${subject}&body=${body}`);
+        window.open(`mailto:${encodeURIComponent(trimmedEmail)}?subject=${subject}&body=${body}`);
         showToast(t("tally.export.successEmail" as TranslationKey), "success");
       }
     } catch (err) {

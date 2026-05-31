@@ -122,7 +122,7 @@ export default function TransactionsClient({ initialTransactions, page, totalPag
 
         <div className="flex gap-2 w-full md:w-auto">
           <HKButton size="sm" variant="secondary" onClick={exportExcel} className="flex-1 md:flex-none">
-            {t("transactions.exportCSV")}
+            {t("transactions.exportExcel")}
           </HKButton>
           <HKButton size="sm" onClick={() => router.push("/reports")} className="flex-1 md:flex-none">
             {t("transactions.goToReports")}
