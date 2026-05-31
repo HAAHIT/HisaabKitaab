@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
 import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useConfirm } from "@/contexts/ConfirmContext";
 import { ITEM_UNITS } from "@/lib/item-catalog";
 import {
   GR, AM, OR, SG, IN, TYPE,
@@ -39,6 +40,7 @@ async function readError(response: Response) {
 
 export default function ItemCatalogPage() {
   const { t } = useLanguage();
+  const confirm = useConfirm();
   const isMobile = useIsMobile();
   const [items, setItems] = useState<ItemRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -109,7 +111,7 @@ export default function ItemCatalogPage() {
   }
 
   async function handleDelete(itemId: string) {
-    if (!confirm(t("items.deleteConfirm"))) return;
+    if (!(await confirm({ message: t("items.deleteConfirm"), confirmLabel: "Delete", intent: "danger" }))) return;
     try {
       const response = await fetch(`/api/items/${itemId}`, { method: "DELETE" });
       if (!response.ok) throw new Error(await readError(response));

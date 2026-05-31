@@ -2,6 +2,7 @@
 
 import { useState, useEffect, use } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useConfirm } from "@/contexts/ConfirmContext";
 import { type TranslationKey } from "@/lib/i18n/translations";
 import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
 import { HKSkeleton } from "@/components/ui/HKSkeleton";
@@ -27,6 +28,7 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
   const { id } = use(params);
   const isMobile = useIsMobile();
   const { t } = useLanguage();
+  const confirm = useConfirm();
 
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
@@ -67,12 +69,12 @@ export default function EditTemplatePage({ params }: { params: Promise<{ id: str
     setColumns([...columns, { id: crypto.randomUUID(), name: "", type: "text", position: columns.length }]);
   }
 
-  function removeColumn(index: number) {
+  async function removeColumn(index: number) {
     const colName = columns[index].name;
     const dependents = columns.filter((c) => c.type === "formula" && c.formula && c.formula.includes(`{${colName}}`));
     if (dependents.length > 0 && colName) {
       const names = dependents.map((d) => d.name).join(", ");
-      if (!confirm(t("templates.confirmDeleteCol" as TranslationKey).replace("{names}", names))) return;
+      if (!(await confirm({ message: t("templates.confirmDeleteCol" as TranslationKey).replace("{names}", names), confirmLabel: "Delete column", intent: "danger" }))) return;
     }
     const newCols = columns.filter((_, i) => i !== index);
     newCols.forEach((c, i) => (c.position = i));

@@ -11,6 +11,7 @@ import { HKPagination } from "@/components/ui/HKPagination";
 import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useConfirm } from "@/contexts/ConfirmContext";
 import { type TranslationKey } from "@/lib/i18n/translations";
 import { dispatchQuotaExceeded } from "@/components/billing/QuotaProvider";
 import {
@@ -52,6 +53,7 @@ export default function PartiesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { t } = useLanguage();
+  const confirm = useConfirm();
   const isMobile = useIsMobile();
   const overdue = useOverdueData();
   const addNewHandled = useRef(false);
@@ -234,7 +236,7 @@ export default function PartiesPage() {
   }
 
   async function handleDelete(party: Party) {
-    if (!confirm(`${t("parties.archiveConfirm")} "${party.name}"?`)) return;
+    if (!(await confirm({ message: `${t("parties.archiveConfirm")} "${party.name}"?`, confirmLabel: "Archive", intent: "danger" }))) return;
     try {
       const response = await fetch(`/api/parties/${party.id}`, { method: "DELETE" });
       if (!response.ok) throw new Error(await readError(response));

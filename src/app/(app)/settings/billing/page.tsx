@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { HKButton } from "@/components/ui/HKButton";
 import { OR, PU, GR, SG, TYPE } from "@/components/ui/hk-design";
 import type { TenantPlan } from "@prisma/client";
+import { useConfirm } from "@/contexts/ConfirmContext";
 
 interface BillingStatus {
   plan: TenantPlan;
@@ -75,6 +76,7 @@ const PLANS = [
 
 export default function BillingPage() {
   const router = useRouter();
+  const confirm = useConfirm();
   const [status, setStatus] = useState<BillingStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -126,7 +128,7 @@ export default function BillingPage() {
   }
 
   async function cancel() {
-    if (!confirm("Cancel subscription? You will keep access until the end of the current billing cycle.")) return;
+    if (!(await confirm({ message: "Cancel subscription? You will keep access until the end of the current billing cycle.", confirmLabel: "Cancel subscription", cancelLabel: "Keep subscription", intent: "danger" }))) return;
     setActionLoading("cancel");
     try {
       const res = await fetch("/api/billing/cancel", { method: "POST" });

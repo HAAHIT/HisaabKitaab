@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { LanguageProvider } from "@/contexts/LanguageContext";
+import { ConfirmProvider } from "@/contexts/ConfirmContext";
 import type { Language } from "@/lib/i18n/translations";
 import { Toaster } from "sonner";
 import { ThemeProvider } from "next-themes";
@@ -36,8 +37,10 @@ export function Providers({
   return (
     <LanguageProvider key={initialLanguage} initialLanguage={initialLanguage}>
       <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
-        {children}
-        <Toaster richColors position="bottom-right" />
+        <ConfirmProvider>
+          {children}
+          <Toaster richColors position="bottom-right" />
+        </ConfirmProvider>
       </ThemeProvider>
     </LanguageProvider>
   );

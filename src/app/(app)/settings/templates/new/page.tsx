@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { validateFormula, translateFormulaToIds, type ColumnDef } from "@/lib/formula";
 import { STARTER_TEMPLATES, applyStarter } from "@/lib/default-bill-templates";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useConfirm } from "@/contexts/ConfirmContext";
 import {
   C, GR, AM, OR, PU, SG, TYPE,
   HKCard, HKToast, PageHeader, useIsMobile,
@@ -16,6 +17,7 @@ import { HKInput } from "@/components/ui/HKInput";
 export default function CreateTemplatePage() {
   const router = useRouter();
   const { t } = useLanguage();
+  const confirm = useConfirm();
   const isMobile = useIsMobile();
   const [name, setName] = useState("");
   const [columns, setColumns] = useState<ColumnDef[]>([
@@ -53,12 +55,12 @@ export default function CreateTemplatePage() {
     setColumns([...columns, { id: crypto.randomUUID(), name: "", type: "text", position: columns.length }]);
   }
 
-  function removeColumn(index: number) {
+  async function removeColumn(index: number) {
     const colName = columns[index].name;
     const dependents = columns.filter((c) => c.type === "formula" && c.formula && c.formula.includes(`{${colName}}`));
     if (dependents.length > 0 && colName) {
       const names = dependents.map((d) => d.name).join(", ");
-      if (!confirm(`This column is used in formulas for: ${names}. Delete anyway?`)) return;
+      if (!(await confirm({ message: `This column is used in formulas for: ${names}. Delete anyway?`, confirmLabel: "Delete column", intent: "danger" }))) return;
     }
     const newCols = columns.filter((_, i) => i !== index);
     newCols.forEach((c, i) => (c.position = i));

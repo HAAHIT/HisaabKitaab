@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useConfirm } from "@/contexts/ConfirmContext";
 import { type TranslationKey } from "@/lib/i18n/translations";
 import { HKButton } from "@/components/ui/HKButton";
 import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
@@ -64,6 +65,7 @@ function fmtDate(iso: string): string {
 export default function ReconcilePage() {
   const isMobile = useIsMobile();
   const { t } = useLanguage();
+  const confirm = useConfirm();
   const [step, setStep] = useState<Step>("history");
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
@@ -372,7 +374,7 @@ export default function ReconcilePage() {
                       size="sm"
                       variant="secondary"
                       onClick={async () => {
-                        if (!confirm(`Undo reconciliation for ${s.bankAccount.name} (${fmtDate(s.periodFrom)} – ${fmtDate(s.periodTo)})? This will reverse any auto-posted journal entries and clear reconciledAt timestamps.`)) return;
+                        if (!(await confirm({ title: "Undo reconciliation", message: `Undo reconciliation for ${s.bankAccount.name} (${fmtDate(s.periodFrom)} – ${fmtDate(s.periodTo)})? This will reverse any auto-posted journal entries and clear reconciledAt timestamps.`, confirmLabel: "Undo", intent: "danger" }))) return;
                         const res = await fetch("/api/reconcile/uncommit", {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },

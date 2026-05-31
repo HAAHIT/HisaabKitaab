@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import type { TenantDetail } from "@/lib/admin-stats";
 import { FEATURE_FLAGS } from "@/lib/feature-flags";
+import { useConfirm } from "@/contexts/ConfirmContext";
 
 const fmtInt = (n: number) => new Intl.NumberFormat("en-IN").format(n);
 const fmtMoney = (n: number) =>
@@ -120,6 +121,7 @@ async function jsonOrThrow(res: Response) {
 export default function TenantDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const confirm = useConfirm();
   const id = params?.id;
   const [data, setData] = useState<TenantDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -188,7 +190,7 @@ export default function TenantDetailPage() {
   const impersonate = async (userId: string, userName: string, readOnly: boolean) => {
     if (!id) return;
     const label = readOnly ? "read-only" : "with FULL ACCESS";
-    if (!confirm(`Sign in as ${userName} ${label}? You'll act as this user until you exit impersonation.`)) return;
+    if (!(await confirm({ title: "Impersonate user", message: `Sign in as ${userName} ${label}? You'll act as this user until you exit impersonation.`, confirmLabel: "Impersonate", intent: "danger" }))) return;
     setBusy(`imp:${userId}`);
     setActionError(null);
     try {
@@ -226,7 +228,7 @@ export default function TenantDetailPage() {
 
   const suspendAll = async (suspend: boolean) => {
     if (!id) return;
-    if (!confirm(suspend ? "Deactivate all non-superadmin users in this tenant?" : "Reactivate all users in this tenant?")) return;
+    if (!(await confirm({ message: suspend ? "Deactivate all non-superadmin users in this tenant?" : "Reactivate all users in this tenant?", confirmLabel: suspend ? "Deactivate" : "Reactivate", intent: suspend ? "danger" : "primary" }))) return;
     setBusy("suspend");
     setActionError(null);
     try {

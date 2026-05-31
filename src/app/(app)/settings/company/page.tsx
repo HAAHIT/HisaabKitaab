@@ -7,6 +7,7 @@ import { HKTextarea } from "@/components/ui/HKTextarea";
 import { useRouter } from "next/navigation";
 import { db } from "@/lib/db";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useConfirm } from "@/contexts/ConfirmContext";
 import {
   BUSINESS_TYPES,
   TAX_REGISTRATION_TYPES,
@@ -26,6 +27,7 @@ async function readError(response: Response) {
 export default function CompanySettingsPage() {
   const router = useRouter();
   const { t } = useLanguage();
+  const confirm = useConfirm();
   const isMobile = useIsMobile();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -170,8 +172,8 @@ export default function CompanySettingsPage() {
   }
 
   async function handleWipeCloudData() {
-    if (!confirm("SACH MEIN? Yeh sab cloud data delete kar dega — journals, parties, bills, payments, imports. Yeh undo nahi hoga!")) return;
-    if (!confirm("Last chance: ALL cloud data will be permanently deleted. Continue?")) return;
+    if (!(await confirm({ title: "Delete ALL cloud data?", message: "SACH MEIN? Yeh sab cloud data delete kar dega — journals, parties, bills, payments, imports. Yeh undo nahi hoga!", confirmLabel: "Continue", intent: "danger" }))) return;
+    if (!(await confirm({ title: "Last chance", message: "ALL cloud data will be permanently deleted. Continue?", confirmLabel: "Wipe data", intent: "danger" }))) return;
     try {
       const res = await fetch("/api/admin/wipe-data", { method: "POST" });
       const data = await res.json();

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useConfirm } from "@/contexts/ConfirmContext";
 
 interface SuperAdmin {
   id: string;
@@ -131,6 +132,7 @@ function ChangeOwnPassword() {
 }
 
 export default function SuperAdminsPage() {
+  const confirm = useConfirm();
   const [rows, setRows] = useState<SuperAdmin[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -173,7 +175,7 @@ export default function SuperAdminsPage() {
   };
 
   const revoke = async (id: string, name: string) => {
-    if (!confirm(`Revoke superadmin access for ${name}?`)) return;
+    if (!(await confirm({ message: `Revoke superadmin access for ${name}?`, confirmLabel: "Revoke", intent: "danger" }))) return;
     try {
       const res = await fetch(`/api/admin/superadmins/${id}`, { method: "DELETE" });
       if (!res.ok) {

@@ -6,6 +6,7 @@ import { HKModal } from "@/components/ui/hk-design";
 import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useConfirm } from "@/contexts/ConfirmContext";
 import { type TranslationKey } from "@/lib/i18n/translations";
 import { BillActionBar } from "@/components/bills/BillActionBar";
 import type { ColumnDef } from "@/lib/formula";
@@ -131,6 +132,7 @@ const PRINT_CSS = `
 export default function BillDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const { t } = useLanguage();
+  const confirm = useConfirm();
   const { id } = use(params);
   const isMobile = useIsMobile();
 
@@ -324,7 +326,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
             <button
               onClick={async () => {
                 if (!bill) return;
-                if (!window.confirm(`Create a new DRAFT copy of ${bill.billNumber}?`)) return;
+                if (!(await confirm({ message: `Create a new DRAFT copy of ${bill.billNumber}?`, confirmLabel: "Duplicate" }))) return;
                 try {
                   const res = await fetch(`/api/bills/${id}/duplicate`, { method: "POST" });
                   const json = await res.json();
