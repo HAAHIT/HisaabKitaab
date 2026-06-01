@@ -1,4 +1,4 @@
-const CACHE_NAME = "doorcraft-static-v2";
+const CACHE_NAME = "solobooks-static-v1";
 const PRECACHE_URLS = [
   "/manifest.json",
   "/icons/icon-192.png",

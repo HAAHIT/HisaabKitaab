@@ -36,7 +36,9 @@ function isPublicPath(pathname: string) {
     if (pattern instanceof RegExp) {
       if (pattern.test(pathname)) return true;
     } else {
-      if (pathname.startsWith(pattern)) return true;
+      // Exact match or a true sub-path only — avoids unanchored prefix
+      // over-matching (e.g. "/guides" must not match "/guides-internal").
+      if (pathname === pattern || pathname.startsWith(pattern + "/")) return true;
     }
   }
   return false;
@@ -160,13 +162,15 @@ export async function proxy(request: NextRequest) {
     }
     
     const tenantId =
-      (typeof payload.tenantId === "string" && payload.tenantId.trim()
+      typeof payload.tenantId === "string" && payload.tenantId.trim()
         ? payload.tenantId.trim()
-        : null) ?? process.env.DEFAULT_TENANT_ID?.trim() ?? null;
-    
+        : null;
+
     // Always overwrite — header was stripped above so only the server-derived
-    // value reaches API routes. If no tenant can be resolved the header stays
-    // absent and routes will return a 500 tenant-context-missing error.
+    // value reaches API routes. A verified token without a tenantId claim
+    // resolves to null (no DEFAULT_TENANT_ID fallback): the header stays
+    // absent and routes return a 500 tenant-context-missing error rather than
+    // silently binding the request to a default tenant.
     if (tenantId) {
       requestHeaders.set(TENANT_HEADER, tenantId);
     }
