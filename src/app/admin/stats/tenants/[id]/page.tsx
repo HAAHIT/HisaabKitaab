@@ -261,7 +261,7 @@ export default function TenantDetailPage() {
   if (!data) return <div style={{ color: "var(--sb-muted)" }}>Loading…</div>;
 
   const anyUserActive = data.users.some((u) => u.isActive && u.role !== "SUPERADMIN");
-  const otherPlan = data.plan === "PRO" ? "FREE" : "PRO";
+  const PLAN_OPTIONS: ("FREE" | "PRO" | "PRO_PLUS")[] = ["FREE", "PRO", "PRO_PLUS"];
 
   return (
     <div>
@@ -280,14 +280,28 @@ export default function TenantDetailPage() {
               {actionError}
             </div>
           )}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
-            <button
-              onClick={() => patchTenant({ plan: otherPlan }, "plan")}
-              disabled={busy === "plan"}
-              style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid var(--sb-border)", background: "var(--sb-card)", fontSize: 13, cursor: "pointer" }}
-            >
-              {busy === "plan" ? "…" : `Switch to ${otherPlan}`}
-            </button>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12, alignItems: "center" }}>
+            <span style={{ fontSize: 12, color: "var(--sb-muted)" }}>Plan:</span>
+            {PLAN_OPTIONS.map((p) => (
+              <button
+                key={p}
+                onClick={() => patchTenant({ plan: p }, "plan")}
+                disabled={busy === "plan" || data.plan === p}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 8,
+                  border: "1px solid var(--sb-border)",
+                  background: data.plan === p ? "#dbeafe" : "var(--sb-card)",
+                  color: data.plan === p ? "#1e40af" : "var(--sb-text)",
+                  fontWeight: data.plan === p ? 700 : 500,
+                  fontSize: 13,
+                  cursor: data.plan === p ? "default" : "pointer",
+                  opacity: busy === "plan" && data.plan !== p ? 0.6 : 1,
+                }}
+              >
+                {data.plan === p ? `✓ ${p}` : p}
+              </button>
+            ))}
             <button
               onClick={() => suspendAll(anyUserActive)}
               disabled={busy === "suspend"}

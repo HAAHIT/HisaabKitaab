@@ -95,6 +95,9 @@ export default function ReconcilePage() {
   const [commitResult, setCommitResult] = useState<{ matchedCount: number; ambiguousCount: number; reconciledPaymentCount?: number; totalRows: number } | null>(null);
   const [commitConfirmOpen, setCommitConfirmOpen] = useState(false);
 
+  // Selected file (for showing name in dropzone)
+  const [selectedFile, setSelectedFile] = useState<{ name: string; size: number } | null>(null);
+
   // ── Load bank accounts ───────────────────────────────────────────────────
 
   useEffect(() => {
@@ -369,7 +372,7 @@ export default function ReconcilePage() {
                       </div>
                     ))}
                   </div>
-                  {s.isReconciled && (
+                  {s.isReconciled ? (
                     <HKButton
                       size="sm"
                       variant="secondary"
@@ -387,6 +390,40 @@ export default function ReconcilePage() {
                       }}
                     >
                       Undo
+                    </HKButton>
+                  ) : (
+                    <HKButton
+                      size="sm"
+                      onClick={async () => {
+                        setLoading(true);
+                        try {
+                          const res = await fetch(`/api/reconcile/statements/${s.id}`);
+                          const data = await res.json();
+                          if (!res.ok) { showToast(data.error ?? "Failed to load statement", false); return; }
+                          setUploadResult({
+                            statementId: data.statementId,
+                            rowCount: data.rowCount,
+                            matchedCount: data.matchedCount,
+                            parseErrors: data.parseErrors,
+                            preview: data.preview,
+                          });
+                          // Seed ignored + categorized state from existing row statuses
+                          const ignoredSet = new Set<string>();
+                          const catMap: Record<string, string> = {};
+                          for (const r of data.preview as RowPreview[]) {
+                            // The /statements/[id] response doesn't include status — rows
+                            // marked AMBIGUOUS or whose matched payment was already manually
+                            // chosen come back via reason hints. For resume we just open
+                            // the preview; the user can re-ignore/re-categorize as needed.
+                            void r; void ignoredSet; void catMap;
+                          }
+                          setStep("preview");
+                        } finally {
+                          setLoading(false);
+                        }
+                      }}
+                    >
+                      Continue
                     </HKButton>
                   )}
                 </div>
@@ -494,28 +531,60 @@ export default function ReconcilePage() {
               <div
                 onClick={() => fileRef.current?.click()}
                 style={{
-                  border: "2px dashed var(--sb-border)", borderRadius: 12, padding: "24px 20px",
+                  border: `2px dashed ${selectedFile ? GR : "var(--sb-border)"}`,
+                  borderRadius: 12, padding: "24px 20px",
                   textAlign: "center", cursor: "pointer",
-                  background: "var(--sb-bg)",
+                  background: selectedFile ? GR + "0a" : "var(--sb-bg)",
+                  transition: "border-color .15s, background .15s",
                 }}
               >
-                <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", fontFamily: SG, margin: 0 }}>
-                  {t("reconcile.csvPrompt" as TranslationKey)}
-                </p>
-                <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG, marginTop: 4 }}>
-                  {t("reconcile.csvHelp" as TranslationKey)}
-                </p>
+                {selectedFile ? (
+                  <>
+                    <p style={{ fontSize: TYPE.body, color: "var(--sb-text)", fontFamily: SG, margin: 0, fontWeight: 700, wordBreak: "break-all" }}>
+                      📎 {selectedFile.name}
+                    </p>
+                    <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG, marginTop: 4 }}>
+                      {(selectedFile.size / 1024).toFixed(1)} KB · Tap to choose a different file
+                    </p>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedFile(null);
+                        if (fileRef.current) fileRef.current.value = "";
+                      }}
+                      style={{
+                        marginTop: 8, fontSize: TYPE.caption, color: OR, background: "none",
+                        border: "none", cursor: "pointer", fontFamily: SG, textDecoration: "underline",
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", fontFamily: SG, margin: 0 }}>
+                      {t("reconcile.csvPrompt" as TranslationKey)}
+                    </p>
+                    <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG, marginTop: 4 }}>
+                      {t("reconcile.csvHelp" as TranslationKey)}
+                    </p>
+                  </>
+                )}
               </div>
               <input
                 ref={fileRef}
                 type="file"
-                accept=".csv,text/csv"
+                accept=".csv,.xlsx,.xls,.pdf,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
                 style={{ display: "none" }}
                 onChange={() => {
-                  const name = fileRef.current?.files?.[0]?.name;
-                  if (name) showToast(`File ready: ${name}`, true);
+                  const f = fileRef.current?.files?.[0];
+                  if (f) setSelectedFile({ name: f.name, size: f.size });
                 }}
               />
+              <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG, marginTop: 6, textAlign: "center" }}>
+                Scanned (image-based) PDFs are not supported.
+              </p>
             </div>
 
             <HKButton
@@ -706,7 +775,7 @@ export default function ReconcilePage() {
               .replace("{ambiguousCount}", String(commitResult.ambiguousCount))}
           </p>
           <HKButton
-            onClick={() => { setStep("history"); setUploadResult(null); setCommitResult(null); }}
+            onClick={() => { setStep("history"); setUploadResult(null); setCommitResult(null); setSelectedFile(null); }}
           >
             {t("reconcile.viewHistory" as TranslationKey)}
           </HKButton>

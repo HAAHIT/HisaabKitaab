@@ -106,9 +106,15 @@ export default function PartyProfileClient({
       ? `Hi ${party.name}, your account is settled. Thank you!`
       : `Hi ${party.name}, your outstanding balance is ${fmtAbs(calculatedCurrent)}.`
   );
-  const waHref = party.phone
-    ? `https://wa.me/91${party.phone.replace(/\D/g, "")}?text=${waText}`
-    : undefined;
+  // wa.me expects a digits-only number with country code. Strip non-digits;
+  // only prepend 91 if the cleaned number doesn't already start with a country
+  // code (10-digit local number = no country code yet).
+  const waHref = (() => {
+    if (!party.phone) return undefined;
+    const digits = party.phone.replace(/\D/g, "");
+    const withCountry = digits.length === 10 ? `91${digits}` : digits;
+    return `https://wa.me/${withCountry}?text=${waText}`;
+  })();
 
   async function handleCheckBalances() {
     setReconcileLoading("check");

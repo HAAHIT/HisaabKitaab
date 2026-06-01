@@ -2,7 +2,7 @@
  * Bank Reconciliation — Matching Algorithm
  *
  * A bank row auto-matches a Payment when ALL four conditions hold:
- *  1. Amount within ₹1 tolerance
+ *  1. Amount within ₹5 tolerance
  *  2. Direction matches (INCOMING ↔ payment type)
  *  3. Date proximity: ±3 calendar days
  *  4. Bank description and party name share at least one significant word (≥3 chars, either direction)
@@ -31,7 +31,10 @@ export interface MatchResult {
   reason: string;
 }
 
-const AMOUNT_TOLERANCE = 1; // ₹1
+// ₹5 covers the typical Indian bank service charges deducted at credit time
+// (SMS alert fees ₹2–₹3, NEFT/IMPS charges ₹2–₹5, cheque-return surcharges).
+// A tighter tolerance was missing these consistently in production statements.
+const AMOUNT_TOLERANCE = 5;
 const DATE_TOLERANCE_DAYS = 3;
 
 function daysDiff(a: Date, b: Date): number {

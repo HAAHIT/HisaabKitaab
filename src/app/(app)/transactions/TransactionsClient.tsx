@@ -9,8 +9,23 @@ import { Activity } from "@/components/ui/icons";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { TranslationKey } from "@/lib/i18n/translations";
 
+interface TransactionLine {
+  partyName: string | null;
+  accountName: string | null;
+  debit: number | string;
+  credit: number | string;
+}
+
+interface Transaction {
+  id: string;
+  entryDate: Date | string;
+  voucherType: string;
+  narration: string | null;
+  lines: TransactionLine[];
+}
+
 interface TransactionsClientProps {
-  initialTransactions: any[];
+  initialTransactions: Transaction[];
   page: number;
   totalPages: number;
   total: number;
@@ -165,7 +180,7 @@ export default function TransactionsClient({ initialTransactions, page, totalPag
             />
           </div>
         ) : (
-          initialTransactions.map((tx: any) => (
+          initialTransactions.map((tx) => (
             <div key={tx.id} className="rounded-2xl border border-[var(--sb-border)] bg-[var(--sb-card)] shadow-sm overflow-hidden">
               <div className="flex items-start justify-between gap-2 p-3 border-b border-[var(--sb-border)] bg-[var(--sb-badge)]">
                 <div className="flex items-center gap-2 min-w-0 flex-wrap">
@@ -179,7 +194,7 @@ export default function TransactionsClient({ initialTransactions, page, totalPag
                 <span className="text-xs text-default-500 whitespace-nowrap">{formatDate(tx.entryDate)}</span>
               </div>
               <div className="divide-y divide-[var(--sb-border)]">
-                {tx.lines.map((line: any, idx: number) => {
+                {tx.lines.map((line, idx) => {
                   const debit = Number(line.debit) || 0;
                   const credit = Number(line.credit) || 0;
                   return (
@@ -240,8 +255,8 @@ export default function TransactionsClient({ initialTransactions, page, totalPag
                   </td>
                 </tr>
               ) : (
-                initialTransactions.flatMap((tx: any) =>
-                  tx.lines.map((line: any, idx: number) => (
+                initialTransactions.flatMap((tx) =>
+                  tx.lines.map((line, idx) => (
                     <tr key={`${tx.id}-${idx}`} className="border-b border-[var(--sb-border)] hover:bg-default-50/50 transition-colors">
                       <td className="py-3 px-4 text-default-600 text-sm w-24">
                         {idx === 0 ? formatDate(tx.entryDate) : ""}

@@ -6,6 +6,7 @@ import { resolveSuperAdminSession } from "@/lib/session-server";
 import { publicUrl } from "@/lib/public-url";
 import { sendMail } from "@/lib/mail";
 import { buildPasswordResetEmail } from "@/lib/mail-templates";
+import { checkRateLimit } from "@/lib/api-rate-limit";
 
 const TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour — operator-initiated, slightly longer than self-serve
 
@@ -21,6 +22,12 @@ export async function POST(
 ) {
   const session = await resolveSuperAdminSession(request);
   if (!session) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  // Cap superadmin-initiated resets to 20/min — prevents a compromised superadmin
+  // session from being used to flood reset emails (which would burn MSG91 quota
+  // and could be flagged as abuse by the provider).
+  const rl = await checkRateLimit(request, `admin:reset-password:${session.userId}`, 20);
+  if (rl) return rl;
 
   const { id } = await context.params;
 

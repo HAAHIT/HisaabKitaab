@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
+import { checkRateLimit } from "@/lib/api-rate-limit";
 import {
   getClosingPreview,
   executeYearEndClose,
@@ -58,6 +59,11 @@ export async function POST(request: NextRequest) {
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Admin role required" }, { status: 403 });
   }
+
+  // Year-end close is irreversible. Cap at 5/min/tenant to limit blast radius
+  // of a runaway script or misclick storm.
+  const rl = await checkRateLimit(request, `year-end-close:${tenantId}`, 5);
+  if (rl) return rl;
 
   let body: { fyStartYear?: number };
   try {
