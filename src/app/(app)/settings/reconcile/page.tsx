@@ -6,6 +6,7 @@ import { useConfirm } from "@/contexts/ConfirmContext";
 import { type TranslationKey } from "@/lib/i18n/translations";
 import { HKButton } from "@/components/ui/HKButton";
 import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
+import { HKInput } from "@/components/ui/HKInput";
 import { OR, PU, GR, AM, SG, IN, TYPE, PageHeader, useIsMobile, HKModal } from "@/components/ui/hk-design";
 import { SUPPORTED_BANKS } from "@/lib/bank-reconciliation/parsers/index";
 import { RECONCILE_CATEGORY_OPTIONS } from "@/lib/bank-reconciliation/categories";
@@ -453,20 +454,16 @@ export default function ReconcilePage() {
               <label style={{ display: "block", fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--sb-sub)", fontFamily: SG, marginBottom: 8 }}>
                 {t("reconcile.selectAccount" as TranslationKey)} *
               </label>
-              <select
+              <HKSelect
                 value={bankAccountId}
-                onChange={(e) => setBankAccountId(e.target.value)}
-                style={{
-                  width: "100%", padding: "12px 16px", borderRadius: 12, fontSize: TYPE.body, fontFamily: SG,
-                  border: "1.5px solid var(--sb-border)", background: "var(--sb-card)", color: "var(--sb-text)",
-                  outline: "none",
-                }}
+                onValueChange={setBankAccountId}
+                placeholder={t("reconcile.selectPlaceholder" as TranslationKey)}
+                aria-label={t("reconcile.selectAccount" as TranslationKey)}
               >
-                <option value="">{t("reconcile.selectPlaceholder" as TranslationKey)}</option>
                 {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}{a.accountNumber ? ` (${a.accountNumber})` : ""}</option>
+                  <HKSelectItem key={a.id} value={a.id}>{a.name}{a.accountNumber ? ` (${a.accountNumber})` : ""}</HKSelectItem>
                 ))}
-              </select>
+              </HKSelect>
             </div>
 
             {/* Bank Format */}
@@ -474,19 +471,15 @@ export default function ReconcilePage() {
               <label style={{ display: "block", fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--sb-sub)", fontFamily: SG, marginBottom: 8 }}>
                 {t("reconcile.bankFormat" as TranslationKey)} *
               </label>
-              <select
+              <HKSelect
                 value={bankSlug}
-                onChange={(e) => setBankSlug(e.target.value)}
-                style={{
-                  width: "100%", padding: "12px 16px", borderRadius: 12, fontSize: TYPE.body, fontFamily: SG,
-                  border: "1.5px solid var(--sb-border)", background: "var(--sb-card)", color: "var(--sb-text)",
-                  outline: "none",
-                }}
+                onValueChange={setBankSlug}
+                aria-label={t("reconcile.bankFormat" as TranslationKey)}
               >
                 {SUPPORTED_BANKS.map((b) => (
-                  <option key={b.slug} value={b.slug}>{b.label}</option>
+                  <HKSelectItem key={b.slug} value={b.slug}>{b.label}</HKSelectItem>
                 ))}
-              </select>
+              </HKSelect>
             </div>
 
             {/* Period */}
@@ -495,30 +488,20 @@ export default function ReconcilePage() {
                 <label style={{ display: "block", fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--sb-sub)", fontFamily: SG, marginBottom: 8 }}>
                   {t("reconcile.periodFrom" as TranslationKey)}
                 </label>
-                <input
+                <HKInput
                   type="date"
                   value={periodFrom}
-                  onChange={(e) => setPeriodFrom(e.target.value)}
-                  style={{
-                    width: "100%", padding: "12px 16px", borderRadius: 12, fontSize: TYPE.body, fontFamily: SG,
-                    border: "1.5px solid var(--sb-border)", background: "var(--sb-card)", color: "var(--sb-text)",
-                    outline: "none", boxSizing: "border-box",
-                  }}
+                  onValueChange={setPeriodFrom}
                 />
               </div>
               <div style={{ flex: 1 }}>
                 <label style={{ display: "block", fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--sb-sub)", fontFamily: SG, marginBottom: 8 }}>
                   {t("reconcile.periodTo" as TranslationKey)}
                 </label>
-                <input
+                <HKInput
                   type="date"
                   value={periodTo}
-                  onChange={(e) => setPeriodTo(e.target.value)}
-                  style={{
-                    width: "100%", padding: "12px 16px", borderRadius: 12, fontSize: TYPE.body, fontFamily: SG,
-                    border: "1.5px solid var(--sb-border)", background: "var(--sb-card)", color: "var(--sb-text)",
-                    outline: "none", boxSizing: "border-box",
-                  }}
+                  onValueChange={setPeriodTo}
                 />
               </div>
             </div>

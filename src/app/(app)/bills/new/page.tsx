@@ -161,6 +161,13 @@ export function BillFormPage({ editBillId }: { editBillId?: string } = {}) {
       }
       if (editBillId && billData?.bill) {
         const b = billData.bill;
+        // Only DRAFT bills are editable. The server PATCH also rejects non-DRAFT
+        // edits (400), but don't even render the editable form for a finalized
+        // or cancelled bill — send the user to the read-only detail view.
+        if (b.status && b.status !== "DRAFT") {
+          router.replace(`/bills/${editBillId}`);
+          return;
+        }
         const tpl = nextTemplates.find((tp) => tp.id === b.templateId) || null;
         if (tpl) {
           setSelectedTemplate(tpl);

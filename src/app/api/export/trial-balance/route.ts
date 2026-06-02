@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { prisma } from "@/lib/prisma";
 import { resolveSession } from "@/lib/api-tenant";
+import { checkFeatureAccess } from "@/lib/quota";
 import { CHART_OF_ACCOUNTS } from "@/lib/chart-of-accounts";
 import { logError, getRequestId } from "@/lib/observability";
 import { parseIndianDateRange, roundTo2 } from "@/lib/journal-reporting";
@@ -22,6 +23,15 @@ export async function GET(request: NextRequest) {
 
   if (role !== "ADMIN" && role !== "ACCOUNTANT") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // [Phase 1 — Plan gate] Excel report exports are a PRO feature; enforce server-side.
+  const feature = await checkFeatureAccess(tenantId, "excelReports");
+  if (!feature.allowed) {
+    return NextResponse.json(
+      { error: feature.reason ?? "Feature locked", code: "FEATURE_LOCKED", feature: "excelReports" },
+      { status: 402 }
+    );
   }
 
   const { searchParams } = new URL(request.url);

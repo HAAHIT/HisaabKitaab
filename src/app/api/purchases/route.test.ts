@@ -54,6 +54,7 @@ const prismaMock = vi.hoisted(() => ({
   },
   tenant: {
     findUnique: vi.fn(),
+    update: vi.fn(),
   },
   auditLog: {
     create: vi.fn(),
@@ -100,6 +101,12 @@ describe("Purchases API", () => {
     });
     prismaMock.tenant.findUnique.mockResolvedValue({
       settings: { billing: { prefix: "PUR", tax: 18 } },
+      // Quota state for checkBillQuota()/getQuotaState().
+      plan: "FREE",
+      trialEndsAt: null,
+      monthlyBillCount: 0,
+      monthlyPartyCount: 0,
+      usageWindowStart: new Date(),
     });
     prismaMock.billTemplate.findFirst.mockResolvedValue({ id: "tmpl-1" });
     prismaMock.bill.count.mockResolvedValue(0);

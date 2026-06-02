@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveSession } from "@/lib/api-tenant";
 import { logError, logInfo, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
+import { checkFeatureAccess } from "@/lib/quota";
 
 export const runtime = "nodejs";
 
@@ -186,6 +187,15 @@ export async function POST(request: NextRequest) {
 
   if (role !== "ADMIN" && role !== "STAFF") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // [Phase 1 — Plan gate] Purchase OCR is a PRO_PLUS feature; enforce server-side.
+  const feature = await checkFeatureAccess(tenantId, "purchaseOcr");
+  if (!feature.allowed) {
+    return NextResponse.json(
+      { error: feature.reason ?? "Feature locked", code: "FEATURE_LOCKED", feature: "purchaseOcr" },
+      { status: 402 }
+    );
   }
 
   // Rate-limit: max 20 OCR parse requests per minute per tenant

@@ -173,7 +173,16 @@ export default function CompanySettingsPage() {
 
   async function handleWipeCloudData() {
     if (!(await confirm({ title: "Delete ALL cloud data?", message: "SACH MEIN? Yeh sab cloud data delete kar dega — journals, parties, bills, payments, imports. Yeh undo nahi hoga!", confirmLabel: "Continue", intent: "danger" }))) return;
-    if (!(await confirm({ title: "Last chance", message: "ALL cloud data will be permanently deleted. Continue?", confirmLabel: "Wipe data", intent: "danger" }))) return;
+    // Final gate: require typing the exact company name. A double tap can't
+    // get through this — the operator must deliberately type it.
+    const confirmName = companyName.trim() || "DELETE";
+    if (!(await confirm({
+      title: "Last chance",
+      message: `ALL cloud data will be permanently deleted and cannot be recovered.`,
+      confirmLabel: "Wipe data",
+      intent: "danger",
+      requireText: confirmName,
+    }))) return;
     try {
       const res = await fetch("/api/admin/wipe-data", { method: "POST" });
       const data = await res.json();

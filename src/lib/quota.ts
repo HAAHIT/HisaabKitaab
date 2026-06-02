@@ -11,9 +11,22 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { PLAN_LIMITS, getEffectivePlan, type QuotaCheck } from "@/lib/plan-limits";
+import {
+  PLAN_LIMITS,
+  getEffectivePlan,
+  type QuotaCheck,
+  type PlanQuota,
+} from "@/lib/plan-limits";
 
 type CounterField = "monthlyBillCount" | "monthlyPartyCount";
+
+/** Boolean feature flags on a plan (everything except numeric quotas / display fields). */
+export type PlanFeature = keyof Omit<
+  PlanQuota,
+  "monthlyBills" | "parties" | "users" | "label" | "monthlyPaise" | "yearlyPaise"
+>;
+
+export type FeatureCheck = { allowed: boolean; reason?: string };
 
 /**
  * IST-based month boundary — returns the first day of the IST month
@@ -154,4 +167,68 @@ export async function incrementPartyCounter(
     where: { id: tenantId },
     data: { monthlyPartyCount: { increment: 1 } },
   });
+}
+
+/**
+ * Server-side plan-feature gate. Call at the top of any API route that
+ * exposes a PRO/PRO_PLUS feature (Tally export/import, GST returns,
+ * credit notes, bank reconciliation, purchase OCR, Excel reports).
+ *
+ * The browser-side paywall is not trustworthy — a FREE tenant can hit the
+ * endpoint directly — so every feature route must enforce this. Honours the
+ * trial via getEffectivePlan().
+ */
+export async function checkFeatureAccess(
+  tenantId: string,
+  feature: PlanFeature,
+): Promise<FeatureCheck> {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { plan: true, trialEndsAt: true },
+  });
+  if (!tenant) throw new Error(`Tenant ${tenantId} not found`);
+
+  const plan = getEffectivePlan(tenant.plan, tenant.trialEndsAt);
+  const allowed = PLAN_LIMITS[plan][feature];
+
+  return {
+    allowed,
+    reason: allowed
+      ? undefined
+      : `This feature isn't available on the ${PLAN_LIMITS[plan].label} plan. Upgrade to unlock it.`,
+  };
+}
+
+/**
+ * Check whether the tenant may add one more user (seat).
+ * Counts only active users — deactivated accounts don't consume a seat.
+ * FREE = 1 user, PRO = 3, PRO_PLUS = unlimited.
+ */
+export async function checkUserSeatQuota(tenantId: string): Promise<QuotaCheck> {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { plan: true, trialEndsAt: true },
+  });
+  if (!tenant) throw new Error(`Tenant ${tenantId} not found`);
+
+  const plan = getEffectivePlan(tenant.plan, tenant.trialEndsAt);
+  const limit = PLAN_LIMITS[plan].users;
+
+  if (limit === null) {
+    return { allowed: true, used: 0, limit: null };
+  }
+
+  const used = await prisma.user.count({
+    where: { tenantId, isActive: true },
+  });
+
+  const allowed = used < limit;
+  return {
+    allowed,
+    used,
+    limit,
+    reason: allowed
+      ? undefined
+      : `You've reached the ${limit}-user limit on the ${PLAN_LIMITS[plan].label} plan. Upgrade to Pakka for more users.`,
+  };
 }

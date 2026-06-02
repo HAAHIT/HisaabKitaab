@@ -77,12 +77,15 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Deterministic idempotency key (matches the webhook convention) so a
+    // retried create for the same subscription can't insert a duplicate row.
     await prisma.subscriptionEvent.create({
       data: {
         tenantId,
         eventType: "subscription.created",
         toPlan: body.plan,
         razorpayId: subscription.id,
+        idempotencyKey: `subscription.created:${subscription.id}`,
         payload: { cycle: body.cycle, totalCount, short_url: subscription.short_url },
       },
     });

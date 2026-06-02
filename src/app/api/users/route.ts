@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { resolveSession } from "@/lib/api-tenant";
 import { checkRateLimit } from "@/lib/api-rate-limit";
+import { checkUserSeatQuota } from "@/lib/quota";
 import { logError, getRequestId } from "@/lib/observability";
 
 export const runtime = "nodejs";
@@ -78,6 +79,20 @@ export async function POST(request: NextRequest) {
 
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // [Phase 1 — Quota] Enforce the plan seat limit (FREE = 1, PRO = 3, PRO_PLUS = unlimited).
+  // Returns 402 PAYMENT_REQUIRED so the client can show the upgrade modal.
+  const seatQuota = await checkUserSeatQuota(tenantId);
+  if (!seatQuota.allowed) {
+    return NextResponse.json(
+      {
+        error: seatQuota.reason ?? "User limit reached",
+        code: "QUOTA_EXCEEDED",
+        quota: { used: seatQuota.used, limit: seatQuota.limit, resource: "users" },
+      },
+      { status: 402 }
+    );
   }
 
   try {

@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { resolveSession } from "@/lib/api-tenant";
+import { checkFeatureAccess } from "@/lib/quota";
 import { logError, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { createJournalEntry } from "@/lib/journal";
@@ -26,6 +27,15 @@ export async function POST(request: NextRequest) {
 
   if (role !== "ADMIN" && role !== "ACCOUNTANT") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // [Phase 1 — Plan gate] Bank reconciliation is a PRO feature; enforce server-side.
+  const feature = await checkFeatureAccess(tenantId, "bankReconciliation");
+  if (!feature.allowed) {
+    return NextResponse.json(
+      { error: feature.reason ?? "Feature locked", code: "FEATURE_LOCKED", feature: "bankReconciliation" },
+      { status: 402 }
+    );
   }
 
   const rl = await checkRateLimit(request, `reconcile:commit:${tenantId}`, 10);

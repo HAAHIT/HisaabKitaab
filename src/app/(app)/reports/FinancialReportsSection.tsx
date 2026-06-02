@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 import { HKButton } from "@/components/ui/HKButton";
 import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
+import { HKCheckbox } from "@/components/ui/HKCheckbox";
 import { HKSkeleton } from "@/components/ui/HKSkeleton";
 
 interface FinancialReportsSectionProps {
   from: string;
   to: string;
   exportBlocked: boolean;
-  accountOptions: { code: string; name: string; tallyGroup: string }[];
+  accountOptions: { code: string; name: string; tallyGroup: string; businessFacing: boolean }[];
 }
 
 type FinTab =
@@ -167,7 +168,13 @@ export default function FinancialReportsSection({
   const [db, setDb] = useState<DayBookData | null>(null);
   const [gl, setGl] = useState<GeneralLedgerData | null>(null);
   const [aging, setAging] = useState<AgingData | null>(null);
-  const [glAccount, setGlAccount] = useState<string>(accountOptions[0]?.code ?? "");
+  const [showAllAccounts, setShowAllAccounts] = useState(false);
+  const visibleAccountOptions = showAllAccounts
+    ? accountOptions
+    : accountOptions.filter((a) => a.businessFacing);
+  const [glAccount, setGlAccount] = useState<string>(
+    accountOptions.find((a) => a.businessFacing)?.code ?? accountOptions[0]?.code ?? ""
+  );
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -296,17 +303,32 @@ export default function FinancialReportsSection({
           </p>
         ) : tab === "generalLedger" ? (
           <div className="grid gap-3 md:grid-cols-[320px,1fr] items-end">
-            <HKSelect
-              label="Account"
-              value={glAccount}
-              onValueChange={(v) => setGlAccount(v)}
-            >
-              {accountOptions.map((a) => (
-                <HKSelectItem key={a.code} value={a.code}>
-                  {a.name}
-                </HKSelectItem>
-              ))}
-            </HKSelect>
+            <div className="flex flex-col gap-2">
+              <HKSelect
+                label="Account"
+                value={glAccount}
+                onValueChange={(v) => setGlAccount(v)}
+              >
+                {visibleAccountOptions.map((a) => (
+                  <HKSelectItem key={a.code} value={a.code}>
+                    {a.name}
+                  </HKSelectItem>
+                ))}
+              </HKSelect>
+              <HKCheckbox
+                isSelected={showAllAccounts}
+                onValueChange={(v) => {
+                  setShowAllAccounts(v);
+                  // If hiding advanced accounts while one is selected, fall back
+                  // to the first business-facing account.
+                  if (!v && !accountOptions.find((a) => a.code === glAccount)?.businessFacing) {
+                    setGlAccount(accountOptions.find((a) => a.businessFacing)?.code ?? "");
+                  }
+                }}
+              >
+                <span className="text-xs text-default-500">Show all accounts (incl. tax &amp; round-off)</span>
+              </HKCheckbox>
+            </div>
           </div>
         ) : null}
 

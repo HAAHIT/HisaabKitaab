@@ -1,7 +1,8 @@
 "use client";
 
-import { createContext, useCallback, useContext, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { HKButton } from "@/components/ui/HKButton";
+import { HKInput } from "@/components/ui/HKInput";
 import { HKModal } from "@/components/ui/hk-design";
 
 interface ConfirmOptions {
@@ -11,6 +12,12 @@ interface ConfirmOptions {
   cancelLabel?: string;
   /** Visual emphasis on the confirm button. Defaults to "primary". */
   intent?: "primary" | "danger" | "success";
+  /**
+   * When set, the confirm button stays disabled until the user types this
+   * exact string. Use for high-stakes, irreversible actions (data wipe,
+   * year-end close) where a single tap is too easy.
+   */
+  requireText?: string;
 }
 
 type ConfirmFn = (options: ConfirmOptions | string) => Promise<boolean>;
@@ -23,8 +30,14 @@ interface PendingState extends ConfirmOptions {
 
 export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   const [pending, setPending] = useState<PendingState | null>(null);
+  const [typed, setTyped] = useState("");
   const pendingRef = useRef<PendingState | null>(null);
   pendingRef.current = pending;
+
+  // Reset the typed-confirmation field whenever a new prompt opens.
+  useEffect(() => { setTyped(""); }, [pending]);
+
+  const textGateUnmet = Boolean(pending?.requireText) && typed.trim() !== pending?.requireText;
 
   const confirm = useCallback<ConfirmFn>((options) => {
     const opts: ConfirmOptions =
@@ -63,6 +76,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
             <HKButton
               variant={pending ? intentToVariant[pending.intent ?? "primary"] : "primary"}
               onClick={() => close(true)}
+              isDisabled={textGateUnmet}
             >
               {pending?.confirmLabel ?? "Confirm"}
             </HKButton>
@@ -72,6 +86,16 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
         <p style={{ fontSize: 14, lineHeight: 1.55, color: "var(--sb-text)", margin: 0, whiteSpace: "pre-wrap" }}>
           {pending?.message}
         </p>
+        {pending?.requireText && (
+          <div style={{ marginTop: 14 }}>
+            <HKInput
+              label={`Type "${pending.requireText}" to confirm`}
+              value={typed}
+              onValueChange={setTyped}
+              autoFocus
+            />
+          </div>
+        )}
       </HKModal>
     </ConfirmContext.Provider>
   );

@@ -6,6 +6,7 @@ import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
 import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { HKModal } from "@/components/ui/hk-design";
 import { Input } from "@heroui/react";
+import { useConfirm } from "@/contexts/ConfirmContext";
 
 interface PreviewLine {
   accountCode: string;
@@ -47,6 +48,7 @@ function currentFyStartYear(): number {
 }
 
 export default function YearEndCloseClient() {
+  const confirm = useConfirm();
   const current = currentFyStartYear();
   const [fyStartYear, setFyStartYear] = useState<number>(current - 1);
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -126,6 +128,40 @@ export default function YearEndCloseClient() {
     }
   }
 
+  async function handleReverse() {
+    if (!preview) return;
+    const ok = await confirm({
+      title: `Reverse close of ${preview.fyLabel}`,
+      message:
+        `This posts a reversing journal entry that negates the closing entry and re-opens ${preview.fyLabel}. ` +
+        `The original closing entry is kept for the audit trail. Use this only if the FY was closed in error.`,
+      confirmLabel: "Reverse close",
+      intent: "danger",
+      requireText: preview.fyLabel,
+    });
+    if (!ok) return;
+
+    setSubmitting(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await fetch(`/api/year-end-close?fyStartYear=${fyStartYear}`, {
+        method: "DELETE",
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Failed to reverse");
+      setSuccess(`${preview.fyLabel} re-opened. Reversing entry ${json.data.journalId} posted.`);
+      const refreshRes = await fetch(`/api/year-end-close?fyStartYear=${fyStartYear}`);
+      const refreshJson = await refreshRes.json();
+      setPreview(refreshJson.data.preview);
+      setClosedYears(refreshJson.data.closedYears);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to reverse");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <div className="animate-fade-in p-4 lg:p-8 space-y-6">
       <div>
@@ -184,8 +220,11 @@ export default function YearEndCloseClient() {
         ) : preview ? (
           <div className="space-y-6">
             {preview.alreadyClosed && (
-              <div className="rounded-xl border border-warning/30 bg-warning/5 p-3 text-sm text-warning-700">
-                This FY is already closed. The closing journal entry exists in the books.
+              <div className="rounded-xl border border-warning/30 bg-warning/5 p-3 text-sm text-warning-700 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <span>This FY is already closed. The closing journal entry exists in the books.</span>
+                <HKButton variant="danger" size="sm" onClick={handleReverse} isDisabled={submitting}>
+                  Reverse close
+                </HKButton>
               </div>
             )}
 

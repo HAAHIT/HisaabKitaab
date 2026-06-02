@@ -274,3 +274,24 @@ export function partyTypeToAccountCode(partyType: string): AccountCode {
       throw new Error(`Unknown party type: "${partyType}". Expected CUSTOMER, VENDOR, EXPENSE, INCOME, ASSET, LIABILITY, or EQUITY.`);
   }
 }
+
+/**
+ * Internal accounting-machinery ledgers — GST tax accounts, round-off, and
+ * opening balance. Non-accountant business owners have no context for these,
+ * so reports hide them from the default account picker (still available via an
+ * "advanced / show all" toggle).
+ */
+export const TECHNICAL_ACCOUNT_CODES: ReadonlySet<AccountCode> = new Set<AccountCode>([
+  "CGST_OUTPUT",
+  "SGST_OUTPUT",
+  "IGST_OUTPUT",
+  "CGST_INPUT",
+  "SGST_INPUT",
+  "IGST_INPUT",
+  "ROUND_OFF",
+  "OPENING_BALANCE",
+]);
+
+export function isBusinessFacingAccount(code: AccountCode): boolean {
+  return !TECHNICAL_ACCOUNT_CODES.has(code);
+}

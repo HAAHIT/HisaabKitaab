@@ -51,6 +51,10 @@ const prismaMock = vi.hoisted(() => ({
   auditLog: {
     create: vi.fn().mockResolvedValue({}),
   },
+  tenant: {
+    // checkFeatureAccess() reads the tenant plan for the creditNotes gate.
+    findUnique: vi.fn().mockResolvedValue({ plan: "PRO", trialEndsAt: null }),
+  },
   $transaction: vi.fn((cb) => cb(prismaMock)),
   $executeRaw: vi.fn(),
 }));

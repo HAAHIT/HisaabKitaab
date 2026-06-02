@@ -253,6 +253,20 @@ export default function PurchaseDetailPage({ params }: { params: Promise<{ id: s
                       </button>
                     </>
                   )}
+                  {bill.status === "FINAL" && (
+                    <button
+                      onClick={() => router.push(`/payments/new?billId=${id}${bill.partyId ? `&partyId=${bill.partyId}` : ""}`)}
+                      style={{
+                        height: isMobile ? 36 : 40, padding: isMobile ? "0 12px" : "0 14px", borderRadius: 12, border: "none",
+                        background: GR, color: "#fff",
+                        fontSize: TYPE.bodySmall, fontWeight: 700, fontFamily: SG,
+                        cursor: "pointer", boxShadow: `0 3px 12px ${GR}40`,
+                        display: "flex", alignItems: "center", gap: 6,
+                      }}
+                    >
+                      {t("payments.record" as TranslationKey)}
+                    </button>
+                  )}
                   {bill.status !== "CANCELLED" && (
                     <button
                       onClick={() => setConfirmAction("CANCELLED")}

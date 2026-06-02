@@ -31,6 +31,13 @@ export function buildMockTenant(overrides: any = {}) {
     id: "test-tenant",
     settings: {},
     gstin: null,
+    // Quota state — checkBillQuota()/checkPartyQuota() read these via
+    // getQuotaState(); usageWindowStart must be a Date or .getTime() throws.
+    plan: "FREE",
+    trialEndsAt: null,
+    monthlyBillCount: 0,
+    monthlyPartyCount: 0,
+    usageWindowStart: new Date(),
     ...overrides,
   };
 }

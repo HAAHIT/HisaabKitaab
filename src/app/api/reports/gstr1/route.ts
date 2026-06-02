@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveSession } from "@/lib/api-tenant";
+import { checkFeatureAccess } from "@/lib/quota";
 import { logError, getRequestId } from "@/lib/observability";
 import { buildGstr1Json } from "@/lib/reports/gstr";
 import { getIstCalendar } from "@/lib/journal-reporting";
@@ -21,6 +22,15 @@ export async function GET(request: NextRequest) {
 
   if (role === "CUSTOMER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // [Phase 1 — Plan gate] GST returns are a PRO feature; enforce server-side.
+  const feature = await checkFeatureAccess(tenantId, "gstReturns");
+  if (!feature.allowed) {
+    return NextResponse.json(
+      { error: feature.reason ?? "Feature locked", code: "FEATURE_LOCKED", feature: "gstReturns" },
+      { status: 402 }
+    );
   }
 
   const { searchParams } = new URL(request.url);

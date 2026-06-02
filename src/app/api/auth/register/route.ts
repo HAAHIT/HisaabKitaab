@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { hashPassword } from "@/lib/auth";
+import { hashPassword, createSession } from "@/lib/auth";
 import { logError, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { TRIAL_DAYS } from "@/lib/plan-limits";
@@ -144,7 +144,20 @@ export async function POST(request: NextRequest) {
       return { tenant: newTenant, user: newUser };
     });
 
-    return NextResponse.json({ success: true }, { status: 201 });
+    // Issue the session immediately so the new admin lands authenticated.
+    // No reason to bounce them through /login to re-type the password they
+    // just set. The (app) layout routes them into the onboarding wizard
+    // because the tenant has onboardingComplete: false.
+    await createSession({
+      userId: user.id,
+      tenantId: tenant.id,
+      name: user.name,
+      role: user.role,
+      email: user.email || undefined,
+      phone: user.phone || undefined,
+    });
+
+    return NextResponse.json({ success: true, redirectTo: "/" }, { status: 201 });
   } catch (error) {
     logError("auth.register.error", { requestId: getRequestId(request), error });
     return NextResponse.json(

@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { isIpRateLimited } from "@/lib/api-rate-limit";
 import { GST_STATE_CODES } from "@/lib/gst-states";
 import { serializeTenantSettings } from "@/lib/tenant-settings";
 import type { ColumnDef } from "@/lib/formula";
@@ -114,6 +116,23 @@ export default async function PublicBillPage(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+
+  // Rate-limit by IP — these are public, unauthenticated pages, so cap how fast
+  // a single client can pull invoices (blunts bill-ID scraping/enumeration).
+  const hdrs = await headers();
+  const ip =
+    hdrs.get("x-forwarded-for")?.split(",").at(-1)?.trim() ||
+    hdrs.get("x-real-ip")?.trim() ||
+    "unknown";
+  if (await isIpRateLimited("public-bill", ip, 60)) {
+    return (
+      <div style={{ maxWidth: 480, margin: "80px auto", padding: 24, textAlign: "center", fontFamily: "system-ui, sans-serif" }}>
+        <h1 style={{ fontSize: 18, fontWeight: 700 }}>Too many requests</h1>
+        <p style={{ color: "#666", marginTop: 8 }}>Please wait a minute and try again.</p>
+      </div>
+    );
+  }
+
   const bill = await getBill(id);
   if (!bill) notFound();
 

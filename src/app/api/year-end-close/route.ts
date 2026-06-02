@@ -5,6 +5,7 @@ import { checkRateLimit } from "@/lib/api-rate-limit";
 import {
   getClosingPreview,
   executeYearEndClose,
+  reverseYearEndClose,
   getClosedFinancialYears,
 } from "@/lib/year-end-close";
 import { getIstCalendar } from "@/lib/journal-reporting";
@@ -92,6 +93,41 @@ export async function POST(request: NextRequest) {
     });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to close FY" },
+      { status: 400 }
+    );
+  }
+}
+
+// DELETE — post a reversing entry for a previously-closed FY (admin only).
+export async function DELETE(request: NextRequest) {
+  const sessionResolution = await resolveSession(request);
+  if (!sessionResolution.ok) return sessionResolution.response;
+  const { tenantId, role, userId } = sessionResolution.session;
+
+  if (role !== "ADMIN") {
+    return NextResponse.json({ error: "Admin role required" }, { status: 403 });
+  }
+
+  const rl = await checkRateLimit(request, `year-end-reverse:${tenantId}`, 5);
+  if (rl) return rl;
+
+  const { searchParams } = new URL(request.url);
+  const fyParam = searchParams.get("fyStartYear");
+  const fyStartYear = fyParam ? parseInt(fyParam, 10) : defaultFyStartYear();
+  if (Number.isNaN(fyStartYear) || fyStartYear < 2000 || fyStartYear > 2100) {
+    return NextResponse.json({ error: "Invalid fyStartYear" }, { status: 400 });
+  }
+
+  try {
+    const result = await reverseYearEndClose(tenantId, fyStartYear, userId);
+    return NextResponse.json({ data: result });
+  } catch (error) {
+    logError("year-end-close.reverse.error", {
+      requestId: getRequestId(request),
+      error,
+    });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to reverse close" },
       { status: 400 }
     );
   }

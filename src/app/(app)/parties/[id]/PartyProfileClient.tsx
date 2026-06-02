@@ -136,7 +136,12 @@ export default function PartyProfileClient({
     setReconcileLoading("fix");
     setReconcileError(null);
     try {
-      const res = await fetch("/api/parties/reconcile", { method: "POST" });
+      // Scope the repair to THIS party only — not the whole tenant.
+      const res = await fetch("/api/parties/reconcile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ partyId }),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Fix failed");
       setReconcileResult(null);
