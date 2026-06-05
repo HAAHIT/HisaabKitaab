@@ -118,6 +118,36 @@ describe("Assets API Security - Open Redirect Fix", () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
+  it("blocks SSRF attempts to private IPv6 addresses with brackets", async () => {
+    const internalUrl = "http://[::1]/admin";
+    const assetId = "test-asset-id";
+    const tenantId = "test-tenant-id";
+
+    (resolveSession as import("vitest").Mock).mockReturnValue({ ok: true, session: { tenantId, userId: "user-123", role: "CUSTOMER" } });
+    (prisma.mediaAsset.findUnique as import("vitest").Mock).mockResolvedValue({
+      id: assetId,
+      kind: "MEASUREMENT_PHOTO",
+      storageProvider: "proxy",
+      storageKey: internalUrl,
+      mimeType: "image/jpeg",
+      measurementPhotos: [{ measurement: { customerId: "user-123", tenantId } }],
+    });
+
+    const req = new NextRequest(`http://localhost/api/assets/${assetId}`, {
+      headers: {
+        "x-user-id": "user-123",
+        "x-user-role": "CUSTOMER",
+      },
+    });
+
+    const res = await GET(req, { params: Promise.resolve({ id: assetId }) });
+
+    expect(res.status).toBe(403);
+    const data = await res.json();
+    expect(data.error).toBe("Forbidden proxy target");
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
   it("blocks non-image content types from proxy", async () => {
     const externalUrl = "https://trusted-site.com/script.sh";
     const assetId = "test-asset-id";

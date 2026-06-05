@@ -86,14 +86,14 @@ export async function GET(
         return NextResponse.json({ error: "Invalid proxy URL" }, { status: 400 });
       }
 
-      // `URL.hostname` strips the surrounding brackets from `[::1]`, so we
-      // compare the bare textual host. We intentionally only block hosts that
-      // *parse* as a private literal — DNS rebinding (a public hostname that
-      // resolves to a private address) is mitigated separately by running
-      // the proxy in a network namespace without metadata access. A safer
+      // Node.js `URL.hostname` preserves the surrounding brackets from `[::1]`,
+      // so we must strip them to compare the bare textual host. We intentionally
+      // only block hosts that *parse* as a private literal — DNS rebinding (a
+      // public hostname that resolves to a private address) is mitigated separately
+      // by running the proxy in a network namespace without metadata access. A safer
       // alternative is dns.lookup + re-check after the fetch handshake, but
       // that requires a custom http.Agent and is out of scope here.
-      const hostname = url.hostname.toLowerCase();
+      const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
       const isPrivateIPv4 = (host: string) => {
         if (host === "localhost" || host === "127.0.0.1") return true;
         if (host.startsWith("10.")) return true;             // 10.0.0.0/8
