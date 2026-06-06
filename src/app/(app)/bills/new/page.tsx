@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/hk-design";
 import { HKButton } from "@/components/ui/HKButton";
 import { HKInput } from "@/components/ui/HKInput";
+import { dispatchQuotaExceeded } from "@/components/billing/QuotaProvider";
+import { BillCreationTour } from "@/components/onboarding/BillCreationTour";
 
 interface Template {
   id: string;
@@ -105,6 +107,12 @@ export function BillFormPage({ editBillId }: { editBillId?: string } = {}) {
 
   const searchParams = useSearchParams();
   const preselectedPartyId = searchParams.get("partyId");
+  const tourMode = searchParams.get("tour") === "1";
+  const [tourDismissed, setTourDismissed] = useState(false);
+  const [billFinalized, setBillFinalized] = useState(false);
+  const [finalizeSeconds, setFinalizeSeconds] = useState<number | undefined>(undefined);
+  const openedAtRef = useRef<number>(typeof performance !== "undefined" ? performance.now() : Date.now());
+
   const [selectedParty, setSelectedParty] = useState<PartyOption | null>(null);
   const [rows, setRows] = useState<Record<string, string | number>[]>([]);
   const [taxPercent, setTaxPercent] = useState(18);
@@ -153,6 +161,13 @@ export function BillFormPage({ editBillId }: { editBillId?: string } = {}) {
       }
       if (editBillId && billData?.bill) {
         const b = billData.bill;
+        // Only DRAFT bills are editable. The server PATCH also rejects non-DRAFT
+        // edits (400), but don't even render the editable form for a finalized
+        // or cancelled bill — send the user to the read-only detail view.
+        if (b.status && b.status !== "DRAFT") {
+          router.replace(`/bills/${editBillId}`);
+          return;
+        }
         const tpl = nextTemplates.find((tp) => tp.id === b.templateId) || null;
         if (tpl) {
           setSelectedTemplate(tpl);
@@ -417,11 +432,36 @@ export function BillFormPage({ editBillId }: { editBillId?: string } = {}) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           });
+      // [Phase 1 — Quota] 402 from /api/bills means monthly limit hit;
+      // fire the global event so QuotaProvider shows the upgrade modal.
+      if (response.status === 402) {
+        const errData = await response.json().catch(() => ({}));
+        if (errData?.code === "QUOTA_EXCEEDED" && errData.quota) {
+          dispatchQuotaExceeded(errData.quota);
+          return;
+        }
+      }
       if (!response.ok) throw new Error(await readError(response));
       const data = await response.json();
       showToast(status === "FINAL" ? t("bills.new.createSuccess" as TranslationKey) : t("bills.new.saveSuccess" as TranslationKey), "success");
       const targetId = isEdit ? editBillId : data.bill.id;
-      window.setTimeout(() => router.push(`/bills/${targetId}`), 700);
+
+      if (status === "FINAL") {
+        const elapsedMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - openedAtRef.current;
+        const secondsToFinalize = elapsedMs / 1000;
+        setFinalizeSeconds(secondsToFinalize);
+        setBillFinalized(true);
+        // Fire-and-forget — don't block navigation on telemetry
+        fetch("/api/telemetry/bill-timing", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ secondsToFinalize, billId: targetId }),
+        }).catch(() => undefined);
+      }
+
+      if (!tourMode || status !== "FINAL") {
+        window.setTimeout(() => router.push(`/bills/${targetId}`), 700);
+      }
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("bills.new.saveError" as TranslationKey), "error");
     } finally {
@@ -552,6 +592,7 @@ export function BillFormPage({ editBillId }: { editBillId?: string } = {}) {
 
             {/* ── Party / Bill To ────────────────────────────────────────── */}
             <Section title={t("bills.new.billTo" as TranslationKey)}>
+              <div data-tour="party-search">
               <PartySearch
                 value={selectedParty?.id || null}
                 onChange={(party) => {
@@ -617,9 +658,11 @@ export function BillFormPage({ editBillId }: { editBillId?: string } = {}) {
                   )}
                 </div>
               )}
+              </div>
             </Section>
 
             {/* ── Line Items ──────────────────────────────────────────────── */}
+            <div data-tour="line-items">
             <HKCard style={{ marginBottom: 16, padding: 0 }}>
               <div style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -816,6 +859,7 @@ export function BillFormPage({ editBillId }: { editBillId?: string } = {}) {
                 </table>
               </div>
             </HKCard>
+            </div>
 
             {/* ── Notes + Summary ─────────────────────────────────────────── */}
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16, marginBottom: 24 }}>
@@ -972,6 +1016,7 @@ export function BillFormPage({ editBillId }: { editBillId?: string } = {}) {
               >
                 {savingAs === "DRAFT" ? t("common.saving" as TranslationKey) : t("bills.saveDraft" as TranslationKey)}
               </button>
+              <div data-tour="finalize-btn">
               <HKButton
                 onClick={() => handleSave("FINAL")}
                 isLoading={savingAs === "FINAL"}
@@ -979,10 +1024,21 @@ export function BillFormPage({ editBillId }: { editBillId?: string } = {}) {
               >
                 {t("bills.finalize" as TranslationKey)}
               </HKButton>
+              </div>
             </div>
           </>
         )}
       </div>
+
+      {tourMode && !tourDismissed && (
+        <BillCreationTour
+          onDismiss={() => setTourDismissed(true)}
+          billFinalized={billFinalized}
+          secondsToFinalize={finalizeSeconds}
+          partySelected={!!selectedParty}
+          hasItems={grandTotal > 0}
+        />
+      )}
     </div>
   );
 }

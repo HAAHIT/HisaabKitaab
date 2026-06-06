@@ -20,6 +20,23 @@ model Tenant {
   createdAt            DateTime            @default(now())
   updatedAt            DateTime            @updatedAt
   isOnboardingComplete Boolean?            @default(false)
+
+  // ── Billing / Quota tracking ─────────────────────────────────────────────
+  // trialEndsAt: null = no trial taken; future date = trial active
+  trialEndsAt          DateTime?
+  // planExpiresAt: when the current paid plan expires (null for FREE)
+  planExpiresAt        DateTime?
+  subscriptionStatus   SubscriptionStatus  @default(ACTIVE)
+  // Razorpay identifiers — null for FREE tenants
+  razorpayCustomerId   String?
+  razorpaySubscriptionId String?
+  // Monthly usage counters (reset by usageWindowStart rollover)
+  monthlyBillCount     Int                 @default(0)
+  monthlyPartyCount    Int                 @default(0)
+  usageWindowStart     DateTime            @default(now())
+  // Reminder language for WhatsApp reminders: "hinglish" | "hindi" | "english"
+  reminderLanguage     String              @default("hinglish")
+  subscriptionEvents   SubscriptionEvent[]
   auditLogs            AuditLog[]
   BankAccount          BankAccount[]
   bills                Bill[]
@@ -238,6 +255,7 @@ model Payment {
   createdAt                                             DateTime      @default(now())
   isDeleted                                             Boolean       @default(false)
   updatedAt                                             DateTime      @updatedAt
+  reconciledAt                                          DateTime?
   tenantId                                              String
   accountId                                             String?
   destinationAccountId                                  String?
@@ -285,6 +303,7 @@ model JournalEntry {
   bill            Bill?         @relation(fields: [billId], references: [id])
   tenant          Tenant        @relation(fields: [tenantId], references: [id])
   lines           JournalLine[]
+  bankStatementRows BankStatementRow[]
 
   @@unique([tenantId, remoteId])
   @@index([tenantId])
@@ -419,6 +438,38 @@ model BankAccount {
 enum TenantPlan {
   FREE
   PRO
+  PRO_PLUS
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIALING
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+// ── §Billing ─ Subscription event audit log ───────────────────────────────
+// Every Razorpay webhook + manual plan change is recorded here as an
+// append-only audit log, so we can always reconstruct billing history.
+model SubscriptionEvent {
+  id             String   @id @default(cuid())
+  tenantId       String
+  eventType      String   // "subscription.activated", "payment.captured", "manual.upgrade", etc.
+  fromPlan       TenantPlan?
+  toPlan         TenantPlan?
+  amount         Int?     // paise
+  razorpayId     String?  // payment_id / subscription_id reference
+  // Composite idempotency key = "<eventType>:<razorpayId>:<paymentId|none>"
+  // DB-unique so concurrent duplicate webhooks hit a constraint violation instead of
+  // racing through the application-level dedup check (TOCTOU fix).
+  idempotencyKey String?  @unique
+  payload        Json?    // full webhook payload for forensics
+  createdAt      DateTime @default(now())
+  tenant         Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([razorpayId])
 }
 
 enum Role {
@@ -555,10 +606,14 @@ model BankStatementRow {
   matchedPaymentId String?
   status           BankRowStatus  @default(PENDING)
   category         String?
+  categoryCode     String?
+  journalEntryId   String?
   statement        BankStatement  @relation(fields: [statementId], references: [id])
   matchedPayment   Payment?       @relation(fields: [matchedPaymentId], references: [id])
+  journalEntry     JournalEntry?  @relation(fields: [journalEntryId], references: [id])
 
   @@index([tenantId])
   @@index([statementId])
+  @@index([journalEntryId])
   @@unique([statementId, date, amount, description])
 }

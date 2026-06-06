@@ -68,7 +68,9 @@ export default function RegisterPage() {
           throw new Error(data.error || t("register.error"));
         }
 
-        router.push("/login");
+        // Register now issues a session cookie, so go straight into the app —
+        // the (app) layout routes new tenants into the onboarding wizard.
+        router.push(typeof data.redirectTo === "string" ? data.redirectTo : "/");
         router.refresh();
       } catch (err) {
         setErrorMessage(

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
 import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useConfirm } from "@/contexts/ConfirmContext";
 import {
   GR, AM, OR, PU, SG, IN, TYPE,
   HKCard, HKToast, PageHeader, useIsMobile,
@@ -25,6 +26,7 @@ const ROLE_COLOR: Record<string, string> = { ADMIN: PU, STAFF: GR, ACCOUNTANT: A
 
 export default function UserManagementPage() {
   const { t } = useLanguage();
+  const confirm = useConfirm();
   const isMobile = useIsMobile();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -107,7 +109,7 @@ export default function UserManagementPage() {
   }
 
   async function handleDelete(userId: string) {
-    if (!confirm(t("users.deactivateConfirm"))) return;
+    if (!(await confirm({ message: t("users.deactivateConfirm"), confirmLabel: "Deactivate", intent: "danger" }))) return;
     try {
       const res = await fetch(`/api/users/${userId}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete user");
@@ -303,6 +305,7 @@ export default function UserManagementPage() {
                   value={formRole}
                   onValueChange={(v) => { if (v) setFormRole(v); }}
                 >
+                  <HKSelectItem value="ADMIN">{t("users.admin")}</HKSelectItem>
                   <HKSelectItem value="STAFF">{t("users.staff")}</HKSelectItem>
                   <HKSelectItem value="ACCOUNTANT">{t("users.accountant")}</HKSelectItem>
                   <HKSelectItem value="CUSTOMER">{t("users.customer")}</HKSelectItem>

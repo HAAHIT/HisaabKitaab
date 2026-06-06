@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { HKButton } from "@/components/ui/HKButton";
 import { HKInput } from "@/components/ui/HKInput";
+import { HKRadio, HKRadioGroup } from "@/components/ui/HKRadioGroup";
 import { HKSkeleton } from "@/components/ui/HKSkeleton";
 
 interface BillSeries {
@@ -122,6 +123,10 @@ export default function BillSeriesClient() {
               </div>
             )}
 
+            <HKRadioGroup
+              value={String(series.findIndex((s) => s.isDefault))}
+              onValueChange={(v) => setDefault(Number(v))}
+            >
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-xs text-default-500 uppercase tracking-wide border-b border-divider">
@@ -153,14 +158,11 @@ export default function BillSeriesClient() {
                       />
                     </td>
                     <td className="py-2 pr-3 text-center">
-                      <input
-                        type="radio"
-                        name="default-series"
-                        checked={s.isDefault}
-                        onChange={() => setDefault(idx)}
-                        aria-label={`Set ${s.name || "this series"} as default`}
-                        style={{ accentColor: "var(--sb-primary)" }}
-                      />
+                      <span className="inline-flex justify-center">
+                        <HKRadio value={String(idx)}>
+                          <span className="sr-only">{`Set ${s.name || "this series"} as default`}</span>
+                        </HKRadio>
+                      </span>
                     </td>
                     <td className="py-2 text-right">
                       <button
@@ -188,6 +190,7 @@ export default function BillSeriesClient() {
                 ))}
               </tbody>
             </table>
+            </HKRadioGroup>
 
             <div className="flex items-center justify-between pt-2">
               <HKButton size="sm" variant="secondary" onClick={addSeries}>

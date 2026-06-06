@@ -109,6 +109,14 @@ describe("tenant isolation for critical mutations", () => {
   });
 
   it("scopes bill creation template lookup by tenant", async () => {
+    // checkBillQuota() runs before the template lookup; give it a valid quota state.
+    prismaMock.tenant.findUnique.mockResolvedValue({
+      plan: "FREE",
+      trialEndsAt: null,
+      monthlyBillCount: 0,
+      monthlyPartyCount: 0,
+      usageWindowStart: new Date(),
+    });
     prismaMock.billTemplate.findFirst.mockResolvedValue(null);
 
     const request = buildRequest(

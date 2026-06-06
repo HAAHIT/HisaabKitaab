@@ -1,13 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { GST_STATE_CODE_SET } from "@/lib/gst-states";
 import {
-  buildBillSnapshotFromParty,
   getPostedBillBalanceDelta,
-  getPaymentBalanceDelta,
 } from "@/lib/accounting";
 import { deriveIsInterState, VALID_GST_SLABS } from "@/lib/gst-helpers";
 import {
-  journalForPaymentMade,
   journalForPurchaseBill,
 } from "@/lib/journal";
 import { NextRequest, NextResponse } from "next/server";
@@ -16,6 +13,7 @@ import { checkRateLimit } from "@/lib/api-rate-limit";
 import { logError, getRequestId } from "@/lib/observability";
 import { generateLockKey } from "@/lib/locks";
 import { z } from "zod";
+import { checkBillQuota, incrementBillCounter } from "@/lib/quota";
 
 type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 type BillRowsJson = NonNullable<Parameters<typeof prisma.bill.create>[0]["data"]>["rows"];
@@ -163,6 +161,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Final bills must have a positive total" }, { status: 400 });
     }
 
+    // Enforce monthly bill quota before writing anything
+    const billQuota = await checkBillQuota(tenantId);
+    if (!billQuota.allowed) {
+      return NextResponse.json(
+        {
+          error: billQuota.reason ?? "Monthly bill limit reached",
+          code: "QUOTA_EXCEEDED",
+          quota: { used: billQuota.used, limit: billQuota.limit, resource: "bills" },
+        },
+        { status: 402 }
+      );
+    }
+
     const purchaseBill = await prisma.$transaction(async (tx: PrismaTx) => {
       const lockKey = generateLockKey(tenantId);
       await tx.$executeRaw`SET LOCAL lock_timeout = '5s'`;
@@ -195,6 +206,9 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      // Increment monthly bill counter atomically inside the transaction
+      await incrementBillCounter(tx, tenantId);
+
       // [MCA GSR 247(E)] Append-only edit log for purchase bill creation.
       await tx.auditLog.create({
         data: {
@@ -216,10 +230,12 @@ export async function POST(request: NextRequest) {
       }
 
       if (billStatus === "FINAL") {
-        const roundedTax = Math.round(taxAmount);
-        const cgst = isInterState ? 0 : Math.round(roundedTax / 2);
-        const sgst = isInterState ? 0 : roundedTax - cgst;
-        const igst = isInterState ? roundedTax : 0;
+        // Use 2dp precision from the persisted value to avoid GSTR-2A reconciliation drift
+        const exactTax = roundTo2(createdBill.taxAmount.toNumber());
+        const halfTax = roundTo2(exactTax / 2);
+        const cgst = isInterState ? 0 : halfTax;
+        const sgst = isInterState ? 0 : roundTo2(exactTax - halfTax);
+        const igst = isInterState ? exactTax : 0;
 
         await journalForPurchaseBill(tx, tenantId, {
           id: createdBill.id,

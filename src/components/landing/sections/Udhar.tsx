@@ -27,7 +27,7 @@ export function UdharSection() {
         <div>
           <span className="divider-tick">02 — Udhar Khata</span>
           <h2 className="font-display text-[36px] sm:text-[52px] font-medium leading-[1.02] tracking-tight mt-4 text-slate-900">
-            &quot;Sunita ne <span className="italic text-amber-600">paisa</span> diya kya?&quot;
+            &quot;Sunita ne <span className="italic text-amber-600">paisa</span>{" "}diya kya?&quot;
           </h2>
           <p className="mt-5 text-[16px] text-slate-500 max-w-[520px] leading-relaxed">
             Open the app, see the answer in under 2 seconds. Udhar Khata is sorted by who owes you the most — not by alphabet. Every row has a call and WhatsApp shortcut. End-of-month reminders go out in one tap.

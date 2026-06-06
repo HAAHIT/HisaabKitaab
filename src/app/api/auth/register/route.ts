@@ -1,8 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { hashPassword } from "@/lib/auth";
+import { hashPassword, createSession } from "@/lib/auth";
 import { logError, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
+import { TRIAL_DAYS } from "@/lib/plan-limits";
 import crypto from "crypto";
 
 function normalizeOptionalString(value: unknown) {
@@ -111,11 +112,16 @@ export async function POST(request: NextRequest) {
 
     // Create Tenant and Admin user inside transaction
     type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+    // [Phase 1 — Billing] 30-day trial unlocks PRO features on the FREE plan.
+    // After trialEndsAt, getEffectivePlan() falls back to FREE limits.
+    const trialEnds = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
     const { tenant, user } = await prisma.$transaction(async (tx: PrismaTx) => {
       const newTenant = await tx.tenant.create({
         data: {
           name: companyName,
           slug,
+          trialEndsAt: trialEnds,
+          subscriptionStatus: "TRIALING",
           settings: {
             companyName,
             onboardingComplete: false,
@@ -138,7 +144,20 @@ export async function POST(request: NextRequest) {
       return { tenant: newTenant, user: newUser };
     });
 
-    return NextResponse.json({ success: true }, { status: 201 });
+    // Issue the session immediately so the new admin lands authenticated.
+    // No reason to bounce them through /login to re-type the password they
+    // just set. The (app) layout routes them into the onboarding wizard
+    // because the tenant has onboardingComplete: false.
+    await createSession({
+      userId: user.id,
+      tenantId: tenant.id,
+      name: user.name,
+      role: user.role,
+      email: user.email || undefined,
+      phone: user.phone || undefined,
+    });
+
+    return NextResponse.json({ success: true, redirectTo: "/" }, { status: 201 });
   } catch (error) {
     logError("auth.register.error", { requestId: getRequestId(request), error });
     return NextResponse.json(

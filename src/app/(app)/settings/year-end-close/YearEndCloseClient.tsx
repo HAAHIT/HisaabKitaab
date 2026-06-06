@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import { HKButton } from "@/components/ui/HKButton";
 import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
 import { HKSkeleton } from "@/components/ui/HKSkeleton";
+import { HKModal } from "@/components/ui/hk-design";
+import { Input } from "@heroui/react";
+import { useConfirm } from "@/contexts/ConfirmContext";
 
 interface PreviewLine {
   accountCode: string;
@@ -45,6 +48,7 @@ function currentFyStartYear(): number {
 }
 
 export default function YearEndCloseClient() {
+  const confirm = useConfirm();
   const current = currentFyStartYear();
   const [fyStartYear, setFyStartYear] = useState<number>(current - 1);
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -53,6 +57,8 @@ export default function YearEndCloseClient() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
 
   const yearOptions = Array.from({ length: 6 }, (_, i) => current - i);
 
@@ -84,14 +90,15 @@ export default function YearEndCloseClient() {
     return () => controller.abort();
   }, [fyStartYear]);
 
+  function openConfirm() {
+    setConfirmText("");
+    setConfirmOpen(true);
+  }
+
   async function handleClose() {
     if (!preview) return;
-    const confirmed = window.confirm(
-      `Close ${preview.fyLabel}? This creates a permanent JOURNAL voucher transferring net ${
-        preview.netProfit >= 0 ? "profit" : "loss"
-      } of ${inr(Math.abs(preview.netProfit))} to Capital Account. It cannot be undone via the UI.`
-    );
-    if (!confirmed) return;
+    if (confirmText.trim() !== preview.fyLabel) return;
+    setConfirmOpen(false);
 
     setSubmitting(true);
     setError(null);
@@ -116,6 +123,40 @@ export default function YearEndCloseClient() {
       setClosedYears(refreshJson.data.closedYears);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to close");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleReverse() {
+    if (!preview) return;
+    const ok = await confirm({
+      title: `Reverse close of ${preview.fyLabel}`,
+      message:
+        `This posts a reversing journal entry that negates the closing entry and re-opens ${preview.fyLabel}. ` +
+        `The original closing entry is kept for the audit trail. Use this only if the FY was closed in error.`,
+      confirmLabel: "Reverse close",
+      intent: "danger",
+      requireText: preview.fyLabel,
+    });
+    if (!ok) return;
+
+    setSubmitting(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await fetch(`/api/year-end-close?fyStartYear=${fyStartYear}`, {
+        method: "DELETE",
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Failed to reverse");
+      setSuccess(`${preview.fyLabel} re-opened. Reversing entry ${json.data.journalId} posted.`);
+      const refreshRes = await fetch(`/api/year-end-close?fyStartYear=${fyStartYear}`);
+      const refreshJson = await refreshRes.json();
+      setPreview(refreshJson.data.preview);
+      setClosedYears(refreshJson.data.closedYears);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to reverse");
     } finally {
       setSubmitting(false);
     }
@@ -148,7 +189,7 @@ export default function YearEndCloseClient() {
           {preview && (
             <HKButton
               isDisabled={preview.alreadyClosed || submitting}
-              onClick={handleClose}
+              onClick={openConfirm}
             >
               {submitting
                 ? "Closing…"
@@ -179,8 +220,11 @@ export default function YearEndCloseClient() {
         ) : preview ? (
           <div className="space-y-6">
             {preview.alreadyClosed && (
-              <div className="rounded-xl border border-warning/30 bg-warning/5 p-3 text-sm text-warning-700">
-                This FY is already closed. The closing journal entry exists in the books.
+              <div className="rounded-xl border border-warning/30 bg-warning/5 p-3 text-sm text-warning-700 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <span>This FY is already closed. The closing journal entry exists in the books.</span>
+                <HKButton variant="danger" size="sm" onClick={handleReverse} isDisabled={submitting}>
+                  Reverse close
+                </HKButton>
               </div>
             )}
 
@@ -212,6 +256,47 @@ export default function YearEndCloseClient() {
           </div>
         ) : null}
       </div>
+
+      {preview && (
+        <HKModal
+          isOpen={confirmOpen}
+          onClose={() => setConfirmOpen(false)}
+          title={`Confirm close of ${preview.fyLabel}`}
+          footer={
+            <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+              <HKButton variant="secondary" onClick={() => setConfirmOpen(false)} isDisabled={submitting}>
+                Cancel
+              </HKButton>
+              <HKButton
+                onClick={handleClose}
+                isDisabled={confirmText.trim() !== preview.fyLabel || submitting}
+                isLoading={submitting}
+              >
+                Close FY
+              </HKButton>
+            </div>
+          }
+        >
+          <div className="space-y-3 text-sm">
+            <p>
+              This creates a permanent JOURNAL voucher transferring net{" "}
+              <strong>{preview.netProfit >= 0 ? "profit" : "loss"}</strong> of{" "}
+              <strong>{inr(Math.abs(preview.netProfit))}</strong> to the Capital Account.
+              It cannot be undone via the UI.
+            </p>
+            <p>
+              Type <strong>{preview.fyLabel}</strong> to confirm:
+            </p>
+            <Input
+              autoFocus
+              value={confirmText}
+              onValueChange={setConfirmText}
+              placeholder={preview.fyLabel}
+              variant="bordered"
+            />
+          </div>
+        </HKModal>
+      )}
     </div>
   );
 }

@@ -599,7 +599,7 @@ export async function PATCH(
           taxAmount: nextTaxAmount,
           grandTotal: nextGrandTotal,
           createdBy: userId || updatedBill.createdBy,
-          entryDate: updatedBill.updatedAt,
+          entryDate: updatedBill.date,
           isInterState,
         });
       }

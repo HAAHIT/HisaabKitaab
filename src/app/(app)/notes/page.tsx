@@ -42,11 +42,17 @@ export default function NotesListPage() {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const monthlyGroups = useMemo(() => {
-    const monthFormatter = new Intl.DateTimeFormat(language === "hi" ? "hi-IN" : "en-IN", { month: "long", year: "numeric" });
+    const monthFormatter = new Intl.DateTimeFormat(language === "hi" ? "hi-IN" : "en-IN", { month: "long", year: "numeric", timeZone: "Asia/Kolkata" });
+    // Group by IST year+month so notes entered near midnight don't fall into the
+    // previous/next month bucket when the server returns UTC dates.
+    const istKey = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Kolkata", year: "numeric", month: "numeric" });
     const groups = new Map<string, { label: string; notes: Note[]; total: number }>();
     for (const note of notes) {
       const d = new Date(note.entryDate);
-      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      const parts = istKey.formatToParts(d);
+      const year = parts.find((p) => p.type === "year")?.value;
+      const month = parts.find((p) => p.type === "month")?.value;
+      const key = `${year}-${month}`;
       const existing = groups.get(key);
       if (existing) {
         existing.notes.push(note);

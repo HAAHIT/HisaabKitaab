@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useConfirm } from "@/contexts/ConfirmContext";
 import {
   C, GR, AM, OR, PU, SG, TYPE,
   HKCard, HKToast, PageHeader, useIsMobile,
@@ -29,6 +30,7 @@ const COL_TYPE_COLOR: Record<string, string> = {
 export default function TemplatesPage() {
   const router = useRouter();
   const { t } = useLanguage();
+  const confirm = useConfirm();
   const isMobile = useIsMobile();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [defaultTemplateId, setDefaultTemplateId] = useState<string | null>(null);
@@ -82,7 +84,7 @@ export default function TemplatesPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm(t("templates.deleteConfirm"))) return;
+    if (!(await confirm({ message: t("templates.deleteConfirm"), confirmLabel: "Delete", intent: "danger" }))) return;
     try {
       const res = await fetch(`/api/templates/${id}`, { method: "DELETE" });
       const data = await res.json();

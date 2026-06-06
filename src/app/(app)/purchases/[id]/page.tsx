@@ -23,9 +23,12 @@ interface PurchaseDetail {
     id: string; name: string; type: "CUSTOMER" | "VENDOR";
     phone: string | null; address: string | null; gstin: string | null;
   } | null;
-  customerName: string;
-  customerPhone: string | null;
-  customerAddress: string | null;
+  // Bill table stores these as customerName/customerPhone/customerAddress for
+  // historical reasons (purchases share the Bill model). For purchases they
+  // hold the vendor's identity — exposed here under vendor* aliases for clarity.
+  vendorName: string;
+  vendorPhone: string | null;
+  vendorAddress: string | null;
   gstin: string | null;
   rows: Record<string, string | number>[];
   notes: string | null;
@@ -54,6 +57,23 @@ function formatCellValue(colName: string, value: string | number): string {
     return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(value);
   }
   return String(value || "");
+}
+
+interface RawBill {
+  customerName: string;
+  customerPhone: string | null;
+  customerAddress: string | null;
+  [key: string]: unknown;
+}
+
+function toPurchaseDetail(raw: RawBill): PurchaseDetail {
+  const { customerName, customerPhone, customerAddress, ...rest } = raw;
+  return {
+    ...(rest as unknown as Omit<PurchaseDetail, "vendorName" | "vendorPhone" | "vendorAddress">),
+    vendorName: customerName,
+    vendorPhone: customerPhone,
+    vendorAddress: customerAddress,
+  };
 }
 
 const PRINT_CSS = `
@@ -89,7 +109,7 @@ export default function PurchaseDetailPage({ params }: { params: Promise<{ id: s
     (async () => {
       try {
         const res = await fetch(`/api/bills/${id}`);
-        if (res.ok) setBill((await res.json()).bill);
+        if (res.ok) setBill(toPurchaseDetail((await res.json()).bill));
       } finally { setLoading(false); }
     })();
   }, [id]);
@@ -108,8 +128,8 @@ export default function PurchaseDetailPage({ params }: { params: Promise<{ id: s
         method: del ? "DELETE" : "PATCH",
         headers: del ? {} : { "Content-Type": "application/json" },
         body: del ? undefined : JSON.stringify({
-          partyId: bill.partyId, customerName: bill.customerName,
-          customerPhone: bill.customerPhone, customerAddress: bill.customerAddress,
+          partyId: bill.partyId, customerName: bill.vendorName,
+          customerPhone: bill.vendorPhone, customerAddress: bill.vendorAddress,
           gstin: bill.gstin, rows: bill.rows, notes: bill.notes,
           taxPercent: bill.taxPercent, subtotal: bill.subtotal,
           taxAmount: bill.taxAmount, grandTotal: bill.grandTotal,
@@ -119,7 +139,7 @@ export default function PurchaseDetailPage({ params }: { params: Promise<{ id: s
       if (!res.ok) throw new Error((await res.json()).error);
       showToast(status === "FINAL" ? t("bills.detail.finalizeSuccess" as TranslationKey) : t("bills.detail.cancelSuccess" as TranslationKey), "success");
       const fresh = await fetch(`/api/bills/${id}`);
-      if (fresh.ok) setBill((await fresh.json()).bill);
+      if (fresh.ok) setBill(toPurchaseDetail((await fresh.json()).bill));
     } catch (e) {
       showToast(e instanceof Error ? e.message : "Failed", "error");
     } finally {
@@ -153,9 +173,9 @@ export default function PurchaseDetailPage({ params }: { params: Promise<{ id: s
   const halfTax = Math.round((bill.taxAmount / 2) * 100) / 100;
   const supply = bill.placeOfSupply ? GST_STATE_CODES[bill.placeOfSupply] : "";
   const supplyFull = bill.placeOfSupply ? `${supply} (${bill.placeOfSupply})` : "—";
-  const supplierName = bill.party?.name || bill.customerName;
-  const supplierPhone = bill.party?.phone || bill.customerPhone;
-  const supplierAddress = bill.party?.address || bill.customerAddress;
+  const supplierName = bill.party?.name || bill.vendorName;
+  const supplierPhone = bill.party?.phone || bill.vendorPhone;
+  const supplierAddress = bill.party?.address || bill.vendorAddress;
   const supplierGstin = bill.party?.gstin || bill.gstin;
 
   return (
@@ -232,6 +252,20 @@ export default function PurchaseDetailPage({ params }: { params: Promise<{ id: s
                         {t("bills.finalize" as TranslationKey)}
                       </button>
                     </>
+                  )}
+                  {bill.status === "FINAL" && (
+                    <button
+                      onClick={() => router.push(`/payments/new?billId=${id}${bill.partyId ? `&partyId=${bill.partyId}` : ""}`)}
+                      style={{
+                        height: isMobile ? 36 : 40, padding: isMobile ? "0 12px" : "0 14px", borderRadius: 12, border: "none",
+                        background: GR, color: "#fff",
+                        fontSize: TYPE.bodySmall, fontWeight: 700, fontFamily: SG,
+                        cursor: "pointer", boxShadow: `0 3px 12px ${GR}40`,
+                        display: "flex", alignItems: "center", gap: 6,
+                      }}
+                    >
+                      {t("payments.record" as TranslationKey)}
+                    </button>
                   )}
                   {bill.status !== "CANCELLED" && (
                     <button

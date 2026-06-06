@@ -367,26 +367,58 @@ export async function PATCH(request: NextRequest) {
         include: { party: { select: { name: true, type: true } } },
       });
 
-      if (!payment.party || !payment.partyId) {
+      // ── Contra payment completion (bank-to-bank transfer) ─────────────────
+      if (!payment.partyId) {
+        // No party — this is a contra entry. Apply bank balance changes and
+        // create the journal that was deferred when status was EXPECTED.
+        const bankDelta = payment.direction === "INCOMING"
+          ? payment.amount.toNumber()
+          : -payment.amount.toNumber();
+        if (payment.accountId) {
+          await tx.bankAccount.update({
+            where: { id: payment.accountId },
+            data: { currentBalance: { increment: bankDelta } },
+          });
+        }
+        if (payment.destinationAccountId) {
+          await tx.bankAccount.update({
+            where: { id: payment.destinationAccountId },
+            data: { currentBalance: { increment: -bankDelta } },
+          });
+        }
+
+        const srcAccount = payment.accountId
+          ? await tx.bankAccount.findUnique({ where: { id: payment.accountId }, select: { type: true } })
+          : null;
+        const dstAccount = payment.destinationAccountId
+          ? await tx.bankAccount.findUnique({ where: { id: payment.destinationAccountId }, select: { type: true } })
+          : null;
+
+        if (srcAccount && dstAccount) {
+          await journalForContraEntry(tx, tenantId, {
+            id: updated.id, partyId: null, partyName: null,
+            amount: payment.amount.toNumber(), mode: payment.mode,
+            date: payment.date, createdBy: userId || payment.createdBy,
+            sourceAccountType: srcAccount.type, destAccountType: dstAccount.type,
+          });
+        }
+
+        await tx.auditLog.create({
+          data: {
+            tenantId, entityType: "Payment", entityId: updated.id,
+            userId: userId || payment.createdBy, action: "UPDATE",
+            fieldName: "status", oldValue: JSON.stringify("EXPECTED"), newValue: JSON.stringify("COMPLETED"),
+          },
+        });
+        return updated;
+      }
+
+      if (!payment.party) {
         throw new Error("Payment has no linked party — cannot complete");
       }
 
-      const balanceChange = getPaymentBalanceDelta(
-        asSupportedPartyType(payment.party.type),
-        payment.direction,
-        payment.amount.toNumber()
-      );
-
-      await tx.party.update({
-        where: { id: payment.partyId },
-        data: {
-          currentBalance: { increment: balanceChange },
-        },
-      });
-
-      // Bring bank account balance in sync with the now-completed cash movement.
-      // EXPECTED payments don't touch bank balance (no real cash flow yet); on
-      // completion we must mirror the POST path's increment.
+      // ── Bring bank account balance in sync with the now-completed cash movement.
+      // EXPECTED payments don't touch bank balance (no real cash flow yet).
       if (payment.accountId) {
         const bankDelta =
           payment.direction === "INCOMING"
@@ -402,8 +434,12 @@ export async function PATCH(request: NextRequest) {
         throw new Error("Payment party missing after update");
       }
 
-      if (payment.direction === "INCOMING") {
-        await journalForPaymentReceived(tx, tenantId, {
+      const isLedgerParty = ["EXPENSE", "INCOME", "ASSET", "LIABILITY", "EQUITY"].includes(payment.party.type);
+
+      if (isLedgerParty) {
+        // Ledger parties: no party currentBalance; journal maps to expense/income accounts.
+        // Mirror the POST path's journalForLedgerPayment call.
+        await journalForLedgerPayment(tx, tenantId, {
           id: updated.id,
           partyId: payment.partyId,
           partyName: updated.party.name,
@@ -411,17 +447,41 @@ export async function PATCH(request: NextRequest) {
           mode: payment.mode,
           date: payment.date,
           createdBy: userId || payment.createdBy,
+          partyType: payment.party.type,
         });
       } else {
-        await journalForPaymentMade(tx, tenantId, {
-          id: updated.id,
-          partyId: payment.partyId,
-          partyName: updated.party.name,
-          amount: payment.amount.toNumber(),
-          mode: payment.mode,
-          date: payment.date,
-          createdBy: userId || payment.createdBy,
+        // Standard CUSTOMER / VENDOR: update party balance + journal.
+        const balanceChange = getPaymentBalanceDelta(
+          asSupportedPartyType(payment.party.type),
+          payment.direction,
+          payment.amount.toNumber()
+        );
+        await tx.party.update({
+          where: { id: payment.partyId },
+          data: { currentBalance: { increment: balanceChange } },
         });
+
+        if (payment.direction === "INCOMING") {
+          await journalForPaymentReceived(tx, tenantId, {
+            id: updated.id,
+            partyId: payment.partyId,
+            partyName: updated.party.name,
+            amount: payment.amount.toNumber(),
+            mode: payment.mode,
+            date: payment.date,
+            createdBy: userId || payment.createdBy,
+          });
+        } else {
+          await journalForPaymentMade(tx, tenantId, {
+            id: updated.id,
+            partyId: payment.partyId,
+            partyName: updated.party.name,
+            amount: payment.amount.toNumber(),
+            mode: payment.mode,
+            date: payment.date,
+            createdBy: userId || payment.createdBy,
+          });
+        }
       }
 
       await tx.auditLog.create({

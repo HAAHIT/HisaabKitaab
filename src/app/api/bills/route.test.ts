@@ -88,6 +88,8 @@ describe("Bills API — authorization guards", () => {
   });
 
   it("POST rejects missing customer name with 400", async () => {
+    // checkBillQuota() runs before validation; give it a valid quota state.
+    prismaMock.tenant.findUnique.mockResolvedValue(buildMockTenant());
     const req = new NextRequest("http://localhost/api/bills", {
       method: "POST",
       headers: {

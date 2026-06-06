@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
 import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useConfirm } from "@/contexts/ConfirmContext";
 import { ITEM_UNITS } from "@/lib/item-catalog";
 import {
   GR, AM, OR, SG, IN, TYPE,
@@ -39,6 +40,7 @@ async function readError(response: Response) {
 
 export default function ItemCatalogPage() {
   const { t } = useLanguage();
+  const confirm = useConfirm();
   const isMobile = useIsMobile();
   const [items, setItems] = useState<ItemRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,16 +48,26 @@ export default function ItemCatalogPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
 
   const unitOptions = useMemo(() => ITEM_UNITS.map((unit) => ({ key: unit, label: unit })), []);
 
-  const fetchItems = useCallback(async () => {
+  const fetchItems = useCallback(async (opts?: { search?: string; page?: number }) => {
+    const q = opts?.search ?? "";
+    const p = opts?.page ?? 1;
     setLoading(true);
     try {
-      const response = await fetch("/api/items");
+      const params = new URLSearchParams({ page: String(p), limit: "50" });
+      if (q.trim()) params.set("search", q.trim());
+      const response = await fetch(`/api/items?${params}`);
       const payload = await response.json().catch(() => ({ items: [] }));
       if (!response.ok) throw new Error(payload?.error || "Failed to load items");
       setItems(payload.items || []);
+      setTotalPages(payload.totalPages || 1);
+      setTotal(payload.total ?? (payload.items?.length || 0));
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Failed to load items", "error");
     } finally {
@@ -63,7 +75,14 @@ export default function ItemCatalogPage() {
     }
   }, []);
 
-  useEffect(() => { fetchItems(); }, [fetchItems]);
+  // Debounced search — refetch 300ms after the user stops typing; resets to page 1.
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      setPage(1);
+      fetchItems({ search, page: 1 });
+    }, 300);
+    return () => window.clearTimeout(handle);
+  }, [search, fetchItems]);
 
   function showToast(message: string, type: "success" | "error") {
     setToast({ message, type });
@@ -98,7 +117,7 @@ export default function ItemCatalogPage() {
         body: JSON.stringify(payload),
       });
       if (!response.ok) throw new Error(await readError(response));
-      await fetchItems();
+      await fetchItems({ search, page });
       resetForm();
       showToast(editingId ? t("items.updated") : t("items.created"), "success");
     } catch (error) {
@@ -109,12 +128,12 @@ export default function ItemCatalogPage() {
   }
 
   async function handleDelete(itemId: string) {
-    if (!confirm(t("items.deleteConfirm"))) return;
+    if (!(await confirm({ message: t("items.deleteConfirm"), confirmLabel: "Delete", intent: "danger" }))) return;
     try {
       const response = await fetch(`/api/items/${itemId}`, { method: "DELETE" });
       if (!response.ok) throw new Error(await readError(response));
       if (editingId === itemId) resetForm();
-      await fetchItems();
+      await fetchItems({ search, page });
       showToast(t("items.deleted"), "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Failed to delete item", "error");
@@ -174,6 +193,14 @@ export default function ItemCatalogPage() {
 
         {/* Items list */}
         <HKCard>
+          <div style={{ marginBottom: 16 }}>
+            <HKInput
+              label={t("items.searchLabel")}
+              placeholder={t("items.searchPlaceholder")}
+              value={search}
+              onValueChange={setSearch}
+            />
+          </div>
           {loading ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {[1, 2, 3].map((i) => <HKSkeleton key={i} className="h-20 rounded-2xl" />)}
@@ -253,6 +280,32 @@ export default function ItemCatalogPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {!loading && totalPages > 1 && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 16 }}>
+              <span style={{ fontSize: TYPE.bodySmall, color: "var(--sb-sub)", fontFamily: SG }}>
+                {t("common.pageOf").replace("{page}", String(page)).replace("{total}", String(totalPages))} · {total}
+              </span>
+              <div style={{ display: "flex", gap: 8 }}>
+                <HKButton
+                  size="sm"
+                  variant="secondary"
+                  isDisabled={page <= 1}
+                  onClick={() => { const p = page - 1; setPage(p); fetchItems({ search, page: p }); }}
+                >
+                  {t("common.prev")}
+                </HKButton>
+                <HKButton
+                  size="sm"
+                  variant="secondary"
+                  isDisabled={page >= totalPages}
+                  onClick={() => { const p = page + 1; setPage(p); fetchItems({ search, page: p }); }}
+                >
+                  {t("common.next")}
+                </HKButton>
+              </div>
             </div>
           )}
         </HKCard>

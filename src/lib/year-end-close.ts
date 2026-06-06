@@ -240,6 +240,88 @@ export async function executeYearEndClose(
   });
 }
 
+/**
+ * Reverse a year-end close while still in the active FY. Posts a balanced
+ * reversing JOURNAL entry that negates the original closing entry (debits and
+ * credits swapped) and removes the FY from `closedFinancialYears`. The original
+ * closing entry is left intact for the audit trail — we never hard-delete.
+ */
+export async function reverseYearEndClose(
+  tenantId: string,
+  fyStartYear: number,
+  createdBy: string
+): Promise<{ journalId: string }> {
+  return prisma.$transaction(async (tx) => {
+    const settings = await getTenantSettings(tenantId, tx);
+    const isClosed =
+      Array.isArray(settings.closedFinancialYears) &&
+      settings.closedFinancialYears.includes(fyStartYear);
+    if (!isClosed) {
+      throw new Error(`FY ${fyStartYear} is not closed; nothing to reverse.`);
+    }
+
+    const { start, end } = fyBoundaries(fyStartYear);
+
+    const closing = await tx.journalEntry.findFirst({
+      where: {
+        tenantId,
+        isDeleted: false,
+        voucherType: "JOURNAL",
+        narration: { startsWith: "Year-end closing entry for" },
+        entryDate: { gte: start, lte: end },
+      },
+      orderBy: { createdAt: "desc" },
+      include: { lines: true },
+    });
+    if (!closing) {
+      throw new Error("Original closing entry not found; cannot reverse.");
+    }
+
+    const alreadyReversed = await tx.journalEntry.findFirst({
+      where: {
+        tenantId,
+        isDeleted: false,
+        voucherType: "JOURNAL",
+        narration: { startsWith: "Reversal of year-end closing entry for" },
+        entryDate: { gte: start, lte: end },
+      },
+      select: { id: true },
+    });
+    if (alreadyReversed) {
+      throw new Error("This year-end close has already been reversed.");
+    }
+
+    // Swap debit/credit on every line to negate the closing entry.
+    const reversedLines = closing.lines.map((l) => ({
+      accountCode: l.accountCode as AccountCode,
+      debit: roundTo2(l.credit.toNumber()),
+      credit: roundTo2(l.debit.toNumber()),
+    }));
+
+    const entry = await createJournalEntry(tx, {
+      tenantId,
+      entryDate: end,
+      narration: closing.narration.replace(
+        "Year-end closing entry for",
+        "Reversal of year-end closing entry for"
+      ),
+      voucherType: "JOURNAL",
+      createdBy,
+      lines: reversedLines,
+    });
+
+    const updatedYears = (settings.closedFinancialYears ?? []).filter(
+      (y) => y !== fyStartYear
+    );
+    await tx.tenant.update({
+      where: { id: tenantId },
+      data: { settings: { ...settings, closedFinancialYears: updatedYears } as object },
+    });
+
+    return { journalId: entry.id };
+  });
+}
+
 export async function getClosedFinancialYears(tenantId: string): Promise<number[]> {
   const settings = await getTenantSettings(tenantId);
   return settings.closedFinancialYears ?? [];

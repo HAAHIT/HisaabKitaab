@@ -2,10 +2,14 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useConfirm } from "@/contexts/ConfirmContext";
 import { type TranslationKey } from "@/lib/i18n/translations";
 import { HKButton } from "@/components/ui/HKButton";
-import { OR, PU, GR, AM, SG, IN, TYPE, PageHeader, useIsMobile } from "@/components/ui/hk-design";
+import { HKSelect, HKSelectItem } from "@/components/ui/HKSelect";
+import { HKInput } from "@/components/ui/HKInput";
+import { OR, PU, GR, AM, SG, IN, TYPE, PageHeader, useIsMobile, HKModal } from "@/components/ui/hk-design";
 import { SUPPORTED_BANKS } from "@/lib/bank-reconciliation/parsers/index";
+import { RECONCILE_CATEGORY_OPTIONS } from "@/lib/bank-reconciliation/categories";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -17,6 +21,7 @@ interface BankAccount {
 }
 
 interface RowPreview {
+  id: string;
   date: string;
   description: string;
   amount: number;
@@ -61,6 +66,7 @@ function fmtDate(iso: string): string {
 export default function ReconcilePage() {
   const isMobile = useIsMobile();
   const { t } = useLanguage();
+  const confirm = useConfirm();
   const [step, setStep] = useState<Step>("history");
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
@@ -80,12 +86,18 @@ export default function ReconcilePage() {
 
   // Review: track per-row manual overrides
   const [ignored, setIgnored] = useState<Set<string>>(new Set());
+  // rowId → selected categoryCode (AccountCode whitelist entry, joined with option index to allow same code under different labels)
+  const [categorized, setCategorized] = useState<Record<string, string>>({});
 
   // History
   const [statements, setStatements] = useState<Statement[]>([]);
 
   // Commit result
-  const [commitResult, setCommitResult] = useState<{ matchedCount: number; ambiguousCount: number; totalRows: number } | null>(null);
+  const [commitResult, setCommitResult] = useState<{ matchedCount: number; ambiguousCount: number; reconciledPaymentCount?: number; totalRows: number } | null>(null);
+  const [commitConfirmOpen, setCommitConfirmOpen] = useState(false);
+
+  // Selected file (for showing name in dropzone)
+  const [selectedFile, setSelectedFile] = useState<{ name: string; size: number } | null>(null);
 
   // ── Load bank accounts ───────────────────────────────────────────────────
 
@@ -157,24 +169,48 @@ export default function ReconcilePage() {
 
   // ── Commit handler ───────────────────────────────────────────────────────
 
+  async function setRowCategory(rowId: string, categoryCode: string | null) {
+    if (categoryCode) {
+      setCategorized((prev) => ({ ...prev, [rowId]: categoryCode }));
+    } else {
+      setCategorized((prev) => {
+        const next = { ...prev };
+        delete next[rowId];
+        return next;
+      });
+    }
+    try {
+      await fetch("/api/reconcile/categorize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          categoryCode
+            ? { rowId, action: "JOURNAL", categoryCode }
+            : { rowId, action: "IGNORE" }
+        ),
+      });
+    } catch {
+      // silent; user can retry by re-selecting
+    }
+  }
+
   async function handleCommit() {
     if (!uploadResult) return;
+    setCommitConfirmOpen(false);
     setLoading(true);
     try {
-      // First, mark user-ignored rows
-      const ignorePromises = Array.from(ignored).map((matchedPaymentId) => {
-        // Find row by matchedPaymentId in preview
-        const row = uploadResult.preview.find((r) => r.matchedPaymentId === matchedPaymentId);
-        if (!row) return Promise.resolve();
-        return fetch("/api/reconcile/categorize", {
+      // First, mark user-ignored rows. The `ignored` set holds BankStatementRow
+      // ids, which is exactly what the categorize endpoint keys on.
+      const ignorePromises = Array.from(ignored).map((rowId) =>
+        fetch("/api/reconcile/categorize", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            rowId: matchedPaymentId, // this is a preview; we use statementId from upload result
+            rowId,
             action: "IGNORE",
           }),
-        });
-      });
+        })
+      );
       await Promise.allSettled(ignorePromises);
 
       const res = await fetch("/api/reconcile/commit", {
@@ -215,6 +251,55 @@ export default function ReconcilePage() {
         subtitle={t("reconcile.subtitle" as TranslationKey)}
         isMobile={isMobile}
       />
+
+      {uploadResult && (
+        (() => {
+          const matchedToCommit = uploadResult.matchedCount - ignored.size;
+          const journalToPost = Object.keys(categorized).length;
+          const ambiguousToCreate =
+            uploadResult.rowCount - uploadResult.matchedCount + ignored.size - journalToPost;
+          return (
+            <HKModal
+              isOpen={commitConfirmOpen}
+              onClose={() => setCommitConfirmOpen(false)}
+              title="Confirm reconciliation commit"
+              footer={
+                <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+                  <HKButton variant="secondary" onClick={() => setCommitConfirmOpen(false)} isDisabled={loading}>
+                    Cancel
+                  </HKButton>
+                  <HKButton variant="success" onClick={handleCommit} isLoading={loading}>
+                    Commit reconciliation
+                  </HKButton>
+                </div>
+              }
+            >
+              <div style={{ fontSize: 14, lineHeight: 1.55, color: "var(--sb-text)" }}>
+                <ul style={{ paddingLeft: 18, margin: "0 0 12px" }}>
+                  <li>
+                    <strong>{matchedToCommit}</strong> payment{matchedToCommit === 1 ? "" : "s"} will be
+                    marked reconciled (a <code>reconciledAt</code> timestamp will be stamped — no new journal entries are created, per BRS standards).
+                  </li>
+                  {journalToPost > 0 && (
+                    <li style={{ marginTop: 6 }}>
+                      <strong>{journalToPost}</strong> categorized row{journalToPost === 1 ? "" : "s"} will
+                      post a balanced JOURNAL voucher (bank charges / interest / round-off).
+                    </li>
+                  )}
+                  <li style={{ marginTop: 6 }}>
+                    <strong>{ambiguousToCreate}</strong> row{ambiguousToCreate === 1 ? "" : "s"} will be left
+                    as <strong>AMBIGUOUS</strong>.
+                  </li>
+                </ul>
+                <p style={{ fontSize: 13, color: "var(--sb-sub)", margin: 0 }}>
+                  You can undo this reconciliation later — journal entries will be reversed and{" "}
+                  <code>reconciledAt</code> cleared.
+                </p>
+              </div>
+            </HKModal>
+          );
+        })()
+      )}
 
       {/* ── Step: History ──────────────────────────────────────────────────── */}
       {step === "history" && (
@@ -273,19 +358,75 @@ export default function ReconcilePage() {
                     {s.isReconciled ? t("reconcile.statusReconciled" as TranslationKey) : t("reconcile.statusPending" as TranslationKey)}
                   </span>
                 </div>
-                <div style={{ display: "flex", gap: 20, marginTop: 12 }}>
-                  {[
-                    { l: t("reconcile.statTotalRows" as TranslationKey), v: s.rowCount },
-                    { l: t("reconcile.statMatched" as TranslationKey), v: s.matchedCount, c: GR },
-                    { l: t("reconcile.statUnmatched" as TranslationKey), v: s.unmatchedCount, c: s.unmatchedCount > 0 ? AM : "var(--sb-sub)" },
-                  ].map((stat) => (
-                    <div key={stat.l}>
-                      <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG, margin: 0 }}>{stat.l}</p>
-                      <p style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: stat.c ?? "var(--sb-text)", fontFamily: IN, margin: 0 }}>
-                        {stat.v}
-                      </p>
-                    </div>
-                  ))}
+                <div style={{ display: "flex", gap: 20, marginTop: 12, alignItems: "flex-end", justifyContent: "space-between" }}>
+                  <div style={{ display: "flex", gap: 20 }}>
+                    {[
+                      { l: t("reconcile.statTotalRows" as TranslationKey), v: s.rowCount },
+                      { l: t("reconcile.statMatched" as TranslationKey), v: s.matchedCount, c: GR },
+                      { l: t("reconcile.statUnmatched" as TranslationKey), v: s.unmatchedCount, c: s.unmatchedCount > 0 ? AM : "var(--sb-sub)" },
+                    ].map((stat) => (
+                      <div key={stat.l}>
+                        <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG, margin: 0 }}>{stat.l}</p>
+                        <p style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: stat.c ?? "var(--sb-text)", fontFamily: IN, margin: 0 }}>
+                          {stat.v}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  {s.isReconciled ? (
+                    <HKButton
+                      size="sm"
+                      variant="secondary"
+                      onClick={async () => {
+                        if (!(await confirm({ title: "Undo reconciliation", message: `Undo reconciliation for ${s.bankAccount.name} (${fmtDate(s.periodFrom)} – ${fmtDate(s.periodTo)})? This will reverse any auto-posted journal entries and clear reconciledAt timestamps.`, confirmLabel: "Undo", intent: "danger" }))) return;
+                        const res = await fetch("/api/reconcile/uncommit", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ statementId: s.id }),
+                        });
+                        const data = await res.json();
+                        if (!res.ok) { showToast(data.error ?? "Undo failed", false); return; }
+                        showToast(`Reversed ${data.journalsReversed} journal entries.`, true);
+                        loadHistory();
+                      }}
+                    >
+                      Undo
+                    </HKButton>
+                  ) : (
+                    <HKButton
+                      size="sm"
+                      onClick={async () => {
+                        setLoading(true);
+                        try {
+                          const res = await fetch(`/api/reconcile/statements/${s.id}`);
+                          const data = await res.json();
+                          if (!res.ok) { showToast(data.error ?? "Failed to load statement", false); return; }
+                          setUploadResult({
+                            statementId: data.statementId,
+                            rowCount: data.rowCount,
+                            matchedCount: data.matchedCount,
+                            parseErrors: data.parseErrors,
+                            preview: data.preview,
+                          });
+                          // Seed ignored + categorized state from existing row statuses
+                          const ignoredSet = new Set<string>();
+                          const catMap: Record<string, string> = {};
+                          for (const r of data.preview as RowPreview[]) {
+                            // The /statements/[id] response doesn't include status — rows
+                            // marked AMBIGUOUS or whose matched payment was already manually
+                            // chosen come back via reason hints. For resume we just open
+                            // the preview; the user can re-ignore/re-categorize as needed.
+                            void r; void ignoredSet; void catMap;
+                          }
+                          setStep("preview");
+                        } finally {
+                          setLoading(false);
+                        }
+                      }}
+                    >
+                      Continue
+                    </HKButton>
+                  )}
                 </div>
               </div>
             ))}
@@ -313,20 +454,16 @@ export default function ReconcilePage() {
               <label style={{ display: "block", fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--sb-sub)", fontFamily: SG, marginBottom: 8 }}>
                 {t("reconcile.selectAccount" as TranslationKey)} *
               </label>
-              <select
+              <HKSelect
                 value={bankAccountId}
-                onChange={(e) => setBankAccountId(e.target.value)}
-                style={{
-                  width: "100%", padding: "12px 16px", borderRadius: 12, fontSize: TYPE.body, fontFamily: SG,
-                  border: "1.5px solid var(--sb-border)", background: "var(--sb-card)", color: "var(--sb-text)",
-                  outline: "none",
-                }}
+                onValueChange={setBankAccountId}
+                placeholder={t("reconcile.selectPlaceholder" as TranslationKey)}
+                aria-label={t("reconcile.selectAccount" as TranslationKey)}
               >
-                <option value="">{t("reconcile.selectPlaceholder" as TranslationKey)}</option>
                 {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}{a.accountNumber ? ` (${a.accountNumber})` : ""}</option>
+                  <HKSelectItem key={a.id} value={a.id}>{a.name}{a.accountNumber ? ` (${a.accountNumber})` : ""}</HKSelectItem>
                 ))}
-              </select>
+              </HKSelect>
             </div>
 
             {/* Bank Format */}
@@ -334,19 +471,15 @@ export default function ReconcilePage() {
               <label style={{ display: "block", fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--sb-sub)", fontFamily: SG, marginBottom: 8 }}>
                 {t("reconcile.bankFormat" as TranslationKey)} *
               </label>
-              <select
+              <HKSelect
                 value={bankSlug}
-                onChange={(e) => setBankSlug(e.target.value)}
-                style={{
-                  width: "100%", padding: "12px 16px", borderRadius: 12, fontSize: TYPE.body, fontFamily: SG,
-                  border: "1.5px solid var(--sb-border)", background: "var(--sb-card)", color: "var(--sb-text)",
-                  outline: "none",
-                }}
+                onValueChange={setBankSlug}
+                aria-label={t("reconcile.bankFormat" as TranslationKey)}
               >
                 {SUPPORTED_BANKS.map((b) => (
-                  <option key={b.slug} value={b.slug}>{b.label}</option>
+                  <HKSelectItem key={b.slug} value={b.slug}>{b.label}</HKSelectItem>
                 ))}
-              </select>
+              </HKSelect>
             </div>
 
             {/* Period */}
@@ -355,30 +488,20 @@ export default function ReconcilePage() {
                 <label style={{ display: "block", fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--sb-sub)", fontFamily: SG, marginBottom: 8 }}>
                   {t("reconcile.periodFrom" as TranslationKey)}
                 </label>
-                <input
+                <HKInput
                   type="date"
                   value={periodFrom}
-                  onChange={(e) => setPeriodFrom(e.target.value)}
-                  style={{
-                    width: "100%", padding: "12px 16px", borderRadius: 12, fontSize: TYPE.body, fontFamily: SG,
-                    border: "1.5px solid var(--sb-border)", background: "var(--sb-card)", color: "var(--sb-text)",
-                    outline: "none", boxSizing: "border-box",
-                  }}
+                  onValueChange={setPeriodFrom}
                 />
               </div>
               <div style={{ flex: 1 }}>
                 <label style={{ display: "block", fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--sb-sub)", fontFamily: SG, marginBottom: 8 }}>
                   {t("reconcile.periodTo" as TranslationKey)}
                 </label>
-                <input
+                <HKInput
                   type="date"
                   value={periodTo}
-                  onChange={(e) => setPeriodTo(e.target.value)}
-                  style={{
-                    width: "100%", padding: "12px 16px", borderRadius: 12, fontSize: TYPE.body, fontFamily: SG,
-                    border: "1.5px solid var(--sb-border)", background: "var(--sb-card)", color: "var(--sb-text)",
-                    outline: "none", boxSizing: "border-box",
-                  }}
+                  onValueChange={setPeriodTo}
                 />
               </div>
             </div>
@@ -391,28 +514,60 @@ export default function ReconcilePage() {
               <div
                 onClick={() => fileRef.current?.click()}
                 style={{
-                  border: "2px dashed var(--sb-border)", borderRadius: 12, padding: "24px 20px",
+                  border: `2px dashed ${selectedFile ? GR : "var(--sb-border)"}`,
+                  borderRadius: 12, padding: "24px 20px",
                   textAlign: "center", cursor: "pointer",
-                  background: "var(--sb-bg)",
+                  background: selectedFile ? GR + "0a" : "var(--sb-bg)",
+                  transition: "border-color .15s, background .15s",
                 }}
               >
-                <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", fontFamily: SG, margin: 0 }}>
-                  {t("reconcile.csvPrompt" as TranslationKey)}
-                </p>
-                <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG, marginTop: 4 }}>
-                  {t("reconcile.csvHelp" as TranslationKey)}
-                </p>
+                {selectedFile ? (
+                  <>
+                    <p style={{ fontSize: TYPE.body, color: "var(--sb-text)", fontFamily: SG, margin: 0, fontWeight: 700, wordBreak: "break-all" }}>
+                      📎 {selectedFile.name}
+                    </p>
+                    <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG, marginTop: 4 }}>
+                      {(selectedFile.size / 1024).toFixed(1)} KB · Tap to choose a different file
+                    </p>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedFile(null);
+                        if (fileRef.current) fileRef.current.value = "";
+                      }}
+                      style={{
+                        marginTop: 8, fontSize: TYPE.caption, color: OR, background: "none",
+                        border: "none", cursor: "pointer", fontFamily: SG, textDecoration: "underline",
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p style={{ fontSize: TYPE.body, color: "var(--sb-sub)", fontFamily: SG, margin: 0 }}>
+                      {t("reconcile.csvPrompt" as TranslationKey)}
+                    </p>
+                    <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG, marginTop: 4 }}>
+                      {t("reconcile.csvHelp" as TranslationKey)}
+                    </p>
+                  </>
+                )}
               </div>
               <input
                 ref={fileRef}
                 type="file"
-                accept=".csv,text/csv"
+                accept=".csv,.xlsx,.xls,.pdf,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
                 style={{ display: "none" }}
                 onChange={() => {
-                  const name = fileRef.current?.files?.[0]?.name;
-                  if (name) showToast(`File ready: ${name}`, true);
+                  const f = fileRef.current?.files?.[0];
+                  if (f) setSelectedFile({ name: f.name, size: f.size });
                 }}
               />
+              <p style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", fontFamily: SG, marginTop: 6, textAlign: "center" }}>
+                Scanned (image-based) PDFs are not supported.
+              </p>
             </div>
 
             <HKButton
@@ -475,9 +630,9 @@ export default function ReconcilePage() {
           {/* Row table */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
             {uploadResult.preview.map((row, idx) => {
-              const matched = !!row.matchedPaymentId && !ignored.has(row.matchedPaymentId);
+              const matched = !!row.matchedPaymentId && !ignored.has(row.id);
               return (
-                <div key={idx} style={{
+                <div key={row.id ?? idx} style={{
                   border: `1.5px solid ${matched ? GR + "44" : "var(--sb-border)"}`,
                   borderRadius: 12, padding: "12px 16px",
                   background: matched ? GR + "08" : "var(--sb-card)",
@@ -495,6 +650,24 @@ export default function ReconcilePage() {
                         ✓ {row.reason}
                       </p>
                     )}
+                    {!row.matchedPaymentId && (
+                      <div style={{ marginTop: 8, maxWidth: 280 }}>
+                        <HKSelect
+                          size="sm"
+                          placeholder="Categorize (optional)"
+                          value={categorized[row.id] ?? ""}
+                          onValueChange={(v) => setRowCategory(row.id, v || null)}
+                        >
+                          {RECONCILE_CATEGORY_OPTIONS
+                            .filter((opt) => opt.validFor.includes(row.direction))
+                            .map((opt, i) => (
+                              <HKSelectItem key={`${opt.code}-${i}`} value={opt.code}>
+                                {opt.label}
+                              </HKSelectItem>
+                            ))}
+                        </HKSelect>
+                      </div>
+                    )}
                   </div>
                   <div style={{ textAlign: "right", flexShrink: 0 }}>
                     <p style={{ fontSize: TYPE.numMedium, fontWeight: 800, color: row.direction === "INCOMING" ? GR : OR, fontFamily: IN, margin: 0 }}>
@@ -502,15 +675,15 @@ export default function ReconcilePage() {
                     </p>
                     {matched && row.matchedPaymentId && (
                       <button
-                        onClick={() => setIgnored((prev) => new Set([...prev, row.matchedPaymentId!]))}
+                        onClick={() => setIgnored((prev) => new Set([...prev, row.id]))}
                         style={{ fontSize: TYPE.caption, color: "var(--sb-sub)", background: "none", border: "none", cursor: "pointer", fontFamily: SG, marginTop: 4 }}
                       >
                         {t("reconcile.ignore" as TranslationKey)}
                       </button>
                     )}
-                    {!matched && row.matchedPaymentId && ignored.has(row.matchedPaymentId) && (
+                    {!matched && row.matchedPaymentId && ignored.has(row.id) && (
                       <button
-                        onClick={() => setIgnored((prev) => { const s = new Set(prev); s.delete(row.matchedPaymentId!); return s; })}
+                        onClick={() => setIgnored((prev) => { const s = new Set(prev); s.delete(row.id); return s; })}
                         style={{ fontSize: TYPE.caption, color: PU, background: "none", border: "none", cursor: "pointer", fontFamily: SG, marginTop: 4 }}
                       >
                         {t("reconcile.undo" as TranslationKey)}
@@ -564,7 +737,7 @@ export default function ReconcilePage() {
           <HKButton
             variant="success"
             fullWidth
-            onClick={handleCommit}
+            onClick={() => setCommitConfirmOpen(true)}
             isLoading={loading}
           >
             {t("reconcile.commitBtn" as TranslationKey)}
@@ -585,7 +758,7 @@ export default function ReconcilePage() {
               .replace("{ambiguousCount}", String(commitResult.ambiguousCount))}
           </p>
           <HKButton
-            onClick={() => { setStep("history"); setUploadResult(null); setCommitResult(null); }}
+            onClick={() => { setStep("history"); setUploadResult(null); setCommitResult(null); setSelectedFile(null); }}
           >
             {t("reconcile.viewHistory" as TranslationKey)}
           </HKButton>

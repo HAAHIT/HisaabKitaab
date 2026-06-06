@@ -20,7 +20,7 @@ interface ReportsClientProps {
   totalEntries: number;
   unbalancedCount: number;
   parties: { id: string; name: string; type: string }[];
-  accountOptions: { code: string; name: string; tallyGroup: string }[];
+  accountOptions: { code: string; name: string; tallyGroup: string; businessFacing: boolean }[];
 }
 
 interface GstMonthRow {

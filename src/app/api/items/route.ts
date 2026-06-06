@@ -27,15 +27,55 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const items = await prisma.itemCatalog.findMany({
-    where: {
-      tenantId,
-      isActive: true,
-    },
-    orderBy: { name: "asc" },
-  });
+  const { searchParams } = new URL(request.url);
+  const search = (searchParams.get("search") || "").trim();
+  // `limit`/`page` are optional. Without them the full active catalog is
+  // returned (back-compat for the bill/purchase forms that load all items
+  // for client-side selection). With them, results are paginated.
+  const limitParam = searchParams.get("limit");
+  const pageParam = searchParams.get("page");
+  const paginate = limitParam !== null || pageParam !== null;
+  const limit = Math.min(Math.max(1, parseInt(limitParam || "50", 10) || 50), 200);
+  const page = Math.max(1, parseInt(pageParam || "1", 10) || 1);
 
-  return NextResponse.json({ items });
+  const where = {
+    tenantId,
+    isActive: true,
+    ...(search
+      ? {
+          OR: [
+            { name: { contains: search, mode: "insensitive" as const } },
+            { hsnCode: { contains: search, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+  };
+
+  if (!paginate) {
+    const items = await prisma.itemCatalog.findMany({
+      where,
+      orderBy: { name: "asc" },
+      ...(search ? { take: 50 } : {}),
+    });
+    return NextResponse.json({ items });
+  }
+
+  const [items, total] = await Promise.all([
+    prisma.itemCatalog.findMany({
+      where,
+      orderBy: { name: "asc" },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.itemCatalog.count({ where }),
+  ]);
+
+  return NextResponse.json({
+    items,
+    total,
+    page,
+    totalPages: Math.max(1, Math.ceil(total / limit)),
+  });
 }
 
 export async function POST(request: NextRequest) {

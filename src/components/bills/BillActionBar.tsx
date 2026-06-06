@@ -49,7 +49,7 @@ export function BillActionBar({ bill, onShare }: BillActionBarProps) {
           backdropFilter: "blur(12px)",
         }}
       >
-        {bill.status !== "DRAFT" && (
+        {bill.status === "FINAL" && (
           <button
             onClick={() => onShare?.()}
             style={{
@@ -101,7 +101,8 @@ export function BillActionBar({ bill, onShare }: BillActionBarProps) {
           {t("common.print")}
         </button>
 
-        {bill.status !== "CANCELLED" && (
+        {/* Payment is only valid against a FINAL bill — a DRAFT has no journal entry yet. */}
+        {bill.status === "FINAL" && (
           <button
             onClick={() => router.push(`/payments/new?billId=${bill.id}${bill.partyId ? `&partyId=${bill.partyId}` : ""}`)}
             style={{

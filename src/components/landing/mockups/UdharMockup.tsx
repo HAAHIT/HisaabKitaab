@@ -24,7 +24,7 @@ export function UdharMockup() {
           <h3 className="text-[18px] font-semibold text-white mt-0.5">Lena baaki hai</h3>
         </div>
         <button className="rounded-full bg-white/5 ring-1 ring-white/10 h-9 w-9 grid place-items-center">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>
         </button>
       </div>
 
@@ -37,7 +37,7 @@ export function UdharMockup() {
           <p className="mt-1 text-[26px] font-semibold text-rose-200 font-display">₹46,650</p>
           <div className="mt-3 flex items-center gap-2">
             <button className="flex-1 rounded-full bg-white text-[#0f1316] text-[12px] font-semibold py-2 flex items-center justify-center gap-1.5">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12c0 2.1.5 4.2 1.6 6L0 24l6.2-1.6c1.7.9 3.7 1.4 5.8 1.4 6.6 0 12-5.4 12-12S18.6 0 12 0Z" opacity=".2"/><path d="M12 2c-5.5 0-10 4.5-10 10 0 1.8.5 3.5 1.4 5L2 22l5.1-1.4c1.5.8 3.2 1.3 4.9 1.3 5.5 0 10-4.5 10-10S17.5 2 12 2Z"/></svg>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12c0 2.1.5 4.2 1.6 6L0 24l6.2-1.6c1.7.9 3.7 1.4 5.8 1.4 6.6 0 12-5.4 12-12S18.6 0 12 0Z" opacity=".2" /><path d="M12 2c-5.5 0-10 4.5-10 10 0 1.8.5 3.5 1.4 5L2 22l5.1-1.4c1.5.8 3.2 1.3 4.9 1.3 5.5 0 10-4.5 10-10S17.5 2 12 2Z" /></svg>
               WhatsApp sab ko
             </button>
           </div>
@@ -68,8 +68,8 @@ export function UdharMockup() {
                     {Math.abs(p.balance).toLocaleString("en-IN")}
                   </p>
                   <div className="mt-0.5 flex justify-end gap-1.5 text-white/40">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72a2 2 0 0 1 1.72 2z"/></svg>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c-5.5 0-10 4.5-10 10 0 1.8.5 3.5 1.4 5L2 22l5.1-1.4c1.5.8 3.2 1.3 4.9 1.3 5.5 0 10-4.5 10-10S17.5 2 12 2Z" opacity=".7"/></svg>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72a2 2 0 0 1 1.72 2z" /></svg>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c-5.5 0-10 4.5-10 10 0 1.8.5 3.5 1.4 5L2 22l5.1-1.4c1.5.8 3.2 1.3 4.9 1.3 5.5 0 10-4.5 10-10S17.5 2 12 2Z" opacity=".7" /></svg>
                   </div>
                 </div>
               </div>
@@ -80,7 +80,7 @@ export function UdharMockup() {
 
       <div className="absolute bottom-3 right-4">
         <button className="h-12 w-12 rounded-full bg-[#2563eb] text-white grid place-items-center shadow-[0_18px_36px_-12px_rgba(37,99,235,0.5)]">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
         </button>
       </div>
     </PhoneFrame>

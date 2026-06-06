@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { isIpRateLimited } from "@/lib/api-rate-limit";
 import { GST_STATE_CODES } from "@/lib/gst-states";
 import { serializeTenantSettings } from "@/lib/tenant-settings";
 import type { ColumnDef } from "@/lib/formula";
+import { PrintButton } from "./PrintButton";
 
 // ─── Helpers (duplicated from bill detail — no client import allowed here) ────
 
@@ -17,10 +21,21 @@ function w(n: number): string {
   return ONES[Math.floor(n/100)]+" Hundred"+(n%100?" and "+w(n%100):"");
 }
 function numberToWords(amount: number): string {
-  const n = Math.round(amount);
-  if (!n) return "Zero Rupees Only";
-  const cr=Math.floor(n/1e7), lk=Math.floor((n%1e7)/1e5), th=Math.floor((n%1e5)/1e3), rm=n%1e3;
-  return "Indian Rupees "+[(cr?w(cr)+" Crore ":""),(lk?w(lk)+" Lakh ":""),(th?w(th)+" Thousand ":""),(rm?w(rm):"")].join("").trim()+" Only.";
+  // Work in paise so 0.25 doesn't round to 0 and produce "Zero Rupees Only".
+  const totalPaise = Math.round(Math.abs(amount) * 100);
+  if (!totalPaise) return "Zero Rupees Only";
+  const rupees = Math.floor(totalPaise / 100);
+  const paise = totalPaise % 100;
+  const rupeeWords = (() => {
+    if (!rupees) return "";
+    const cr=Math.floor(rupees/1e7), lk=Math.floor((rupees%1e7)/1e5), th=Math.floor((rupees%1e5)/1e3), rm=rupees%1e3;
+    return [(cr?w(cr)+" Crore ":""),(lk?w(lk)+" Lakh ":""),(th?w(th)+" Thousand ":""),(rm?w(rm):"")].join("").trim();
+  })();
+  const paiseWords = paise ? `${w(paise).trim()} Paise` : "";
+  const parts: string[] = [];
+  if (rupeeWords) parts.push(`Indian Rupees ${rupeeWords}`);
+  if (paiseWords) parts.push(rupeeWords ? `and ${paiseWords}` : paiseWords);
+  return `${parts.join(" ")} Only.`;
 }
 function formatINR(n: number) {
   return new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
@@ -101,6 +116,23 @@ export default async function PublicBillPage(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+
+  // Rate-limit by IP — these are public, unauthenticated pages, so cap how fast
+  // a single client can pull invoices (blunts bill-ID scraping/enumeration).
+  const hdrs = await headers();
+  const ip =
+    hdrs.get("x-forwarded-for")?.split(",").at(-1)?.trim() ||
+    hdrs.get("x-real-ip")?.trim() ||
+    "unknown";
+  if (await isIpRateLimited("public-bill", ip, 60)) {
+    return (
+      <div style={{ maxWidth: 480, margin: "80px auto", padding: 24, textAlign: "center", fontFamily: "system-ui, sans-serif" }}>
+        <h1 style={{ fontSize: 18, fontWeight: 700 }}>Too many requests</h1>
+        <p style={{ color: "#666", marginTop: 8 }}>Please wait a minute and try again.</p>
+      </div>
+    );
+  }
+
   const bill = await getBill(id);
   if (!bill) notFound();
 
@@ -165,12 +197,7 @@ export default async function PublicBillPage(
               Pay ₹{total.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} via UPI
             </a>
           )}
-          <button
-            onClick={() => window.print()}
-            style={{ padding:"8px 18px", borderRadius:8, border:"1.5px solid #374151", background:"white", fontWeight:700, fontSize:13, cursor:"pointer" }}
-          >
-            🖨 Print / Save PDF
-          </button>
+          <PrintButton />
         </div>
       </div>
 
@@ -189,9 +216,14 @@ export default async function PublicBillPage(
         {/* Company nameplate */}
         <div style={{ textAlign:"center", padding:"14px 20px 10px", borderBottom:"1.5px solid #333" }}>
           {bill.tenant.logoUrl && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={bill.tenant.logoUrl} alt="Logo"
-              style={{ height:56, width:"auto", objectFit:"contain", display:"block", margin:"0 auto 8px" }} />
+            <Image
+              src={bill.tenant.logoUrl}
+              alt="Logo"
+              width={200}
+              height={56}
+              unoptimized
+              style={{ height:56, width:"auto", objectFit:"contain", display:"block", margin:"0 auto 8px" }}
+            />
           )}
           <div style={{ fontWeight:900, fontSize:28, letterSpacing:0.5, lineHeight:1 }}>
             {settings.companyName || bill.tenant.name}

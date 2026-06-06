@@ -88,7 +88,10 @@ export function SearchableSelect<T extends object>({
     if (!containerRef.current) return;
     const bcr = containerRef.current.getBoundingClientRect();
     const dropdownMaxHeight = 256 + 4;
-    const spaceBelow = window.innerHeight - bcr.bottom;
+    // Use visualViewport.height when available — on mobile it excludes the
+    // virtual keyboard, so flipUp is correctly computed against visible space.
+    const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+    const spaceBelow = viewportHeight - bcr.bottom;
     const spaceAbove = bcr.top;
     const flipUp = spaceBelow < dropdownMaxHeight && spaceAbove > spaceBelow;
 
@@ -113,12 +116,25 @@ export function SearchableSelect<T extends object>({
 
   useEffect(() => {
     if (!isOpen) return;
-    const update = () => calcRect();
+    let rafId: number | null = null;
+    const update = () => {
+      // Throttle reposition to one rAF per scroll/resize event to eliminate
+      // the one-frame lag that causes the dropdown to visibly chase the input.
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        calcRect();
+      });
+    };
     window.addEventListener("scroll", update, true);
     window.addEventListener("resize", update);
+    // Mobile: virtual keyboard fires visualViewport resize, not window resize
+    window.visualViewport?.addEventListener("resize", update);
     return () => {
       window.removeEventListener("scroll", update, true);
       window.removeEventListener("resize", update);
+      window.visualViewport?.removeEventListener("resize", update);
+      if (rafId !== null) cancelAnimationFrame(rafId);
     };
   }, [isOpen, calcRect]);
 
@@ -194,7 +210,7 @@ export function SearchableSelect<T extends object>({
         style={{
           position: "fixed",
           ...(rect.flipUp
-            ? { bottom: window.innerHeight - rect.top }
+            ? { bottom: (window.visualViewport?.height ?? window.innerHeight) - rect.top }
             : { top: rect.top }),
           left: rect.left,
           width: rect.width,

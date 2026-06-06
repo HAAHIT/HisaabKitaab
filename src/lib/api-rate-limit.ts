@@ -7,7 +7,7 @@ const WINDOW_MS = 60_000; // 1 minute sliding window
 
 function getClientIp(request: NextRequest): string {
   return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("x-forwarded-for")?.split(",").at(-1)?.trim() ||
     request.headers.get("x-real-ip")?.trim() ||
     "unknown"
   );
@@ -24,16 +24,15 @@ function getClientIp(request: NextRequest): string {
  * @param key      Short identifier for the endpoint, e.g. "measurements.upload"
  * @param limit    Max requests per minute from a single IP
  */
-export async function checkRateLimit(
-  request: NextRequest,
-  key: string,
+/**
+ * Core sliding-window check against a fully-formed store key.
+ * Returns whether the caller is over the limit (plus a Retry-After hint).
+ * Falls back to an in-memory window if the DB is unavailable.
+ */
+async function consumeRateLimit(
+  storeKey: string,
   limit: number
-): Promise<NextResponse | null> {
-  const ip = getClientIp(request);
-  // Scope the key by tenant so one tenant's traffic cannot exhaust another's
-  // quota. Public paths (no proxy-verified tenant header) fall back to IP-only.
-  const tenantId = request.headers.get("x-tenant-id")?.trim();
-  const storeKey = tenantId ? `${key}:${tenantId}:${ip}` : `${key}:${ip}`;
+): Promise<{ limited: boolean; retryAfter: number }> {
   const now = new Date();
   const windowCutoff = new Date(now.getTime() - WINDOW_MS);
 
@@ -48,17 +47,14 @@ export async function checkRateLimit(
         create: { key: storeKey, count: 1, windowStart: now },
         update: { count: 1, windowStart: now },
       });
-      return null;
+      return { limited: false, retryAfter: 0 };
     }
 
     if (existing.count >= limit) {
       const retryAfter = Math.ceil(
         (existing.windowStart.getTime() + WINDOW_MS - now.getTime()) / 1000
       );
-      return NextResponse.json(
-        { error: "Too many requests. Please try again later." },
-        { status: 429, headers: { "Retry-After": String(retryAfter) } }
-      );
+      return { limited: true, retryAfter };
     }
 
     await prisma.apiRateLimit.update({
@@ -71,21 +67,48 @@ export async function checkRateLimit(
       .deleteMany({ where: { windowStart: { lt: windowCutoff } } })
       .catch(() => undefined);
 
-    return null;
+    return { limited: false, retryAfter: 0 };
   } catch (error) {
     // [FIX #6] In-memory fallback if the database is down or connection pool is exhausted.
     // This prevents attackers from exploiting DB downtime to bypass rate limits.
-    const fallbackLimit = fallbackCheck(storeKey, limit);
-    if (fallbackLimit) {
-      return NextResponse.json(
-        { error: "Too many requests (fallback-limit). Please try again later." },
-        { status: 429 }
-      );
-    }
-
-    logError("rate-limit.check.error", { key: storeKey, error });
-    return null;
+    const limited = fallbackCheck(storeKey, limit);
+    if (!limited) logError("rate-limit.check.error", { key: storeKey, error });
+    return { limited, retryAfter: Math.ceil(WINDOW_MS / 1000) };
   }
+}
+
+export async function checkRateLimit(
+  request: NextRequest,
+  key: string,
+  limit: number
+): Promise<NextResponse | null> {
+  const ip = getClientIp(request);
+  // Scope the key by tenant so one tenant's traffic cannot exhaust another's
+  // quota. Public paths (no proxy-verified tenant header) fall back to IP-only.
+  const tenantId = request.headers.get("x-tenant-id")?.trim();
+  const storeKey = tenantId ? `${key}:${tenantId}:${ip}` : `${key}:${ip}`;
+
+  const { limited, retryAfter } = await consumeRateLimit(storeKey, limit);
+  if (limited) {
+    return NextResponse.json(
+      { error: "Too many requests. Please try again later." },
+      { status: 429, headers: { "Retry-After": String(retryAfter) } }
+    );
+  }
+  return null;
+}
+
+/**
+ * IP-scoped rate-limit check for Server Components / contexts without a
+ * NextRequest (e.g. the public invoice page). Returns true if over the limit.
+ */
+export async function isIpRateLimited(
+  key: string,
+  ip: string,
+  limit: number
+): Promise<boolean> {
+  const { limited } = await consumeRateLimit(`${key}:${ip || "unknown"}`, limit);
+  return limited;
 }
 
 // Simple in-memory sliding window for fallback

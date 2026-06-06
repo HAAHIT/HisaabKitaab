@@ -11,10 +11,13 @@ const nextConfig: NextConfig = {
     },
   },
   async headers() {
+    // 'unsafe-eval' is only needed by the dev/HMR runtime — never ship it to
+    // production. 'unsafe-inline' still required for Next.js hydration scripts;
+    // tighten with nonces when ready.
+    const isDev = process.env.NODE_ENV !== "production";
     const csp = [
       "default-src 'self'",
-      // Next.js requires 'unsafe-inline' for hydration scripts; tighten with nonces when ready
-      "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+      `script-src 'self'${isDev ? " 'unsafe-eval'" : ""} 'unsafe-inline'`,
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
       "font-src 'self'",

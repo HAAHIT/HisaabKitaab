@@ -6,6 +6,7 @@ import AppShell from "@/components/ui/AppShell";
 import { SetupWizard } from "@/components/onboarding/SetupWizard";
 import { ProductTour } from "@/components/onboarding/ProductTour";
 import GlobalSearch from "@/components/search/GlobalSearch";
+import { QuotaProvider } from "@/components/billing/QuotaProvider";
 
 interface UserSession {
   userId: string;
@@ -41,13 +42,6 @@ export default function AppShellWrapper({
     }
   }, []);
 
-  // Force full reload on browser back/forward to bust Next.js router cache
-  useEffect(() => {
-    const reload = () => window.location.reload();
-    window.addEventListener("popstate", reload);
-    return () => window.removeEventListener("popstate", reload);
-  }, []);
-
   function handleOnboardingComplete() {
     setWizardVisible(false);
     router.refresh();
@@ -77,6 +71,7 @@ export default function AppShellWrapper({
   return (
     <AppShell user={user}>
       <GlobalSearch />
+      <QuotaProvider />
       {children}
       {showTourNow && <ProductTour onFinish={handleTourFinish} />}
     </AppShell>

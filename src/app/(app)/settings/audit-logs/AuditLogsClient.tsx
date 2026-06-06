@@ -63,6 +63,8 @@ export default function AuditLogsClient() {
   const [entityType, setEntityType] = useState("");
   const [action, setAction] = useState("");
   const [entityId, setEntityId] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +78,8 @@ export default function AuditLogsClient() {
     if (entityType) params.set("entityType", entityType);
     if (action) params.set("action", action);
     if (entityId) params.set("entityId", entityId);
+    if (from) params.set("from", from);
+    if (to) params.set("to", to);
 
     fetch(`/api/audit-logs?${params.toString()}`, { signal: controller.signal })
       .then(async (res) => {
@@ -95,7 +99,17 @@ export default function AuditLogsClient() {
       });
 
     return () => controller.abort();
-  }, [entityType, action, entityId, page]);
+  }, [entityType, action, entityId, from, to, page]);
+
+  function exportCsv() {
+    const params = new URLSearchParams({ format: "csv" });
+    if (entityType) params.set("entityType", entityType);
+    if (action) params.set("action", action);
+    if (entityId) params.set("entityId", entityId);
+    if (from) params.set("from", from);
+    if (to) params.set("to", to);
+    window.location.href = `/api/audit-logs?${params.toString()}`;
+  }
 
   return (
     <div className="animate-fade-in p-4 lg:p-8 space-y-6">
@@ -108,6 +122,26 @@ export default function AuditLogsClient() {
       </div>
 
       <div className="rounded-2xl border border-[var(--sb-border)] bg-[var(--sb-card)] shadow-sm p-6 space-y-4">
+        <div className="flex justify-end">
+          <HKButton size="sm" variant="secondary" onClick={exportCsv}>
+            Export CSV
+          </HKButton>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          <HKInput
+            type="date"
+            label="From (IST)"
+            value={from}
+            onValueChange={(v) => { setPage(1); setFrom(v); }}
+          />
+          <HKInput
+            type="date"
+            label="To (IST)"
+            value={to}
+            onValueChange={(v) => { setPage(1); setTo(v); }}
+          />
+          <div /> {/* spacer to keep 3-col grid */}
+        </div>
         <div className="grid gap-4 md:grid-cols-3">
           <HKSelect
             label="Entity"

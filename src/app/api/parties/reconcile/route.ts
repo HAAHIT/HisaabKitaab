@@ -56,10 +56,23 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // Optional `partyId` scopes the repair to a single party (used by the
+    // party profile "Fix Balances" button). Without it, the whole tenant is
+    // reconciled (admin maintenance job). Default must stay tenant-wide for
+    // backward compatibility.
+    const body = await request.json().catch(() => ({}));
+    const partyId = typeof body?.partyId === "string" && body.partyId.trim()
+      ? body.partyId.trim()
+      : null;
+
     const parties = await prisma.party.findMany({
-      where: { tenantId, isDeleted: false },
+      where: { tenantId, isDeleted: false, ...(partyId ? { id: partyId } : {}) },
       select: { id: true, name: true, currentBalance: true },
     });
+
+    if (partyId && parties.length === 0) {
+      return NextResponse.json({ error: "Party not found" }, { status: 404 });
+    }
 
     let fixed = 0;
     for (const party of parties) {
@@ -73,8 +86,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    logInfo("parties.reconcile.fixed", { requestId: getRequestId(request), fixed });
-    return NextResponse.json({ fixed });
+    logInfo("parties.reconcile.fixed", { requestId: getRequestId(request), fixed, scope: partyId ? "party" : "tenant" });
+    return NextResponse.json({ fixed, scope: partyId ? "party" : "tenant" });
   } catch (error) {
     logError("parties.reconcile.fix.error", { requestId: getRequestId(request), error });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

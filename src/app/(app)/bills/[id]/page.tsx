@@ -6,6 +6,7 @@ import { HKModal } from "@/components/ui/hk-design";
 import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useConfirm } from "@/contexts/ConfirmContext";
 import { type TranslationKey } from "@/lib/i18n/translations";
 import { BillActionBar } from "@/components/bills/BillActionBar";
 import type { ColumnDef } from "@/lib/formula";
@@ -76,12 +77,20 @@ function w(n: number): string {
   return ONES[Math.floor(n/100)] + " Hundred" + (n%100 ? " and " + w(n%100) : "");
 }
 function numberToWords(amount: number): string {
-  const n = Math.round(amount);
-  if (!n) return "Zero Rupees Only";
-  const cr=Math.floor(n/1e7), lk=Math.floor((n%1e7)/1e5), th=Math.floor((n%1e5)/1e3), rm=n%1e3;
-  return "Indian Rupees " +
-    [(cr?w(cr)+" Crore ":""),(lk?w(lk)+" Lakh ":""),(th?w(th)+" Thousand ":""),(rm?w(rm):" ")].join("").trim() +
-    " Only.";
+  const totalPaise = Math.round(Math.abs(amount) * 100);
+  if (!totalPaise) return "Zero Rupees Only";
+  const rupees = Math.floor(totalPaise / 100);
+  const paise = totalPaise % 100;
+  const rupeeWords = (() => {
+    if (!rupees) return "";
+    const cr=Math.floor(rupees/1e7), lk=Math.floor((rupees%1e7)/1e5), th=Math.floor((rupees%1e5)/1e3), rm=rupees%1e3;
+    return [(cr?w(cr)+" Crore ":""),(lk?w(lk)+" Lakh ":""),(th?w(th)+" Thousand ":""),(rm?w(rm):"")].join("").trim();
+  })();
+  const paiseWords = paise ? `${w(paise).trim()} Paise` : "";
+  const parts: string[] = [];
+  if (rupeeWords) parts.push(`Indian Rupees ${rupeeWords}`);
+  if (paiseWords) parts.push(rupeeWords ? `and ${paiseWords}` : paiseWords);
+  return `${parts.join(" ")} Only.`;
 }
 
 function formatINR(n: number) {
@@ -131,6 +140,7 @@ const PRINT_CSS = `
 export default function BillDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const { t } = useLanguage();
+  const confirm = useConfirm();
   const { id } = use(params);
   const isMobile = useIsMobile();
 
@@ -140,6 +150,7 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
   const [toast,         setToast]         = useState<{ message: string; type: "success"|"error" }|null>(null);
   const [confirmAction, setConfirmAction] = useState<"FINAL"|"CANCELLED"|null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [duplicating,   setDuplicating]   = useState(false);
 
   useEffect(() => {
     const el = document.createElement("style");
@@ -169,21 +180,26 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
     setActionLoading(true);
     try {
       const del = status === "CANCELLED";
+      // Send ONLY the status transition — never re-send rows/totals from the
+      // client. Re-sending the full body would silently overwrite newer server
+      // state if the bill was edited in another session since this page loaded.
       const res = await fetch(`/api/bills/${id}`, {
         method: del ? "DELETE" : "PATCH",
         headers: del ? {} : { "Content-Type": "application/json" },
-        body: del ? undefined : JSON.stringify({
-          partyId: bill.partyId, customerName: bill.customerName,
-          customerPhone: bill.customerPhone, customerAddress: bill.customerAddress,
-          gstin: bill.gstin, rows: bill.rows, notes: bill.notes, terms: bill.terms,
-          taxPercent: bill.taxPercent, subtotal: bill.subtotal,
-          taxAmount: bill.taxAmount, grandTotal: bill.grandTotal,
-          isInterState: bill.isInterState === true, status,
-        }),
+        body: del ? undefined : JSON.stringify({ status }),
       });
       if (!res.ok) throw new Error((await res.json()).error);
       showToast(status === "FINAL" ? t("bills.detail.finalizeSuccess" as TranslationKey) : t("bills.detail.cancelSuccess" as TranslationKey), "success");
-      setBill((await fetch(`/api/bills/${id}`).then(r => r.json())).bill);
+      try {
+        const freshRes = await fetch(`/api/bills/${id}`);
+        if (!freshRes.ok) throw new Error(`HTTP ${freshRes.status}`);
+        const freshJson = await freshRes.json();
+        if (freshJson?.bill) setBill(freshJson.bill);
+      } catch {
+        // Status changed successfully on the server but we couldn't refresh
+        // the local view. Tell the user to reload so stale state isn't acted on.
+        showToast("Status updated, but the view couldn't refresh — reload the page.", "error");
+      }
     } catch (e) { showToast(e instanceof Error ? e.message : "Failed", "error"); }
     finally { setActionLoading(false); setConfirmAction(null); }
   }
@@ -323,8 +339,9 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
             </button>
             <button
               onClick={async () => {
-                if (!bill) return;
-                if (!window.confirm(`Create a new DRAFT copy of ${bill.billNumber}?`)) return;
+                if (!bill || duplicating) return;
+                if (!(await confirm({ message: `Create a new DRAFT copy of ${bill.billNumber}?`, confirmLabel: "Duplicate" }))) return;
+                setDuplicating(true);
                 try {
                   const res = await fetch(`/api/bills/${id}/duplicate`, { method: "POST" });
                   const json = await res.json();
@@ -333,8 +350,10 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
                   setTimeout(() => router.push(`/bills/${json.data.id}/edit`), 400);
                 } catch (err) {
                   showToast(err instanceof Error ? err.message : "Failed to duplicate", "error");
+                  setDuplicating(false);
                 }
               }}
+              disabled={duplicating}
               className="no-print bill-toolbar-btn"
               aria-label="Duplicate"
               style={{
@@ -342,7 +361,8 @@ export default function BillDetailPage({ params }: { params: Promise<{ id: strin
                 borderRadius: 10, border: "1.5px solid var(--sb-border)",
                 background: "var(--sb-card)", color: "var(--sb-text)",
                 fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG,
-                cursor: "pointer", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
+                cursor: duplicating ? "wait" : "pointer", opacity: duplicating ? 0.6 : 1,
+                display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
               }}
             >
               <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

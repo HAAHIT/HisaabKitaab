@@ -44,7 +44,8 @@ function formatDate(value: string | number) {
 export default function MyUploadsPage() {
   const router = useRouter();
   const { t } = useLanguage();
-  const { isOnline, isSyncing, syncAll } = useSync();
+  const { isOnline, isSyncing, syncAll, failures, clearFailure } = useSync();
+  const failureList = Object.values(failures);
   const [uploads, setUploads] = useState<MeasurementUpload[]>([]);
   const [drafts, setDrafts] = useState<MeasurementDraft[]>([]);
   const [loading, setLoading] = useState(true);
@@ -118,6 +119,33 @@ export default function MyUploadsPage() {
           </HKButton>
         </div>
       </div>
+
+      {failureList.length > 0 && (
+        <div className="mb-4 rounded-xl border border-danger/30 bg-danger/5 p-3 text-sm">
+          <p className="font-semibold text-danger mb-2">
+            {failureList.length} upload{failureList.length === 1 ? "" : "s"} failed
+          </p>
+          <ul className="space-y-1.5">
+            {failureList.map((f) => (
+              <li key={f.draftId} className="flex items-center justify-between gap-3">
+                <span className="text-default-700">
+                  <strong>{f.label}</strong>
+                  <span className="text-default-500"> — {f.message}</span>
+                  {f.attempts > 1 && (
+                    <span className="text-default-400"> ({f.attempts} attempts)</span>
+                  )}
+                </span>
+                <button
+                  className="text-xs text-default-500 underline hover:text-default-700"
+                  onClick={() => clearFailure(f.draftId)}
+                >
+                  Discard
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {loading ? (
         <div className="space-y-4">

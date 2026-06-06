@@ -11,7 +11,9 @@ import { HKPagination } from "@/components/ui/HKPagination";
 import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useConfirm } from "@/contexts/ConfirmContext";
 import { type TranslationKey } from "@/lib/i18n/translations";
+import { dispatchQuotaExceeded } from "@/components/billing/QuotaProvider";
 import {
   C, OR, PU, GR, SG, IN, TYPE,
   fmt, fmtFull, useIsMobile,
@@ -23,6 +25,7 @@ import { HKInput } from "@/components/ui/HKInput";
 import { OverdueBanner } from "@/components/ui/OverdueBanner";
 import { normalizeIndianPhone, buildWhatsAppReminderUrl } from "@/lib/phone";
 import { useOverdueData } from "@/hooks/useOverdueData";
+import { BulkReminderModal } from "@/components/parties/BulkReminderModal";
 
 interface Party {
   id: string;
@@ -50,9 +53,11 @@ export default function PartiesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { t } = useLanguage();
+  const confirm = useConfirm();
   const isMobile = useIsMobile();
   const overdue = useOverdueData();
   const addNewHandled = useRef(false);
+  const overflowMenuRef = useRef<HTMLDivElement | null>(null);
 
   const [parties, setParties] = useState<Party[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,6 +71,7 @@ export default function PartiesPage() {
   const [editingParty, setEditingParty] = useState<Party | null>(null);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [showBulkReminder, setShowBulkReminder] = useState(false);
 
   // Auto-open add panel when ?addNew=true (from Smart FAB §5.5)
   useEffect(() => {
@@ -80,6 +86,18 @@ export default function PartiesPage() {
     setOverdueFilter(searchParams.get("overdue") === "true");
   }, [searchParams]);
 
+  // Close overflow menu on outside click
+  useEffect(() => {
+    if (!overflowPartyId) return;
+    function handleOutside(e: MouseEvent) {
+      if (overflowMenuRef.current && !overflowMenuRef.current.contains(e.target as Node)) {
+        setOverflowPartyId(null);
+      }
+    }
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [overflowPartyId]);
+
   const [formName, setFormName] = useState("");
   const [formPhone, setFormPhone] = useState("");
   const [formEmail, setFormEmail] = useState("");
@@ -88,6 +106,16 @@ export default function PartiesPage() {
   const [formType, setFormType] = useState("CUSTOMER");
   const [formBalance, setFormBalance] = useState("0");
   const [companyName, setCompanyName] = useState("");
+
+  // One-time settings fetch — separated so it never re-triggers the parties fetch.
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((s) => {
+        if (s?.settings?.companyName) setCompanyName(s.settings.companyName as string);
+      })
+      .catch(() => undefined);
+  }, []);
 
   const fetchParties = useCallback(async () => {
     setLoading(true);
@@ -99,19 +127,12 @@ export default function PartiesPage() {
       if (typeFilter !== "ALL") params.set("type", typeFilter);
       if (overdueFilter) params.set("overdue", "true");
 
-      const [response, settingsRes] = await Promise.all([
-        fetch(`/api/parties?${params.toString()}`),
-        companyName ? Promise.resolve(null) : fetch("/api/settings"),
-      ]);
+      const response = await fetch(`/api/parties?${params.toString()}`);
       if (!response.ok) throw new Error(await readError(response));
 
       const data = await response.json();
       setParties((data.parties || []) as Party[]);
       setTotalPages(typeof data.totalPages === "number" && data.totalPages > 0 ? data.totalPages : 1);
-      if (settingsRes) {
-        const s = await settingsRes.json().catch(() => null);
-        if (s?.settings?.companyName) setCompanyName(s.settings.companyName as string);
-      }
     } catch (error) {
       setParties([]);
       setToast({
@@ -121,7 +142,7 @@ export default function PartiesPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, t, typeFilter, overdueFilter, page, companyName]);
+  }, [search, t, typeFilter, overdueFilter, page]);
 
   // Reset to page 1 when filters change so we don't sit on a now-empty page.
   useEffect(() => {
@@ -193,6 +214,15 @@ export default function PartiesPage() {
             }),
           });
 
+      // [Phase 1 — Quota] Surface party limit via the global upgrade modal.
+      if (!editingParty && response.status === 402) {
+        const errData = await response.json().catch(() => ({}));
+        if (errData?.code === "QUOTA_EXCEEDED" && errData.quota) {
+          dispatchQuotaExceeded(errData.quota);
+          setShowPanel(false);
+          return;
+        }
+      }
       if (!response.ok) throw new Error(await readError(response));
 
       showToast(editingParty ? t("parties.updated") : t("parties.created"), "success");
@@ -206,7 +236,7 @@ export default function PartiesPage() {
   }
 
   async function handleDelete(party: Party) {
-    if (!confirm(`${t("parties.archiveConfirm")} "${party.name}"?`)) return;
+    if (!(await confirm({ message: `${t("parties.archiveConfirm")} "${party.name}"?`, confirmLabel: "Archive", intent: "danger" }))) return;
     try {
       const response = await fetch(`/api/parties/${party.id}`, { method: "DELETE" });
       if (!response.ok) throw new Error(await readError(response));
@@ -253,7 +283,18 @@ export default function PartiesPage() {
             title={t("parties.title" as TranslationKey)}
             subtitle={t("parties.subtitle" as TranslationKey)}
             isMobile={isMobile}
-            action={<HKButton onClick={openCreate}>{t("parties.addBtn" as TranslationKey)}</HKButton>}
+            action={
+              <div style={{ display: "flex", gap: 8 }}>
+                <HKButton
+                  variant="secondary"
+                  onClick={() => setShowBulkReminder(true)}
+                  title="Send month-end WhatsApp reminders to overdue customers"
+                >
+                  📲 {isMobile ? "" : "Reminders"}
+                </HKButton>
+                <HKButton onClick={openCreate}>{t("parties.addBtn" as TranslationKey)}</HKButton>
+              </div>
+            }
           />
           {/* Overdue banner */}
           <OverdueBanner
@@ -462,6 +503,7 @@ export default function PartiesPage() {
                           )}
                           {/* Overflow menu */}
                           <div
+                            ref={overflowPartyId === party.id ? overflowMenuRef : undefined}
                             role="button"
                             tabIndex={0}
                             onClick={(e) => {
@@ -771,6 +813,10 @@ export default function PartiesPage() {
           to { transform: translateX(0); }
         }
       `}</style>
+
+      {showBulkReminder && (
+        <BulkReminderModal onClose={() => setShowBulkReminder(false)} />
+      )}
     </>
   );
 }

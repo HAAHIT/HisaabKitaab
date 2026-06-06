@@ -5,6 +5,7 @@ import { HKSkeleton } from "@/components/ui/HKSkeleton";
 import { HKPagination } from "@/components/ui/HKPagination";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useConfirm } from "@/contexts/ConfirmContext";
 import { type TranslationKey } from "@/lib/i18n/translations";
 import {
   C, OR, GR, AM, SG, IN, TYPE,
@@ -57,6 +58,7 @@ async function readError(response: Response) {
 export default function BillsListPage() {
   const router = useRouter();
   const { t } = useLanguage();
+  const confirm = useConfirm();
   const isMobile = useIsMobile();
   const overdue = useOverdueData();
 
@@ -395,7 +397,7 @@ export default function BillsListPage() {
               variant="secondary"
               isDisabled={bulkBusy || selectedIds.size === 0}
               onClick={async () => {
-                if (!window.confirm(`Mark ${selectedIds.size} selected DRAFT bill(s) as CANCELLED?`)) return;
+                if (!(await confirm({ message: `Mark ${selectedIds.size} selected DRAFT bill(s) as CANCELLED?`, confirmLabel: "Cancel drafts", intent: "danger" }))) return;
                 setBulkBusy(true);
                 try {
                   const res = await fetch("/api/bills/bulk", {
@@ -426,7 +428,7 @@ export default function BillsListPage() {
               variant="danger"
               isDisabled={bulkBusy || selectedIds.size === 0}
               onClick={async () => {
-                if (!window.confirm(`Delete ${selectedIds.size} selected DRAFT bill(s)? Only drafts will be deleted.`)) return;
+                if (!(await confirm({ message: `Delete ${selectedIds.size} selected DRAFT bill(s)? Only drafts will be deleted.`, confirmLabel: "Delete", intent: "danger" }))) return;
                 setBulkBusy(true);
                 try {
                   const res = await fetch("/api/bills/bulk", {

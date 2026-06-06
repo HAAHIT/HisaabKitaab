@@ -25,10 +25,28 @@ interface ItemHit {
   unit: string;
   rate: number;
 }
+interface PaymentHit {
+  id: string;
+  direction: "INCOMING" | "OUTGOING";
+  amount: number;
+  date: string;
+  mode: string;
+  referenceNo: string | null;
+  partyName: string | null;
+}
+interface JournalEntryHit {
+  id: string;
+  entryDate: string;
+  narration: string;
+  voucherType: string;
+  amount: number;
+}
 interface SearchData {
   bills: BillHit[];
   parties: PartyHit[];
   items: ItemHit[];
+  payments: PaymentHit[];
+  journalEntries: JournalEntryHit[];
 }
 
 function inr(n: number) {
@@ -80,6 +98,32 @@ function flatten(data: SearchData | null): FlatHit[] {
       subtitle: `${i.unit}${i.hsnCode ? ` · HSN ${i.hsnCode}` : ""}`,
       right: inr(i.rate),
       href: `/settings/items`,
+    });
+  }
+  for (const p of data.payments) {
+    const dateStr = new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" }).format(new Date(p.date));
+    const dirLabel = p.direction === "INCOMING" ? "Received" : "Paid";
+    out.push({
+      key: `payment-${p.id}`,
+      group: "Payments",
+      title: `${dirLabel}${p.partyName ? ` · ${p.partyName}` : ""}`,
+      subtitle: `${dateStr} · ${p.mode}${p.referenceNo ? ` · Ref ${p.referenceNo}` : ""}`,
+      right: inr(p.amount),
+      href: `/payments?highlight=${p.id}`,
+    });
+  }
+  for (const j of data.journalEntries) {
+    const dateStr = new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" }).format(new Date(j.entryDate));
+    const isNote = j.voucherType === "CREDIT_NOTE" || j.voucherType === "DEBIT_NOTE";
+    const group = isNote ? "Notes" : "Journal";
+    const href = isNote ? "/notes" : `/transactions?highlight=${j.id}`;
+    out.push({
+      key: `journal-${j.id}`,
+      group,
+      title: j.narration || j.voucherType,
+      subtitle: `${dateStr} · ${j.voucherType.replace("_", " ").toLowerCase()}`,
+      right: inr(j.amount),
+      href,
     });
   }
   return out;
@@ -267,7 +311,7 @@ export default function GlobalSearch() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={onInputKeyDown}
-            placeholder="Search bills, parties, items…"
+            placeholder="Search bills, parties, items, payments, notes…"
             style={{
               flex: 1,
               background: "transparent",

@@ -3,6 +3,8 @@
  * Used for tel: links, WhatsApp wa.me links, and display.
  */
 
+export type ReminderLanguage = "hinglish" | "hindi" | "english";
+
 /**
  * Strip formatting and prepend country code for wa.me / tel: links.
  * Non-Indian numbers (already starting with a non-91 country code) are
@@ -24,29 +26,81 @@ export function normalizeIndianPhone(raw: string | null | undefined): string {
 }
 
 /**
- * Build a wa.me URL with a pre-filled Hinglish reminder message.
+ * Build a wa.me URL with a pre-filled reminder message.
+ *
+ * language:
+ *   "hinglish" — Roman-script Hindi/English mix (default, widest reach)
+ *   "hindi"    — Pure Devanagari Hindi
+ *   "english"  — Formal English
  */
 export function buildWhatsAppReminderUrl(opts: {
   phone: string;
   partyName: string;
   balanceAmount: number; // absolute value
   tenantName?: string;
+  language?: ReminderLanguage;
 }): string {
   const normalised = normalizeIndianPhone(opts.phone);
   if (!normalised) return "";
 
-  const firstName = opts.partyName.split(" ")[0];
-  const amt = `₹${opts.balanceAmount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const { partyName, balanceAmount, tenantName, language = "hinglish" } = opts;
+  const firstName = partyName.split(" ")[0];
+  const amt = `₹${balanceAmount.toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+  const suffix = tenantName ? `\n— ${tenantName}` : "";
 
   let message: string;
-  if (opts.balanceAmount > 0) {
-    message =
-      `Namaste ${firstName} ji, aapse ${amt} ka hisaab baaki hai.\n` +
-      `Jab convenient ho, please clear kar dein. Dhanyavaad.`;
-    if (opts.tenantName) message += `\n— ${opts.tenantName}`;
-  } else {
-    message = `Namaste ${firstName} ji, aapka hisaab clear hai. Dhanyavaad!`;
-    if (opts.tenantName) message += `\n— ${opts.tenantName}`;
+
+  switch (language) {
+    case "hindi": {
+      // Pure Devanagari
+      if (balanceAmount > 0) {
+        message =
+          `नमस्ते ${firstName} जी,\n` +
+          `आपके खाते में ${amt} का बकाया है।\n` +
+          `कृपया जल्द भुगतान करें। धन्यवाद।` +
+          suffix;
+      } else {
+        message =
+          `नमस्ते ${firstName} जी,\n` +
+          `आपका खाता क्लियर है। धन्यवाद!` +
+          suffix;
+      }
+      break;
+    }
+
+    case "english": {
+      // Formal English
+      if (balanceAmount > 0) {
+        message =
+          `Dear ${firstName},\n` +
+          `This is a friendly reminder that an amount of ${amt} is outstanding in your account.\n` +
+          `Kindly clear the dues at your earliest convenience. Thank you.` +
+          suffix;
+      } else {
+        message =
+          `Dear ${firstName},\n` +
+          `Your account is fully settled. Thank you!` +
+          suffix;
+      }
+      break;
+    }
+
+    case "hinglish":
+    default: {
+      // Roman-script Hinglish (original behaviour)
+      if (balanceAmount > 0) {
+        message =
+          `Namaste ${firstName} ji, aapse ${amt} ka hisaab baaki hai.\n` +
+          `Jab convenient ho, please clear kar dein. Dhanyavaad.` +
+          suffix;
+      } else {
+        message = `Namaste ${firstName} ji, aapka hisaab clear hai. Dhanyavaad!` + suffix;
+      }
+      break;
+    }
   }
 
   return `https://wa.me/${normalised}?text=${encodeURIComponent(message)}`;

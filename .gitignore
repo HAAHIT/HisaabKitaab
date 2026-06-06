@@ -25,6 +25,10 @@
 .DS_Store
 *.pem
 
+# landing page sub-project (has its own node_modules and .next)
+landing/node_modules/
+landing/.next/
+
 # debug
 npm-debug.log*
 yarn-debug.log*

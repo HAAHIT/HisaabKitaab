@@ -1,29 +1,54 @@
 /**
  * POST /api/reconcile/categorize
  *
- * Manually assign a payment to a BankStatementRow, or mark it IGNORED.
+ * Three actions on a BankStatementRow:
+ *  - MATCH:    link to an existing Payment (status → MANUALLY_CATEGORIZED).
+ *  - JOURNAL:  tag with a categoryCode so commit auto-posts a Journal voucher.
+ *  - IGNORE:   skip this row at commit time.
  *
  * Body:
- *   { rowId: string; action: "MATCH" | "IGNORE"; paymentId?: string; category?: string }
+ *   { rowId: string; action: "MATCH" | "JOURNAL" | "IGNORE";
+ *     paymentId?: string; categoryCode?: string; category?: string }
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { resolveSession } from "@/lib/api-tenant";
+import { checkFeatureAccess } from "@/lib/quota";
 import { logError, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
+import { isValidReconcileCategoryCode } from "@/lib/bank-reconciliation/categories";
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   const sessionResolution = await resolveSession(request);
   if (!sessionResolution.ok) return sessionResolution.response;
-  const { tenantId } = sessionResolution.session;
+  const { tenantId, role } = sessionResolution.session;
+
+  if (role !== "ADMIN" && role !== "ACCOUNTANT") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // [Phase 1 — Plan gate] Bank reconciliation is a PRO feature; enforce server-side.
+  const feature = await checkFeatureAccess(tenantId, "bankReconciliation");
+  if (!feature.allowed) {
+    return NextResponse.json(
+      { error: feature.reason ?? "Feature locked", code: "FEATURE_LOCKED", feature: "bankReconciliation" },
+      { status: 402 }
+    );
+  }
 
   const rl = await checkRateLimit(request, `reconcile:categorize:${tenantId}`, 60);
   if (rl) return rl;
 
-  let body: { rowId?: unknown; action?: unknown; paymentId?: unknown; category?: unknown };
+  let body: {
+    rowId?: unknown;
+    action?: unknown;
+    paymentId?: unknown;
+    category?: unknown;
+    categoryCode?: unknown;
+  };
   try {
     body = await request.json();
   } catch {
@@ -34,13 +59,19 @@ export async function POST(request: NextRequest) {
   const action = typeof body.action === "string" ? body.action : null;
   const paymentId = typeof body.paymentId === "string" ? body.paymentId : null;
   const category = typeof body.category === "string" ? body.category.trim() : null;
+  const categoryCode = typeof body.categoryCode === "string" ? body.categoryCode : null;
 
   if (!rowId) return NextResponse.json({ error: "rowId is required" }, { status: 400 });
-  if (action !== "MATCH" && action !== "IGNORE") {
-    return NextResponse.json({ error: "action must be MATCH or IGNORE" }, { status: 400 });
+  if (action !== "MATCH" && action !== "JOURNAL" && action !== "IGNORE") {
+    return NextResponse.json({ error: "action must be MATCH, JOURNAL, or IGNORE" }, { status: 400 });
   }
   if (action === "MATCH" && !paymentId) {
     return NextResponse.json({ error: "paymentId is required for MATCH action" }, { status: 400 });
+  }
+  if (action === "JOURNAL") {
+    if (!categoryCode || !isValidReconcileCategoryCode(categoryCode)) {
+      return NextResponse.json({ error: "valid categoryCode is required for JOURNAL action" }, { status: 400 });
+    }
   }
 
   // Verify the row belongs to this tenant
@@ -67,8 +98,12 @@ export async function POST(request: NextRequest) {
       await tx.bankStatementRow.update({
         where: { id: rowId },
         data: {
-          status: action === "MATCH" ? "MANUALLY_CATEGORIZED" : "IGNORED",
+          status:
+            action === "MATCH" || action === "JOURNAL"
+              ? "MANUALLY_CATEGORIZED"
+              : "IGNORED",
           matchedPaymentId: action === "MATCH" ? paymentId : null,
+          categoryCode: action === "JOURNAL" ? categoryCode : null,
           category: category ?? undefined,
         },
       });

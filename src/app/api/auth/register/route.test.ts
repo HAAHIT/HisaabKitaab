@@ -28,6 +28,8 @@ const hashPasswordMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/auth", () => ({
   hashPassword: hashPasswordMock,
+  // Register now issues a session on signup; stub it out (no cookie store in tests).
+  createSession: vi.fn().mockResolvedValue("test-token"),
 }));
 
 describe("POST /api/auth/register", () => {
@@ -173,6 +175,9 @@ describe("POST /api/auth/register", () => {
       data: {
         name: "Acme Corp",
         slug: "acme-corp",
+        // 30-day PRO trial is started on registration.
+        subscriptionStatus: "TRIALING",
+        trialEndsAt: expect.any(Date),
         settings: { companyName: "Acme Corp", onboardingComplete: false },
       },
     });

@@ -7,6 +7,7 @@ import { HKButton } from "@/components/ui/HKButton";
 import { HKInput } from "@/components/ui/HKInput";
 import { motion } from "framer-motion";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { dispatchQuotaExceeded } from "@/components/billing/QuotaProvider";
 
 interface Props {
   isOpen: boolean;
@@ -62,6 +63,17 @@ export function QuickAddPartyModal({
           openingBalance: 0,
         }),
       });
+
+      // [Phase 1 — Quota] If we hit the party limit, fire the global modal
+      // and dismiss this quick-add UI without showing the inline error.
+      if (response.status === 402) {
+        const errData = await response.json().catch(() => ({}));
+        if (errData?.code === "QUOTA_EXCEEDED" && errData.quota) {
+          dispatchQuotaExceeded(errData.quota);
+          onClose();
+          return;
+        }
+      }
 
       if (!response.ok) {
         const data = await response.json();

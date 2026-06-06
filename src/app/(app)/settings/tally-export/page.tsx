@@ -7,6 +7,7 @@ import { HKButton } from "@/components/ui/HKButton";
 import { HKInput } from "@/components/ui/HKInput";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { getIstCalendar } from "@/lib/journal-reporting";
 import { type TranslationKey } from "@/lib/i18n/translations";
 import {
   C, GR, AM, OR, SG, IN, TYPE,
@@ -44,10 +45,9 @@ export default function TallyExportPage() {
   const [caEmail, setCaEmail] = useState("");
 
   useEffect(() => {
-    const today = new Date();
-    const currentMonth = today.getMonth();
-    const currentYear = today.getFullYear();
-    const fyStartYear = currentMonth >= 3 ? currentYear : currentYear - 1;
+    // IST calendar — financial year starts 1 April (month index 3).
+    const { year, month } = getIstCalendar(new Date());
+    const fyStartYear = month >= 3 ? year : year - 1;
     if (!customFrom) setCustomFrom(`${fyStartYear}-04-01`);
     if (!customTo) setCustomTo(`${fyStartYear + 1}-03-31`);
     fetch("/api/settings")
@@ -62,20 +62,28 @@ export default function TallyExportPage() {
   }
 
   const getDateRange = () => {
-    const today = new Date();
-    const currentYear = today.getFullYear();
-    const currentMonth = today.getMonth();
+    // All boundaries computed against the IST calendar (month is 0-indexed),
+    // not the browser's local timezone — avoids off-by-one-day errors near
+    // month/quarter/FY boundaries on non-IST devices.
+    const { year, month } = getIstCalendar(new Date());
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const lastDay = (y: number, m0: number) => new Date(Date.UTC(y, m0 + 1, 0)).getUTCDate();
     if (periodType === "month") {
-      const from = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-01`;
-      const to = new Date(currentYear, currentMonth + 1, 0).toISOString().split("T")[0];
-      return { from, to };
+      return {
+        from: `${year}-${pad(month + 1)}-01`,
+        to: `${year}-${pad(month + 1)}-${pad(lastDay(year, month))}`,
+      };
     } else if (periodType === "quarter") {
-      const q = Math.floor(currentMonth / 3);
-      const from = `${currentYear}-${String(q * 3 + 1).padStart(2, "0")}-01`;
-      const to = new Date(currentYear, q * 3 + 3, 0).toISOString().split("T")[0];
-      return { from, to };
+      // GST quarters align with the calendar 3-month blocks
+      // (Apr–Jun, Jul–Sep, Oct–Dec, Jan–Mar).
+      const qStart = Math.floor(month / 3) * 3;
+      const qEnd = qStart + 2;
+      return {
+        from: `${year}-${pad(qStart + 1)}-01`,
+        to: `${year}-${pad(qEnd + 1)}-${pad(lastDay(year, qEnd))}`,
+      };
     } else if (periodType === "year") {
-      const fyStartYear = currentMonth >= 3 ? currentYear : currentYear - 1;
+      const fyStartYear = month >= 3 ? year : year - 1;
       return { from: `${fyStartYear}-04-01`, to: `${fyStartYear + 1}-03-31` };
     }
     return { from: customFrom, to: customTo };
@@ -133,11 +141,19 @@ export default function TallyExportPage() {
         window.open(`https://wa.me/?text=${msg}`, "_blank");
         showToast(t("tally.export.successWhatsapp" as TranslationKey), "success");
       } else if (method === "email") {
+        const trimmedEmail = (caEmail || "").trim();
+        // Simple RFC-5322-ish format check — enough to catch the obvious "not an email"
+        // mistakes (missing @, trailing spaces, two @s). Real validation happens at delivery time.
+        const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail);
+        if (!emailOk) {
+          showToast(t("tally.export.invalidEmail" as TranslationKey) || "Enter a valid CA email address in Settings first.", "error");
+          return;
+        }
         const a = document.createElement("a");
         a.href = url; a.download = `SoloBooks-${from}-to-${to}.xml`; a.click();
         const subject = encodeURIComponent(`SoloBooks Tally file for ${from} to ${to}`);
         const body = encodeURIComponent(`Namaste,\nSoloBooks ka ${from} se ${to} ka Tally file ready hai.\nDownload karke Tally mein import kar lo.\n\n— SoloBooks`);
-        window.open(`mailto:${caEmail}?subject=${subject}&body=${body}`);
+        window.open(`mailto:${encodeURIComponent(trimmedEmail)}?subject=${subject}&body=${body}`);
         showToast(t("tally.export.successEmail" as TranslationKey), "success");
       }
     } catch (err) {

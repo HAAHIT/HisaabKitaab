@@ -294,6 +294,21 @@ export default function MeasurementDetailPage({
               <HKButton fullWidth onClick={handleUpdateStatus} isLoading={saving}>
                 Update Status
               </HKButton>
+              {data.status === "COMPLETED" && (
+                <HKButton
+                  fullWidth
+                  variant="secondary"
+                  onClick={() =>
+                    router.push(
+                      data.party
+                        ? `/bills/new?partyId=${data.party.id}`
+                        : "/bills/new"
+                    )
+                  }
+                >
+                  Create Bill from Measurement
+                </HKButton>
+              )}
             </div>
           </div>
         </div>

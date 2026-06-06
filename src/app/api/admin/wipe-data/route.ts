@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { resolveSession } from "@/lib/api-tenant";
 import { logInfo, logError, getRequestId } from "@/lib/observability";
+import { checkRateLimit } from "@/lib/api-rate-limit";
 
 export const runtime = "nodejs";
 
@@ -21,6 +22,11 @@ export async function POST(request: NextRequest) {
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  // Tight cap — wiping tenant data is irreversible. 2/min/tenant is plenty for
+  // legitimate test flows and prevents any kind of accidental loop.
+  const rl = await checkRateLimit(request, `wipe-data:${tenantId}`, 2);
+  if (rl) return rl;
 
   const reqId = getRequestId(request);
 

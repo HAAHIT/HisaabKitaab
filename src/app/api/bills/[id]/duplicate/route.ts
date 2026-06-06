@@ -4,19 +4,11 @@ import { resolveSession } from "@/lib/api-tenant";
 import { logError, getRequestId } from "@/lib/observability";
 import { generateLockKey } from "@/lib/locks";
 import { getIstCalendar, istMidnightUtc } from "@/lib/journal-reporting";
+import { listBillSeries, resolveBillSeriesPrefix } from "@/lib/bill-series";
 
 export const runtime = "nodejs";
 
 type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
-
-interface FlatSettings {
-  billPrefix?: string;
-}
-
-function parseFlatSettings(value: unknown): FlatSettings {
-  if (!value || typeof value !== "object") return {};
-  return value as FlatSettings;
-}
 
 export async function POST(
   request: NextRequest,
@@ -40,12 +32,14 @@ export async function POST(
       return NextResponse.json({ error: "Bill not found" }, { status: 404 });
     }
 
-    const tenant = await prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { settings: true },
-    });
-    const settings = parseFlatSettings(tenant?.settings);
-    const prefix = (settings.billPrefix && settings.billPrefix.trim()) || "BILL";
+    // Use the Bill Numbering series — not a hardcoded "BILL" prefix. Reuse the
+    // source bill's series when its prefix is identifiable, else fall back to
+    // the tenant's default series (same behaviour as a fresh bill).
+    const series = await listBillSeries(tenantId);
+    const sourcePrefix = source.billNumber.replace(/-\d{6}-\d+$/, "");
+    const matchedSeries = series.find((s) => s.prefix === sourcePrefix);
+    const resolvedSeries = await resolveBillSeriesPrefix(tenantId, matchedSeries?.id ?? null);
+    const prefix = resolvedSeries.prefix;
 
     const newDate = new Date();
     const ist = getIstCalendar(newDate);
@@ -73,7 +67,7 @@ export async function POST(
         const lastSeq = parseInt(parts[parts.length - 1], 10);
         if (!Number.isNaN(lastSeq)) nextSeq = lastSeq + 1;
       }
-      const billNumber = `${prefix}-${yearMonth}-${String(nextSeq).padStart(3, "0")}`;
+      const billNumber = `${prefix}-${yearMonth}-${String(nextSeq).padStart(5, "0")}`;
 
       return tx.bill.create({
         data: {

@@ -23,27 +23,53 @@ const PUBLIC_PATHS = [
   "/api/jobs/process-import",
 ];
 
-function isPublicPath(pathname: string) {
-  return PUBLIC_PATHS.some((pattern) => {
-    if (pattern.includes("*")) {
-      const regex = new RegExp(`^${pattern.replace(/\*/g, "[^/]+")}$`);
-      return regex.test(pathname);
-    }
+// Precompile regexes once on module load to avoid regex creation and compilation overhead on every request
+const PUBLIC_PATH_PATTERNS = PUBLIC_PATHS.map((pattern) => {
+  if (pattern.includes("*")) {
+    return new RegExp(`^${pattern.replace(/\*/g, "[^/]+")}$`);
+  }
+  return pattern;
+});
 
-    return pathname.startsWith(pattern);
-  });
+function isPublicPath(pathname: string) {
+  for (const pattern of PUBLIC_PATH_PATTERNS) {
+    if (pattern instanceof RegExp) {
+      if (pattern.test(pathname)) return true;
+    } else {
+      // Exact match or a true sub-path only — avoids unanchored prefix
+      // over-matching (e.g. "/guides" must not match "/guides-internal").
+      if (pathname === pattern || pathname.startsWith(pattern + "/")) return true;
+    }
+  }
+  return false;
 }
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // 1. FAST-PATH BYPASS: Bypasses headers/cookie/JWT parsing completely for static file and asset routes,
+  // returning within sub-millisecond ranges to maximize edge performance.
+  // Only the LAST path segment is checked for a file extension — `pathname.includes(".")`
+  // would let any path containing a dot (e.g. `/api/v2.0/bills`) skip auth entirely.
+  if (
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/favicon") ||
+    /\.[a-zA-Z0-9]+$/.test(pathname)
+  ) {
+    return NextResponse.next();
+  }
+
   const requestId =
     request.headers.get("x-request-id")?.trim() || crypto.randomUUID();
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-request-id", requestId);
   
-  // Strip any client-supplied tenant header immediately — it will be set
-  // authoritatively from the verified JWT payload below.
+  // Strip any client-supplied tenant or user identity headers immediately — they 
+  // will be set authoritatively from the verified JWT payload below.
   requestHeaders.delete(TENANT_HEADER);
+  requestHeaders.delete("x-user-id");
+  requestHeaders.delete("x-user-role");
+  requestHeaders.delete("x-user-name");
   
   let jwtSecret: Uint8Array;
 
@@ -65,7 +91,7 @@ export async function proxy(request: NextRequest) {
   try {
     jwtSecret = getJwtSecret();
   } catch (error) {
-    logError("proxy.auth.misconfigured", {
+    logError("middleware.auth.misconfigured", {
       requestId,
       pathname,
       error,
@@ -101,13 +127,7 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  if (
-    isPublicPath(pathname) ||
-    pathname === "/" ||
-    pathname.startsWith("/_next") ||
-    pathname.startsWith("/favicon") ||
-    pathname.includes(".")
-  ) {
+  if (isPublicPath(pathname) || pathname === "/") {
     return nextWithRequestHeaders();
   }
 
@@ -142,13 +162,15 @@ export async function proxy(request: NextRequest) {
     }
     
     const tenantId =
-      (typeof payload.tenantId === "string" && payload.tenantId.trim()
+      typeof payload.tenantId === "string" && payload.tenantId.trim()
         ? payload.tenantId.trim()
-        : null) ?? process.env.DEFAULT_TENANT_ID?.trim() ?? null;
-    
+        : null;
+
     // Always overwrite — header was stripped above so only the server-derived
-    // value reaches API routes. If no tenant can be resolved the header stays
-    // absent and routes will return a 500 tenant-context-missing error.
+    // value reaches API routes. A verified token without a tenantId claim
+    // resolves to null (no DEFAULT_TENANT_ID fallback): the header stays
+    // absent and routes return a 500 tenant-context-missing error rather than
+    // silently binding the request to a default tenant.
     if (tenantId) {
       requestHeaders.set(TENANT_HEADER, tenantId);
     }

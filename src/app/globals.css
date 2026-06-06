@@ -202,6 +202,15 @@ body > * {
 .sb-auth-shell { --sb-bg: #ffffff; }
 .dark .sb-auth-shell { --sb-bg: #0b0b14; }
 
+/* Native <select> dropdown options: browsers (especially Chrome on Windows)
+   render the popup using OS colours and ignore CSS variables on <option>.
+   Use concrete hex values so at least Firefox/Edge honour dark mode.
+   Chrome popup remains OS-styled — a custom dropdown is needed to fully fix it. */
+.dark select option {
+  background-color: #141420;
+  color: #eef0f7;
+}
+
 /* ── Animations ───────────────────────────────────────── */
 @keyframes sb-spin    { to { transform: rotate(360deg); } }
 @keyframes sb-fade    { from { opacity: 0 } to { opacity: 1 } }

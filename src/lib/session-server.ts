@@ -39,9 +39,11 @@ export async function resolveVerifiedTenantId(
       typeof payload.tenantId === "string" && payload.tenantId.trim()
         ? payload.tenantId.trim()
         : null;
-    // Token is valid but has no tenantId claim — single-tenant JWT. Fall back
-    // to the env variable only in this case (token was genuinely verified).
-    return tenantId ?? process.env.DEFAULT_TENANT_ID?.trim() ?? null;
+    // A verified token MUST carry a tenantId claim. Fail closed if it doesn't —
+    // never fall back to DEFAULT_TENANT_ID, which would silently bind a
+    // tenant-less token to a single tenant (cross-tenant write risk if any
+    // future token-minting path ever omits the claim).
+    return tenantId;
   } catch {
     // Token is present but invalid or expired — reject, do not fall back.
     return null;

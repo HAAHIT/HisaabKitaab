@@ -17,6 +17,7 @@ import {
   HKCard, HKToast, useIsMobile,
 } from "@/components/ui/hk-design";
 import { formatCurrency } from "@/lib/currency";
+import { PurchaseBillScanner, type OcrParsedFields } from "@/components/purchases/PurchaseBillScanner";
 
 interface Template {
   id: string;
@@ -85,6 +86,14 @@ export function PurchaseBillForm() {
   const [notes, setNotes] = useState("");
   const [enableRoundOff, setEnableRoundOff] = useState(false);
 
+  // OCR scanner
+  const [showScanner, setShowScanner] = useState(false);
+  const [scanBanner, setScanBanner] = useState<{
+    vendor: string | null;
+    amount: string | null;
+    confidence: number;
+  } | null>(null);
+
   const fetchFormData = useCallback(async () => {
     setLoading(true);
     try {
@@ -104,6 +113,23 @@ export function PurchaseBillForm() {
   function showToast(message: string, type: "success" | "error") {
     setToast({ message, type });
     window.setTimeout(() => setToast(null), 3000);
+  }
+
+  function handleScanComplete(fields: OcrParsedFields) {
+    setShowScanner(false);
+    // Pre-fill fields from OCR result
+    if (fields.invoiceNo) setSupplierInvoiceNo(fields.invoiceNo);
+    if (fields.date) setBillDate(fields.date);
+    if (fields.taxPercent !== null) setTaxPercent(fields.taxPercent);
+    // Show scan banner with vendor + amount info for manual review
+    setScanBanner({
+      vendor: fields.vendor,
+      amount: fields.amount !== null
+        ? `₹${fields.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`
+        : null,
+      confidence: fields.confidence,
+    });
+    showToast("Bill scanned! Review and complete the details below.", "success");
   }
 
   const selectTemplate = useCallback((templateId: string) => {
@@ -234,7 +260,7 @@ export function PurchaseBillForm() {
                 <path d="M15 18l-6-6 6-6" />
               </svg>
             </button>
-            <div>
+            <div style={{ flex: 1 }}>
               <h1 style={{ fontFamily: DISPLAY, fontSize: isMobile ? 24 : 30, fontWeight: 600, color: "var(--sb-text)", margin: 0, letterSpacing: "-0.01em", lineHeight: 1.2 }}>
                 {t("purchases.new.title" as TranslationKey)}
               </h1>
@@ -242,7 +268,59 @@ export function PurchaseBillForm() {
                 {t("purchases.new.subtitle" as TranslationKey)}
               </p>
             </div>
+            {/* OCR scan button */}
+            <HKButton
+              variant="secondary"
+              onClick={() => setShowScanner(true)}
+              title="Scan a purchase bill with camera to auto-fill the form"
+              style={{ flexShrink: 0 }}
+            >
+              📷 {isMobile ? "Scan" : "Scan Bill"}
+            </HKButton>
           </div>
+
+          {/* OCR scan result banner */}
+          {scanBanner && (
+            <div
+              style={{
+                display: "flex", alignItems: "flex-start", gap: 12,
+                padding: "14px 16px", borderRadius: 14, marginBottom: 16,
+                background: "var(--sb-surface-alt)",
+                border: `1.5px solid ${C.primary}40`,
+              }}
+            >
+              <span style={{ fontSize: 20, flexShrink: 0 }}>🔍</span>
+              <div style={{ flex: 1 }}>
+                <p style={{ fontSize: TYPE.bodySmall, fontWeight: 700, color: "var(--sb-text)", fontFamily: SG, margin: 0 }}>
+                  Bill scanned — review fields below
+                </p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 16px", marginTop: 4 }}>
+                  {scanBanner.vendor && (
+                    <span style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", fontFamily: SG }}>
+                      Vendor detected: <strong style={{ color: "var(--sb-text)" }}>{scanBanner.vendor}</strong>
+                    </span>
+                  )}
+                  {scanBanner.amount && (
+                    <span style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", fontFamily: SG }}>
+                      Scanned total: <strong style={{ color: "var(--sb-text)", fontFamily: IN }}>{scanBanner.amount}</strong>
+                    </span>
+                  )}
+                  {scanBanner.confidence < 70 && (
+                    <span style={{ fontSize: TYPE.caption, color: OR, fontFamily: SG, fontWeight: 600 }}>
+                      ⚠️ Low OCR confidence ({Math.round(scanBanner.confidence)}%) — please verify all values
+                    </span>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={() => setScanBanner(null)}
+                aria-label="Dismiss scan banner"
+                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--sb-muted)", flexShrink: 0, padding: 2, fontSize: 16 }}
+              >
+                ✕
+              </button>
+            </div>
+          )}
 
           {/* Template picker */}
           {(templatePickerOpen || (!loading && !selectedTemplate && templates.length === 0)) && (
@@ -551,6 +629,14 @@ export function PurchaseBillForm() {
           )}
         </div>
       </div>
+
+      {/* OCR scanner modal — rendered outside main layout for correct stacking */}
+      {showScanner && (
+        <PurchaseBillScanner
+          onScanComplete={handleScanComplete}
+          onClose={() => setShowScanner(false)}
+        />
+      )}
     </>
   );
 }

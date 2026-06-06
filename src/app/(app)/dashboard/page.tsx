@@ -308,6 +308,10 @@ function RecentActivityCard({ data, onNavigate, isMobile }: { data: DashboardDat
 function QuickLinks({ isMobile, onNavigate }: { isMobile: boolean; onNavigate: (href: string) => void }) {
   const { t } = useLanguage();
   const links = [
+    { label: t("dash.quick.newBill.title" as TranslationKey),  sub: t("dash.quick.newBill.desc" as TranslationKey),     href: "/bills/new",
+      icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg> },
+    { label: t("dash.quick.payment.title" as TranslationKey),  sub: t("dash.quick.payment.desc" as TranslationKey),     href: "/payments/new",
+      icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg> },
     { label: t("dash.quick.tally.title" as TranslationKey),    sub: t("dash.quick.tally.desc" as TranslationKey),       href: "/settings/tally-export",
       icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> },
     { label: t("dash.quick.reconcile.title" as TranslationKey), sub: t("dash.quick.reconcile.desc" as TranslationKey),  href: "/settings/reconcile",
@@ -320,49 +324,62 @@ function QuickLinks({ isMobile, onNavigate }: { isMobile: boolean; onNavigate: (
   return (
     <div style={{
       display: "grid",
-      gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)",
+      gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(3, 1fr)",
       gap: 10,
     }}>
-      {links.map(q => {
-        const [hovered, setHovered] = useState(false);
-        return (
-          <button key={q.label}
-            onClick={() => onNavigate(q.href)}
-            onMouseEnter={() => setHovered(true)}
-            onMouseLeave={() => setHovered(false)}
-            style={{
-              background: "var(--sb-card)",
-              borderRadius: 14,
-              border: `1px solid ${hovered ? "var(--sb-border-strong)" : "var(--sb-border)"}`,
-              boxShadow: hovered ? "var(--sb-shadow-card-hover)" : "var(--sb-shadow-card)",
-              padding: "14px",
-              textAlign: "left",
-              cursor: "pointer",
-              transition: "border-color 0.15s, box-shadow 0.15s, transform 0.15s",
-              transform: hovered ? "translateY(-1px)" : "none",
-              display: "flex", gap: 10, alignItems: "center",
-              fontFamily: SG,
-            }}
-          >
-            <div style={{
-              width: 36, height: 36, borderRadius: 10,
-              background: "var(--sb-surface-alt)",
-              color: "var(--sb-sub)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              flexShrink: 0,
-            }}>{q.icon}</div>
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <p style={{ fontSize: TYPE.bodySm, fontWeight: 700, color: "var(--sb-text)", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {q.label}
-              </p>
-              <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", margin: "3px 0 0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {q.sub}
-              </p>
-            </div>
-          </button>
-        );
-      })}
+      {links.map(q => (
+        <QuickLinkCard key={q.label} link={q} onNavigate={onNavigate} />
+      ))}
     </div>
+  );
+}
+
+// One card per quick link. Extracted from the map() above so its hover `useState`
+// lives at a component's top level — calling hooks inside a .map() callback
+// violates the Rules of Hooks.
+function QuickLinkCard({
+  link,
+  onNavigate,
+}: {
+  link: { label: string; sub: string; href: string; icon: React.ReactNode };
+  onNavigate: (href: string) => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <button
+      onClick={() => onNavigate(link.href)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background: "var(--sb-card)",
+        borderRadius: 14,
+        border: `1px solid ${hovered ? "var(--sb-border-strong)" : "var(--sb-border)"}`,
+        boxShadow: hovered ? "var(--sb-shadow-card-hover)" : "var(--sb-shadow-card)",
+        padding: "14px",
+        textAlign: "left",
+        cursor: "pointer",
+        transition: "border-color 0.15s, box-shadow 0.15s, transform 0.15s",
+        transform: hovered ? "translateY(-1px)" : "none",
+        display: "flex", gap: 10, alignItems: "center",
+        fontFamily: SG,
+      }}
+    >
+      <div style={{
+        width: 36, height: 36, borderRadius: 10,
+        background: "var(--sb-surface-alt)",
+        color: "var(--sb-sub)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        flexShrink: 0,
+      }}>{link.icon}</div>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <p style={{ fontSize: TYPE.bodySm, fontWeight: 700, color: "var(--sb-text)", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {link.label}
+        </p>
+        <p style={{ fontSize: TYPE.caption, color: "var(--sb-muted)", margin: "3px 0 0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {link.sub}
+        </p>
+      </div>
+    </button>
   );
 }
 
@@ -479,9 +496,12 @@ export default function DashboardPage() {
   if (!data) return null;
 
   const now = new Date();
-  const today = now.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" });
-  const mo = now.getMonth();
-  const dy = now.getDate();
+  const today = now.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", timeZone: "Asia/Kolkata" });
+  // Use IST for quarter-boundary calculation so the nudge fires correctly
+  // when the server is on UTC (Cloud Run / Vercel default).
+  const istParts = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Kolkata", month: "numeric", day: "numeric" }).formatToParts(now);
+  const mo = Number(istParts.find((p) => p.type === "month")?.value) - 1; // 0-indexed
+  const dy = Number(istParts.find((p) => p.type === "day")?.value);
   const showTallyNudge = (mo % 3 === 2 && dy >= 15) || (mo % 3 === 0 && dy <= 15);
   const s = data.summary;
 

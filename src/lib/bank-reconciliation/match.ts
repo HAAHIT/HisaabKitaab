@@ -2,10 +2,10 @@
  * Bank Reconciliation — Matching Algorithm
  *
  * A bank row auto-matches a Payment when ALL four conditions hold:
- *  1. Amount within ₹1 tolerance
+ *  1. Amount within ₹5 tolerance
  *  2. Direction matches (INCOMING ↔ payment type)
  *  3. Date proximity: ±3 calendar days
- *  4. Bank description contains a substring of the party name (or vice-versa)
+ *  4. Bank description and party name share at least one significant word (≥3 chars, either direction)
  */
 
 import type { BankStatementRow } from "./types";
@@ -31,7 +31,10 @@ export interface MatchResult {
   reason: string;
 }
 
-const AMOUNT_TOLERANCE = 1; // ₹1
+// ₹5 covers the typical Indian bank service charges deducted at credit time
+// (SMS alert fees ₹2–₹3, NEFT/IMPS charges ₹2–₹5, cheque-return surcharges).
+// A tighter tolerance was missing these consistently in production statements.
+const AMOUNT_TOLERANCE = 5;
 const DATE_TOLERANCE_DAYS = 3;
 
 function daysDiff(a: Date, b: Date): number {
@@ -42,18 +45,22 @@ function normalizeStr(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]/g, " ").replace(/\s+/g, " ").trim();
 }
 
-/** Returns true if partyName is meaningfully present in the bank description */
+/** Returns true if partyName and bank description share a meaningful word (either direction) */
 function descriptionMatches(bankDesc: string, partyName: string | null): boolean {
   if (!partyName) return false;
   const desc = normalizeStr(bankDesc);
   const party = normalizeStr(partyName);
 
-  // Try each word of the party name (≥3 chars) for substring match
-  const words = party.split(" ").filter((w) => w.length >= 3);
-  if (words.length === 0) return false;
+  const partyWords = party.split(" ").filter((w) => w.length >= 3);
+  if (partyWords.length === 0) return false;
 
-  // At least one significant word must appear in the bank description
-  return words.some((w) => desc.includes(w));
+  // Forward: party name word appears in bank description
+  if (partyWords.some((w) => desc.includes(w))) return true;
+
+  // Reverse: bank description word appears in party name (handles truncated bank refs).
+  // Use ≥4 chars to avoid false positives from common 3-letter bank tokens (UPI, TFR, REF, etc.)
+  const descWords = desc.split(" ").filter((w) => w.length >= 4);
+  return descWords.some((w) => party.includes(w));
 }
 
 /**

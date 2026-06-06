@@ -87,20 +87,21 @@ function buildSalesTaxLines(
   }
 
   if (isInterState) {
-    const roundedIgst = Math.round(taxAmount);
+    const igst = roundTo2(taxAmount);
     return [
       {
         accountCode: "IGST_OUTPUT" as const,
-        debit: direction === "DEBIT" ? roundedIgst : 0,
-        credit: direction === "CREDIT" ? roundedIgst : 0,
+        debit: direction === "DEBIT" ? igst : 0,
+        credit: direction === "CREDIT" ? igst : 0,
       },
     ];
   }
 
-  // [Section 170 CGST Act] GST amounts must be rounded to the "Nearest Rupee"
-  const roundedTax = Math.round(taxAmount);
-  const halfTax = Math.round(roundedTax / 2);
-  const otherHalf = roundedTax - halfTax;
+  // Keep 2dp precision so the journal matches the bill's stored taxAmount.
+  // Section 170 rounds the final payable in GST returns, not per-entry splits.
+  const exactTax = roundTo2(taxAmount);
+  const halfTax = roundTo2(exactTax / 2);
+  const otherHalf = roundTo2(exactTax - halfTax);
 
   return [
     {
@@ -191,7 +192,7 @@ export async function journalForSalesBill(
   tenantId: string,
   bill: SalesBillJournalInput
 ) {
-  const theoreticalTotal = roundTo2(bill.subtotal + Math.round(bill.taxAmount));
+  const theoreticalTotal = roundTo2(bill.subtotal + roundTo2(bill.taxAmount));
   const diff = roundTo2(bill.grandTotal - theoreticalTotal);
 
   return createJournalEntry(tx, {
@@ -233,7 +234,7 @@ export async function journalForCancelledSalesBill(
   tenantId: string,
   bill: SalesBillJournalInput
 ) {
-  const theoreticalTotal = roundTo2(bill.subtotal + Math.round(bill.taxAmount));
+  const theoreticalTotal = roundTo2(bill.subtotal + roundTo2(bill.taxAmount));
   const diff = roundTo2(bill.grandTotal - theoreticalTotal);
 
   return createJournalEntry(tx, {

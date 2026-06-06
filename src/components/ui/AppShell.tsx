@@ -673,6 +673,7 @@ export default function AppShell({
           {canQuickBill && (
             <button
               onClick={openSmartFab}
+              title="Quick actions (F8 = New Bill · F9 = New Purchase)"
               data-tour="new-bill"
               style={{
                 display: "flex", alignItems: "center", gap: 7,
@@ -689,6 +690,11 @@ export default function AppShell({
               onMouseLeave={e => (e.currentTarget.style.background = "var(--sb-primary)")}
             >
               <Icons.plus /> {t("nav.billAction")}
+              <span style={{
+                marginLeft: 4, fontSize: 10, fontWeight: 700,
+                background: "rgba(255,255,255,0.2)", borderRadius: 4,
+                padding: "1px 5px", letterSpacing: "0.3px",
+              }}>F8</span>
             </button>
           )}
           <ThemeToggleBtn />
@@ -895,6 +901,7 @@ export default function AppShell({
           { label: t("nav.reports"),       href: "/reports",               icon: <Icons.reports />,  roles: ["ADMIN","ACCOUNTANT"] },
           { label: t("nav.tallyExportImport"), href: "/settings/tally-export", icon: <Icons.tally />, roles: ["ADMIN","ACCOUNTANT"] },
           { label: t("nav.reconcile"),     href: "/settings/reconcile",    icon: <Icons.bank />,     roles: ["ADMIN","ACCOUNTANT"] },
+          { label: t("nav.caPortal"),       href: "/ca",                    icon: <Icons.reports />,  roles: ["ACCOUNTANT"] },
           { label: t("shell.settings"),    href: "/settings/company",      icon: <Icons.settings />, roles: ["ADMIN"] },
         ].filter(item => item.roles.includes(user.role)).map(item => (
           <button key={item.href}

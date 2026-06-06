@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import type { TenantDetail } from "@/lib/admin-stats";
 import { FEATURE_FLAGS } from "@/lib/feature-flags";
+import { useConfirm } from "@/contexts/ConfirmContext";
 
 const fmtInt = (n: number) => new Intl.NumberFormat("en-IN").format(n);
 const fmtMoney = (n: number) =>
@@ -120,12 +121,13 @@ async function jsonOrThrow(res: Response) {
 export default function TenantDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const confirm = useConfirm();
   const id = params?.id;
   const [data, setData] = useState<TenantDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [resetLink, setResetLink] = useState<{ userName: string; url: string; expiresAt: string } | null>(null);
+  const [resetLink, setResetLink] = useState<{ userName: string; userId: string; userEmail: string | null; url: string; expiresAt: string; emailDelivered?: boolean; emailReason?: string } | null>(null);
 
   const load = () => {
     if (!id) return;
@@ -172,12 +174,24 @@ export default function TenantDetailPage() {
     }
   };
 
-  const issueReset = async (userId: string, userName: string) => {
+  const issueReset = async (userId: string, userName: string, sendEmail: boolean) => {
     setBusy(`reset:${userId}`);
     setActionError(null);
     try {
-      const j = await jsonOrThrow(await fetch(`/api/admin/users/${userId}/reset-password`, { method: "POST" }));
-      setResetLink({ userName, url: j.data.resetUrl, expiresAt: j.data.expiresAt });
+      const j = await jsonOrThrow(await fetch(`/api/admin/users/${userId}/reset-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sendEmail }),
+      }));
+      setResetLink({
+        userName,
+        userId,
+        userEmail: j.data.userEmail,
+        url: j.data.resetUrl,
+        expiresAt: j.data.expiresAt,
+        emailDelivered: j.data.emailDelivered,
+        emailReason: j.data.emailReason,
+      });
     } catch (e) {
       setActionError(String(e instanceof Error ? e.message : e));
     } finally {
@@ -188,7 +202,7 @@ export default function TenantDetailPage() {
   const impersonate = async (userId: string, userName: string, readOnly: boolean) => {
     if (!id) return;
     const label = readOnly ? "read-only" : "with FULL ACCESS";
-    if (!confirm(`Sign in as ${userName} ${label}? You'll act as this user until you exit impersonation.`)) return;
+    if (!(await confirm({ title: "Impersonate user", message: `Sign in as ${userName} ${label}? You'll act as this user until you exit impersonation.`, confirmLabel: "Impersonate", intent: "danger" }))) return;
     setBusy(`imp:${userId}`);
     setActionError(null);
     try {
@@ -226,7 +240,7 @@ export default function TenantDetailPage() {
 
   const suspendAll = async (suspend: boolean) => {
     if (!id) return;
-    if (!confirm(suspend ? "Deactivate all non-superadmin users in this tenant?" : "Reactivate all users in this tenant?")) return;
+    if (!(await confirm({ message: suspend ? "Deactivate all non-superadmin users in this tenant?" : "Reactivate all users in this tenant?", confirmLabel: suspend ? "Deactivate" : "Reactivate", intent: suspend ? "danger" : "primary" }))) return;
     setBusy("suspend");
     setActionError(null);
     try {
@@ -247,7 +261,7 @@ export default function TenantDetailPage() {
   if (!data) return <div style={{ color: "var(--sb-muted)" }}>Loading…</div>;
 
   const anyUserActive = data.users.some((u) => u.isActive && u.role !== "SUPERADMIN");
-  const otherPlan = data.plan === "PRO" ? "FREE" : "PRO";
+  const PLAN_OPTIONS: ("FREE" | "PRO" | "PRO_PLUS")[] = ["FREE", "PRO", "PRO_PLUS"];
 
   return (
     <div>
@@ -266,14 +280,28 @@ export default function TenantDetailPage() {
               {actionError}
             </div>
           )}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
-            <button
-              onClick={() => patchTenant({ plan: otherPlan }, "plan")}
-              disabled={busy === "plan"}
-              style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid var(--sb-border)", background: "var(--sb-card)", fontSize: 13, cursor: "pointer" }}
-            >
-              {busy === "plan" ? "…" : `Switch to ${otherPlan}`}
-            </button>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12, alignItems: "center" }}>
+            <span style={{ fontSize: 12, color: "var(--sb-muted)" }}>Plan:</span>
+            {PLAN_OPTIONS.map((p) => (
+              <button
+                key={p}
+                onClick={() => patchTenant({ plan: p }, "plan")}
+                disabled={busy === "plan" || data.plan === p}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 8,
+                  border: "1px solid var(--sb-border)",
+                  background: data.plan === p ? "#dbeafe" : "var(--sb-card)",
+                  color: data.plan === p ? "#1e40af" : "var(--sb-text)",
+                  fontWeight: data.plan === p ? 700 : 500,
+                  fontSize: 13,
+                  cursor: data.plan === p ? "default" : "pointer",
+                  opacity: busy === "plan" && data.plan !== p ? 0.6 : 1,
+                }}
+              >
+                {data.plan === p ? `✓ ${p}` : p}
+              </button>
+            ))}
             <button
               onClick={() => suspendAll(anyUserActive)}
               disabled={busy === "suspend"}
@@ -322,12 +350,35 @@ export default function TenantDetailPage() {
           <div style={{ fontSize: 11, color: "var(--sb-muted)", marginBottom: 8 }}>
             Expires {fmtDateTime(resetLink.expiresAt)}. Share over a secure channel.
           </div>
-          <input
-            readOnly
-            value={resetLink.url}
-            onFocus={(e) => e.currentTarget.select()}
-            style={{ width: "100%", fontFamily: "monospace", fontSize: 12, padding: 6, border: "1px solid var(--sb-border)", borderRadius: 6 }}
-          />
+          {resetLink.emailDelivered === true ? (
+            <div style={{ fontSize: 12, color: "#15803d", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "6px 8px", marginBottom: 8 }}>
+              ✓ Email sent to {resetLink.userEmail}. The link is not shown here for security.
+            </div>
+          ) : (
+            <>
+              {resetLink.emailDelivered === false && resetLink.emailReason && (
+                <div style={{ fontSize: 12, color: "#b91c1c", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, padding: "6px 8px", marginBottom: 8 }}>
+                  Email not sent ({resetLink.emailReason}). Copy the link below and share it manually.
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <input
+                  readOnly
+                  value={resetLink.url}
+                  onFocus={(e) => e.currentTarget.select()}
+                  style={{ flex: 1, fontFamily: "monospace", fontSize: 12, padding: 6, border: "1px solid var(--sb-border)", borderRadius: 6 }}
+                />
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(resetLink.url);
+                  }}
+                  style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--sb-border)", background: "white", fontSize: 12, cursor: "pointer" }}
+                >
+                  Copy
+                </button>
+              </div>
+            </>
+          )}
           <button
             onClick={() => setResetLink(null)}
             style={{ marginTop: 8, padding: "4px 10px", borderRadius: 6, border: "1px solid var(--sb-border)", background: "white", fontSize: 12, cursor: "pointer" }}
@@ -416,12 +467,20 @@ export default function TenantDetailPage() {
                           {busy === `user:${u.id}` ? "…" : u.isActive ? "Deactivate" : "Activate"}
                         </button>
                         <button
-                          onClick={() => issueReset(u.id, u.name)}
+                          onClick={() => issueReset(u.id, u.name, false)}
                           disabled={busy === `reset:${u.id}` || !u.email}
-                          title={!u.email ? "User has no email" : ""}
-                          style={{ padding: "3px 8px", borderRadius: 6, border: "1px solid var(--sb-border)", background: "var(--sb-card)", fontSize: 11, cursor: u.email ? "pointer" : "not-allowed", opacity: u.email ? 1 : 0.5, marginRight: 6 }}
+                          title={!u.email ? "User has no email" : "Generate reset link (copy/share manually)"}
+                          style={{ padding: "3px 8px", borderRadius: "6px 0 0 6px", border: "1px solid var(--sb-border)", background: "var(--sb-card)", fontSize: 11, cursor: u.email ? "pointer" : "not-allowed", opacity: u.email ? 1 : 0.5 }}
                         >
-                          {busy === `reset:${u.id}` ? "…" : "Reset password"}
+                          {busy === `reset:${u.id}` ? "…" : "Reset link"}
+                        </button>
+                        <button
+                          onClick={() => issueReset(u.id, u.name, true)}
+                          disabled={busy === `reset:${u.id}` || !u.email}
+                          title={!u.email ? "User has no email" : `Generate reset link and email it to ${u.email}`}
+                          style={{ padding: "3px 8px", borderRadius: "0 6px 6px 0", border: "1px solid var(--sb-border)", borderLeft: "none", background: "var(--sb-card)", fontSize: 11, cursor: u.email ? "pointer" : "not-allowed", opacity: u.email ? 1 : 0.5, marginRight: 6 }}
+                        >
+                          Email
                         </button>
                         <button
                           onClick={() => impersonate(u.id, u.name, true)}

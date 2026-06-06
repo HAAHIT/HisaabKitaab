@@ -16,9 +16,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { resolveSession } from "@/lib/api-tenant";
+import { checkFeatureAccess } from "@/lib/quota";
 import { logError, getRequestId } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/api-rate-limit";
 import { parseStatement } from "@/lib/bank-reconciliation/parsers/index";
+import { extractStatementText } from "@/lib/bank-reconciliation/extract-text";
 import { matchRows } from "@/lib/bank-reconciliation/match";
 import type { MatchablePayment } from "@/lib/bank-reconciliation/match";
 import { Prisma } from "@prisma/client";
@@ -29,6 +31,15 @@ export async function POST(request: NextRequest) {
   const sessionResolution = await resolveSession(request);
   if (!sessionResolution.ok) return sessionResolution.response;
   const { tenantId } = sessionResolution.session;
+
+  // [Phase 1 — Plan gate] Bank reconciliation is a PRO feature; enforce server-side.
+  const feature = await checkFeatureAccess(tenantId, "bankReconciliation");
+  if (!feature.allowed) {
+    return NextResponse.json(
+      { error: feature.reason ?? "Feature locked", code: "FEATURE_LOCKED", feature: "bankReconciliation" },
+      { status: 402 }
+    );
+  }
 
   const rl = await checkRateLimit(request, `reconcile:upload:${tenantId}`, 10);
   if (rl) return rl;
@@ -62,10 +73,47 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid periodFrom or periodTo" }, { status: 400 });
   }
 
-  // Read CSV text
+  // Read text from CSV / XLSX / PDF
   let csvText: string;
+  let sourceKind: "csv" | "xlsx" | "xls" | "pdf" = "csv";
   if (fileField instanceof File) {
-    csvText = await fileField.text();
+    try {
+      const extracted = await extractStatementText(fileField);
+      csvText = extracted.text;
+      sourceKind = extracted.kind;
+    } catch (error) {
+      // Some banks export "Excel" files that are actually HTML/XML masquerading
+      // as .xlsx — JSZip throws "Can't find end of central directory" for these.
+      // Surface a hint rather than a stack-trace string.
+      const msg = error instanceof Error ? error.message : "";
+      if (msg.includes("end of central directory")) {
+        logError("reconcile.upload.malformed_xlsx", { requestId: getRequestId(request), fileName: fileField.name });
+        return NextResponse.json(
+          {
+            error:
+              "This file is named .xlsx but isn't a valid Excel file. " +
+              "Open it in Excel/LibreOffice and re-save as .xlsx or .csv, then try again.",
+          },
+          { status: 400 }
+        );
+      }
+      logError("reconcile.upload.extract_failed", { requestId: getRequestId(request), error });
+      return NextResponse.json(
+        { error: "Could not read statement file. Supported formats: CSV, XLSX, XLS, PDF." },
+        { status: 400 }
+      );
+    }
+    if (!csvText.trim()) {
+      return NextResponse.json(
+        {
+          error:
+            sourceKind === "pdf"
+              ? "No readable text in PDF. Image-based / scanned PDFs are not supported — export from your bank's portal as text-PDF, CSV, or XLSX."
+              : "File is empty.",
+        },
+        { status: 422 }
+      );
+    }
   } else if (typeof fileField === "string") {
     csvText = fileField;
   } else {
@@ -123,7 +171,10 @@ export async function POST(request: NextRequest) {
 
   const matchResults = matchRows(parsedRows, matchablePayments);
 
-  // Persist inside a transaction
+  // Persist inside a transaction. rowIds is populated in matchResults order so
+  // the returned preview can carry each persisted BankStatementRow id — the
+  // categorize endpoint keys on that id, not on a payment id.
+  const rowIds: string[] = [];
   try {
     const statement = await prisma.$transaction(async (tx) => {
       // Create the BankStatement header
@@ -147,7 +198,7 @@ export async function POST(request: NextRequest) {
           result.payment !== null && result.confidence >= 60;
         if (isMatched) matchedCount++;
 
-        await tx.bankStatementRow.upsert({
+        const upserted = await tx.bankStatementRow.upsert({
           where: {
             statementId_date_amount_description: {
               statementId: stmt.id,
@@ -168,7 +219,9 @@ export async function POST(request: NextRequest) {
             matchedPaymentId: isMatched ? result.payment!.id : null,
             status: isMatched ? "AUTO_MATCHED" : "PENDING",
           },
+          select: { id: true },
         });
+        rowIds.push(upserted.id);
       }
 
       // Update counts on the statement
@@ -184,7 +237,8 @@ export async function POST(request: NextRequest) {
     });
 
     // Return statement summary + row previews
-    const preview = matchResults.map((r) => ({
+    const preview = matchResults.map((r, i) => ({
+      id: rowIds[i],
       date: r.bankRow.date,
       description: r.bankRow.description,
       amount: r.bankRow.amount,

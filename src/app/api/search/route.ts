@@ -17,14 +17,14 @@ export async function GET(request: NextRequest) {
 
   if (q.length < 2) {
     return NextResponse.json({
-      data: { bills: [], parties: [], items: [] },
+      data: { bills: [], parties: [], items: [], payments: [], journalEntries: [] },
     });
   }
 
   const canSeeAll = role !== "CUSTOMER";
 
   try {
-    const [bills, parties, items] = await Promise.all([
+    const [bills, parties, items, payments, journalEntries] = await Promise.all([
       canSeeAll
         ? prisma.bill.findMany({
             where: {
@@ -88,6 +88,57 @@ export async function GET(request: NextRequest) {
             take: PER_TYPE_LIMIT,
           })
         : Promise.resolve([]),
+
+      canSeeAll
+        ? prisma.payment.findMany({
+            where: {
+              tenantId,
+              isDeleted: false,
+              OR: [
+                { referenceNo: { contains: q, mode: "insensitive" } },
+                { notes: { contains: q, mode: "insensitive" } },
+                { party: { name: { contains: q, mode: "insensitive" } } },
+              ],
+            },
+            select: {
+              id: true,
+              direction: true,
+              amount: true,
+              date: true,
+              mode: true,
+              referenceNo: true,
+              party: { select: { name: true } },
+            },
+            orderBy: { date: "desc" },
+            take: PER_TYPE_LIMIT,
+          })
+        : Promise.resolve([]),
+
+      canSeeAll
+        ? prisma.journalEntry.findMany({
+            where: {
+              tenantId,
+              isDeleted: false,
+              OR: [
+                { narration: { contains: q, mode: "insensitive" } },
+              ],
+              // Surface only voucher types not already covered by Bills/Payments
+              // (so a search for "refund" returns the CREDIT_NOTE narration, not
+              // a duplicate of its journal). SALES/PURCHASE bills already appear
+              // under the Bills group via the bill query above.
+              voucherType: { in: ["CREDIT_NOTE", "DEBIT_NOTE", "JOURNAL", "CONTRA"] },
+            },
+            select: {
+              id: true,
+              entryDate: true,
+              narration: true,
+              voucherType: true,
+              totalDebit: true,
+            },
+            orderBy: { entryDate: "desc" },
+            take: PER_TYPE_LIMIT,
+          })
+        : Promise.resolve([]),
     ]);
 
     return NextResponse.json({
@@ -113,6 +164,22 @@ export async function GET(request: NextRequest) {
           hsnCode: i.hsnCode,
           unit: i.unit,
           rate: Number(i.rate),
+        })),
+        payments: payments.map((p) => ({
+          id: p.id,
+          direction: p.direction,
+          amount: Number(p.amount),
+          date: p.date,
+          mode: p.mode,
+          referenceNo: p.referenceNo,
+          partyName: p.party?.name ?? null,
+        })),
+        journalEntries: journalEntries.map((j) => ({
+          id: j.id,
+          entryDate: j.entryDate,
+          narration: j.narration,
+          voucherType: j.voucherType,
+          amount: Number(j.totalDebit),
         })),
       },
     });

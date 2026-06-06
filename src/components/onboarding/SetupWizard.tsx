@@ -113,6 +113,7 @@ interface BankEntry {
   bankName: string;
   accountNumber: string;
   openingBalance: string;
+  type: "BANK" | "CASH";
 }
 
 interface PartyEntry {
@@ -158,7 +159,7 @@ async function apiPatch(url: string, body: object) {
 
 // ── Wizard draft persistence ──────────────────────────────────────────────────
 
-const WIZARD_STORAGE_KEY = "hk_wizard_draft_v1";
+const WIZARD_STORAGE_KEY = "hk_wizard_draft_v2"; // bump on BankEntry schema change
 
 interface WizardDraft {
   step: number;
@@ -197,6 +198,11 @@ export function SetupWizard({ onComplete, initialBusinessName }: SetupWizardProp
   // Load persisted draft once — used as lazy initial values for all state below
   const draft = useRef(getWizardDraft());
 
+  // Guards to prevent duplicate server writes when the user presses Back then Next.
+  // These are NOT persisted — a page reload is a safe retry signal.
+  const step3SavedRef = useRef(false);
+  const step5TemplateSavedRef = useRef(false);
+
   const [step, setStep] = useState<number>(draft.current?.step ?? 0);
 
   useEffect(() => setThemeMounted(true), []);
@@ -233,7 +239,7 @@ export function SetupWizard({ onComplete, initialBusinessName }: SetupWizardProp
 
   // Step 2 — Bank accounts
   const [banks, setBanks] = useState<BankEntry[]>(
-    draft.current?.banks ?? [{ bankName: "", accountNumber: "", openingBalance: "0" }]
+    draft.current?.banks ?? [{ bankName: "", accountNumber: "", openingBalance: "0", type: "BANK" }]
   );
 
   // Step 3 — Parties
@@ -309,11 +315,14 @@ export function SetupWizard({ onComplete, initialBusinessName }: SetupWizardProp
     setError(null);
     const validBanks = banks.filter((b) => b.bankName.trim());
     if (!validBanks.length) return true;
+    // Already saved in this session — skip to prevent duplicates on Back→Next.
+    if (step3SavedRef.current) return true;
     setSaving(true);
     try {
       for (const bank of validBanks) {
-        await apiFetch("/api/bank-accounts", { name: bank.bankName.trim(), accountNumber: bank.accountNumber.trim() || null, openingBalance: Number(bank.openingBalance) || 0, type: "BANK" });
+        await apiFetch("/api/bank-accounts", { name: bank.bankName.trim(), accountNumber: bank.accountNumber.trim() || null, openingBalance: Number(bank.openingBalance) || 0, type: bank.type });
       }
+      step3SavedRef.current = true;
       return true;
     } catch (err) { setError(err instanceof Error ? err.message : t("wizard.error.bankSaveFailed")); return false; }
     finally { setSaving(false); }
@@ -343,10 +352,12 @@ export function SetupWizard({ onComplete, initialBusinessName }: SetupWizardProp
 
   async function saveStep5Template() {
     setError(null);
+    const preset = PRESET_TEMPLATES.find((p) => p.id === selectedPreset);
+    if (!preset) return true;
+    // Already saved in this session — skip to prevent duplicate template creation on Back→Next.
+    if (step5TemplateSavedRef.current) return true;
     setSaving(true);
     try {
-      const preset = PRESET_TEMPLATES.find((p) => p.id === selectedPreset);
-      if (!preset) return true;
       // Create the template — use the stable English label so the persisted name doesn't change with locale.
       const res = await apiFetch("/api/templates", { name: preset.label, columns: preset.columns });
       const templateId: string = res.template?.id;
@@ -354,6 +365,7 @@ export function SetupWizard({ onComplete, initialBusinessName }: SetupWizardProp
         // Save as default
         await apiPatch("/api/settings", { defaultTemplateId: templateId });
       }
+      step5TemplateSavedRef.current = true;
       return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : t("wizard.error.templateSaveFailed"));
@@ -380,7 +392,7 @@ export function SetupWizard({ onComplete, initialBusinessName }: SetupWizardProp
       await apiFetch("/api/onboarding/complete", {});
       clearWizardDraft();
       onComplete();
-      router.push("/dashboard");
+      router.push("/bills/new?tour=1");
     }
     catch (err) { setError(err instanceof Error ? err.message : t("wizard.error.finishFailed")); }
     finally { setSaving(false); }
@@ -404,9 +416,25 @@ export function SetupWizard({ onComplete, initialBusinessName }: SetupWizardProp
   function skipAndNext() { setError(null); setStep((s) => Math.min(s + 1, TOTAL_STEPS - 1) as typeof s); }
 
   async function skipAll() {
-    const ok = await saveStep1();
-    if (!ok) return;
-    await finishWizard();
+    // Only the business name is required to skip — state and all other steps are optional.
+    if (!businessName.trim()) { setError(t("wizard.error.businessNameRequired")); return; }
+    setError(null); setSaving(true);
+    try {
+      const address = [city.trim(), stateName].filter(Boolean).join(", ");
+      await apiPatch("/api/settings", {
+        companyName: businessName.trim(),
+        businessType,
+        ...(address ? { companyAddress: address } : {}),
+      });
+      await apiFetch("/api/onboarding/complete", {});
+      clearWizardDraft();
+      onComplete();
+      router.push("/bills/new?tour=1");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("wizard.error.saveFailed"));
+    } finally {
+      setSaving(false);
+    }
   }
 
   // ── Inline add helpers ────────────────────────────────────────────────────
@@ -425,7 +453,7 @@ export function SetupWizard({ onComplete, initialBusinessName }: SetupWizardProp
   }
   function removeItem(i: number) { setItems((it) => it.filter((_, idx) => idx !== i)); }
 
-  function addBankRow() { setBanks((b) => [...b, { bankName: "", accountNumber: "", openingBalance: "0" }]); }
+  function addBankRow() { setBanks((b) => [...b, { bankName: "", accountNumber: "", openingBalance: "0", type: "BANK" }]); }
   function removeBankRow(i: number) { setBanks((b) => b.filter((_, idx) => idx !== i)); }
 
   // ── Shared styles ─────────────────────────────────────────────────────────
@@ -650,7 +678,7 @@ export function SetupWizard({ onComplete, initialBusinessName }: SetupWizardProp
                   <HKSelect label={t("wizard.step1.businessTypeLabel")} value={businessType} onValueChange={(v) => { if (v) setBusinessType(v); }} size="lg">
                     {BUSINESS_TYPES.map((bt) => <HKSelectItem key={bt} value={bt}>{bt}</HKSelectItem>)}
                   </HKSelect>
-                  <HKSelect label={t("wizard.step1.stateLabel")} value={stateName} onValueChange={(v) => { if (v) setStateName(v); }} size="lg">
+                  <HKSelect label={t("wizard.step1.stateLabel")} placeholder="Select your state" value={stateName} onValueChange={(v) => { if (v) setStateName(v); }} size="lg">
                     {INDIAN_STATES.map((s) => <HKSelectItem key={s} value={s}>{s}</HKSelectItem>)}
                   </HKSelect>
                   <HKInput label={t("wizard.step1.cityLabel")} placeholder={t("wizard.step1.cityPlaceholder")} value={city} onValueChange={setCity} size="lg" />
@@ -701,10 +729,36 @@ export function SetupWizard({ onComplete, initialBusinessName }: SetupWizardProp
                       )}
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                      <HKSelect label={t("wizard.step3.bankLabel")} value={bank.bankName} onValueChange={(v) => { if (v) setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, bankName: v } : b)); }}>
-                        {BANKS.map((b) => <HKSelectItem key={b} value={b}>{b}</HKSelectItem>)}
-                      </HKSelect>
-                      <HKInput label={t("wizard.step3.accountNumberLabel")} placeholder={t("wizard.step3.accountNumberPlaceholder")} value={bank.accountNumber} onValueChange={(v) => setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, accountNumber: v } : b))} />
+                      {/* Account type toggle */}
+                      <div>
+                        <p style={{ fontSize: TYPE.caption, fontWeight: 600, color: "var(--sb-sub)", marginBottom: 6, fontFamily: SG }}>Account type</p>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          {(["BANK", "CASH"] as const).map((at) => (
+                            <button
+                              key={at}
+                              type="button"
+                              onClick={() => setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, bankName: at === "CASH" ? "Cash" : b.bankName, accountNumber: at === "CASH" ? "" : b.accountNumber, type: at } : b))}
+                              style={{
+                                flex: 1, padding: "10px", borderRadius: 8, cursor: "pointer",
+                                border: `1.5px solid ${bank.type === at ? (at === "BANK" ? PU : GR) : "var(--sb-border)"}`,
+                                background: bank.type === at ? (at === "BANK" ? PU + "18" : GR + "18") : "transparent",
+                                color: bank.type === at ? (at === "BANK" ? PU : GR) : "var(--sb-sub)",
+                                fontSize: TYPE.bodySmall, fontWeight: 700, fontFamily: SG,
+                              }}
+                            >
+                              {at === "BANK" ? "🏦 Bank Account" : "💵 Cash in Hand"}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {bank.type === "BANK" && (
+                        <HKSelect label={t("wizard.step3.bankLabel")} value={bank.bankName} onValueChange={(v) => { if (v) setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, bankName: v } : b)); }}>
+                          {BANKS.map((b) => <HKSelectItem key={b} value={b}>{b}</HKSelectItem>)}
+                        </HKSelect>
+                      )}
+                      {bank.type === "BANK" && (
+                        <HKInput label={t("wizard.step3.accountNumberLabel")} placeholder={t("wizard.step3.accountNumberPlaceholder")} value={bank.accountNumber} onValueChange={(v) => setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, accountNumber: v } : b))} />
+                      )}
                       <HKInput label={t("wizard.step3.openingBalanceLabel")} type="number" value={bank.openingBalance} onValueChange={(v) => setBanks((prev) => prev.map((b, idx) => idx === i ? { ...b, openingBalance: v } : b))} />
                     </div>
                   </div>
@@ -749,7 +803,12 @@ export function SetupWizard({ onComplete, initialBusinessName }: SetupWizardProp
                   </div>
                 </div>
                 <div style={{ marginTop: 14, textAlign: "center" }}>
-                  <a href="/settings/tally-import?returnTo=/dashboard" style={{ fontSize: TYPE.bodySmall, fontWeight: 600, color: PU, fontFamily: SG }}>{t("wizard.step4.importFromTally")}</a>
+                  <button
+                    onClick={() => { clearWizardDraft(); router.push("/settings/tally-import?returnTo=/dashboard"); }}
+                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: TYPE.bodySmall, fontWeight: 600, color: PU, fontFamily: SG, textDecoration: "underline", textUnderlineOffset: 3 }}
+                  >
+                    {t("wizard.step4.importFromTally")}
+                  </button>
                 </div>
               </div>
             )}
@@ -938,6 +997,20 @@ export function SetupWizard({ onComplete, initialBusinessName }: SetupWizardProp
                 color: OR, fontSize: TYPE.bodySmall, fontWeight: 600, fontFamily: SG,
               }}>
                 ⚠ {error}
+                {/* On the final step, a persistent failure must not lock the user out. */}
+                {step === TOTAL_STEPS - 1 && (
+                  <button
+                    onClick={() => { clearWizardDraft(); onComplete(); router.push("/dashboard"); }}
+                    style={{
+                      display: "block", marginTop: 8, background: "none", border: "none",
+                      cursor: "pointer", fontSize: TYPE.bodySmall, fontWeight: 700,
+                      color: OR, fontFamily: SG, textDecoration: "underline",
+                      textUnderlineOffset: 3, padding: 0,
+                    }}
+                  >
+                    Skip anyway and go to dashboard →
+                  </button>
+                )}
               </div>
             )}
 
