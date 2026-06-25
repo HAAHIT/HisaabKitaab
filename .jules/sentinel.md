@@ -7,3 +7,7 @@
 **Vulnerability:** Server-Side Request Forgery (SSRF) bypass in Asset Proxy
 **Learning:** In Node.js (and standard WHATWG URL parsing), `URL.hostname` preserves the square brackets around IPv6 addresses (e.g., `[::1]`). If you check the string directly against `::1` without stripping the brackets first, it will fail to match, allowing an attacker to bypass private IP blocklists by passing a bracketed IPv6 URL.
 **Prevention:** Always explicitly strip `[` and `]` brackets from `URL.hostname` using `.replace(/^\[|\]$/g, "")` before applying allowlist/denylist string matching to prevent bypasses.
+## 2026-06-25 - Host Header Injection via X-Forwarded-Host
+**Vulnerability:** Host Header Injection / Password Reset Poisoning
+**Learning:** Functions generating self-referencing absolute URLs (like `getPublicBaseUrl`) should not blindly trust HTTP headers like `x-forwarded-host` or `x-forwarded-proto` because these can be trivially spoofed by an attacker, leading to malicious link generation (e.g., password reset tokens sent to an attacker's domain).
+**Prevention:** Always prioritize securely configured environment variables (like `process.env.NEXT_PUBLIC_SITE_URL`) for determining the host URL before falling back to request headers.
