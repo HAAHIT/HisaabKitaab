@@ -1,6 +1,10 @@
 import type { NextRequest } from "next/server";
 
 export function getPublicBaseUrl(request: NextRequest | Request): string {
+  if (process.env.NEXT_PUBLIC_SITE_URL) {
+    return process.env.NEXT_PUBLIC_SITE_URL;
+  }
+
   const forwardedHost = request.headers.get("x-forwarded-host");
   const forwardedProto = request.headers.get("x-forwarded-proto");
   if (forwardedHost) {
