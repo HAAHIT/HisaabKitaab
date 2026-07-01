@@ -7,3 +7,8 @@
 **Vulnerability:** Server-Side Request Forgery (SSRF) bypass in Asset Proxy
 **Learning:** In Node.js (and standard WHATWG URL parsing), `URL.hostname` preserves the square brackets around IPv6 addresses (e.g., `[::1]`). If you check the string directly against `::1` without stripping the brackets first, it will fail to match, allowing an attacker to bypass private IP blocklists by passing a bracketed IPv6 URL.
 **Prevention:** Always explicitly strip `[` and `]` brackets from `URL.hostname` using `.replace(/^\[|\]$/g, "")` before applying allowlist/denylist string matching to prevent bypasses.
+
+## 2024-XX-XX - Open Redirect via Absolute URL Evaluation
+**Vulnerability:** Open Redirect / SSRF
+**Learning:** When using the `new URL(path, base)` constructor in JavaScript to resolve paths, relying on simple string filters like blocking `//` or `/\` is insufficient. If the `path` argument is a valid absolute URL (e.g. `https://evil.com`), the `base` argument is entirely ignored by the standard URL parser.
+**Prevention:** Always parse the URL first, then check if `result.hostname === new URL(base).hostname`. If they do not match, fall back to a safe default path (like `/`).
