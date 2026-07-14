@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import net from "node:net";
 import { prisma } from "@/lib/prisma";
 import { readStoredObject } from "@/lib/object-storage";
 import { resolveSession } from "@/lib/api-tenant";
@@ -95,7 +96,9 @@ export async function GET(
       // that requires a custom http.Agent and is out of scope here.
       const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
       const isPrivateIPv4 = (host: string) => {
-        if (host === "localhost" || host === "127.0.0.1") return true;
+        if (host === "localhost") return true;
+        if (!net.isIPv4(host)) return false;
+        if (host === "127.0.0.1") return true;
         if (host.startsWith("10.")) return true;             // 10.0.0.0/8
         if (host.startsWith("192.168.")) return true;        // 192.168.0.0/16
         if (host.startsWith("169.254.")) return true;        // 169.254.0.0/16 (incl. cloud metadata)
@@ -105,12 +108,27 @@ export async function GET(
         return false;
       };
       const isPrivateIPv6 = (host: string) => {
+        if (!net.isIPv6(host)) return false;
         if (host === "::1" || host === "::") return true;
         if (host.startsWith("fe80:") || host.startsWith("fe80::")) return true; // link-local
-        if (/^f[cd][0-9a-f]{2}:/.test(host)) return true;    // fc00::/7 unique-local
+        if (/^f[cd][0-9a-f]{2}:/i.test(host)) return true;    // fc00::/7 unique-local
         // IPv4-mapped (::ffff:127.0.0.1) and IPv4-compatible (::127.0.0.1) — check the embedded v4
-        const v4Mapped = host.match(/^(?:::ffff:|::)([0-9.]+)$/);
-        if (v4Mapped && isPrivateIPv4(v4Mapped[1])) return true;
+        const v4MappedMatch = host.match(/^(?:::ffff:|::)([0-9a-f.:]+)$/i);
+        if (v4MappedMatch) {
+          const v4Part = v4MappedMatch[1];
+          if (net.isIPv4(v4Part)) return isPrivateIPv4(v4Part);
+          // Handle hex-encoded IPv4 inside mapped IPv6 (e.g. ::ffff:7f00:1 for 127.0.0.1)
+          // Handle padding: pad each block to 4 characters before stripping colons
+          if (/^[0-9a-f:]+$/i.test(v4Part)) {
+            const hexClean = v4Part
+              .split(":")
+              .map((block) => block.padStart(4, "0"))
+              .join("")
+              .toLowerCase();
+            if (/^(7f|0a|c0a8|a9fe|0000)/.test(hexClean)) return true;
+            if (/^ac1[0-9a-f]/.test(hexClean)) return true;
+          }
+        }
         return false;
       };
       if (isPrivateIPv4(hostname) || isPrivateIPv6(hostname)) {
