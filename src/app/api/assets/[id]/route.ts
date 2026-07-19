@@ -109,8 +109,18 @@ export async function GET(
         if (host.startsWith("fe80:") || host.startsWith("fe80::")) return true; // link-local
         if (/^f[cd][0-9a-f]{2}:/.test(host)) return true;    // fc00::/7 unique-local
         // IPv4-mapped (::ffff:127.0.0.1) and IPv4-compatible (::127.0.0.1) — check the embedded v4
-        const v4Mapped = host.match(/^(?:::ffff:|::)([0-9.]+)$/);
-        if (v4Mapped && isPrivateIPv4(v4Mapped[1])) return true;
+        // In Node 22+, URL.hostname normalizes mapped IPs into hex segments (e.g. ::ffff:7f00:1)
+        const v4Mapped = host.match(/^(?:::ffff:|::)([\da-f]{1,4}:[\da-f]{1,4}|[\d.]+)$/i);
+        if (v4Mapped) {
+          let v4Str = v4Mapped[1];
+          if (v4Str.includes(":")) {
+            const parts = v4Str.split(":");
+            const p1 = parseInt(parts[0], 16);
+            const p2 = parseInt(parts[1], 16);
+            v4Str = `${(p1 >> 8) & 0xff}.${p1 & 0xff}.${(p2 >> 8) & 0xff}.${p2 & 0xff}`;
+          }
+          if (isPrivateIPv4(v4Str)) return true;
+        }
         return false;
       };
       if (isPrivateIPv4(hostname) || isPrivateIPv6(hostname)) {
