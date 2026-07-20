@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import net from "node:net";
 import { prisma } from "@/lib/prisma";
 import { readStoredObject } from "@/lib/object-storage";
 import { resolveSession } from "@/lib/api-tenant";
@@ -95,7 +96,9 @@ export async function GET(
       // that requires a custom http.Agent and is out of scope here.
       const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
       const isPrivateIPv4 = (host: string) => {
-        if (host === "localhost" || host === "127.0.0.1") return true;
+        if (host === "localhost") return true;
+        if (!net.isIPv4(host)) return false;
+        if (host === "127.0.0.1") return true;
         if (host.startsWith("10.")) return true;             // 10.0.0.0/8
         if (host.startsWith("192.168.")) return true;        // 192.168.0.0/16
         if (host.startsWith("169.254.")) return true;        // 169.254.0.0/16 (incl. cloud metadata)
@@ -105,9 +108,20 @@ export async function GET(
         return false;
       };
       const isPrivateIPv6 = (host: string) => {
+        if (!net.isIPv6(host)) return false;
         if (host === "::1" || host === "::") return true;
         if (host.startsWith("fe80:") || host.startsWith("fe80::")) return true; // link-local
         if (/^f[cd][0-9a-f]{2}:/.test(host)) return true;    // fc00::/7 unique-local
+
+        // Handle hex-encoded IPv4-mapped addresses (Node 22+)
+        const hexMapped = host.match(/^(?:::ffff:|::)([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+        if (hexMapped) {
+          const p1 = parseInt(hexMapped[1], 16);
+          const p2 = parseInt(hexMapped[2], 16);
+          const v4 = `${(p1 >> 8) & 0xff}.${p1 & 0xff}.${(p2 >> 8) & 0xff}.${p2 & 0xff}`;
+          if (isPrivateIPv4(v4)) return true;
+        }
+
         // IPv4-mapped (::ffff:127.0.0.1) and IPv4-compatible (::127.0.0.1) — check the embedded v4
         const v4Mapped = host.match(/^(?:::ffff:|::)([0-9.]+)$/);
         if (v4Mapped && isPrivateIPv4(v4Mapped[1])) return true;
