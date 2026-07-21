@@ -13,5 +13,13 @@ export function publicUrl(
   request: NextRequest | Request,
   pathOrUrl: string
 ): URL {
-  return new URL(pathOrUrl, getPublicBaseUrl(request));
+  const baseUrlStr = getPublicBaseUrl(request);
+  const baseUrl = new URL(baseUrlStr);
+  const url = new URL(pathOrUrl, baseUrl);
+
+  if (url.origin === "null" || url.origin !== baseUrl.origin) {
+    return new URL("/", baseUrl);
+  }
+
+  return url;
 }
