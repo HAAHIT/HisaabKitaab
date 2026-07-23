@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import net from "node:net";
 import { prisma } from "@/lib/prisma";
 import { readStoredObject } from "@/lib/object-storage";
 import { resolveSession } from "@/lib/api-tenant";
@@ -96,6 +97,7 @@ export async function GET(
       const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
       const isPrivateIPv4 = (host: string) => {
         if (host === "localhost" || host === "127.0.0.1") return true;
+        if (!net.isIPv4(host)) return false;
         if (host.startsWith("10.")) return true;             // 10.0.0.0/8
         if (host.startsWith("192.168.")) return true;        // 192.168.0.0/16
         if (host.startsWith("169.254.")) return true;        // 169.254.0.0/16 (incl. cloud metadata)
@@ -109,8 +111,17 @@ export async function GET(
         if (host.startsWith("fe80:") || host.startsWith("fe80::")) return true; // link-local
         if (/^f[cd][0-9a-f]{2}:/.test(host)) return true;    // fc00::/7 unique-local
         // IPv4-mapped (::ffff:127.0.0.1) and IPv4-compatible (::127.0.0.1) — check the embedded v4
-        const v4Mapped = host.match(/^(?:::ffff:|::)([0-9.]+)$/);
-        if (v4Mapped && isPrivateIPv4(v4Mapped[1])) return true;
+        const v4Mapped = host.match(/^(?:::ffff:|::)([0-9a-f:.]+)$/i);
+        if (v4Mapped) {
+          let v4Host = v4Mapped[1];
+          if (v4Host.includes(":")) {
+            const parts = v4Host.split(":");
+            const p1 = parseInt(parts[0] || "0", 16);
+            const p2 = parseInt(parts[1] || "0", 16);
+            v4Host = `${(p1 >> 8) & 0xff}.${p1 & 0xff}.${(p2 >> 8) & 0xff}.${p2 & 0xff}`;
+          }
+          if (isPrivateIPv4(v4Host)) return true;
+        }
         return false;
       };
       if (isPrivateIPv4(hostname) || isPrivateIPv6(hostname)) {
